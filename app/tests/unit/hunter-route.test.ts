@@ -6,6 +6,10 @@ const runHunterTick = vi.fn();
 const hasAi = vi.fn();
 vi.mock("@/lib/hunter/tick-store", () => ({ createHunterTickStore: (...a: unknown[]) => createHunterTickStore(...a) }));
 vi.mock("@/lib/hunter/tick", () => ({ runHunterTick: (...a: unknown[]) => runHunterTick(...a) }));
+const createSourceTickStore = vi.fn();
+const runSourceTick = vi.fn();
+vi.mock("@/lib/sources/store", () => ({ createSourceTickStore: (...a: unknown[]) => createSourceTickStore(...a) }));
+vi.mock("@/lib/sources/tick", () => ({ runSourceTick: (...a: unknown[]) => runSourceTick(...a) }));
 vi.mock("@/lib/ai/config", () => ({ hasAi: () => hasAi() }));
 vi.mock("@/lib/ai/gateway", () => ({ defaultTransport: () => ({ fake: true }) }));
 
@@ -18,7 +22,10 @@ beforeEach(() => {
   createHunterTickStore.mockReset();
   runHunterTick.mockReset();
   hasAi.mockReset().mockReturnValue(true);
+  createSourceTickStore.mockReset().mockReturnValue({});
+  runSourceTick.mockReset().mockResolvedValue({ outcome: "ok", started: 0, polled: 0, imported: 0, failed: 0 });
 });
+const NO_SOURCES = { outcome: "ok", started: 0, polled: 0, imported: 0, failed: 0 };
 
 describe("POST /api/hunter/tick", () => {
   test.each([
@@ -39,12 +46,35 @@ describe("POST /api/hunter/tick", () => {
     expect(runHunterTick).not.toHaveBeenCalled();
   });
 
-  test("no AI key: 200 {outcome:'no_ai'} and no store is created", async () => {
+  test("no AI key: 200 {outcome:'no_ai'}, no hunter store, and the sources still run", async () => {
     hasAi.mockReturnValue(false);
     const res = await call(ok);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ outcome: "no_ai" });
+    expect(await res.json()).toEqual({ outcome: "no_ai", sources: NO_SOURCES });
     expect(createHunterTickStore).not.toHaveBeenCalled();
+    expect(createSourceTickStore).toHaveBeenCalledWith(TOKEN);
+  });
+
+  test("the route runs the sources tick and reports it", async () => {
+    createHunterTickStore.mockReturnValue({});
+    runHunterTick.mockResolvedValue({ tickId: "t", outcome: "ok", runs: 0, steps: 0, paused: 0, failed: 0 });
+    runSourceTick.mockResolvedValue({ outcome: "ok", started: 1, polled: 2, imported: 3, failed: 4 });
+    const res = await call(ok);
+    expect(createSourceTickStore).toHaveBeenCalledWith(TOKEN);
+    expect(await res.json()).toEqual({ outcome: "ok", runs: 0, steps: 0, paused: 0, failed: 0, sources: { outcome: "ok", started: 1, polled: 2, imported: 3, failed: 4 } });
+  });
+
+  test("a sources failure is a bare error object and does not hide the hunter result; a refused token is 401", async () => {
+    createHunterTickStore.mockReturnValue({});
+    runHunterTick.mockResolvedValue({ tickId: "t", outcome: "ok", runs: 1, steps: 1, paused: 0, failed: 0 });
+    runSourceTick.mockRejectedValue(new Error(`boom ${TOKEN}`));
+    const res = await call(ok);
+    const text = await res.text();
+    expect(text).not.toContain(TOKEN);
+    expect(JSON.parse(text).sources).toEqual({ outcome: "error", started: 0, polled: 0, imported: 0, failed: 0 });
+    expect(JSON.parse(text).outcome).toBe("ok");
+    runSourceTick.mockRejectedValue(Object.assign(new Error("x"), { name: "HunterAuthError" }));
+    expect((await call(ok)).status).toBe(401);
   });
 
   test("a well-formed token creates a store with that token and returns only the counts", async () => {
@@ -52,7 +82,7 @@ describe("POST /api/hunter/tick", () => {
     runHunterTick.mockResolvedValue({ tickId: "t", outcome: "ok", runs: 2, steps: 5, paused: 1, failed: 0 });
     const res = await call(ok);
     expect(createHunterTickStore).toHaveBeenCalledWith(TOKEN);
-    expect(await res.json()).toEqual({ outcome: "ok", runs: 2, steps: 5, paused: 1, failed: 0 });
+    expect(await res.json()).toEqual({ outcome: "ok", runs: 2, steps: 5, paused: 1, failed: 0, sources: NO_SOURCES });
   });
 
   test("maxDuration is 300, HunterAuthError is 401, other errors are a bare 500", async () => {
@@ -64,7 +94,7 @@ describe("POST /api/hunter/tick", () => {
     const res = await call(ok);
     expect(res.status).toBe(500);
     const text = await res.text();
-    expect(JSON.parse(text)).toEqual({ outcome: "error" });
+    expect(JSON.parse(text)).toEqual({ outcome: "error", sources: NO_SOURCES });
     expect(text).not.toContain(TOKEN);
     createHunterTickStore.mockReturnValue(null);
     expect((await call(ok)).status).toBe(500);
