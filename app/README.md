@@ -90,6 +90,16 @@ Valem para os e-mails da sequência, no clique e no relógio, em ensaio e em env
 - A **closer** só vê leads passados para ela (isso chega na F5); até lá a tela dela fica vazia. Ela não abre telas de pesquisa (`/agentes/pesquisa/...` volta para LEADS).
 - **Antes de publicar** esta versão do app, aplicar `0009_leads.sql` (depende de 0001-0008).
 
+## Caçador em segundo plano (F3b)
+- **Ligar / Pausar**: no agente, "Ligar" põe o Caçador para trabalhar sozinho na frequência escolhida, mesmo com a aba fechada. "Pausar" para.
+- O relógio (pg_cron, `supabase/manual/hunter_cron.sql`) chama `/api/hunter/tick` a cada 2 minutos. A tela do agente só mostra o progresso (somente leitura).
+- Só traz empresas **novas**: as que já estão em LEADS são puladas e contadas.
+- Se o teto de IA for atingido, o agente **pausa sozinho e avisa**. Nada roda além do teto; é preciso ligar de novo.
+- No máximo **3 Caçadores ligados** por workspace. Não dá para arquivar um agente ligado.
+- **Relatório de baseline (J3)**: compara a 1ª execução com as listas de `data/gold/` (precisão e cobertura) e propõe a meta semanal. O relatório e as listas ficam fora do repositório (público). Exportar cada aba das listas para CSV em uma pasta (`todos.csv` e `quentes-*.csv`) e rodar, em `kolmeia/app`:
+  `BASELINE_FOUND=<run.csv> BASELINE_GOLD_DIR=<pasta> BASELINE_SCHEDULE=weekly BASELINE_AGENT="<agente>" BASELINE_RUN_DATE="dd/mm/aaaa" BASELINE_ALREADY_KNOWN=<n> BASELINE_OUT=<arquivo.md fora de kolmeia/> npm run baseline`
+- **Ordem de publicação**: aplicar `0010_hunter.sql`, depois publicar o código, e só então rodar `supabase/manual/hunter_cron.sql`.
+
 ## Pendências
 - O painel de uso das caixas (`mailbox_usage`) ainda conta as últimas 24 horas e pode divergir do portão de limite do dia até ser atualizado.
 
