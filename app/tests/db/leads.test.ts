@@ -236,3 +236,89 @@ describe("0009 leads", () => {
     expect(upd.error).toMatchObject({ code: "42501" });
   });
 });
+
+describe("0009 closer", () => {
+  let candA: string;
+  let candB: string;
+  let runA: string;
+
+  // One verified lead (with a check and evidence added through add_research_check) plus a second, unassigned one.
+  async function seed() {
+    await clean();
+    runA = await run(UUID_A, wsA);
+    candA = await cand(UUID_A, wsA, runA, { name: "Acme Builders" });
+    candB = await cand(UUID_A, wsA, runA, { name: "Beta Homes" });
+    for (const id of [candA, candB]) {
+      await db.query(as(UUID_A), "select public.add_research_check($1,'exists_active',1,'ok','ok',$2::jsonb)", [
+        id,
+        JSON.stringify([{ url: "https://example.com/p", title: "Page", excerpt: "text" }]),
+      ]);
+      await verify(UUID_A, id);
+    }
+  }
+
+  test("J2 the closer cannot start, answer, approve or advance research", async () => {
+    await seed();
+    const ins = await db.try(
+      as(UUID_D),
+      "insert into public.research_runs (workspace_id, title, request_text, region_text, rigor) values ($1,'t','p','r','careful')",
+      [wsA],
+    );
+    expect(ins.error).toBeDefined();
+    expect(await db.query(as(UUID_D), "update public.research_runs set answers = '{}'::jsonb where id = $1 returning id", [runA])).toHaveLength(0);
+    const holder = "dddddddd-0000-4000-8000-000000000001";
+    const claim = await db.try<{ claim_research_step: boolean }>(as(UUID_D), "select public.claim_research_step($1,$2,60)", [runA, holder]);
+    expect(claim.error ?? claim.rows?.[0]?.claim_research_step === false).toBeTruthy();
+    const [locked] = await db.admin<{ locked_by: string | null }>("select locked_by from public.research_runs where id = $1", [runA]);
+    expect(locked.locked_by).toBeNull();
+    const chk = await db.try(as(UUID_D), "select public.add_research_check($1,'exists_active',2,'ok','x','[]'::jsonb)", [candA]);
+    expect(chk.error).toBeDefined();
+    expect(await db.query(as(UUID_D), "update public.research_candidates set user_decision = 'keep' where id = $1 returning id", [candA])).toHaveLength(0);
+    // the reviewer note: verified_at (and so the lead link) is out of the closer's hands too
+    expect(await db.query(as(UUID_D), "update public.research_candidates set verified_at = null where id = $1 returning id", [candA])).toHaveLength(0);
+  });
+
+  test("J2 the closer sees no research runs, sources, jobs or lists", async () => {
+    await seed();
+    await db.admin("insert into public.research_sources (workspace_id, run_id, kind, title, url, status) values ($1,$2,'permits','s','https://example.com/s','used')", [wsA, runA]);
+    await db.admin("insert into public.research_jobs (workspace_id, run_id, address, source_url) values ($1,$2,'1 Main St','https://example.com/j')", [wsA, runA]);
+    await db.admin("update public.research_candidates set user_decision = 'keep' where id = $1", [candA]);
+    const [l] = await db.admin<{ id: string }>("insert into public.research_lists (workspace_id, run_id, name) values ($1,$2,'L') returning id", [wsA, runA]);
+    await db.admin("insert into public.research_list_items (list_id, candidate_id, workspace_id) values ($1,$2,$3)", [l.id, candA, wsA]);
+    for (const t of ["research_runs", "research_sources", "research_jobs", "research_lists", "research_list_items"]) {
+      expect(await db.query(as(UUID_D), `select 1 from public.${t}`), t).toHaveLength(0);
+      expect((await db.query(as(UUID_A), `select 1 from public.${t}`)).length, t).toBeGreaterThan(0);
+    }
+  });
+
+  test("J2 the closer sees only the leads assigned to her, and their proof", async () => {
+    await seed();
+    const count = (t: string) => db.query(as(UUID_D), `select 1 from public.${t}`).then((r) => r.length);
+    expect(await count("leads")).toBe(0);
+    for (const t of ["research_candidates", "research_checks", "research_evidence"]) expect(await count(t), t).toBe(0);
+    const [lead] = await db.admin<{ id: string }>("select lead_id as id from public.research_candidates where id = $1", [candA]);
+    await db.admin("update public.leads set owner_id = $1 where id = $2", [UUID_D, lead.id]);
+    expect(await count("leads")).toBe(1);
+    expect(await db.query(as(UUID_D), "select id from public.research_candidates")).toEqual([{ id: candA }]);
+    expect(await count("research_checks")).toBe(1);
+    expect(await count("research_evidence")).toBe(1);
+    expect(await db.query(as(UUID_D), "select 1 from public.research_candidates where id = $1", [candB])).toHaveLength(0);
+    // sees the proof but still cannot change it
+    expect(await db.query(as(UUID_D), "update public.research_candidates set user_decision = 'keep' where id = $1 returning id", [candA])).toHaveLength(0);
+  });
+
+  test("owner and sdr keep full research access", async () => {
+    await seed();
+    for (const u of [UUID_A, UUID_C]) {
+      const r = await run(u, wsA);
+      expect(await db.query(as(u), "update public.research_runs set answers = '{}'::jsonb where id = $1 returning id", [r])).toHaveLength(1);
+      const holder = "cccccccc-0000-4000-8000-000000000001";
+      const c = await db.query<{ claim_research_step: boolean }>(as(u), "select public.claim_research_step($1,$2,60)", [r, holder]);
+      expect(c[0].claim_research_step).toBe(true);
+      await db.query(as(u), "select public.release_research_step($1,$2)", [r, holder]);
+      const [after] = await db.admin<{ locked_by: string | null }>("select locked_by from public.research_runs where id = $1", [r]);
+      expect(after.locked_by).toBeNull();
+      await db.query(as(u), "select public.add_research_check($1,'has_work',1,'unknown','ok','[]'::jsonb)", [candA]);
+    }
+  });
+});

@@ -233,3 +233,219 @@ create policy leads_select on public.leads
 
 -- C1: Juan's old verified searches become leads ("pesquisa avulsa"). Running it again changes nothing.
 select public.backfill_leads();
+
+-- ================================================================ J2 the closer leaves research (F2 blocker 4)
+-- Research tables are owner/sdr only. The closer reads the proof (candidates, checks, evidence) of the leads
+-- assigned to her, and nothing else. is_workspace_sender is owner/sdr (0003); closers and clients are not senders.
+create or replace function public.candidate_visible_to_assignee(p_candidate uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+      from public.research_candidates c
+      join public.leads l on l.id = c.lead_id and l.workspace_id = c.workspace_id
+     where c.id = p_candidate and l.owner_id = auth.uid()
+  );
+$$;
+
+create or replace function public.check_visible_to_assignee(p_check uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+      from public.research_checks k
+      join public.research_candidates c on c.id = k.candidate_id
+      join public.leads l on l.id = c.lead_id and l.workspace_id = c.workspace_id
+     where k.id = p_check and l.owner_id = auth.uid()
+  );
+$$;
+
+revoke all on function public.candidate_visible_to_assignee(uuid) from public, anon;
+revoke all on function public.check_visible_to_assignee(uuid) from public, anon;
+grant execute on function public.candidate_visible_to_assignee(uuid) to authenticated;
+grant execute on function public.check_visible_to_assignee(uuid) to authenticated;
+
+-- research_runs
+drop policy if exists research_runs_select on public.research_runs;
+create policy research_runs_select on public.research_runs
+  for select to authenticated using (public.is_workspace_sender(workspace_id));
+drop policy if exists research_runs_insert on public.research_runs;
+create policy research_runs_insert on public.research_runs
+  for insert to authenticated with check (public.is_workspace_sender(workspace_id));
+drop policy if exists research_runs_update on public.research_runs;
+create policy research_runs_update on public.research_runs
+  for update to authenticated
+  using (public.is_workspace_sender(workspace_id))
+  with check (public.is_workspace_sender(workspace_id));
+drop policy if exists research_runs_delete on public.research_runs;
+create policy research_runs_delete on public.research_runs
+  for delete to authenticated
+  using (public.is_workspace_owner(workspace_id) or (created_by = auth.uid() and public.is_workspace_sender(workspace_id)));
+
+-- research_sources
+drop policy if exists research_sources_select on public.research_sources;
+create policy research_sources_select on public.research_sources
+  for select to authenticated using (public.is_workspace_sender(workspace_id));
+drop policy if exists research_sources_insert on public.research_sources;
+create policy research_sources_insert on public.research_sources
+  for insert to authenticated
+  with check (public.is_workspace_sender(workspace_id) and public.run_in_workspace(run_id, workspace_id));
+drop policy if exists research_sources_update on public.research_sources;
+create policy research_sources_update on public.research_sources
+  for update to authenticated
+  using (public.is_workspace_sender(workspace_id))
+  with check (public.is_workspace_sender(workspace_id));
+
+-- research_jobs
+drop policy if exists research_jobs_select on public.research_jobs;
+create policy research_jobs_select on public.research_jobs
+  for select to authenticated using (public.is_workspace_sender(workspace_id));
+drop policy if exists research_jobs_insert on public.research_jobs;
+create policy research_jobs_insert on public.research_jobs
+  for insert to authenticated
+  with check (public.is_workspace_sender(workspace_id) and public.run_in_workspace(run_id, workspace_id));
+
+-- research_candidates: the closer may read the ones of her assigned leads; writes (verified_at, decisions) are sender-only
+drop policy if exists research_candidates_select on public.research_candidates;
+create policy research_candidates_select on public.research_candidates
+  for select to authenticated
+  using (public.is_workspace_sender(workspace_id) or public.candidate_visible_to_assignee(id));
+drop policy if exists research_candidates_insert on public.research_candidates;
+create policy research_candidates_insert on public.research_candidates
+  for insert to authenticated
+  with check (public.is_workspace_sender(workspace_id) and public.run_in_workspace(run_id, workspace_id));
+drop policy if exists research_candidates_update on public.research_candidates;
+create policy research_candidates_update on public.research_candidates
+  for update to authenticated
+  using (public.is_workspace_sender(workspace_id))
+  with check (public.is_workspace_sender(workspace_id));
+
+-- research_checks / research_evidence
+drop policy if exists research_checks_select on public.research_checks;
+create policy research_checks_select on public.research_checks
+  for select to authenticated
+  using (public.is_workspace_sender(workspace_id) or public.candidate_visible_to_assignee(candidate_id));
+drop policy if exists research_checks_insert on public.research_checks;
+create policy research_checks_insert on public.research_checks
+  for insert to authenticated with check (public.is_workspace_sender(workspace_id));
+drop policy if exists research_evidence_select on public.research_evidence;
+create policy research_evidence_select on public.research_evidence
+  for select to authenticated
+  using (public.is_workspace_sender(workspace_id) or public.check_visible_to_assignee(check_id));
+drop policy if exists research_evidence_insert on public.research_evidence;
+create policy research_evidence_insert on public.research_evidence
+  for insert to authenticated with check (public.is_workspace_sender(workspace_id));
+
+-- research_lists / research_list_items
+drop policy if exists research_lists_select on public.research_lists;
+create policy research_lists_select on public.research_lists
+  for select to authenticated using (public.is_workspace_sender(workspace_id));
+drop policy if exists research_lists_insert on public.research_lists;
+create policy research_lists_insert on public.research_lists
+  for insert to authenticated
+  with check (
+    public.is_workspace_sender(workspace_id)
+    and (run_id is null or public.run_in_workspace(run_id, workspace_id))
+  );
+drop policy if exists research_lists_update on public.research_lists;
+create policy research_lists_update on public.research_lists
+  for update to authenticated
+  using (public.is_workspace_sender(workspace_id))
+  with check (public.is_workspace_sender(workspace_id));
+drop policy if exists research_lists_delete on public.research_lists;
+create policy research_lists_delete on public.research_lists
+  for delete to authenticated using (public.is_workspace_sender(workspace_id));
+
+drop policy if exists research_list_items_select on public.research_list_items;
+create policy research_list_items_select on public.research_list_items
+  for select to authenticated using (public.is_workspace_sender(workspace_id));
+drop policy if exists research_list_items_insert on public.research_list_items;
+create policy research_list_items_insert on public.research_list_items
+  for insert to authenticated with check (public.is_workspace_sender(workspace_id));
+drop policy if exists research_list_items_delete on public.research_list_items;
+create policy research_list_items_delete on public.research_list_items
+  for delete to authenticated using (public.is_workspace_sender(workspace_id));
+
+-- RPCs: same bodies as 0002/0004, sender instead of member
+create or replace function public.claim_research_step(p_run uuid, p_holder uuid, p_seconds integer)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'not authenticated' using errcode = '28000';
+  end if;
+  update public.research_runs r
+     set locked_until = now() + make_interval(secs => least(greatest(coalesce(p_seconds, 60), 10), 900)),
+         locked_by = p_holder
+   where r.id = p_run
+     and public.is_workspace_sender(r.workspace_id)
+     and (r.locked_until is null or r.locked_until < now() or r.locked_by = p_holder);
+  return found;
+end;
+$$;
+
+create or replace function public.release_research_step(p_run uuid, p_holder uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  update public.research_runs r
+     set locked_until = null, locked_by = null
+   where r.id = p_run and r.locked_by = p_holder and public.is_workspace_sender(r.workspace_id);
+end;
+$$;
+
+create or replace function public.add_research_check(
+  p_candidate uuid,
+  p_kind text,
+  p_pass integer,
+  p_result text,
+  p_summary text,
+  p_evidence jsonb
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_ws uuid;
+  v_id uuid;
+  e jsonb;
+begin
+  if auth.uid() is null then
+    raise exception 'not authenticated' using errcode = '28000';
+  end if;
+  select c.workspace_id into v_ws from public.research_candidates c where c.id = p_candidate;
+  if v_ws is null or not public.is_workspace_sender(v_ws) then
+    raise exception 'candidate not found' using errcode = '42501';
+  end if;
+  insert into public.research_checks (workspace_id, candidate_id, kind, pass, result, summary)
+  values (v_ws, p_candidate, p_kind, p_pass, p_result, coalesce(p_summary, ''))
+  on conflict (candidate_id, kind, pass)
+  do update set result = excluded.result, summary = excluded.summary, created_at = now()
+  returning id into v_id;
+  delete from public.research_evidence ev where ev.check_id = v_id;
+  for e in select * from jsonb_array_elements(coalesce(p_evidence, '[]'::jsonb)) loop
+    insert into public.research_evidence (workspace_id, check_id, url, title, excerpt, seen_at)
+    values (
+      v_ws, v_id, e ->> 'url', coalesce(e ->> 'title', ''), coalesce(e ->> 'excerpt', ''),
+      coalesce((e ->> 'seen_at')::timestamptz, now())
+    );
+  end loop;
+  return v_id;
+end;
+$$;
