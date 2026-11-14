@@ -4,6 +4,30 @@ import { CANDIDATE_COLUMNS, normalizeCandidate, type CandidateRow } from "@/lib/
 import type { CheckWithEvidence } from "@/lib/research/store";
 import { LEAD_COLUMNS, type LeadDetail, type LeadListItem, type LeadRow } from "./types";
 
+/**
+ * Ids per `.in()` request. Two limits at once: the URL stays small (100 UUIDs is ~3.8 KB, 500 would be ~19 KB, over
+ * common 8-16 KB limits), and PostgREST returns at most 1000 rows per response, silently truncating the rest. A
+ * candidate has at most 8 checks, so 100 ids give at most 800 check rows per request. Keep ID_CHUNK * 8 <= 1000.
+ */
+export const ID_CHUNK = 100;
+
+/** Runs `run` for each chunk of ids in parallel and concatenates the rows; throws on the first error. */
+export async function inChunks<T>(
+  ids: string[],
+  run: (chunk: string[]) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  label: string,
+): Promise<T[]> {
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += ID_CHUNK) chunks.push(ids.slice(i, i + ID_CHUNK));
+  const results = await Promise.all(chunks.map((c) => run(c)));
+  const out: T[] = [];
+  for (const r of results) {
+    if (r.error) throw new Error(`${label}: ${r.error.message}`);
+    out.push(...(r.data ?? []));
+  }
+  return out;
+}
+
 const CHECK_SELECT = "id, candidate_id, kind, pass, result, summary, research_evidence(url, title, excerpt, seen_at)";
 
 type RawCheck = Record<string, unknown> & { research_evidence: CheckWithEvidence["evidence"] | null };
@@ -31,19 +55,16 @@ export async function listLeads(db: SupabaseClient, workspaceId: string): Promis
   const bestIds = leads.map((l) => l.best_candidate_id as string);
   const agentIds = [...new Set(leads.map((l) => l.origin_agent_id).filter((x): x is string => Boolean(x)))];
 
-  const [cands, agents, checks] = await Promise.all([
-    db.from("research_candidates").select(CANDIDATE_COLUMNS).in("id", bestIds),
-    agentIds.length ? db.from("agents").select("id, name").in("id", agentIds) : Promise.resolve({ data: [], error: null }),
-    db.from("research_checks").select(CHECK_SELECT).in("candidate_id", bestIds),
+  const [candRows, agentRows, checkRows] = await Promise.all([
+    inChunks<Record<string, unknown>>(bestIds, (c) => db.from("research_candidates").select(CANDIDATE_COLUMNS).in("id", c) as never, "listLeads candidates"),
+    inChunks<Record<string, unknown>>(agentIds, (c) => db.from("agents").select("id, name").in("id", c) as never, "listLeads agents"),
+    inChunks<unknown>(bestIds, (c) => db.from("research_checks").select(CHECK_SELECT).in("candidate_id", c) as never, "listLeads checks"),
   ]);
-  if (cands.error) throw new Error(`listLeads candidates: ${cands.error.message}`);
-  if (agents.error) throw new Error(`listLeads agents: ${agents.error.message}`);
-  if (checks.error) throw new Error(`listLeads checks: ${checks.error.message}`);
 
-  const candById = new Map((cands.data ?? []).map((r) => [(r as { id: string }).id, normalizeCandidate(r as unknown as Record<string, unknown>)]));
-  const agentName = new Map((agents.data ?? []).map((a) => [(a as { id: string }).id, (a as { name: string }).name]));
+  const candById = new Map(candRows.map((r) => [r.id as string, normalizeCandidate(r)]));
+  const agentName = new Map(agentRows.map((a) => [a.id as string, a.name as string]));
   const proofBy = new Map<string, number>();
-  for (const c of toChecks(checks.data)) {
+  for (const c of toChecks(checkRows)) {
     if (c.result === "ok" && c.evidence.length > 0) proofBy.set(c.candidate_id, (proofBy.get(c.candidate_id) ?? 0) + 1);
   }
 
@@ -87,15 +108,12 @@ export async function getLead(db: SupabaseClient, id: string): Promise<LeadDetai
     agentName = (data as { name: string } | null)?.name ?? null;
   }
 
-  let checks: CheckWithEvidence[] = [];
-  if (candidates.length) {
-    const { data, error: kErr } = await db
-      .from("research_checks")
-      .select(CHECK_SELECT)
-      .in("candidate_id", candidates.map((c) => c.id))
-      .order("created_at", { ascending: true });
-    if (kErr) throw new Error(`getLead checks: ${kErr.message}`);
-    checks = toChecks(data);
-  }
+  const checks = toChecks(
+    await inChunks<unknown>(
+      candidates.map((c) => c.id),
+      (c) => db.from("research_checks").select(CHECK_SELECT).in("candidate_id", c).order("created_at", { ascending: true }) as never,
+      "getLead checks",
+    ),
+  );
   return { lead, agentName, candidates, checks };
 }
