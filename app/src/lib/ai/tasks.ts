@@ -4,12 +4,12 @@ import { applyEvidenceRules, clip, normalizeHook, type CheckIn, type SeenFilter 
 import type { CheckKind, CompanyType, Confidence, EmailType, EntryPath, Plan, Question, Rigor, SourceKind, SourceStatus } from "@/lib/research/types";
 import { reserveFor, runTask, type AiContext, type TaskDef, type TaskMeta, type TaskResult } from "./gateway";
 import { MODELS } from "./models";
+import { minCallUsd, routeFor, WEB_LIMITS_BY_RIGOR, type ResearchStep } from "./routing";
 import * as collectP from "./prompts/collect";
 import * as discoverP from "./prompts/discover";
 import * as planP from "./prompts/plan";
 import * as questionsP from "./prompts/questions";
 import * as secondP from "./prompts/second-pass";
-import { budgetLine } from "./prompts/shared";
 import * as verifyP from "./prompts/verify";
 import {
   collectSchema,
@@ -32,22 +32,19 @@ import {
 // that call (finding 3); the gateway reserves each task's worst case computed from the limits below (finding 2).
 
 /**
- * Web limits per call (max_uses). Raised on 10/11/2026 after the "0 companies" run: with 3 searches a collect call
- * ran out before it could list anyone (docs/mvp/fase-1-3-pesquisa.md, "0 empresas"). The model is told the budget
- * in the request; reaching it is a normal end of searching, reported in the run's limits.
+ * Web limits per call (max_uses) of "careful" and "strict" (the task definitions' defaults). Raised on 10/11/2026
+ * after the "0 companies" run: with 3 searches a collect call ran out before it could list anyone
+ * (docs/mvp/fase-1-3-pesquisa.md, "0 empresas"). "quick" uses smaller ones (routing.ts). The model is told the budget
+ * in the request (the gateway appends it); reaching it is a normal end of searching, reported in the run's limits.
  */
-export const WEB_LIMITS = {
-  discover: { search: { maxUses: 6 }, fetch: { maxUses: 3 } },
-  collect: { search: { maxUses: 8 }, fetch: { maxUses: 6 } },
-  verify: { search: { maxUses: 3 }, fetch: { maxUses: 6 } },
-  second: { search: { maxUses: 2 }, fetch: { maxUses: 4 } },
-} as const;
+export const WEB_LIMITS = WEB_LIMITS_BY_RIGOR.careful;
 
-/** The request text plus this call's web budget (so the model can plan its searches). */
-const withBudget =
-  <I>(build: (i: I) => string, web: { search?: { maxUses: number }; fetch?: { maxUses: number } }) =>
-  (i: I) =>
-    `${build(i)}\n${budgetLine(web)}`;
+/** The task definition with the model and web budget of this step at this rigor (modo econômico, routing.ts). */
+function routed<I, P, O>(def: TaskDef<I, P, O>, step: ResearchStep, rigor: Rigor | undefined): TaskDef<I, P, O> {
+  if (!rigor) return def;
+  const r = routeFor(step, rigor);
+  return { ...def, model: r.model, web: r.web };
+}
 
 // ---------------------------------------------------------------- small normalizers
 const list = (xs: string[], max: number, len: number) => xs.map((x) => clip(x, len)).filter(Boolean).slice(0, max);
@@ -105,12 +102,14 @@ export function seenUrl(raw: string, meta: TaskMeta): string | null {
 
 const filterOf = (meta: TaskMeta): SeenFilter => ({ seen: (u) => meta.seen(u), seenAt: (u) => meta.seenAt(u), dropped: meta.dropped });
 
-// ---------------------------------------------------------------- 1. questions (Opus)
+// ---------------------------------------------------------------- 1. questions (Sonnet)
+// Moved from Opus on 14/11/2026 (modo econômico): the questions only ask the owner what to clarify; the owner
+// answers them and the plan (still Opus) is what shapes the search.
 export type QuestionsResult = { understood: string; places: string[]; questions: Question[] };
 
 const questionsDef: TaskDef<questionsP.QuestionsInput, QuestionsOut, QuestionsResult> = {
   task: "research_questions",
-  model: MODELS.opus,
+  model: MODELS.sonnet,
   promptVersion: questionsP.PROMPT_VERSION,
   system: questionsP.SYSTEM,
   schema: questionsSchema,
@@ -160,7 +159,7 @@ export function writePlan(ctx: AiContext, input: planP.PlanInput): Promise<TaskR
   return runTask(ctx, planDef, input);
 }
 
-// ---------------------------------------------------------------- 3. discover sources (Sonnet + web)
+// ---------------------------------------------------------------- 3. discover sources (+ web; model per rigor, routing.ts)
 export type FoundSource = { kind: SourceKind; title: string; url: string | null; status: SourceStatus; note: string };
 
 /**
@@ -207,12 +206,12 @@ const discoverDef: TaskDef<discoverP.DiscoverInput, DiscoverOut, FoundSource[]> 
   effort: "medium",
   maxTokens: 12_000,
   web: WEB_LIMITS.discover,
-  buildUser: withBudget(discoverP.buildUser, WEB_LIMITS.discover),
+  buildUser: discoverP.buildUser,
   normalize: (p, _i, meta) => normalizeSources(p.sources, 20, meta),
 };
 
-export function discoverSources(ctx: AiContext, input: discoverP.DiscoverInput): Promise<TaskResult<FoundSource[]>> {
-  return runTask(ctx, discoverDef, input);
+export function discoverSources(ctx: AiContext, input: discoverP.DiscoverInput, rigor?: Rigor): Promise<TaskResult<FoundSource[]>> {
+  return runTask(ctx, routed(discoverDef, "discover", rigor), input);
 }
 
 // ---------------------------------------------------------------- jobs without a builder (G10)
@@ -254,7 +253,7 @@ export function normalizeJobs(raw: JobOut[], meta: TaskMeta, max = 20): FoundJob
   return out;
 }
 
-// ---------------------------------------------------------------- 4. collect candidates (Sonnet + web)
+// ---------------------------------------------------------------- 4. collect candidates (+ web; model per rigor, routing.ts)
 export type CollectedCandidate = {
   name: string;
   city: string | null;
@@ -279,7 +278,7 @@ const collectDef: TaskDef<collectP.CollectInput, CollectOut, CollectResult> = {
   effort: "medium",
   maxTokens: 16_000,
   web: WEB_LIMITS.collect,
-  buildUser: withBudget(collectP.buildUser, WEB_LIMITS.collect),
+  buildUser: collectP.buildUser,
   normalize: (p, input, meta) => {
     const candidates: CollectedCandidate[] = [];
     for (const c of p.candidates) {
@@ -315,8 +314,8 @@ const collectDef: TaskDef<collectP.CollectInput, CollectOut, CollectResult> = {
   },
 };
 
-export function collectCandidates(ctx: AiContext, input: collectP.CollectInput): Promise<TaskResult<CollectResult>> {
-  return runTask(ctx, collectDef, input);
+export function collectCandidates(ctx: AiContext, input: collectP.CollectInput, rigor?: Rigor): Promise<TaskResult<CollectResult>> {
+  return runTask(ctx, routed(collectDef, "collect", rigor), input);
 }
 
 // ---------------------------------------------------------------- 5. verify (Sonnet + web)
@@ -405,7 +404,7 @@ const verifyDef: TaskDef<verifyP.VerifyInput, VerifyOut, VerifyResult> = {
   effort: "medium",
   maxTokens: 16_000,
   web: WEB_LIMITS.verify,
-  buildUser: withBudget(verifyP.buildUser, WEB_LIMITS.verify),
+  buildUser: verifyP.buildUser,
   normalize: (p, input, meta) => {
     const refs = new Set(input.companies.map((c) => c.ref));
     const done = new Set<string>();
@@ -464,7 +463,7 @@ const verifyDef: TaskDef<verifyP.VerifyInput, VerifyOut, VerifyResult> = {
 };
 
 export function verifyCompanies(ctx: AiContext, input: verifyP.VerifyInput): Promise<TaskResult<VerifyResult>> {
-  return runTask(ctx, verifyDef, input);
+  return runTask(ctx, routed(verifyDef, "verify", input.rigor), input);
 }
 
 // ---------------------------------------------------------------- 6. second pass (Opus + web), strict only
@@ -479,7 +478,7 @@ const secondDef: TaskDef<secondP.SecondPassInput, SecondPassOut, SecondPassCompa
   effort: "high",
   maxTokens: 16_000,
   web: WEB_LIMITS.second,
-  buildUser: withBudget(secondP.buildUser, WEB_LIMITS.second),
+  buildUser: secondP.buildUser,
   normalize: (p, input, meta) => {
     const refs = new Set(input.companies.map((c) => c.ref));
     const done = new Set<string>();
@@ -503,17 +502,22 @@ const secondDef: TaskDef<secondP.SecondPassInput, SecondPassOut, SecondPassCompa
   },
 };
 
-export function secondPass(ctx: AiContext, input: secondP.SecondPassInput): Promise<TaskResult<SecondPassCompany[]>> {
-  return runTask(ctx, secondDef, input);
+export function secondPass(ctx: AiContext, input: secondP.SecondPassInput, rigor?: Rigor): Promise<TaskResult<SecondPassCompany[]>> {
+  return runTask(ctx, routed(secondDef, "second", rigor), input);
 }
 
 /** For tests and docs: the definitions (limits, models, reserves). */
 export const TASK_DEFS = { questionsDef, planDef, discoverDef, collectDef, verifyDef, secondDef };
 
-/** The reservation (worst case) of one call of a research step, for the engine's "does it still fit?" checks. */
-export const RESERVE_USD = {
-  discover: reserveFor(discoverDef),
-  collect: reserveFor(collectDef),
-  verify: reserveFor(verifyDef),
-  second: reserveFor(secondDef),
-} as const;
+const STEP_DEFS = { discover: discoverDef, collect: collectDef, verify: verifyDef, second: secondDef } as Record<ResearchStep, TaskDef<unknown, unknown, unknown>>;
+
+/** The full reservation (worst case) of one call of a research step at a rigor, before any shrink to fit the run cap. */
+export function reserveUsdFor(step: ResearchStep, rigor: Rigor): number {
+  return reserveFor(routed(STEP_DEFS[step], step, rigor));
+}
+
+/** The reservation of the smallest call of a step at a rigor (what must be left for the step to run at all). */
+export function minReserveUsdFor(step: ResearchStep, rigor: Rigor): number {
+  const def = routed(STEP_DEFS[step], step, rigor);
+  return minCallUsd(def.model, def.maxTokens, def.web, def.reserveUsd ?? 0);
+}

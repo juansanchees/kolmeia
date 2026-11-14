@@ -38,6 +38,9 @@ afterAll(async () => {
 });
 
 // ---------------------------------------------------------------- fixtures
+/** Haiku over 100k prompt tokens: 120k x 0.5 + 216k x 2.5 per million = US$ 0.60 per call. */
+const HAIKU_PRICEY = { ...USAGE, inputTokens: 120_000, outputTokens: 216_000 };
+
 const refsIn = (req: AiRequest) => [...req.user.matchAll(/"ref":\s*"([0-9a-f-]{36})"/g)].map((m) => m[1]);
 const namesIn = (req: AiRequest) => [...req.user.matchAll(/"name":\s*"([^"]+)"/g)].map((m) => m[1]);
 
@@ -265,10 +268,10 @@ describe("happy path, strict rigor", () => {
     expect(run.plan?.places).toEqual(["Worcester County, MA", "Framingham, MA"]);
   });
 
-  test("models per task (questions/plan/second pass on Opus, web stages on Sonnet)", () => {
+  test("models per task in strict (questions on Sonnet, plan/second pass on Opus, web stages on Sonnet)", () => {
     const model = Object.fromEntries(fake.calls.map((c) => [c.task, c.model]));
     expect(model).toEqual({
-      research_questions: MODELS.opus,
+      research_questions: MODELS.sonnet,
       research_plan: MODELS.opus,
       research_discover: MODELS.sonnet,
       research_collect: MODELS.sonnet,
@@ -294,8 +297,8 @@ describe("happy path, strict rigor", () => {
     }
     const sum = calls.reduce((s, c) => s + Number(c.cost_usd), 0);
     expect(run.spent_cost_usd).toBeCloseTo(sum, 5);
-    // Opus 2000 in / 500 out = 0.008 + 0.01; Sonnet discover = 0.004 + 0.005 + 4 searches * 0.01
-    expect(Number(calls.find((c) => c.task === "research_questions")!.cost_usd)).toBeCloseTo(0.018, 6);
+    // Sonnet 2000 in / 500 out = 0.004 + 0.005 (questions and strict discover); discover + 4 searches * 0.01
+    expect(Number(calls.find((c) => c.task === "research_questions")!.cost_usd)).toBeCloseTo(0.009, 6);
     expect(Number(calls.find((c) => c.task === "research_discover")!.cost_usd)).toBeCloseTo(0.049, 6);
   });
 
@@ -380,8 +383,8 @@ describe("caps [P6] [R16]", () => {
     const fake = new FakeTransport({
       research_questions: () => ({ json: { ...questionsJson, questions: [] } }),
       research_plan: () => ({ json: planJson }),
-      research_discover: () => ({ json: discoverJson, usage: expensive }),
-      research_collect: (_r, n) => ({ json: collectJson(n), usage: expensive }),
+      research_discover: () => ({ json: discoverJson, usage: HAIKU_PRICEY }),
+      research_collect: (_r, n) => ({ json: collectJson(n), usage: HAIKU_PRICEY }),
       research_verify: (r) => ({ json: verifyJson(r), usage: expensive }),
       research_second_pass: (r) => ({ json: secondJson(r) }),
     });
@@ -826,24 +829,81 @@ describe("[0 companies] collection keeps going, tool limits are a normal end, so
   });
 
   test("when another collect round no longer fits the cost cap, the run checks what it found instead of stopping", async () => {
-    const pricey = { ...USAGE, outputTokens: 60_000 }; // Sonnet: US$ 0.60 per call
     const fake = new FakeTransport({
       research_questions: () => ({ json: { ...questionsJson, questions: [] } }),
       research_plan: () => ({ json: planJson }),
-      research_discover: () => ({ json: discoverJson, usage: pricey }),
-      research_collect: (_r, n) => ({ json: { ...collectJson(0), exhausted: false, candidates: n === 0 ? collectJson(0).candidates : [] }, usage: pricey }),
+      research_discover: () => ({ json: discoverJson, usage: HAIKU_PRICEY }),
+      research_collect: (_r, n) => ({ json: { ...collectJson(0), exhausted: false, candidates: n === 0 ? collectJson(0).candidates : [] }, usage: HAIKU_PRICEY }),
       research_verify: (r) => ({ json: verifyJson(r) }),
     });
     const deps: EngineDeps = { store, transport: fake, now: () => NOW, batchSize: 10 };
     const runId = await newRun("careful");
     let run = await drive(deps, runId);
-    // discover 0.60 -> collect fits (0.60 + 1.35 <= 2.5) -> 1.20: a 2nd collect would not fit, verify (0.85) does.
-    await approvePlan(store, run, { rigor: "careful", maxCandidates: 20, maxCostUsd: 2.5 });
+    // Discover and collect leave US$ 0.25 (one smallest verify call) untouched. Questions + plan 0.027, discover
+    // 0.60 -> collect fits (0.627 + 0.46 <= 1.48 - 0.25) -> 1.227: a 2nd collect does not fit even shrunk (0.03 >
+    // 0.003 left), a shrunk verify (0.25 <= 0.253) does.
+    await approvePlan(store, run, { rigor: "careful", maxCandidates: 20, maxCostUsd: 1.48 });
     run = await drive(deps, runId);
     expect(run.status).toBe("done");
     expect(fake.callsFor("research_collect")).toHaveLength(1);
     expect(fake.callsFor("research_verify")).toHaveLength(1);
     expect((await store.listCandidates(runId)).every((c) => c.verified_at)).toBe(true);
     expect(run.limits_notes.some((n) => /sobrar custo para checar/.test(n.text))).toBe(true);
+  });
+});
+
+describe("modo econômico: a Rápida run with a US$ 1 cap really searches", () => {
+  // Realistic per-call usage (live calls cost 5 to 15 times less than their reserve): Haiku collect ~US$ 0.06,
+  // Sonnet verify ~US$ 0.17. Before 14/11/2026 this run stopped before any search (discover alone reserved 0.97).
+  const haikuWeb = { ...USAGE, inputTokens: 90_000, outputTokens: 4_000, webSearches: 5, webFetches: 3 };
+  const sonnetVerify = { ...USAGE, inputTokens: 60_000, outputTokens: 3_000, webSearches: 2, webFetches: 3 };
+
+  test("discover, collect and verify run on the economy route, shrink to fit, and never pass the cap", async () => {
+    const fake = new FakeTransport({
+      research_questions: () => ({ json: { ...questionsJson, questions: [] } }),
+      research_plan: () => ({ json: planJson }),
+      research_discover: () => ({ json: discoverJson, usage: haikuWeb }),
+      research_collect: (_r, n) => ({ json: collectJson(n), usage: haikuWeb }),
+      research_verify: (r) => ({ json: verifyJson(r), usage: sonnetVerify }),
+    });
+    const deps: EngineDeps = { store, transport: fake, now: () => NOW, batchSize: 1 };
+    const runId = await newRun("quick");
+    let run = await drive(deps, runId);
+    expect(run.status).toBe("plan");
+    await approvePlan(store, run, { rigor: "quick", maxCandidates: 10, maxCostUsd: 1 });
+    run = await drive(deps, runId);
+
+    expect(run.status).toBe("done");
+    expect(fake.callsFor("research_discover")).toHaveLength(1);
+    expect(fake.callsFor("research_collect").length).toBeGreaterThanOrEqual(1);
+    expect(fake.callsFor("research_verify").length).toBeGreaterThanOrEqual(1);
+    expect(fake.callsFor("research_second_pass")).toHaveLength(0); // Rápida has no second pass
+    expect((await store.listCandidates(runId)).length).toBeGreaterThan(0);
+
+    // Routing: Haiku proposes, Sonnet decides; Rápida asks for fewer searches.
+    for (const c of fake.callsFor("research_discover")) expect(c.model).toBe(MODELS.haiku);
+    for (const c of fake.callsFor("research_collect")) expect(c.model).toBe(MODELS.haiku);
+    for (const c of fake.callsFor("research_verify")) expect(c.model).toBe(MODELS.sonnet);
+    expect(fake.callsFor("research_collect")[0].web).toEqual({ search: { maxUses: 5 }, fetch: { maxUses: 3 } });
+    expect(fake.callsFor("research_collect")[0].user).toMatch(/at most 5 web searches and 3 page opens/);
+
+    // Late verify calls were shrunk to fit what was left, and the model was told the smaller budget.
+    const verifies = fake.callsFor("research_verify");
+    const last = verifies[verifies.length - 1];
+    expect(last.web!.search!.maxUses + last.web!.fetch!.maxUses).toBeLessThan(5);
+    expect(last.user).toContain(`at most ${last.web!.search!.maxUses} web searches and ${last.web!.fetch!.maxUses} page opens`);
+    expect(run.limits_notes.some((n) => /menos buscas que o normal/.test(n.text))).toBe(true);
+
+    // [P6] the cap holds: settled spend and every reservation stayed inside US$ 1.
+    expect(run.spent_cost_usd).toBeLessThanOrEqual(1);
+    const rows = await db.query<{ reserve_usd: string; cost_usd: string; status: string }>(
+      as(UUID_A),
+      "select reserve_usd, cost_usd, status from public.ai_calls where run_id = $1 order by created_at",
+      [runId],
+    );
+    expect(rows.every((r) => r.status === "ok")).toBe(true);
+    const sum = rows.reduce((s, r) => s + Number(r.cost_usd), 0);
+    expect(sum).toBeLessThanOrEqual(1);
+    expect(run.spent_cost_usd).toBeCloseTo(sum, 5);
   });
 });

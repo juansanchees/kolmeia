@@ -68,8 +68,9 @@ export const CHECKS_BY_RIGOR: Record<Rigor, readonly CheckKind[]> = {
 export const SECOND_PASS_BY_RIGOR: Record<Rigor, boolean> = { quick: false, careful: false, strict: true };
 
 /** Default caps per rigor. The user may change them before approving, up to the hard ceilings. */
-// Raised on 10/11/2026 with finding 2: every call now reserves its worst case (US$ 0.36 to 1.35 per call), and a
-// stage only starts when the run's remaining budget covers that reserve.
+// Raised on 10/11/2026 with finding 2: every call reserves its worst case. Since 14/11/2026 (modo econômico) a call
+// that does not fit the run's remaining budget asks for fewer searches instead of stopping (ai/routing.ts), so a
+// Rápida run also works with a US$ 1 cap.
 export const DEFAULT_CAPS: Record<Rigor, { maxCandidates: number; maxCostUsd: number; maxMinutes: number }> = {
   quick: { maxCandidates: 15, maxCostUsd: 2, maxMinutes: 20 },
   careful: { maxCandidates: 20, maxCostUsd: 3, maxMinutes: 40 },
@@ -123,6 +124,8 @@ export type Progress = {
   budgetHits?: Partial<Record<"discover_sources" | "collect" | "verify" | "second_pass", number>>;
   /** Why the collection stopped, when it was not the normal end (shown in the limits). */
   collectStop?: "empty" | "cost";
+  /** Calls whose web budget was shrunk to fit the run's remaining cost cap (shown in the limits). */
+  trimmedCalls?: number;
 };
 
 export type LimitNote = {

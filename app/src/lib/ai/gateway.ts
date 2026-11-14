@@ -7,6 +7,8 @@ import { aiSpendCaps, getAnthropicKey } from "./config";
 import { AiError, AiTransportFailure } from "./errors";
 import type { ModelId } from "./models";
 import { estimateCostUsd, worstCaseUsd } from "./pricing";
+import { budgetLine } from "./prompts/shared";
+import { fitWebToBudget } from "./routing";
 import { ZERO_USAGE, type AiRequest, type AiResponse, type AiTask, type AiTransport, type AiUsage, type WebTools } from "./types";
 
 // The one door every AI call goes through: access allowlist and caps (R16, P6), the ledger (R17), output
@@ -98,6 +100,7 @@ export type TaskDef<Input, Parsed, Out> = {
    * model, maxTokens, web limits and continuations (pricing.worstCaseUsd).
    */
   reserveUsd?: number;
+  /** The request text. For a task with web tools the gateway appends the call's web budget line (budgetLine). */
   buildUser: (input: Input) => string;
   /** Turns the validated model output into what our code stores (caps, URL checks, defaults). */
   normalize: (parsed: Parsed, input: Input, meta: TaskMeta) => Out;
@@ -112,6 +115,10 @@ export type WebReport = {
   errors: Record<string, number>;
   /** The call reached its own per-call web budget (max_uses) for search or fetch. */
   budgetUsed: boolean;
+  /** The web budget this call was actually given (smaller than the task's when the run's cost cap was close). */
+  limits: WebTools;
+  /** True when the web budget was shrunk to fit the run's remaining cost cap. */
+  trimmed: boolean;
 };
 
 export type TaskResult<Out> = { data: Out; costUsd: number; usage: AiUsage; droppedUrls?: number; web?: WebReport };
@@ -193,10 +200,22 @@ export async function runTask<Input, Parsed, Out>(
   input: Input,
 ): Promise<TaskResult<Out>> {
   if (!ctx.transport) throw new AiError("not_configured");
-  const reserveUsd = reserveFor(def);
+  let reserveUsd = reserveFor(def);
+  let web = def.web;
+  let maxContinuations = def.maxContinuations ?? DEFAULT_MAX_CONTINUATIONS;
+  let trimmed = false;
 
-  // P6: per-run cap, in memory first (the database checks it again inside reserve_ai_call).
-  if (ctx.runBudget && ctx.runBudget.spentUsd + reserveUsd > ctx.runBudget.maxUsd) throw new AiError("run_cap");
+  // P6: per-run cap, in memory first (the database checks it again inside reserve_ai_call). A call with web tools
+  // that does not fit asks for fewer searches instead (modo econômico); its reserve is still the worst case of the
+  // call that is actually sent, so the run cap is never exceeded by more than before.
+  if (ctx.runBudget) {
+    const remaining = Math.round((ctx.runBudget.maxUsd - ctx.runBudget.spentUsd) * 1_000_000) / 1_000_000;
+    if (reserveUsd > remaining) {
+      const fitted = def.web ? fitWebToBudget(def.model, def.maxTokens, def.web, maxContinuations, remaining, def.reserveUsd ?? 0) : null;
+      if (!fitted) throw new AiError("run_cap");
+      ({ web, maxContinuations, reserveUsd, trimmed } = fitted);
+    }
+  }
 
   let callId: string | null = null;
   if (ctx.ledger.reserve) {
@@ -222,12 +241,13 @@ export async function runTask<Input, Parsed, Out>(
     task: def.task,
     model: def.model,
     system: def.system,
-    user: def.buildUser(input),
+    // The model is told the web budget it really has (the API enforces it as max_uses).
+    user: web ? `${def.buildUser(input)}\n${budgetLine(web)}` : def.buildUser(input),
     jsonSchema: jsonSchemaFor(schema),
     effort: def.effort,
     maxTokens: def.maxTokens,
-    web: def.web,
-    maxContinuations: def.maxContinuations ?? DEFAULT_MAX_CONTINUATIONS,
+    web,
+    maxContinuations,
   };
 
   const finish = (usage: AiUsage, costUsd: number, status: AiCallStatus, error: string | null, durationMs: number) => {
@@ -284,11 +304,11 @@ export async function runTask<Input, Parsed, Out>(
   await finish(res.usage, costUsd, "ok", null, durationMs);
   const meta = taskMeta(res, Boolean(def.web));
   const data = def.normalize(parsed, input, meta);
-  return { data, costUsd, usage: res.usage, droppedUrls: meta.dropped.count, ...(def.web ? { web: webReport(def.web, res) } : {}) };
+  return { data, costUsd, usage: res.usage, droppedUrls: meta.dropped.count, ...(web ? { web: webReport(web, res, trimmed) } : {}) };
 }
 
 /** A tool-limit error is the normal end of searching inside a call, not a failure; it is only reported. */
-export function webReport(web: WebTools, res: Pick<AiResponse, "usage" | "toolErrors" | "searchQueries">): WebReport {
+export function webReport(web: WebTools, res: Pick<AiResponse, "usage" | "toolErrors" | "searchQueries">, trimmed = false): WebReport {
   const errors = { ...(res.toolErrors ?? {}) };
   const searchFull = Boolean(web.search) && res.usage.webSearches >= web.search!.maxUses;
   const fetchFull = Boolean(web.fetch) && res.usage.webFetches >= web.fetch!.maxUses;
@@ -298,6 +318,8 @@ export function webReport(web: WebTools, res: Pick<AiResponse, "usage" | "toolEr
     queries: res.searchQueries ?? [],
     errors,
     budgetUsed: (errors.max_uses_exceeded ?? 0) > 0 || searchFull || fetchFull,
+    limits: web,
+    trimmed,
   };
 }
 

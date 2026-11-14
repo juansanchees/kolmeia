@@ -300,7 +300,8 @@ describe("[finding 2] reservation at the worst case, settled once", () => {
 
   test("every research task reserves its worst case; the per-call numbers stay sane (< US$ 1.50)", () => {
     const reserves = Object.fromEntries(Object.entries(TASK_DEFS).map(([k, d]) => [k, reserveFor(d as never)]));
-    expect(reserves).toEqual({ questionsDef: 0.36, planDef: 0.36, discoverDef: 0.97, collectDef: 1.35, verifyDef: 0.85, secondDef: 1.32 });
+    // questions moved to Sonnet on 14/11/2026 (modo econômico): 8k in x 2 + 16k out x 10 = 0.176 -> 0.18.
+    expect(reserves).toEqual({ questionsDef: 0.18, planDef: 0.36, discoverDef: 0.97, collectDef: 1.35, verifyDef: 0.85, secondDef: 1.32 });
     // A Cuidadosa run (US$ 3) still affords discover + several collect rounds + verify batches: discover starts at
     // spend 0, collect while spend <= 1.65, verify while spend <= 2.15 (live calls cost about US$ 0.05 to 0.30).
     expect(reserves.discoverDef + reserves.collectDef).toBeLessThanOrEqual(3);

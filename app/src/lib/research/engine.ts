@@ -7,12 +7,12 @@ import {
   discoverSources,
   secondPass,
   verifyCompanies,
-  WEB_LIMITS,
   type FoundJob,
   type FoundSource,
   type VerifiedCompany,
 } from "@/lib/ai/tasks";
-import { writePlan } from "@/lib/ai/tasks";
+import { minReserveUsdFor, writePlan } from "@/lib/ai/tasks";
+import { WEB_LIMITS_BY_RIGOR } from "@/lib/ai/routing";
 import type { AiTransport } from "@/lib/ai/types";
 import { dedupe, nameKey } from "./dedupe";
 import { approach, temperature } from "./rules";
@@ -24,6 +24,7 @@ import {
   type CheckKind,
   type LimitNote,
   type Progress,
+  type Rigor,
   type SeenItem,
   type Stage,
   type StageCounts,
@@ -88,15 +89,21 @@ export async function advance(deps: EngineDeps, runId: string, holder: string): 
   }
 }
 
-function aiContext(deps: EngineDeps, run: RunRow, withRunBudget: boolean): AiContext {
+/**
+ * `holdBackUsd`: budget a stage must leave untouched (modo econômico). Discover and collect keep enough for one
+ * smallest verify call, so a run whose web calls shrink to fit a small cap can still check what it found.
+ */
+function aiContext(deps: EngineDeps, run: RunRow, withRunBudget: boolean, holdBackUsd = 0): AiContext {
   return {
     workspaceId: run.workspace_id,
     runId: run.id,
     ledger: deps.store,
     transport: deps.transport,
-    runBudget: withRunBudget ? { spentUsd: run.spent_cost_usd, maxUsd: run.max_cost_usd } : undefined,
+    runBudget: withRunBudget ? { spentUsd: run.spent_cost_usd, maxUsd: Math.max(0, run.max_cost_usd - holdBackUsd) } : undefined,
   };
 }
+
+const verifyRoom = (run: RunRow) => minReserveUsdFor("verify", run.rigor);
 
 async function reload(deps: EngineDeps, runId: string): Promise<RunRow> {
   const r = await deps.store.getRun(runId);
@@ -225,9 +232,15 @@ const NOT_RETURNED = "A IA não devolveu esta empresa nesta passada.";
 const dropped = (run: RunRow, n: number | undefined) => (run.progress.droppedUrls ?? 0) + (n ?? 0);
 
 type BudgetStage = keyof NonNullable<Progress["budgetHits"]>;
-/** Counts a call that used its whole web budget (a normal end of searching, reported in the limits). */
+/**
+ * Counts a call that used its whole web budget (a normal end of searching, reported in the limits). A call whose
+ * budget was shrunk to fit the cost cap is counted in trimmedCalls instead (its note would quote the wrong numbers).
+ */
 const budgetHits = (run: RunRow, stage: BudgetStage, web: WebReport | undefined): Progress["budgetHits"] =>
-  web?.budgetUsed ? { ...run.progress.budgetHits, [stage]: (run.progress.budgetHits?.[stage] ?? 0) + 1 } : run.progress.budgetHits;
+  web?.budgetUsed && !web.trimmed ? { ...run.progress.budgetHits, [stage]: (run.progress.budgetHits?.[stage] ?? 0) + 1 } : run.progress.budgetHits;
+/** Counts calls whose web budget was shrunk to fit the run's remaining cost cap (modo econômico). */
+const trimmedCalls = (run: RunRow, web: WebReport | undefined): number | undefined =>
+  web?.trimmed ? (run.progress.trimmedCalls ?? 0) + 1 : run.progress.trimmedCalls;
 
 function jobRows(jobs: FoundJob[] | undefined): JobInsert[] {
   return (jobs ?? []).map((j) => ({
@@ -280,11 +293,11 @@ async function runningStep(deps: EngineDeps, run: RunRow, now: () => Date): Prom
 
 // ---------------------------------------------------------------- stages
 async function discoverStage(deps: EngineDeps, run: RunRow) {
-  const { data, droppedUrls, web } = await discoverSources(aiContext(deps, run, true), {
+  const { data, droppedUrls, web } = await discoverSources(aiContext(deps, run, true, verifyRoom(run)), {
     request: run.request_text,
     region: run.region_text,
     plan: run.plan ?? { summary: "", places: [], sourceTypes: [], warnings: [] },
-  });
+  }, run.rigor);
   const existing = await deps.store.listSources(run.id); // a retried step does not duplicate sources
   await deps.store.insertSources(run.workspace_id, toSourceRows(run.id, data, existing));
   await patchProgress(deps, run, {
@@ -292,6 +305,7 @@ async function discoverStage(deps: EngineDeps, run: RunRow) {
     errorStreak: 0,
     droppedUrls: dropped(run, droppedUrls),
     budgetHits: budgetHits(run, "discover_sources", web),
+    trimmedCalls: trimmedCalls(run, web),
   });
 }
 
@@ -319,7 +333,7 @@ async function collectStage(deps: EngineDeps, run: RunRow) {
   const profile = await deps.store.getProfile(run.workspace_id);
   let result: Awaited<ReturnType<typeof collectCandidates>>;
   try {
-    result = await collectCandidates(aiContext(deps, run, true), {
+    result = await collectCandidates(aiContext(deps, run, true, verifyRoom(run)), {
       profile,
       request: run.request_text,
       region: run.region_text,
@@ -329,7 +343,7 @@ async function collectStage(deps: EngineDeps, run: RunRow) {
       want: Math.min(COLLECT_PER_ROUND, remaining),
       round: rounds + 1,
       queriesTried: run.progress.queries ?? [],
-    });
+    }, run.rigor);
   } catch (e) {
     // Another collect round no longer fits the run's cost cap, but checking what was found may: go check it.
     if (isAiError(e) && e.code === "run_cap" && existing.length > 0) {
@@ -392,6 +406,7 @@ async function collectStage(deps: EngineDeps, run: RunRow) {
     droppedUrls: dropped(run, droppedUrls),
     queries: [...(run.progress.queries ?? []), ...(web?.queries ?? [])].slice(-QUERIES_KEEP),
     budgetHits: budgetHits(run, "collect", web),
+    trimmedCalls: trimmedCalls(run, web),
     ...(emptyRounds >= MAX_EMPTY_ROUNDS && total < run.max_candidates ? { collectStop: "empty" as const } : {}),
   });
 }
@@ -445,6 +460,7 @@ async function verifyStage(deps: EngineDeps, run: RunRow, now: () => Date) {
     seen: [...seen, ...(run.progress.seen ?? [])].slice(0, SEEN_KEEP),
     droppedUrls: dropped(run, droppedUrls),
     budgetHits: budgetHits(run, "verify", web),
+    trimmedCalls: trimmedCalls(run, web),
   });
 }
 
@@ -529,7 +545,7 @@ async function secondPassStage(deps: EngineDeps, run: RunRow, now: () => Date) {
     }
     return { ref: c.id, name: c.name, city: c.city, state: c.state, website: c.website, phone: c.phone, evidence: evidence.slice(0, 12) };
   });
-  const { data, droppedUrls, web } = await secondPass(aiContext(deps, run, true), { today: now().toISOString().slice(0, 10), companies });
+  const { data, droppedUrls, web } = await secondPass(aiContext(deps, run, true), { today: now().toISOString().slice(0, 10), companies }, run.rigor);
   const byRef = new Map(data.map((v) => [v.ref, v]));
   const seen: SeenItem[] = [];
   for (const c of batch) {
@@ -560,6 +576,7 @@ async function secondPassStage(deps: EngineDeps, run: RunRow, now: () => Date) {
     seen: [...seen, ...(run.progress.seen ?? [])].slice(0, SEEN_KEEP),
     droppedUrls: dropped(run, droppedUrls),
     budgetHits: budgetHits(run, "second_pass", web),
+    trimmedCalls: trimmedCalls(run, web),
   });
 }
 
@@ -610,9 +627,10 @@ export function limitsFromSources(sources: { title: string; status: string; note
  * Plain notes on the app's own limits that shaped this run: the per-call web budget (max_uses, set by the app to
  * hold the cost, never "the search tool's limit") and why the collection stopped early.
  */
-export function limitsFromProgress(p: Progress): LimitNote[] {
+export function limitsFromProgress(p: Progress, rigor: Rigor = "careful"): LimitNote[] {
   const notes: LimitNote[] = [];
   const hits = p.budgetHits ?? {};
+  const WEB_LIMITS = WEB_LIMITS_BY_RIGOR[rigor];
   const per = (w: { search: { maxUses: number }; fetch: { maxUses: number } }) => `${w.search.maxUses} buscas e ${w.fetch.maxUses} leituras de página`;
   const app = "um limite do próprio app para segurar o custo";
   if (hits.discover_sources) {
@@ -626,6 +644,9 @@ export function limitsFromProgress(p: Progress): LimitNote[] {
   }
   if (hits.second_pass) {
     notes.push({ kind: "budget", text: `Segunda passada: em ${hits.second_pass} lote(s) a IA usou tudo o que o app libera por lote (${app}).` });
+  }
+  if (p.trimmedCalls) {
+    notes.push({ kind: "budget", text: `Em ${p.trimmedCalls} chamada(s) a IA recebeu menos buscas que o normal, para caber no que restava do teto de custo da pesquisa.` });
   }
   if (p.collectStop === "empty") {
     notes.push({ kind: "estimate", text: `Juntar empresas: ${MAX_EMPTY_ROUNDS} rodadas seguidas, com buscas diferentes, não acharam empresa nova; a coleta parou.` });
@@ -659,7 +680,7 @@ async function finalize(deps: EngineDeps, stale: RunRow, now: () => Date, partia
   if (run.progress.droppedUrls) {
     notes.push({ kind: "estimate", text: `${run.progress.droppedUrls} link(s) citados pela IA foram descartados porque nenhuma busca os devolveu.` });
   }
-  notes.push(...limitsFromProgress(run.progress));
+  notes.push(...limitsFromProgress(run.progress, run.rigor));
   await deps.store.updateRun(run.id, {
     status: "done",
     is_partial: Boolean(partial),
