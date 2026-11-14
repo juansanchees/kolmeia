@@ -100,7 +100,7 @@ describe("proof that RLS is really enforced in PGlite", () => {
         "scheduler_finish_email_send", "scheduler_finish_run", "scheduler_holds_lease", "scheduler_message", "scheduler_prospect", "scheduler_renew_lease",
         "scheduler_sender",
         // 0009 (leads: the database links candidates to leads; clients have no grant on these)
-        "backfill_leads", "link_candidate_lead", "link_lead", "unlink_candidate_lead",
+        "archive_agent_runs", "backfill_leads", "link_candidate_lead", "link_lead", "unlink_candidate_lead",
         // 0009 J2 (the closer sees research proof only through her assigned leads)
         "candidate_visible_to_assignee", "check_visible_to_assignee",
       ].sort(),

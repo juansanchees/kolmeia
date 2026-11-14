@@ -119,7 +119,7 @@ describe("0008 agents", () => {
     expect((await db.try(as(UUID_D), RUN_SQL, [wsA, fresh])).error?.message).toMatch(/A2/);
   });
 
-  test("A3 draft becomes paused only when its setup run has a plan; running, done and back-to-draft are refused", async () => {
+  test("A3 draft becomes paused only when its setup run has a plan; done and back-to-draft are refused (F3b: running is Ligar)", async () => {
     const ag = await draft(UUID_A, wsA);
     expect((await db.try(as(UUID_A), "update public.agents set status = 'paused' where id = $1", [ag])).error?.message).toMatch(/A3/);
     const run = await setupRun(UUID_A, wsA, ag);
@@ -127,7 +127,7 @@ describe("0008 agents", () => {
     await withPlan(run);
     const ok = await db.query<{ status: string }>(as(UUID_A), "update public.agents set status = 'paused' where id = $1 returning status", [ag]);
     expect(ok[0].status).toBe("paused");
-    for (const s of ["running", "done", "draft"]) {
+    for (const s of ["done", "draft"]) {
       expect((await db.try(as(UUID_A), "update public.agents set status = $2 where id = $1", [ag, s])).error?.message, s).toMatch(/A3/);
     }
   });
