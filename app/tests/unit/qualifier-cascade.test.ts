@@ -426,6 +426,20 @@ describe("review fixes (T6)", () => {
     expect(p.calls).toEqual([]);
     expect(t.callsFor("qualify_light")).toHaveLength(1);
   });
+
+  test("I-1b P4 needs 40 s before the request deadline, else the lead is requeued at p4 unpaid and deferred; with time the call carries the remaining time", async () => {
+    const t = lightModel([]);
+    const st = fakeQualifierStore([], { ledger: okLedger() });
+    const r = await qualifyLead(snapshot({ nextStep: "p2", level: 0, fields: [web] }), deps(st, fakeHttp({ [SITE]: PAGE }), { transport: t, deadline: 39_000 }));
+    expect(r).toMatchObject({ result: "requeued", deferred: true });
+    expect(steps(st).at(-1)).toBe("p4:deadline:p4:");
+    expect(t.calls).toHaveLength(0);
+    const t2 = lightModel([]);
+    const st2 = fakeQualifierStore([], { ledger: okLedger() });
+    await qualifyLead(snapshot({ nextStep: "p2", level: 0, fields: [web] }), deps(st2, fakeHttp({ [SITE]: PAGE }), { transport: t2, deadline: 100_000 }));
+    expect(t2.calls[0].deadlineMs).toBeLessThanOrEqual(100_000);
+    expect(t2.calls[0].deadlineMs).toBeGreaterThan(40_000);
+  });
 });
 
 describe("P5 IA forte", () => {
@@ -524,11 +538,17 @@ describe("P5 IA forte", () => {
     // "no" without evidence is not a refutation (the check comes back "unknown" or with no proof)
     const unsure = await run({ fields: [old, phone] }, deepModel({ dm: "unknown" }));
     expect(unsure.store.log.some((l) => l[0] === "refute")).toBe(false);
-    // a closed company is dead
-    const dead = await run({}, deepModel({ exists: "no" }));
-    expect(dead.r.result).toBe("done");
+    // I-2: an AI "closed" alone does not kill a lead that can still be reached (phone): outcome closed, complete, nothing written
+    const alive = await run({}, deepModel({ exists: "no" }));
+    expect(alive.r.result).toBe("done");
+    expect(steps(alive.store)).toEqual(["p5:closed:done:complete"]);
+    expect(alive.store.log.some((l) => l[0] === "addFields")).toBe(false);
+    // dead only when nothing is left to reach or read (the same rule P2 and P3 use)
+    const dead = await run({ fields: [field({ field: "name", value: "Acme HVAC" })], level: 1 }, deepModel({ exists: "no" }));
     expect(steps(dead.store)).toEqual(["p5:ok:done:dead"]);
-    expect(dead.store.log.some((l) => l[0] === "addFields")).toBe(false);
+    // another non-refuted website keeps it alive
+    const site = await run({ fields: [field({ field: "website", value: SITE })], level: 1 }, deepModel({ exists: "no" }));
+    expect(steps(site.store)).toEqual(["p5:closed:done:complete"]);
   });
 
   test("the deep call shrinks to the lead's cap and otherwise stops as \"parou no teto\"", async () => {
@@ -553,17 +573,60 @@ describe("P5 IA forte", () => {
     expect(steps(db)).toEqual(["p5:lead_cap:done:lead_cap"]);
   });
 
-  test("J-1 the daily cap pauses the Qualificador before reserving past it; the lead stays queued", async () => {
+  test("M-2 when the day's money is short for P5 only that lead's P5 ends (day_cap); no pause", async () => {
     const t = deepModel({});
     // 0.20 left today, the lead has plenty: the day is the tighter limit
     const { r, store, rows } = await run({ settings: { ...snapshot().settings, dailyCapUsd: 5, spentToday: 4.8, leadCapUsd: 0.5 } }, t);
-    expect(r).toMatchObject({ result: "paused", pauseReason: "daily_cap" });
+    expect(r).toMatchObject({ result: "done" });
+    expect(r.pauseReason).toBeUndefined();
     expect(t.calls).toHaveLength(0);
     expect(rows.reserve).toEqual([]);
-    expect(steps(store)).toEqual([]); // nothing written: the lead goes back to the queue unchanged
+    expect(steps(store)).toEqual(["p5:day_cap:done:complete"]);
     // the database refusing at reserve time pauses the same way
     const db = fakeQualifierStore([], { ledger: { dailyCapUsd: async () => 10, spentTodayUsd: async () => 0, record: async () => undefined, reserve: async () => Promise.reject(new AiError("qualifier_daily")) } });
     const r2 = await qualifyLead(snapshot({ ...base }), deps(db, undefined, { transport: deepModel({}) }));
     expect(r2).toMatchObject({ result: "paused", pauseReason: "daily_cap" });
+  });
+
+  test("I-1b P5 needs 150 s before the request deadline, else it is requeued at p5 unpaid and deferred; with time it runs", async () => {
+    const t = deepModel({});
+    const rows = { reserve: [] as number[], settled: 0 };
+    const store = fakeQualifierStore([], { ledger: ledgerOf(rows) });
+    // deadline at 149 s on a clock that starts at 0
+    const r = await qualifyLead(snapshot({ ...base }), deps(store, undefined, { transport: t, deadline: 149_000 }));
+    expect(r).toMatchObject({ result: "requeued", deferred: true });
+    expect(steps(store)).toEqual(["p5:deadline:p5:"]);
+    expect(t.calls).toHaveLength(0);
+    expect(rows.reserve).toEqual([]);
+    // 151 s left: it runs, and the call carries what is left as its own deadline
+    const ok = deepModel({});
+    const st2 = fakeQualifierStore([], { ledger: ledgerOf({ reserve: [], settled: 0 }) });
+    const r2 = await qualifyLead(snapshot({ ...base }), deps(st2, undefined, { transport: ok, deadline: 151_000 }));
+    expect(r2.result).toBe("done");
+    expect(ok.calls[0].deadlineMs).toBe(151_000);
+    // a lead P5 would skip is never deferred
+    const skip = fakeQualifierStore([]);
+    await qualifyLead(snapshot({ ...base, profileMatch: false }), deps(skip, undefined, { transport: deepModel({}), deadline: 1 }));
+    expect(steps(skip)).toEqual(["p5:skipped:done:complete"]);
+  });
+
+  test("M-1 a resume at p5 goes straight on: no re-read of the site, no P4", async () => {
+    const http = fakeHttp({ [SITE]: PAGE });
+    const light = new FakeTransport({ qualify_light: () => ({ json: {} }), qualify_deep: () => ({ json: deepAnswer({}) }) });
+    const st = fakeQualifierStore([], { ledger: ledgerOf({ reserve: [], settled: 0 }) });
+    await qualifyLead(snapshot({ ...base, fields: [...base.fields, field({ field: "website", value: SITE })] }), deps(st, http, { transport: light }));
+    expect(steps(st)).toEqual(["p5:ok:done:complete"]);
+    expect(http.calls).toEqual([]);
+    expect(light.callsFor("qualify_light")).toHaveLength(0);
+    expect(light.callsFor("qualify_deep")).toHaveLength(1);
+  });
+
+  test("M-6 the date given to P5 is the New York day", async () => {
+    const t = deepModel({});
+    const st = fakeQualifierStore([], { ledger: ledgerOf({ reserve: [], settled: 0 }) });
+    // 2026-11-15 03:00 UTC is still 2026-11-14 in New York
+    await qualifyLead(snapshot({ ...base }), { ...deps(st, undefined, { transport: t }), now: () => Date.UTC(2026, 10, 15, 3, 0, 0) });
+    expect(t.calls[0].user).toContain("2026-11-14");
+    expect(t.calls[0].user).not.toContain("2026-11-15");
   });
 });

@@ -119,7 +119,7 @@ describe("0014 qualifier path", () => {
     expect(row.locked_by).toBe(tick);
   });
 
-  test("a claim returns the LeadSnapshot, locks 180 s, and an expired lock can be claimed again", async () => {
+  test("a claim returns the LeadSnapshot, locks until the tick lease ends (I-1), and an expired lock can be claimed again", async () => {
     const { ws, lead } = await seedQualifierLead(db, { fields: [{ field: "name", value: "Acme Builders" }, { field: "website", value: "https://acme.example" }] });
     const tick = await beginQualifierTick(db);
     const s = (await claim(tick))!;
@@ -127,9 +127,9 @@ describe("0014 qualifier path", () => {
     expect(s.fields.map((f) => f.field).sort()).toEqual(["name", "website"]);
     expect(s.settings).toMatchObject({ daily_cap_usd: 5, lead_cap_usd: 0.5, spent_today: 0 });
     expect(s.settings.auto_deep).toBe(true);
-    const [q] = await db.admin<{ secs: string }>("select extract(epoch from locked_until - now()) as secs from public.qualifier_queue where lead_id = $1", [lead]);
-    expect(Number(q.secs)).toBeGreaterThan(170);
-    expect(Number(q.secs)).toBeLessThanOrEqual(180);
+    // I-1: the lock is the tick's own lease_until, so a call can never outlive its lock
+    const [q] = await db.admin<{ same: boolean }>("select q.locked_until = t.lease_until as same from public.qualifier_queue q, public.qualifier_ticks t where q.lead_id = $1 and t.id = $2", [lead, tick]);
+    expect(q.same).toBe(true);
     expect(await claim(tick)).toBeNull();
     await db.admin("update public.qualifier_queue set locked_until = now() - interval '1 second' where lead_id = $1", [lead]);
     expect((await claim(tick))!.lead_id).toBe(lead);
@@ -396,17 +396,18 @@ describe("0014 qualifier path", () => {
     await db.admin("update public.qualifier_queue set next_step = 'done', done_reason = 'dead' where lead_id = $1", [dead]);
 
     const n = (await db.query<{ n: number }>(as(a.owner), "select public.request_qualification($1,$2::uuid[]) as n", [a.ws, `{${l3},${dead},${foreign.lead}}`]))[0].n;
-    expect(n).toBe(1); // l3 only: dead and foreign leads are not touched
+    expect(n).toBe(2); // l3 and the dead one (a request revives it, I-2); the foreign lead is not touched
     const q = async (id: string) => (await db.admin<{ next_step: string; done_reason: string | null; manual_at: string | null; deep_requested: boolean; fail_streak: number }>("select next_step, done_reason, manual_at, deep_requested, fail_streak from public.qualifier_queue where lead_id = $1", [id]))[0];
     expect(await q(l3)).toMatchObject({ next_step: "p1", done_reason: null, deep_requested: true, fail_streak: 0 });
     expect((await q(l3)).manual_at).not.toBeNull();
-    expect(await q(dead)).toMatchObject({ next_step: "done", done_reason: "dead", deep_requested: false, manual_at: null });
+    expect(await q(dead)).toMatchObject({ next_step: "p1", done_reason: null, deep_requested: true });
+    expect((await q(dead)).manual_at).not.toBeNull();
     expect(await q(foreign.lead)).toMatchObject({ manual_at: null, deep_requested: false });
     await db.admin("update public.qualifier_queue set manual_at = now() - interval '1 minute' where lead_id = $1", [l3]); // explicit order
     await db.query(as(a.owner), "select public.request_qualification($1,$2::uuid[])", [a.ws, `{${l2}}`]);
     // the requested leads are claimed before the rest, oldest request first
     const tick = await beginQualifierTick(db);
-    expect([(await claim(tick))!.lead_id, (await claim(tick))!.lead_id]).toEqual([l3, l2]);
+    expect([(await claim(tick))!.lead_id, (await claim(tick))!.lead_id, (await claim(tick))!.lead_id]).toEqual([l3, dead, l2]);
     expect((await claim(tick))!.manual).toBe(false);
 
     // refused: the closer, a workspace the caller is not in, anon, too many ids
@@ -415,6 +416,30 @@ describe("0014 qualifier path", () => {
     expect((await db.try(anon, "select public.request_qualification($1,$2::uuid[])", [a.ws, `{${l2}}`])).error?.message).toMatch(/permission denied/);
     const many = `{${Array.from({ length: 501 }, () => ZERO).join(",")}}`;
     expect(code((await db.try(as(a.owner), "select public.request_qualification($1,$2::uuid[])", [a.ws, many])).error)).toBe("22023");
+  });
+
+  test("I-1c: begin_tick settles Qualificador calls pending for 10+ minutes at their reserve; fresh ones and other tasks stay", async () => {
+    const s = await seedQualifierLead(db);
+    const mk = async (task: string, age: string, reserve = 0.3) =>
+      (await db.admin<{ id: string }>("insert into public.ai_calls (workspace_id, user_id, lead_id, task, model, prompt_version, status, reserve_usd) values ($1,$2,$3,$4,'m','v','pending',$5) returning id", [s.ws, s.owner, s.lead, task, reserve]))[0].id;
+    const age = (id: string, iv: string) => db.admin("update public.ai_calls set created_at = now() - $2::interval where id = $1", [id, iv]);
+    const stale = await mk("qualify_deep", "");
+    const stalePlaces = await mk("qualify_places", "", 0.04);
+    const fresh = await mk("qualify_light", "");
+    const other = await mk("research_verify", "");
+    await age(stale, "11 minutes");
+    await age(stalePlaces, "11 minutes");
+    await age(fresh, "9 minutes");
+    await age(other, "11 minutes");
+    const row = async (id: string) => (await db.admin<{ status: string; cost_usd: string; error: string | null }>("select status, cost_usd, error from public.ai_calls where id = $1", [id]))[0];
+    const before = Number((await db.admin<{ spent_usd: string }>("select spent_usd from public.qualifier_queue where lead_id = $1", [s.lead]))[0].spent_usd);
+    await beginQualifierTick(db);
+    expect(await row(stale)).toMatchObject({ status: "error", cost_usd: "0.300000", error: "stale_pending" });
+    expect(await row(stalePlaces)).toMatchObject({ status: "error", cost_usd: "0.040000" });
+    expect((await row(fresh)).status).toBe("pending");
+    expect((await row(other)).status).toBe("pending");
+    // the lead's spend follows the settled cost
+    expect(Number((await db.admin<{ spent_usd: string }>("select spent_usd from public.qualifier_queue where lead_id = $1", [s.lead]))[0].spent_usd)).toBeCloseTo(before + 0.34, 6);
   });
 
   test("take_over_qualifier_charge: owner only; a no_access pause resumes, other pauses stay", async () => {

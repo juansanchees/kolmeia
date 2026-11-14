@@ -23,12 +23,12 @@ type Qualifier = { outcome: string; leads: number; steps: number; paused: number
 type Sources = { outcome: string; started: number; polled: number; imported: number; failed: number };
 
 /** The Qualificador tick: runs after the Caçador, always (without an AI key its AI steps say no_ai). Never throws except the 401. */
-async function qualifierTick(token: string, budgetMs: number): Promise<Qualifier> {
+async function qualifierTick(token: string, budgetMs: number, deadline: number): Promise<Qualifier> {
   const none: Qualifier = { outcome: "error", leads: 0, steps: 0, paused: 0, failed: 0 };
   try {
     const store = createQualifierTickStore(token);
     if (!store) return none;
-    const r = await runQualifierTick({ store, transport: hasAi() ? defaultTransport() : null, places: placesClient(), budgetMs });
+    const r = await runQualifierTick({ store, transport: hasAi() ? defaultTransport() : null, places: placesClient(), budgetMs, deadline });
     return { outcome: r.outcome, leads: r.leads, steps: r.steps, paused: r.paused, failed: r.failed };
   } catch (e) {
     if (e instanceof Error && e.name === "HunterAuthError") throw e;
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
   }
   const left = () => Math.max(0, requestStart + REQUEST_BUDGET_MS - Date.now());
   try {
-    const qualifier = await qualifierTick(token, Math.min(QUALIFIER_TICK_BUDGET_MS, left()));
+    const qualifier = await qualifierTick(token, Math.min(QUALIFIER_TICK_BUDGET_MS, left()), requestStart + REQUEST_BUDGET_MS);
     // the sources budget is what is left after the qualifier finished
     const sources = await sourcesTick(token, Math.min(SOURCE_TICK_BUDGET_MS, left()));
     return Response.json({ ...hunter, qualifier, sources }, { status: hunterStatus });

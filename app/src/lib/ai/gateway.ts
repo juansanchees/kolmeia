@@ -65,6 +65,8 @@ export type AiContext = {
   transport: AiTransport | null;
   /** Remaining budget of the run (P6). */
   runBudget?: { spentUsd: number; maxUsd: number };
+  /** Time this one call may take, in ms, from now (the caller's request deadline minus the clock); the transport aborts there. */
+  deadlineMs?: number;
 };
 
 /** What normalize may use to check the model's URLs against the web tools' real results (optional for old tasks). */
@@ -248,6 +250,7 @@ export async function runTask<Input, Parsed, Out>(
     maxTokens: def.maxTokens,
     web,
     maxContinuations,
+    ...(ctx.deadlineMs !== undefined ? { deadlineMs: Math.max(1, Math.floor(ctx.deadlineMs)) } : {}),
   };
 
   const finish = (usage: AiUsage, costUsd: number, status: AiCallStatus, error: string | null, durationMs: number) => {

@@ -62,6 +62,16 @@ describe("runQualifierTick", () => {
     expect((await runQualifierTick({ store: small, transport: null, budgetMs: 34_999, now: () => 0 })).leads).toBe(0);
   });
 
+  test("I-1b: the request deadline reaches the cascade; a lead deferred for lack of time is not released nor picked again in this tick", async () => {
+    const store = fakeQualifierStore([lead(1, { nextStep: "p5", level: 1, profileMatch: true }), lead(2, { nextStep: "p5", level: 1, profileMatch: true })]);
+    const transport = { send: async () => Promise.reject(new Error("must not be called")) };
+    // the deadline is 100 s away: P5 (150 s) is deferred for both leads
+    const r = await runQualifierTick({ store, transport, http: fakeHttp({}), deadline: 100_000, now: () => 0, budgetMs: 60_000 });
+    expect(r.outcome).toBe("ok");
+    expect(store.log.filter((l) => l[0] === "stepDone").map((l) => `${l[2]}:${l[3]}:${l[4]}`)).toEqual(["p5:deadline:p5", "p5:deadline:p5"]);
+    expect(store.log.filter((l) => l[0] === "release")).toEqual([]);
+  });
+
   test("m-3: a lead that failed is not released and not picked again in this tick", async () => {
     const store = fakeQualifierStore([lead(1, { nextStep: "p1" }), lead(2, { nextStep: "p1" })], { failOn: { stepDone: new Error("rpc_x") } });
     await runQualifierTick({ store, transport: null, http: fakeHttp({}) });

@@ -74,6 +74,10 @@ describe("POST /api/hunter/tick", () => {
     expect(order).toEqual(["hunter", "qualifier", "sources"]);
     expect(body.qualifier).toEqual({ outcome: "ok", leads: 3, steps: 9, paused: 1, failed: 0 });
     expect(runQualifierTick.mock.calls[0][0].transport).toEqual({ fake: true });
+    // I-1b: the request's own deadline (start + REQUEST_BUDGET_MS) goes to the Qualificador tick
+    const deadline = runQualifierTick.mock.calls[0][0].deadline as number;
+    expect(deadline).toBeGreaterThan(Date.now() + 230_000);
+    expect(deadline).toBeLessThanOrEqual(Date.now() + 240_000);
     runQualifierTick.mockRejectedValue(new Error(`boom ${TOKEN}`));
     const text = await (await call(ok)).text();
     expect(text).not.toContain(TOKEN);

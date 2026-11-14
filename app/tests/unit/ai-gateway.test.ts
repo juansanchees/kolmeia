@@ -48,6 +48,16 @@ const def: TaskDef<{ q: string }, z.infer<typeof schema>, string> = {
   normalize: (p) => p.answer.toUpperCase(),
 };
 
+describe("deadlineMs", () => {
+  test("a call deadline in the context is passed to the request; without one the request has none", async () => {
+    const fake = new FakeTransport({ classify: () => ({ json: { answer: "x" } }) });
+    await runTask({ ...ctx(fake), deadlineMs: 12_345.7 }, def, { q: "a" });
+    expect(fake.calls[0].deadlineMs).toBe(12_345);
+    await runTask(ctx(fake), def, { q: "a" });
+    expect(fake.calls[1].deadlineMs).toBeUndefined();
+  });
+});
+
 function ctx(fake: FakeTransport | null, ledger = new MemLedger(), runBudget?: AiContext["runBudget"]): AiContext {
   return { workspaceId: "ws", runId: null, ledger, transport: fake, runBudget };
 }

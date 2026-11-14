@@ -1,4 +1,7 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
+const { loadSourceRuns, loadWorkspaceToday } = await import("@/lib/spend/queries");
 import { agentLabel, periodStart, sourceRows, spendRows, spendTotal, stepLabel, type SpendCall } from "@/lib/spend/view";
 
 const base: SpendCall = {
@@ -84,5 +87,39 @@ describe("F3c-2 spend view", () => {
     ]);
     expect(rows.find((r) => r.provider === "apify")).toMatchObject({ runs: 3, usd: 3.5 });
     expect(rows.reduce((s, r) => s + r.usd, 0)).toBeCloseTo(4, 6);
+  });
+});
+
+
+describe("M-4 spend queries read past PostgREST's 1000-row page", () => {
+  // a query builder that answers .range() pages from a list, like PostgREST (max 1000 per request)
+  const fakeDb = (table: Record<string, Record<string, unknown>[]>) =>
+    ({
+      from(name: string) {
+        const rows = table[name] ?? [];
+        const q: Record<string, unknown> = {
+          select: () => q,
+          eq: () => q,
+          gte: () => q,
+          order: () => q,
+          maybeSingle: async () => ({ data: null, error: null }),
+          range: async (a: number, b: number) => ({ data: rows.slice(a, Math.min(b, a + 999) + 1), error: null }),
+          then: undefined,
+        };
+        return q;
+      },
+    }) as never;
+  const many = (n: number, o: Record<string, unknown>) => Array.from({ length: n }, (_, i) => ({ id: String(i), ...o }));
+
+  test("loadWorkspaceToday sums every row, not the first 1000", async () => {
+    const db = fakeDb({ ai_calls: many(2500, { status: "ok", cost_usd: 0.01, reserve_usd: 0.05 }) });
+    const r = await loadWorkspaceToday(db, "ws", new Date("2026-11-14T15:00:00Z"));
+    expect(r.spent).toBeCloseTo(25, 6);
+    expect(r.cap).toBe(10);
+  });
+
+  test("loadSourceRuns returns every row", async () => {
+    const db = fakeDb({ source_runs: many(2100, { provider: "apify", kind: "maps", status: "ok", cost_usd: 1, reserve_usd: 1 }) });
+    expect(await loadSourceRuns(db, "ws", "today" as never)).toHaveLength(2100);
   });
 });

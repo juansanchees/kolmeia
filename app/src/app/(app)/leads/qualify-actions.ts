@@ -27,7 +27,7 @@ export async function estimateQualifyAction(leadIds: string[]): Promise<Estimate
   if (!supabase) return { ok: false, error: E.failed };
   const [queue, status] = await Promise.all([
     parsed.data.length
-      ? supabase.from("qualifier_queue").select("lead_id, spent_usd, done_reason").eq("workspace_id", workspace.id).in("lead_id", parsed.data)
+      ? supabase.from("qualifier_queue").select("lead_id, spent_usd").eq("workspace_id", workspace.id).in("lead_id", parsed.data)
       : Promise.resolve({ data: [], error: null }),
     supabase.rpc("qualifier_status", { p_ws: workspace.id }),
   ]);
@@ -35,7 +35,13 @@ export async function estimateQualifyAction(leadIds: string[]): Promise<Estimate
   const st = status.data as { daily_cap_usd: number; lead_cap_usd: number; spent_today: number };
   const { data: lv } = parsed.data.length ? await supabase.from("leads").select("id, level").eq("workspace_id", workspace.id).in("id", parsed.data) : { data: [] };
   const level = new Map((lv ?? []).map((l) => [l.id as string, Number(l.level)]));
-  const rows = (queue.data ?? []).map((q) => ({ level: level.get(q.lead_id as string) ?? 0, spentUsd: Number(q.spent_usd), doneReason: (q.done_reason as string | null) ?? null }));
+  // pending AI calls still hold their reserve against the lead's cap
+  const { data: pend } = parsed.data.length
+    ? await supabase.from("ai_calls").select("lead_id, reserve_usd, cost_usd").eq("workspace_id", workspace.id).eq("status", "pending").in("lead_id", parsed.data).limit(1000)
+    : { data: [] };
+  const held = new Map<string, number>();
+  for (const p of pend ?? []) held.set(p.lead_id as string, (held.get(p.lead_id as string) ?? 0) + Math.max(Number(p.reserve_usd) - Number(p.cost_usd), 0));
+  const rows = (queue.data ?? []).map((q) => ({ level: level.get(q.lead_id as string) ?? 0, spentUsd: Number(q.spent_usd) + (held.get(q.lead_id as string) ?? 0) }));
   const usd = estimateQualifyUsd(rows, {
     leadCapUsd: Number(st.lead_cap_usd),
     placesUsd: hasPlaces() ? PLACES_CALL_USD : null,

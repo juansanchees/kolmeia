@@ -24,7 +24,13 @@ export type CascadeDeps = {
   sleep: (ms: number) => Promise<void>;
   now: () => number;
   gaps: Map<string, number>;
+  /** When the request that runs this tick must be over (same clock as `now`). P4 and P5 do not start without time to finish. */
+  deadline?: number;
 };
+
+/** Time P5 needs (one careful call can take up to 150 s) and P4 (one light call plus margin). */
+export const P5_MIN_MS = 150_000;
+export const P4_MIN_MS = 40_000;
 
 export type CascadeResult = {
   steps: number;
@@ -32,6 +38,8 @@ export type CascadeResult = {
   pauseReason?: QualifierPauseReason;
   /** The lead was given back because a step failed: the tick keeps it out of the rest of this tick. */
   errored?: boolean;
+  /** The lead was given back for lack of time before a paid step: the tick keeps it out of the rest of this tick. */
+  deferred?: boolean;
 };
 
 /** Imported values a "no" from the decision-maker check may refute (research values follow their own proof in the database). */
@@ -41,6 +49,9 @@ const IMPORTED = new Set(["import", "apify_maps", "apollo"]);
 export function deepEligible(s: LeadSnapshot, aiOn: boolean): boolean {
   return aiOn && s.level < 4 && (s.deepRequested || (s.settings.autoDeep && s.profileMatch && s.level >= 1));
 }
+
+/** Today's date (YYYY-MM-DD) in New York, the Qualificador's day. */
+const ny = (ms: number) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ms));
 
 const foldName = (v: string) => v.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
@@ -101,6 +112,8 @@ export async function qualifyLead(s: LeadSnapshot, d: CascadeDeps): Promise<Casc
   const leadStart = d.now();
   const readHosts = new Set<string>();
   const siteDeps = () => ({ http: d.http, sleep: d.sleep, now: d.now, gaps: d.gaps, totalMs: SITE_LIMITS.totalMs - (d.now() - leadStart) });
+  const left = () => (d.deadline === undefined ? Infinity : d.deadline - d.now());
+  const aiMs = () => (d.deadline === undefined ? undefined : Math.max(1, left()));
   const otherSite = () => fields.some((f) => f.field === "website" && f.status !== "refuted");
   const reach = () => fields.some((f) => REACH.has(f.field) && f.status !== "refuted");
 
@@ -195,7 +208,8 @@ export async function qualifyLead(s: LeadSnapshot, d: CascadeDeps): Promise<Casc
         if (!d.transport) return { outcome: "no_ai" };
         const pages = (site?.pages ?? []).filter((p) => p.text.trim()).map((p) => ({ url: p.url, text: p.text }));
         if (pages.length === 0) return { outcome: "skipped" }; // only pages read in this pass
-        const r = await lightQualify({ workspaceId: s.workspaceId, runId: null, ledger: store.ledger(tickId, leadId), transport: d.transport }, { pages });
+        if (left() < P4_MIN_MS) return { outcome: "deadline", again: true };
+        const r = await lightQualify({ workspaceId: s.workspaceId, runId: null, ledger: store.ledger(tickId, leadId), transport: d.transport, deadlineMs: aiMs() }, { pages });
         leadSpent += r.costUsd;
         daySpent += r.costUsd;
         const held = new Set(fields.map((f) => `${f.field}:${fieldKey(f.field, f.value)}`));
@@ -223,15 +237,20 @@ export async function qualifyLead(s: LeadSnapshot, d: CascadeDeps): Promise<Casc
       case "p5": {
         if (!d.transport) return { outcome: "no_ai" };
         if (!deepEligible({ ...s, level }, true)) return { outcome: "skipped" };
+        if (left() < P5_MIN_MS) return { outcome: "deadline", again: true }; // not enough time to finish a careful call: nothing paid, same step next time
         const { leadCapUsd, dailyCapUsd } = s.settings;
         // the call shrinks to what is left of the lead's cap and of the day; the gateway raises run_cap when even the smallest does not fit
         const runBudget = { spentUsd: leadSpent, maxUsd: Math.min(leadCapUsd, leadSpent + (dailyCapUsd - daySpent)) };
         let r;
         try {
-          r = await verifyLead({ workspaceId: s.workspaceId, runId: null, ledger: store.ledger(tickId, leadId), transport: d.transport, runBudget }, { ...s, fields }, new Date().toISOString().slice(0, 10));
+          r = await verifyLead({ workspaceId: s.workspaceId, runId: null, ledger: store.ledger(tickId, leadId), transport: d.transport, runBudget, deadlineMs: aiMs() }, { ...s, fields }, ny(d.now()));
         } catch (e) {
-          // not even the smallest call fits: the lead's cap if that is the tighter limit, else the day's
-          if (isAiError(e) && e.code === "run_cap") throw new AiError(leadCapUsd - leadSpent <= dailyCapUsd - daySpent ? "lead_cap" : "qualifier_daily");
+          if (isAiError(e) && e.code === "run_cap") {
+            // not even the smallest call fits: the lead's cap if that is the tighter limit, else the day's
+            if (leadCapUsd - leadSpent <= dailyCapUsd - daySpent) throw new AiError("lead_cap");
+            // the day's money is short for this one call: only this lead's P5 ends (the others keep running; the database's own daily cap still pauses)
+            return { outcome: "day_cap" };
+          }
           throw e;
         }
         const c = r.data[0];
@@ -246,7 +265,8 @@ export async function qualifyLead(s: LeadSnapshot, d: CascadeDeps): Promise<Casc
           return k && k.result === "no" && k.evidence.length > 0 ? k : null;
         };
         // a closed company: nothing else is worth writing
-        if (no("exists_active")) return { outcome: "ok", done: "dead" };
+        // (dead only when nothing else is left to reach or read: an AI "no" alone never kills a lead, as in P2 and P3)
+        if (no("exists_active")) return !reach() && !otherSite() ? { outcome: "ok", done: "dead" } : { outcome: "closed" };
         const held = new Set(fields.filter((f) => f.status === "confirmed").map((f) => `${f.field}:${fieldKey(f.field, f.value)}`));
         const rows: FieldIn[] = [];
         const push = (row: FieldIn) => {
@@ -281,10 +301,11 @@ export async function qualifyLead(s: LeadSnapshot, d: CascadeDeps): Promise<Casc
     }
   };
 
-  // a resume at p4 or p5 has no pages in memory: go back to p2 (it re-reads the site) but never pay Places again
+  // a resume at p4 has no pages in memory: go back to p2 (it re-reads the site) but never pay Places again.
+  // A resume at p5 needs no pages: it goes straight on (P4 is not paid again).
   let first = ORDER.indexOf(s.nextStep);
   const resumedPastP3 = first > ORDER.indexOf("p3");
-  if (first >= ORDER.indexOf("p4") && siteField(s)) first = ORDER.indexOf("p2");
+  if (first === ORDER.indexOf("p4") && siteField(s)) first = ORDER.indexOf("p2");
   for (let i = first; i < ORDER.length; i++) {
     const step = ORDER[i];
     const next = (ORDER[i + 1] ?? "done") as QualifierStep | "done";
@@ -320,7 +341,7 @@ export async function qualifyLead(s: LeadSnapshot, d: CascadeDeps): Promise<Casc
     }
     if (r.requeue || r.again) {
       await store.stepDone(tickId, leadId, step, r.outcome, r.again ? step : next, null);
-      return { steps: steps + 1, result: "requeued" };
+      return { steps: steps + 1, result: "requeued", ...(r.outcome === "deadline" ? { deferred: true } : {}) };
     }
     await store.stepDone(tickId, leadId, step, r.outcome, next, next === "done" ? "complete" : null);
     steps++;

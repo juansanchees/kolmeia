@@ -13,7 +13,9 @@ export type StepOutcome =
   | "closed"
   | "no_ai"
   | "error"
-  | "lead_cap";
+  | "lead_cap"
+  | "day_cap"
+  | "deadline";
 
 export type DoneReason = "complete" | "lead_cap" | "dead";
 export type QualifierPauseReason = "daily_cap" | "workspace_cap" | "user_cap" | "global_cap" | "no_access";

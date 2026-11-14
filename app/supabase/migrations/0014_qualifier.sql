@@ -848,6 +848,11 @@ begin
   end if;
   perform pg_advisory_xact_lock(hashtext('qualifier:tick'));
   delete from public.qualifier_ticks where started_at < now() - interval '30 days';
+  -- a Qualificador call that stayed pending for 10+ minutes cannot still be running (a tick lasts under 6): settle it as an
+  -- error at its full reserve, so it stops counting as "pending" and the money is accounted for
+  update public.ai_calls c
+     set status = 'error', cost_usd = c.reserve_usd, error = 'stale_pending', settled_at = now()
+   where c.status = 'pending' and left(c.task, 8) = 'qualify_' and c.created_at < now() - interval '10 minutes';
   if exists (select 1 from public.qualifier_ticks t where t.finished_at is null and t.lease_until > now()) then
     return jsonb_build_object('tick_id', null, 'busy', true);
   end if;
@@ -890,7 +895,7 @@ end;
 $$;
 
 -- The next lead (K-4): first a daily-cap pause whose New York midnight has passed ends; then manual requests (oldest
--- first), then Caçador-born or profile-matching leads, then higher level, then oldest enqueued. Locks it for 180 s.
+-- first), then Caçador-born or profile-matching leads, then higher level, then oldest enqueued. Locks it until the tick's lease ends (a call can never outlive its lock).
 create or replace function public.qualifier_claim_next(p_tick uuid)
 returns jsonb
 language plpgsql
@@ -924,7 +929,7 @@ begin
   if v_lead is null then
     return null;
   end if;
-  update public.qualifier_queue q set locked_by = p_tick, locked_until = now() + interval '180 seconds', claimed_at = now() where q.lead_id = v_lead;
+  update public.qualifier_queue q set locked_by = p_tick, locked_until = (select t.lease_until from public.qualifier_ticks t where t.id = p_tick), claimed_at = now() where q.lead_id = v_lead;
 
   select jsonb_build_object(
     'lead_id', q.lead_id,
@@ -1312,8 +1317,7 @@ begin
   end if;
   update public.qualifier_queue q
      set manual_at = now(), deep_requested = true, next_step = 'p1', done_reason = null, fail_step = null, fail_streak = 0
-   where q.workspace_id = p_ws and q.lead_id = any (p_leads)
-     and not (q.next_step = 'done' and q.done_reason = 'dead');
+   where q.workspace_id = p_ws and q.lead_id = any (p_leads);
   get diagnostics v_n = row_count;
   return v_n;
 end;

@@ -69,16 +69,26 @@ export async function loadSpend(
   return { calls, runAgent, leads, truncated };
 }
 
+/** Every row of a query, a PostgREST page (1000) at a time and never more than SPEND_MAX; `page` must order by a stable key. */
+async function allRows<T>(label: string, page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; from < SPEND_MAX; from += PAGE) {
+    const { data, error } = await page(from, from + PAGE - 1);
+    if (error) throw new Error(`${label}: ${error.message}`);
+    const rows = data ?? [];
+    out.push(...rows);
+    if (rows.length < PAGE) break;
+  }
+  return out;
+}
+
 /** F3d's paid sources in the period (source_runs; RLS: owner/sdr only). */
 export async function loadSourceRuns(db: SupabaseClient, ws: string, p: SpendPeriod, now: Date = new Date()): Promise<SourceRun[]> {
-  const { data, error } = await db
-    .from("source_runs")
-    .select("provider, kind, status, cost_usd, reserve_usd")
-    .eq("workspace_id", ws)
-    .gte("created_at", periodStart(p, now).toISOString())
-    .limit(5000);
-  if (error) throw new Error(`loadSourceRuns: ${error.message}`);
-  return (data ?? []).map((r) => ({
+  const since = periodStart(p, now).toISOString();
+  const rows = await allRows<Record<string, unknown>>("loadSourceRuns", (from, to) =>
+    db.from("source_runs").select("id, provider, kind, status, cost_usd, reserve_usd").eq("workspace_id", ws).gte("created_at", since).order("id", { ascending: true }).range(from, to),
+  );
+  return rows.map((r) => ({
     provider: r.provider as string,
     kind: r.kind as string,
     status: r.status as string,
@@ -91,10 +101,11 @@ export async function loadSourceRuns(db: SupabaseClient, ws: string, p: SpendPer
 export async function loadWorkspaceToday(db: SupabaseClient, ws: string, now: Date = new Date()): Promise<{ spent: number; cap: number }> {
   const utc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
   const [rows, settings] = await Promise.all([
-    db.from("ai_calls").select("status, cost_usd, reserve_usd").eq("workspace_id", ws).gte("created_at", utc).limit(SPEND_MAX),
+    allRows<Record<string, unknown>>("loadWorkspaceToday", (from, to) =>
+      db.from("ai_calls").select("id, status, cost_usd, reserve_usd").eq("workspace_id", ws).gte("created_at", utc).order("id", { ascending: true }).range(from, to),
+    ),
     db.from("workspace_settings").select("ai_daily_cap_usd").eq("workspace_id", ws).maybeSingle(),
   ]);
-  if (rows.error) throw new Error(`loadWorkspaceToday: ${rows.error.message}`);
-  const spent = (rows.data ?? []).reduce((s, r) => s + (r.status === "pending" ? Math.max(num(r.reserve_usd), num(r.cost_usd)) : num(r.cost_usd)), 0);
+  const spent = rows.reduce((s, r) => s + (r.status === "pending" ? Math.max(num(r.reserve_usd), num(r.cost_usd)) : num(r.cost_usd)), 0);
   return { spent, cap: settings.data ? num(settings.data.ai_daily_cap_usd) : 10 };
 }

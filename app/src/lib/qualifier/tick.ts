@@ -37,6 +37,8 @@ export async function runQualifierTick(opts: {
   sleep?: (ms: number) => Promise<void>;
   budgetMs?: number;
   maxLeads?: number;
+  /** When the request must be over (same clock as `now`): paid steps do not start without time to finish before it. */
+  deadline?: number;
 }): Promise<QualifierTickResult> {
   const { store } = opts;
   const now = opts.now ?? Date.now;
@@ -83,10 +85,11 @@ export async function runQualifierTick(opts: {
           sleep,
           now,
           gaps,
+          deadline: opts.deadline,
         });
         counts.steps += r.steps;
-        // a failed lead is not released: it stays locked until finishTick frees it, out of the rest of this tick
-        keep = r.result === "requeued" && !r.errored;
+        // a failed or deferred (no time left for a paid step) lead is not released: it stays locked until finishTick frees it, out of the rest of this tick
+        keep = r.result === "requeued" && !r.errored && !r.deferred;
         if (r.result === "paused") pauseReason = r.pauseReason;
       } catch (e) {
         counts.failed++;
