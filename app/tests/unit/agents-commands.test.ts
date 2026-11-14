@@ -1,9 +1,9 @@
 import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { archiveAgent, finishHunter, startHunter, type Actor } from "@/lib/agents/commands";
+import { archiveAgent, finishHunter, pauseHunter, startHunter, turnOnHunter, type Actor } from "@/lib/agents/commands";
 import type { AgentStore } from "@/lib/agents/store";
-import type { AgentPatch, AgentRow } from "@/lib/agents/types";
+import type { AgentPatch, AgentRow, AgentStatus } from "@/lib/agents/types";
 import type { HunterSetup } from "@/lib/agents/hunter";
 import type { NewRun, ResearchStore } from "@/lib/research/store";
 import type { RunRow } from "@/lib/research/rows";
@@ -26,6 +26,7 @@ class FakeAgentStore implements AgentStore {
       config: a.config,
       schedule: "weekly",
       next_run_at: null,
+      paused_reason: null,
       archived_at: null,
       created_at: "2026-11-14T00:00:00Z",
       updated_at: "2026-11-14T00:00:00Z",
@@ -37,6 +38,23 @@ class FakeAgentStore implements AgentStore {
   }
   async updateAgent(id: string, patch: AgentPatch) {
     this.patches.push([id, patch]);
+  }
+  ifCalls: [string, AgentStatus][] = [];
+  /** Mirrors the A7 trigger: a 4th running hunter is refused. */
+  async updateAgentIf(id: string, expected: AgentStatus, patch: AgentPatch) {
+    this.ifCalls.push([id, expected]);
+    const a = this.agents.get(id);
+    if (!a || a.status !== expected) return false;
+    if (patch.status === "running" && [...this.agents.values()].filter((x) => x.status === "running").length >= 3) {
+      throw new Error("A7: no more than 3 running hunters");
+    }
+    this.patches.push([id, patch]);
+    if (patch.status) a.status = patch.status;
+    return true;
+  }
+  runs: RunRow[] = [];
+  async listRuns() {
+    return this.runs;
   }
   async listAgents() {
     return [...this.agents.values()];
@@ -129,6 +147,81 @@ describe("F2 agent commands", () => {
     for (const f of ["src/app/(app)/agentes/page.tsx", "src/app/(app)/agentes/pesquisa/layout.tsx"]) {
       expect(read(f), f).toContain('.is("setup_agent_id", null)');
     }
+  });
+
+  describe("F3b life cycle", () => {
+    const closer: Actor = { workspaceId: "w1", role: "closer" };
+    async function agentWith(agents: FakeAgentStore, status: AgentStatus) {
+      const id = await agents.insertDraft({ workspaceId: "w1", name: "x", config: good as HunterSetup });
+      agents.agents.get(id)!.status = status;
+      return id;
+    }
+
+    test("turnOnHunter: paused becomes running; the 4th comes back as too_many; the closer is refused", async () => {
+      const agents = new FakeAgentStore();
+      const id = await agentWith(agents, "paused");
+      expect(await turnOnHunter(agents, owner, id)).toEqual({ ok: true });
+      expect(agents.agents.get(id)!.status).toBe("running");
+      expect(agents.patches).toEqual([[id, { status: "running" }]]);
+      // already running: ok, no write
+      expect(await turnOnHunter(agents, owner, id)).toEqual({ ok: true });
+      expect(agents.patches).toHaveLength(1);
+      // draft: not ready
+      const d = await agentWith(agents, "draft");
+      expect(await turnOnHunter(agents, owner, d)).toEqual({ ok: false, error: "not_ready" });
+      expect(await turnOnHunter(agents, closer, id)).toEqual({ ok: false, error: "forbidden" });
+      expect(await turnOnHunter(agents, { workspaceId: "w2", role: "owner" }, id)).toEqual({ ok: false, error: "not_found" });
+      // fill to 3 running, the 4th is refused
+      await turnOnHunter(agents, owner, await agentWith(agents, "paused"));
+      await turnOnHunter(agents, owner, await agentWith(agents, "paused"));
+      const fourth = await agentWith(agents, "paused");
+      expect(await turnOnHunter(agents, owner, fourth)).toEqual({ ok: false, error: "too_many" });
+      expect(agents.agents.get(fourth)!.status).toBe("paused");
+    });
+
+    test("pauseHunter: running becomes paused and its running research is paused by the user", async () => {
+      const agents = new FakeAgentStore();
+      const id = await agentWith(agents, "running");
+      agents.runs = [{ id: "run-9", status: "running", progress: {} } as unknown as RunRow];
+      const updates: [string, unknown][] = [];
+      const research = { async updateRun(runId: string, patch: unknown) { updates.push([runId, patch]); } } as unknown as ResearchStore;
+      expect(await pauseHunter(agents, research, owner, id)).toEqual({ ok: true });
+      expect(agents.agents.get(id)!.status).toBe("paused");
+      expect(updates).toEqual([["run-9", { status: "paused", progress: { pauseReason: "user" } }]]);
+      expect(await pauseHunter(agents, research, closer, id)).toEqual({ ok: false, error: "forbidden" });
+      // not running any more (second tab): nothing else is touched
+      expect(await pauseHunter(agents, research, owner, id)).toEqual({ ok: true });
+      expect(updates).toHaveLength(1);
+    });
+
+    test('archiveAgent: a running agent is refused with "running"; draft, paused and done archive', async () => {
+      const agents = new FakeAgentStore();
+      const run = await agentWith(agents, "running");
+      expect(await archiveAgent(agents, owner, run)).toEqual({ ok: false, error: "running" });
+      expect(agents.patches).toHaveLength(0);
+      for (const st of ["draft", "paused", "done"] as const) {
+        const id = await agentWith(agents, st);
+        expect(await archiveAgent(agents, owner, id)).toEqual({ ok: true });
+      }
+      expect(agents.patches).toHaveLength(3);
+    });
+
+    test("finishHunter: the write only lands on a draft (a second tab does not overwrite)", async () => {
+      const agents = new FakeAgentStore();
+      const id = await agentWith(agents, "draft");
+      agents.setupRun = { status: "plan", plan: { summary: "s", places: [], sourceTypes: [], warnings: [] }, region_text: "Boston" } as unknown as RunRow;
+      expect(await finishHunter(agents, owner, id, { name: "N", rigor: "careful", schedule: "weekly" })).toEqual({ ok: true });
+      expect(agents.ifCalls).toEqual([[id, "draft"]]);
+      // the other tab already moved it on between the read and the write: the write returns false -> still ok
+      const spy = agents.updateAgentIf.bind(agents);
+      agents.updateAgentIf = async (i, e, p) => {
+        agents.agents.get(i)!.status = "running";
+        return spy(i, e, p);
+      };
+      const id2 = await agentWith(agents, "draft");
+      expect(await finishHunter(agents, owner, id2, { name: "N", rigor: "careful", schedule: "weekly" })).toEqual({ ok: true });
+      expect(agents.agents.get(id2)!.status).toBe("running");
+    });
   });
 
   describe("finishHunter", () => {

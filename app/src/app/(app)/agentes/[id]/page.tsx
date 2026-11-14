@@ -48,7 +48,10 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
   const step = hunterStep(agent, run, ai);
   const setup = hunterSetupSchema.safeParse(agent.config);
 
-  if (step === "created") return <AgentDetail agent={agent} setupRun={run} />;
+  if (step === "created") {
+    const runs = await store.listRuns(id);
+    return <AgentDetail agent={agent} setupRun={run} runs={runs} now={new Date()} />;
+  }
 
   const profile = setup.success ? (setup.data.profileSource === "saved" ? H.profileSaved : H.profileDescribe) : "";
   const audience = setup.success ? (setup.data.audience === "other" ? setup.data.audienceText : H.audiences[setup.data.audience]) : "";

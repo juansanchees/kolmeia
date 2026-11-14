@@ -25,7 +25,9 @@ export function Progress({
   sources,
   candidates,
   checks,
+  readOnly = false,
 }: {
+  readOnly?: boolean;
   run: RunRow;
   sources: SourceRow[];
   candidates: CandidateRow[];
@@ -137,13 +139,13 @@ export function Progress({
 
       <section aria-label={R.money} className="flex flex-wrap items-center justify-between gap-4 border border-blue bg-blue-wash p-4">
         <div className="flex flex-col gap-1">
-          <span className="text-[15px] font-semibold">{R.keepOpen}</span>
-          <span className="text-sm">{paused ? (run.progress.pauseReason === "daily_cap" ? R.pausedDailyCap : R.paused) : R.keepOpenBody}</span>
+          {!readOnly && <span className="text-[15px] font-semibold">{R.keepOpen}</span>}
+          <span className="text-sm">{paused ? (run.progress.pauseReason === "daily_cap" ? R.pausedDailyCap : R.paused) : readOnly ? "" : R.keepOpenBody}</span>
           <span className="font-mono text-xs text-blue-ink">
             {R.money}: {fill(R.moneyOf, { a: usd(run.spent_cost_usd), b: usd(run.max_cost_usd) })}
           </span>
         </div>
-        <RunControls runId={run.id} paused={paused} />
+        {!readOnly && <RunControls runId={run.id} paused={paused} />}
       </section>
     </div>
   );

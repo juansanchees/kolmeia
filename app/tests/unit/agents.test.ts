@@ -1,9 +1,11 @@
 import { describe, expect, test } from "vitest";
 import { defaultAgentName, hunterConfig, hunterFinishSchema, hunterRequest, hunterSetupSchema, regionOptions, type HunterSetup } from "@/lib/agents/hunter";
 import { hunterStep } from "@/lib/agents/steps";
-import { agentRowView } from "@/lib/agents/view";
+import { agentMetrics, agentRowView } from "@/lib/agents/view";
 import type { AgentRow } from "@/lib/agents/types";
+import type { RunRow } from "@/lib/research/rows";
 import { DEFAULT_CAPS } from "@/lib/research/types";
+import { when } from "@/components/email/format";
 import { t } from "@/messages/pt";
 
 const base: HunterSetup = { profileSource: "saved", companyNote: "", audience: "builder", audienceText: "", region: "Boston" };
@@ -77,9 +79,35 @@ describe("F2 agents", () => {
   test("agentRowView: draft continues, paused hunter has not run yet", () => {
     const row = (o: Partial<AgentRow>): AgentRow => ({
       id: "a1", workspace_id: "w", type: "hunter", name: "N", status: "draft", config: {}, schedule: "weekly",
-      next_run_at: null, archived_at: null, created_at: "", updated_at: "", ...o,
+      next_run_at: null, paused_reason: null, archived_at: null, created_at: "", updated_at: "", ...o,
     });
-    expect(agentRowView(row({}))).toMatchObject({ status: "rascunho", metric: t.agents.metric.draft, cta: "Continuar", href: "/agentes/a1" });
-    expect(agentRowView(row({ status: "paused" }))).toMatchObject({ type: "Caçador", status: "pausado", metric: t.agents.metric.neverRan, cta: "Abrir" });
+    const now = new Date("2026-11-14T12:00:00Z");
+    expect(agentRowView(row({}), now)).toMatchObject({ status: "rascunho", metric: t.agents.metric.draft, cta: "Continuar", href: "/agentes/a1" });
+    expect(agentRowView(row({ status: "paused" }), now)).toMatchObject({ type: "Caçador", status: "pausado", metric: t.agents.metric.neverRan, cta: "Abrir" });
+  });
+
+  test("agentRowView: next search, searching now, the pause reason, done", () => {
+    const row = (o: Partial<AgentRow>): AgentRow => ({
+      id: "a1", workspace_id: "w", type: "hunter", name: "N", status: "running", config: {}, schedule: "weekly",
+      next_run_at: null, paused_reason: null, archived_at: null, created_at: "", updated_at: "", ...o,
+    });
+    const now = new Date("2026-11-14T12:00:00Z");
+    const future = "2026-11-21T12:00:00Z";
+    expect(agentRowView(row({ next_run_at: future }), now).metric).toBe(t.agents.detail.nextRun.replace("{when}", when(future)));
+    expect(agentRowView(row({ next_run_at: "2026-11-14T11:00:00Z" }), now).metric).toBe(t.agents.metric.searching);
+    expect(agentRowView(row({ next_run_at: null }), now).metric).toBe(t.agents.metric.searching);
+    expect(agentRowView(row({ status: "paused", paused_reason: "daily_cap" }), now).metric).toBe(t.agents.paused.daily_cap);
+    expect(agentRowView(row({ status: "paused", paused_reason: "error" }), now).metric).toBe(t.agents.paused.error);
+    expect(agentRowView(row({ status: "paused" }), now).metric).toBe(t.agents.metric.neverRan);
+    expect(agentRowView(row({ status: "done" }), now).metric).toBe(t.agents.metric.done);
+  });
+
+  test("agentMetrics sums runs, companies, verified, refuted and AI cost with the setup", () => {
+    const run = (candidates: number, verified: number, refuted: number, cost: number) =>
+      ({ spent_cost_usd: cost, progress: { counts: { candidates, verified, refuted } } }) as unknown as RunRow;
+    const m = agentMetrics([run(20, 18, 2, 2.1), run(5, 5, 0, 0.4)], 0.3);
+    expect(m).toMatchObject({ runs: 2, found: 25, verified: 23, refuted: 2 });
+    expect(m.costUsd).toBeCloseTo(2.8, 10);
+    expect(agentMetrics([{ spent_cost_usd: 1, progress: {} } as unknown as RunRow], 0)).toEqual({ runs: 1, found: 0, verified: 0, refuted: 0, costUsd: 1 });
   });
 });

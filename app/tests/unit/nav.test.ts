@@ -155,3 +155,20 @@ describe("F3a LEADS", () => {
     expect(hits).toEqual([]);
   });
 });
+
+describe("F3b agent screens", () => {
+  test("agent runs open read-only: no RunDriver for run.agent_id, AutoRefresh instead", () => {
+    const src = read("src/app/(app)/agentes/pesquisa/[id]/page.tsx");
+    expect(src).toContain("run.agent_id");
+    expect(src).toContain("AutoRefresh");
+    expect(src).toContain("!run.agent_id");
+    expect(src).toMatch(/!run\.agent_id[^\n]*RunDriver/);
+  });
+  test("the agent page can turn on, pause and confirm archiving", () => {
+    expect(read("src/components/agents/AgentDetail.tsx")).toContain("AgentPowerButton");
+    expect(read("src/components/agents/AgentDetail.tsx")).not.toContain("turnOnSoon");
+    expect(read("src/components/agents/ArchiveButton.tsx")).toContain("archiveConfirm");
+    const hits = walk(join(process.cwd(), "src")).filter((f) => readFileSync(f, "utf8").includes("turnOnSoon"));
+    expect(hits).toEqual([]);
+  });
+});

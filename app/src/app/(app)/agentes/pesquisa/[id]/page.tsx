@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { hasAi } from "@/lib/ai/config";
 import { needsAdvance } from "@/lib/research/engine";
 import { researchSession } from "@/lib/research/session";
+import { AutoRefresh } from "@/components/AutoRefresh";
 import { Conversation } from "@/components/research/Conversation";
 import { Progress } from "@/components/research/Progress";
 import { Results } from "@/components/research/Results";
@@ -41,8 +42,17 @@ export default async function ResearchRunPage({
 
   return (
     <div className="flex flex-col gap-5">
-      {ai && needsAdvance(run) && <RunDriver runId={run.id} status={run.status} />}
-      {!ai && needsAdvance(run) && (
+      {/* Agent runs are driven by the cron only: this page never claims a step for them, it just re-reads every 20 s. */}
+      {ai && needsAdvance(run) && !run.agent_id && <RunDriver runId={run.id} status={run.status} />}
+      {run.agent_id && needsAdvance(run) && (
+        <>
+          <AutoRefresh seconds={20} />
+          <p role="status" className="bg-blue-wash px-3 py-2.5 text-sm text-blue-ink">
+            {t.agents.detail.background}
+          </p>
+        </>
+      )}
+      {!ai && needsAdvance(run) && !run.agent_id && (
         <p role="status" className="bg-warn-soft px-3 py-2.5 text-sm text-warn">
           {t.ai.notConfigured}
         </p>
@@ -58,7 +68,7 @@ export default async function ResearchRunPage({
           <Conversation run={run} readOnly={!talking} />
         </>
       ) : searching ? (
-        <Progress run={run} sources={sources} candidates={candidates} checks={checks} />
+        <Progress readOnly={!!run.agent_id} run={run} sources={sources} candidates={candidates} checks={checks} />
       ) : run.status === "done" || candidates.length > 0 ? (
         <>
           {(run.status === "failed" || run.status === "cancelled") && (

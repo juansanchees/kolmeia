@@ -11,7 +11,24 @@ export const agents = {
   restart: "Recomeçar",
   types: { hunter: "Caçador", email: "E-mail", call: "Ligação" },
   statuses: { draft: "rascunho", paused: "pausado", running: "rodando", done: "concluído" },
-  metric: { draft: "Falta terminar a criação", neverRan: "Ainda não rodou" },
+  metric: { draft: "Falta terminar a criação", neverRan: "Ainda não rodou", searching: "Buscando agora", done: "Concluído" },
+  paused: {
+    daily_cap: "Pausado: teto de IA do workspace atingido",
+    user_cap: "Pausado: teto de IA do usuário atingido",
+    global_cap: "Pausado: teto de IA geral atingido",
+    no_access: "Pausado: sem acesso à IA",
+    error: "Pausado: a configuração do agente está incompleta",
+  },
+  capWarning:
+    "O teto de gasto de IA foi atingido e o agente pausou sozinho. Nada roda além do teto. Ligue de novo quando o limite do dia virar (meia-noite UTC) ou peça para subir o teto.",
+  errors: {
+    tooMany: "Já há 3 Caçadores ligados. Pause um antes de ligar outro.",
+    running: "Pause o agente antes de arquivar.",
+  },
+  archiveConfirm: "Arquivar este agente?",
+  archiveYes: "Sim, arquivar",
+  archiveNo: "Não",
+  metrics: { runs: "Execuções", found: "Empresas achadas", verified: "Conferidas", refuted: "Refutadas na 2ª passada", cost: "Custo de IA (total)" },
   gallery: {
     title: "Novo agente",
     describe: "Descreva o que você quer...",
@@ -77,6 +94,10 @@ export const agents = {
   detail: {
     creationCost: "Custo da criação (IA)",
     turnOn: "Ligar",
-    turnOnSoon: "Ligar chega na próxima versão. Até lá o agente fica pausado e não gasta nada.",
+    pause: "Pausar",
+    turnOnHelp: "Ligado, o Caçador busca sozinho na frequência escolhida, mesmo com a aba fechada. Só traz empresas novas.",
+    nextRun: "Próxima busca: {when}",
+    background: "Este agente roda sozinho em segundo plano. Esta tela só mostra o progresso.",
+    history: "Execuções",
   },
 } as const;

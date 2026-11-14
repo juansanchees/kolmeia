@@ -1,5 +1,5 @@
 // Pure commands of the AGENTES area (no server imports): the server actions wrap these with the session.
-import { createRun } from "@/lib/research/commands";
+import { createRun, pauseRun } from "@/lib/research/commands";
 import type { ResearchStore } from "@/lib/research/store";
 import { isSender, type Role } from "@/lib/roles";
 import { defaultAgentName, hunterConfig, hunterFinishSchema, hunterRequest, hunterSetupSchema } from "./hunter";
@@ -9,7 +9,7 @@ export type Actor = { workspaceId: string; role: Role };
 
 export type CommandResult<T = object> =
   | ({ ok: true } & T)
-  | { ok: false; error: "forbidden" | "not_found" | "not_ready" | "invalid" | "generic"; fieldErrors?: Record<string, string> };
+  | { ok: false; error: "forbidden" | "not_found" | "not_ready" | "invalid" | "generic" | "too_many" | "running"; fieldErrors?: Record<string, string> };
 
 /** Draft agent + its setup research (the normal research row, linked by setup_agent_id). */
 export async function startHunter(agents: AgentStore, research: ResearchStore, actor: Actor, raw: unknown): Promise<CommandResult<{ agentId: string }>> {
@@ -44,10 +44,11 @@ export async function archiveAgent(agents: AgentStore, actor: Actor, agentId: st
     return { ok: false, error: "generic" };
   }
   if (!agent || agent.workspace_id !== actor.workspaceId) return { ok: false, error: "not_found" };
+  if (agent.status === "running") return { ok: false, error: "running" }; // A8: pause first (the database refuses too)
   try {
     await agents.updateAgent(agentId, { archived_at: new Date().toISOString() });
-  } catch {
-    return { ok: false, error: "generic" };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error && /A8/.test(e.message) ? "running" : "generic" }; // a second tab turned it on meanwhile
   }
   return { ok: true };
 }
@@ -74,12 +75,54 @@ export async function finishHunter(agents: AgentStore, actor: Actor, agentId: st
     if (!setup.success) return { ok: false, error: "generic" };
     run = await agents.getSetupRun(agentId);
     if (!run || run.status !== "plan" || !run.plan) return { ok: false, error: "not_ready" };
-    await agents.updateAgent(agentId, {
+    // Only while still a draft: a second tab that already moved the agent on is not overwritten (false -> nothing to do).
+    await agents.updateAgentIf(agentId, "draft", {
       name: parsed.data.name,
       status: "paused",
       schedule: parsed.data.schedule,
       config: hunterConfig(setup.data, parsed.data, run.region_text),
     });
+  } catch {
+    return { ok: false, error: "generic" };
+  }
+  return { ok: true };
+}
+
+async function loadOwned(agents: AgentStore, actor: Actor, agentId: string) {
+  try {
+    const agent = await agents.getAgent(agentId);
+    if (!agent || agent.workspace_id !== actor.workspaceId || agent.archived_at) return { error: "not_found" as const };
+    return { agent };
+  } catch {
+    return { error: "generic" as const };
+  }
+}
+
+/** "Ligar": paused -> running. The database enforces the limit of 3 running hunters (A7). */
+export async function turnOnHunter(agents: AgentStore, actor: Actor, agentId: string): Promise<CommandResult> {
+  if (!isSender(actor.role)) return { ok: false, error: "forbidden" };
+  const l = await loadOwned(agents, actor, agentId);
+  if (!l.agent) return { ok: false, error: l.error };
+  if (l.agent.type !== "hunter") return { ok: false, error: "not_ready" };
+  if (l.agent.status === "running") return { ok: true };
+  if (l.agent.status !== "paused") return { ok: false, error: "not_ready" };
+  try {
+    await agents.updateAgentIf(agentId, "paused", { status: "running" });
+  } catch (e) {
+    return { ok: false, error: e instanceof Error && /A7/.test(e.message) ? "too_many" : "generic" };
+  }
+  return { ok: true };
+}
+
+/** "Pausar": running -> paused, then the agent's running research is paused by the user (a step in flight finishes; none starts). */
+export async function pauseHunter(agents: AgentStore, research: ResearchStore, actor: Actor, agentId: string): Promise<CommandResult> {
+  if (!isSender(actor.role)) return { ok: false, error: "forbidden" };
+  const l = await loadOwned(agents, actor, agentId);
+  if (!l.agent) return { ok: false, error: l.error };
+  try {
+    if (!(await agents.updateAgentIf(agentId, "running", { status: "paused" }))) return { ok: true }; // already paused/done elsewhere
+    const run = (await agents.listRuns(agentId)).find((r) => r.status === "running");
+    if (run) await pauseRun(research, run);
   } catch {
     return { ok: false, error: "generic" };
   }

@@ -7,6 +7,9 @@ export type AgentStatus = (typeof AGENT_STATUSES)[number];
 export const SCHEDULES = ["once", "weekly", "daily"] as const;
 export type Schedule = (typeof SCHEDULES)[number];
 
+export const PAUSED_REASONS = ["daily_cap", "user_cap", "global_cap", "no_access", "error"] as const;
+export type PausedReason = (typeof PAUSED_REASONS)[number];
+
 export type AgentRow = {
   id: string;
   workspace_id: string;
@@ -16,6 +19,7 @@ export type AgentRow = {
   config: Record<string, unknown>;
   schedule: Schedule;
   next_run_at: string | null;
+  paused_reason: PausedReason | null;
   archived_at: string | null;
   created_at: string;
   updated_at: string;
@@ -23,4 +27,4 @@ export type AgentRow = {
 
 export type AgentPatch = Partial<Pick<AgentRow, "name" | "status" | "config" | "schedule" | "archived_at">>;
 
-export const AGENT_COLUMNS = "id, workspace_id, type, name, status, config, schedule, next_run_at, archived_at, created_at, updated_at";
+export const AGENT_COLUMNS = "id, workspace_id, type, name, status, config, schedule, next_run_at, paused_reason, archived_at, created_at, updated_at";

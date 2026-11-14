@@ -4,10 +4,11 @@ import type { AgentRow } from "@/lib/agents/types";
 import { ArchiveButton } from "./ArchiveButton";
 
 export function AgentList({ agents }: { agents: AgentRow[] }) {
+  const now = new Date();
   return (
     <ul className="m-0 flex list-none flex-col border border-line bg-surface p-0">
       {agents.map((a) => {
-        const v = agentRowView(a);
+        const v = agentRowView(a, now);
         return (
           <li key={a.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line px-4 py-3 last:border-b-0">
             <div className="flex min-w-0 flex-[1_1_220px] flex-col gap-0.5">
@@ -25,7 +26,7 @@ export function AgentList({ agents }: { agents: AgentRow[] }) {
             >
               {v.cta}
             </Link>
-            {(a.status === "draft" || a.status === "paused") && <ArchiveButton agentId={a.id} />}
+            {a.status !== "running" && <ArchiveButton agentId={a.id} />}
           </li>
         );
       })}

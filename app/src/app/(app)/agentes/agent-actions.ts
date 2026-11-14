@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { archiveAgent, finishHunter, startHunter, type Actor } from "@/lib/agents/commands";
+import { archiveAgent, finishHunter, pauseHunter, startHunter, turnOnHunter, type Actor } from "@/lib/agents/commands";
 import { SupabaseAgentStore } from "@/lib/agents/store";
 import type { FormState } from "@/lib/form-state";
 import { researchSession } from "@/lib/research/session";
@@ -48,6 +48,7 @@ async function archive(agentId: string): Promise<FormState | null> {
   const res = await archiveAgent(new SupabaseAgentStore(s.supabase), actorOf(s), agentId);
   if (!res.ok) {
     if (res.error === "forbidden") redirect("/leads");
+    if (res.error === "running") return { status: "error", message: t.agents.errors.running };
     return { status: "error", message: E.failed };
   }
   revalidatePath("/agentes", "layout");
@@ -80,4 +81,30 @@ export async function finishHunterAction(agentId: string, input: { name: string;
   }
   revalidatePath("/agentes", "layout");
   redirect("/agentes");
+}
+
+/** "Ligar". The database refuses a 4th running hunter (A7); the message says so. */
+export async function turnOnHunterAction(agentId: string): Promise<FormState> {
+  const s = await researchSession();
+  if (!s || !uuid.safeParse(agentId).success) return { status: "error", message: E.failed };
+  const res = await turnOnHunter(new SupabaseAgentStore(s.supabase), actorOf(s), agentId);
+  if (!res.ok) {
+    if (res.error === "forbidden") redirect("/leads");
+    return { status: "error", message: res.error === "too_many" ? t.agents.errors.tooMany : E.failed };
+  }
+  revalidatePath("/agentes", "layout");
+  return { status: "success" };
+}
+
+/** "Pausar". */
+export async function pauseHunterAction(agentId: string): Promise<FormState> {
+  const s = await researchSession();
+  if (!s || !uuid.safeParse(agentId).success) return { status: "error", message: E.failed };
+  const res = await pauseHunter(new SupabaseAgentStore(s.supabase), s.store, actorOf(s), agentId);
+  if (!res.ok) {
+    if (res.error === "forbidden") redirect("/leads");
+    return { status: "error", message: E.failed };
+  }
+  revalidatePath("/agentes", "layout");
+  return { status: "success" };
 }
