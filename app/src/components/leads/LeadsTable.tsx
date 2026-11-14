@@ -15,7 +15,9 @@ const LB = t.research.labels;
 const LEAD_TABS = TABS.filter((x): x is LeadTab => x !== "jobs");
 const selectCls = "min-h-11 min-w-0 border border-line bg-surface px-2.5 text-sm text-ink";
 
-export function LeadsTable({ items, canCreate }: { items: LeadListItem[]; canCreate: boolean }) {
+const linkBtn = "inline-flex min-h-11 items-center border border-blue bg-surface px-4 text-sm font-semibold text-blue no-underline hover:bg-blue-wash";
+
+export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: false } }: { items: LeadListItem[]; canCreate: boolean; sources?: { maps: boolean; apollo: boolean } }) {
   const [f, setF] = useState<LeadFilters>(DEFAULT_LEAD_FILTERS);
   const set = (patch: Partial<LeadFilters>) => setF((x) => ({ ...x, ...patch }));
   const filtered = useMemo(() => filterLeads(items, f), [items, f]);
@@ -38,6 +40,8 @@ export function LeadsTable({ items, canCreate }: { items: LeadListItem[]; canCre
             <Link href="/leads/subir" className="inline-flex min-h-11 items-center border border-blue bg-surface px-4 text-sm font-semibold text-blue no-underline hover:bg-blue-wash">
               {t.imports.button}
             </Link>
+            {sources.maps && <Link href="/leads/buscar#maps" className={linkBtn}>{t.sources.search.maps}</Link>}
+            {sources.apollo && <Link href="/leads/buscar#apollo" className={linkBtn}>{t.sources.search.apollo}</Link>}
           </div>
         )}
       </div>
@@ -102,6 +106,8 @@ export function LeadsTable({ items, canCreate }: { items: LeadListItem[]; canCre
               {t.imports.button}
             </Link>
           )}
+          {canCreate && sources.maps && <Link href="/leads/buscar#maps" className={linkBtn}>{t.sources.search.maps}</Link>}
+          {canCreate && sources.apollo && <Link href="/leads/buscar#apollo" className={linkBtn}>{t.sources.search.apollo}</Link>}
           <button type="button" onClick={download} className="min-h-11 border border-blue bg-surface px-4 text-sm font-semibold text-blue hover:bg-blue-wash">
             {t.leads.csv}
           </button>

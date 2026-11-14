@@ -11,6 +11,8 @@ import { AgentDetail } from "@/components/agents/AgentDetail";
 import { HunterReviewCard } from "@/components/agents/HunterReviewCard";
 import { QuestionsForm } from "@/components/research/QuestionsForm";
 import { RunDriver } from "@/components/research/RunDriver";
+import { AgentSources, DEFAULT_AGENT_SOURCES } from "@/components/sources/AgentSources";
+import { agentSourceSettings, connectedSources } from "@/lib/sources/queries";
 import { RestartButton } from "@/components/agents/RestartButton";
 import { t } from "@/messages/pt";
 
@@ -50,7 +52,14 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
 
   if (step === "created") {
     const runs = await store.listRuns(id);
-    return <AgentDetail agent={agent} setupRun={run} runs={runs} now={new Date()} />;
+    const conn = await connectedSources(supabase, workspace.id);
+    const settings = (await agentSourceSettings(supabase, id)) ?? DEFAULT_AGENT_SOURCES;
+    return (
+      <div className="flex min-w-0 flex-col gap-5">
+        <AgentDetail agent={agent} setupRun={run} runs={runs} now={new Date()} />
+        <AgentSources agentId={agent.id} connected={{ maps: conn.maps, apollo: conn.apollo }} settings={settings} />
+      </div>
+    );
   }
 
   const profile = setup.success ? (setup.data.profileSource === "saved" ? H.profileSaved : H.profileDescribe) : "";

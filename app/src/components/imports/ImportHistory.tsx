@@ -37,7 +37,7 @@ export function ImportHistory({ items }: { items: ImportListItem[] }) {
             const result = undone[i.id];
             const status = result ? "undone" : i.status;
             return (
-              <li key={i.id} className="flex flex-col gap-2 border-b border-line px-3.5 py-3 last:border-b-0">
+              <li key={i.id} id={`import-${i.id}`} className="flex flex-col gap-2 border-b border-line px-3.5 py-3 last:border-b-0">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="min-w-0 truncate text-sm font-semibold">{i.list_name}</span>
                   <span className="font-mono text-xs text-muted">{date(i.created_at)} · {M.statuses[status]}</span>
