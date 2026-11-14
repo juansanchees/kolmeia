@@ -16,8 +16,10 @@ export const isProvider = (v: unknown): v is Provider => v === "apify" || v === 
 /** The bounds of the daily caps (same as the database). */
 export const CAP_LIMITS = { apify: { min: 0.5, max: 50 }, apollo: { min: 1, max: 200 } } as const;
 
+/** Last 4 ALPHANUMERIC characters (the database allows only [A-Za-z0-9]{4}); "" when there are fewer than 4. */
 export function last4(key: string): string {
-  return key.trim().slice(-4);
+  const alnum = key.replace(/[^A-Za-z0-9]/g, "");
+  return alnum.length < 4 ? "" : alnum.slice(-4);
 }
 
 /** Trimmed, 16..200 chars, letters, digits, underscore and hyphen only. */
@@ -26,7 +28,7 @@ export function validateKeyShape(_p: Provider, key: string): boolean {
   return k.length >= 16 && k.length <= 200 && /^[A-Za-z0-9_-]+$/.test(k);
 }
 
-/** Does the service accept this key? A plan limit (Apollo) still means the key itself works. */
+/** Does the service accept this key? Only an explicit API_INACCESSIBLE (Apollo plan limit) still means the key works; a bare 403 is refused. */
 export async function testKey(p: Provider, key: string, http: HttpJson): Promise<"ok" | "refused" | "unreachable"> {
   const k = key.trim();
   if (p === "apify") return apifyClient(k, http).checkKey();
@@ -65,7 +67,9 @@ export function parseCap(p: Provider, raw: unknown): number | null | "capRange" 
 }
 
 type Who = { ws: string; role: Role };
-const rpcError = (e: { code?: string }): SourceError => (e.code === "42501" ? "notAllowed" : e.code === "23514" || e.code === "22023" ? "capRange" : "generic");
+// Cap-only RPCs report a bad cap (23514/22023); set_source_connection can also fail a check on the key columns, so there it is "generic".
+const rpcError = (e: { code?: string }, capRpc = true): SourceError =>
+  e.code === "42501" ? "notAllowed" : capRpc && (e.code === "23514" || e.code === "22023") ? "capRange" : "generic";
 
 /**
  * Tests the key the user just typed, seals it and stores it. The result never contains the key: every failure
@@ -91,8 +95,10 @@ export async function saveKeyCore(
   } catch (e) {
     return { error: e instanceof MailboxKeyError ? "noKey" : "generic" };
   }
-  const { error } = await deps.rpc("set_source_connection", { p_ws: who.ws, p_provider: p, p_ciphertext: sealed, p_last4: last4(input.key), p_cap: cap });
-  return error ? { error: rpcError(error) } : sourceOk;
+  const tail = last4(input.key);
+  if (!tail) return { error: "keyShape" };
+  const { error } = await deps.rpc("set_source_connection", { p_ws: who.ws, p_provider: p, p_ciphertext: sealed, p_last4: tail, p_cap: cap });
+  return error ? { error: rpcError(error, false) } : sourceOk;
 }
 
 export async function saveCapCore(who: Who, input: { provider: unknown; cap: unknown }, deps: { rpc: Rpc }): Promise<SourceResult> {

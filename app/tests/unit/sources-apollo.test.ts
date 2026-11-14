@@ -39,7 +39,7 @@ describe("apolloClient.lookup", () => {
     expect(await apolloClient(KEY, fake({ json: "nope" }).http).lookup(Q)).toEqual([]);
   });
   it("lookup never calls an enrich endpoint", async () => {
-    const { http, calls } = fake({ json: { organizations: [] } });
+    const { http, calls } = fake({ json: { organizations: [], is_logged_in: true } });
     await apolloClient(KEY, http).lookup(Q);
     await apolloClient(KEY, http).checkKey();
     for (const c of calls) expect(c.url).not.toMatch(/enrich|people|match/);
@@ -64,7 +64,7 @@ describe("apolloClient errors", () => {
     for (const e of [e1, e2, e3]) expect(String(e.message) + String(e.stack ?? "")).not.toContain(KEY);
   });
   it("checkKey is true on 200", async () => {
-    expect(await apolloClient(KEY, fake({ json: { healthy: true } }).http).checkKey()).toBe(true);
+    expect(await apolloClient(KEY, fake({ json: { is_logged_in: true } }).http).checkKey()).toBe(true);
   });
 });
 

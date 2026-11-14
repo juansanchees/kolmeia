@@ -119,6 +119,7 @@ function Disconnect({ provider }: { provider: P }) {
 export function ConnectionCard({ view, isOwner }: { view: ConnectionView; isOwner: boolean }) {
   const { provider, last4, cap, today } = view;
   const connected = last4 !== null;
+  // 0.5 = the smallest Apify run reserve (APIFY_MIN_CHARGE_USD): under that margin no new Maps search fits today.
   const atCap = connected && cap !== null && today !== null && (provider === "apify" ? today + 0.5 > cap : today >= cap);
   return (
     <Card aria-labelledby={`src-${provider}`} className="flex-[1_1_340px]">

@@ -94,9 +94,32 @@ describe("F3d connections", () => {
     expect(calls).toEqual([]);
   });
 
-  test("apollo: 401 is refused, plan limit still means the key works", async () => {
-    const url = "https://api.apollo.io/";
-    expect(await testKey("apollo", KEY, fakeHttp({ [`GET ${url}`]: { status: 401, json: {} }, [`POST ${url}`]: { status: 401, json: {} } }))).toBe("refused");
+  test("apollo key check: is_logged_in false and a bare 403 are refused; explicit API_INACCESSIBLE is ok; true is ok", async () => {
+    const url = "GET https://api.apollo.io/";
+    const t = (r: { status: number; json: unknown }) => testKey("apollo", KEY, fakeHttp({ [url]: r }));
+    expect(await t({ status: 401, json: {} })).toBe("refused");
+    expect(await t({ status: 200, json: { is_logged_in: false } })).toBe("refused");
+    expect(await t({ status: 200, json: { healthy: true } })).toBe("refused");
+    expect(await t({ status: 403, json: {} })).toBe("refused");
+    expect(await t({ status: 403, json: { error_code: "API_INACCESSIBLE" } })).toBe("ok");
+    expect(await t({ status: 200, json: { is_logged_in: true } })).toBe("ok");
+    expect(await t({ status: 500, json: {} })).toBe("unreachable");
+  });
+
+  test("last4 uses alphanumerics only: a key ending in a hyphen stores a valid last4", async () => {
+    const dashKey = "apify_api_TESTKEY12-";
+    expect(last4(dashKey)).toBe("EY12");
+    expect(last4(dashKey)).toMatch(/^[A-Za-z0-9]{4}$/);
+    expect(last4("----")).toBe("");
+    const http = fakeHttp({ "GET https://api.apify.com/v2/users/me": { status: 200, json: { data: {} } } });
+    const { rpc, calls } = recorder();
+    expect(await saveKeyCore({ ws: WS, role: "owner" }, { provider: "apify", key: dashKey, cap: "" }, { http, rpc })).toEqual({ ok: true });
+    expect(calls[0].args.p_last4).toMatch(/^[A-Za-z0-9]{4}$/);
+  });
+
+  test("a check violation from set_source_connection is generic, not the cap message", async () => {
+    const http = fakeHttp({ "GET https://api.apify.com/v2/users/me": { status: 200, json: { data: {} } } });
+    expect(await saveKeyCore({ ws: WS, role: "owner" }, { provider: "apify", key: KEY, cap: "" }, { http, rpc: recorder({ code: "23514" }).rpc })).toEqual({ error: "generic" });
   });
 
   test("cap and delete go through the owner RPCs with the session workspace", async () => {

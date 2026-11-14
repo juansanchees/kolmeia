@@ -3,6 +3,7 @@ import { ConnectionCard, type ConnectionView } from "@/components/sources/Connec
 import { isSender } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace } from "@/lib/workspace";
+import { Notice } from "@/components/email/bits";
 import { t } from "@/messages/pt";
 
 type Row = { provider: string; last4: string; daily_cap_usd: number | null; daily_calls: number | null; spent_today_usd: number | null; calls_today: number | null };
@@ -12,7 +13,15 @@ export default async function SourcesPage() {
   const workspace = await getCurrentWorkspace();
   if (!workspace || !isSender(workspace.role)) notFound();
   const supabase = await createClient();
-  const { data } = supabase ? await supabase.rpc("list_source_connections", { p_ws: workspace.id }) : { data: null };
+  const { data, error } = supabase ? await supabase.rpc("list_source_connections", { p_ws: workspace.id }) : { data: null, error: null };
+  if (!supabase || error) {
+    return (
+      <section className="flex flex-col gap-4">
+        <h2 className="text-3xl">{t.sources.title}</h2>
+        <Notice role="alert">{t.sources.errors.generic}</Notice>
+      </section>
+    );
+  }
   const rows = (Array.isArray(data) ? data : []) as Row[];
   const views: ConnectionView[] = (["apify", "apollo"] as const).map((provider) => {
     const r = rows.find((x) => x.provider === provider);

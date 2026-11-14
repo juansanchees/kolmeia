@@ -12,6 +12,10 @@ type HttpResponse = { status: number; json: unknown };
 const APOLLO_BASE = "https://api.apollo.io"; // ?
 const SEARCH_PATH = "/api/v1/mixed_companies/search"; // ? worked via Apollo MCP; REST free-plan access unknown
 const HEALTH_PATH = "/api/v1/auth/health"; // ? key test
+/** ? Key check: a 2xx whose JSON says is_logged_in === true. Unverified until T5 Step 0 (real call with Juan's key). Anything else = refused. */
+function keyAccepted(json: unknown): boolean {
+  return typeof json === "object" && json !== null && (json as Record<string, unknown>).is_logged_in === true;
+}
 const KEY_HEADER = "X-Api-Key"; // ?
 const DISPLAY_MODE = "fuzzy_select_mode"; // free lookup mode; never call mixed_companies without it
 const PER_PAGE = 25;
@@ -98,7 +102,8 @@ export function mapOrg(item: unknown, row = 1): ImportRowIn | null {
 export function apolloClient(key: string, http: HttpJson) {
   const headers = { [KEY_HEADER]: key, "Content-Type": "application/json", Accept: "application/json" };
 
-  async function call(req: { url: string; method: "GET" | "POST"; body?: unknown }): Promise<unknown> {
+  /** strictPlan: only the explicit API_INACCESSIBLE code is a plan block; a bare 403 is a refused key (key check). */
+  async function call(req: { url: string; method: "GET" | "POST"; body?: unknown }, strictPlan = false): Promise<unknown> {
     let res: HttpResponse;
     try {
       res = await http.request(req.method, req.url, { headers, body: req.body, timeoutMs: TIMEOUT_MS });
@@ -106,8 +111,8 @@ export function apolloClient(key: string, http: HttpJson) {
       throw new ApolloError(0); // the underlying message could echo the request: fixed text only
     }
     const code = isObj(res.json) ? res.json.error_code : undefined;
-    if (isPlanError(res.status, code)) throw new ApolloPlanError();
-    if (res.status === 401) throw new ApolloKeyError();
+    if (strictPlan ? code === PLAN_ERROR_CODE : isPlanError(res.status, code)) throw new ApolloPlanError();
+    if (res.status === 401 || (strictPlan && res.status === 403)) throw new ApolloKeyError();
     if (res.status < 200 || res.status >= 300) throw new ApolloError(res.status);
     return res.json;
   }
@@ -115,7 +120,8 @@ export function apolloClient(key: string, http: HttpJson) {
   return {
     /** Does the key work at all? Throws ApolloKeyError / ApolloPlanError / ApolloError. */
     async checkKey(): Promise<true> {
-      await call({ url: APOLLO_BASE + HEALTH_PATH, method: "GET" });
+      const json = await call({ url: APOLLO_BASE + HEALTH_PATH, method: "GET" }, true);
+      if (!keyAccepted(json)) throw new ApolloKeyError();
       return true;
     },
     /** One page (25) of organizations, raw items. Free lookup only: never enriches. */

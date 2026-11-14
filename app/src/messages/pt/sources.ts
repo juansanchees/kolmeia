@@ -1,10 +1,10 @@
 // Fontes conectadas (F3d): copy for the connections screen. Short and simple.
 export const sources = {
   title: "Fontes conectadas",
-  intro: "Cada espaço usa as próprias chaves. A chave fica guardada com criptografia e nunca aparece de novo.",
+  intro: "Cada workspace usa as próprias chaves. A chave fica guardada com criptografia e nunca aparece de novo.",
   mapsTerms: "A coleta do Google Maps segue os termos do Google. O responsável é o dono do workspace.",
   apolloTerms: "Os dados do Apollo ficam só neste workspace. Não revendemos nem compartilhamos.",
-  noSocial: "Links de redes sociais de contato são descartados.",
+  noSocial: "Links de redes sociais são descartados.",
   keyMasked: "••••{last4}",
   todayUsd: "Hoje: US$ {spent} de {cap}",
   todayCalls: "Hoje: {n} de {cap} buscas",
