@@ -1,17 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
   apolloClient, ApolloError, ApolloKeyError, ApolloPlanError, isForeignDomain, mapOrg,
-  type HttpJson, type HttpRequest,
 } from "@/lib/sources/apollo";
+import type { HttpJson } from "@/lib/sources/http";
+import { mapPlace } from "@/lib/sources/maps";
 
 const KEY = "apollo_TEST";
 const Q = { locations: [] as string[], naics: [] as string[], page: 1 };
 function fake(res: { status?: number; json: unknown } | Error) {
-  const calls: HttpRequest[] = [];
-  const http: HttpJson = async (req) => {
-    calls.push(req);
-    if (res instanceof Error) throw res;
-    return { status: res.status ?? 200, json: res.json };
+  const calls: { method: string; url: string; headers: Record<string, string>; body?: unknown }[] = [];
+  const http: HttpJson = {
+    async request(method, url, o) {
+      calls.push({ method, url, headers: o.headers, body: o.body });
+      if (res instanceof Error) throw res;
+      return { status: res.status ?? 200, json: res.json };
+    },
   };
   return { http, calls };
 }
@@ -72,6 +75,10 @@ describe("apollo junk filter", () => {
     expect(isForeignDomain("y.ca")).toBe(true);
     expect(isForeignDomain("z.com")).toBe(false);
     expect(isForeignDomain("w.us")).toBe(false);
+    for (const ok of ["acme.io", "acme.ai", "acme.co", "ACME.IO."]) expect(isForeignDomain(ok)).toBe(false);
+    for (const bad of ["acme.de", "acme.in", "acme.co.uk"]) expect(isForeignDomain(bad)).toBe(true);
+    expect(mapOrg({ name: "Dot Io", primary_domain: "dotio.io" })?.website).toBe("https://dotio.io/");
+    expect(mapOrg({ name: "Dot De", primary_domain: "dotde.de" })).toBeNull();
     expect(mapOrg({ name: "A", primary_domain: "acme.co.uk" })).toBeNull();
     expect(mapOrg({ name: "B", domain: "x.com.pk", website_url: "http://www.x.com.pk" })).toBeNull();
     expect(mapOrg({ name: "C", primary_domain: "y.ca" })).toBeNull();
@@ -79,17 +86,34 @@ describe("apollo junk filter", () => {
     expect(mapOrg({ name: "D", website_url: "" })).toBeNull();
     expect(mapOrg({ name: "", primary_domain: "z.com" })).toBeNull();
     expect(mapOrg(null)).toBeNull();
-    expect(mapOrg({ name: "E", primary_domain: "z.com" })).toEqual({ name: "E", website: "https://z.com/" });
-    expect(mapOrg({ name: "F", primary_domain: "w.us" })).toEqual({ name: "F", website: "https://w.us/" });
+    expect(mapOrg({ name: "E", primary_domain: "z.com" })).toEqual({ row: 1, name: "E", name_key: "e", website: "https://z.com/" });
+    expect(mapOrg({ name: "F", primary_domain: "w.us" })).toEqual({ row: 1, name: "F", name_key: "f", website: "https://w.us/" });
   });
   it("mapOrg prefers website_url, strips LinkedIn and keeps no phone", () => {
     const r = mapOrg({
       name: "Acme", primary_domain: "acme.example", website_url: "https://www.acme.example/hvac",
       phone: "508-555-0101", primary_phone: { number: "508-555-0101" }, linkedin_url: "https://linkedin.com/company/acme",
     });
-    expect(r).toEqual({ name: "Acme", website: "https://www.acme.example/hvac" });
+    expect(r).toEqual({ row: 1, name: "Acme", name_key: "acme", website: "https://www.acme.example/hvac" });
     expect(JSON.stringify(r)).not.toMatch(/555|linkedin/i);
     expect(mapOrg({ name: "Beta", primary_domain: "beta.example", website_url: "https://linkedin.com/company/beta" }))
-      .toEqual({ name: "Beta", website: "https://beta.example/" });
+      .toEqual({ row: 1, name: "Beta", name_key: "beta", website: "https://beta.example/" });
+  });
+});
+
+describe("row keys match import_rows_core", () => {
+  // import_rows_core (0013) accepts: row, name, name_key + website, phone, email, address, city, state, zip, contact_name, contact_title, note
+  // and, for source imports only, company_type and place_id. name_key is required.
+  const ALLOWED = new Set(["row", "name", "name_key", "website", "phone", "email", "address", "city", "state", "zip", "contact_name", "contact_title", "note", "company_type", "place_id"]);
+  it("mapOrg emits only accepted keys, with row and name_key", () => {
+    const r = mapOrg({ name: "Acme Heating", primary_domain: "acme.example" }, 7)!;
+    expect(Object.keys(r).sort()).toEqual(["name", "name_key", "row", "website"]);
+    expect(r.row).toBe(7);
+    for (const k of Object.keys(r)) expect(ALLOWED.has(k)).toBe(true);
+  });
+  it("mapPlace emits only accepted keys", () => {
+    const r = mapPlace({ title: "Cutler Builders", website: "https://cutler.example", phone: "(508) 555-0101", street: "1 Main St", city: "Worcester", state: "MA", postalCode: "01608", placeId: "ChIJfake", categoryName: "General contractor", countryCode: "US" }, 3)!;
+    expect(Object.keys(r).sort()).toEqual(["address", "city", "company_type", "name", "name_key", "phone", "place_id", "row", "state", "website", "zip"]);
+    for (const k of Object.keys(r)) expect(ALLOWED.has(k)).toBe(true);
   });
 });

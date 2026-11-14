@@ -1,15 +1,12 @@
 // Apollo FREE organization lookup (F3d Task 5): pure TypeScript, HTTP behind an injected seam, never calls the network itself.
 // Every assumption that was NOT confirmed with a real key lives in the ADAPTER block below and is marked "?".
 // TODO: confirmar com chave real do Apollo (Task 5 Step 0) - path, auth header, response keys, plan access.
+import { nameKey } from "@/lib/research/dedupe";
 import { hostOf, sanitizeUrl } from "@/lib/safe-url";
+import type { HttpJson } from "./http";
+import type { ImportRowIn } from "./types";
 
-/** Minimal HTTP seam (Task 4 owns the shared one; structurally compatible). Tests pass a fake, production a fetch wrapper. */
-export type HttpRequest = { url: string; method: "GET" | "POST"; headers: Record<string, string>; body?: unknown; timeoutMs?: number };
-export type HttpResponse = { status: number; json: unknown };
-export type HttpJson = (req: HttpRequest) => Promise<HttpResponse>;
-
-/** Row shape for the F3c-1 import path (local copy: the shared ImportRowIn type arrives with Task 1/3). */
-export type ImportRowIn = { name: string; website?: string };
+type HttpResponse = { status: number; json: unknown };
 
 // ---------- ADAPTER: everything unverified (?) is here ----------
 const APOLLO_BASE = "https://api.apollo.io"; // ?
@@ -65,15 +62,18 @@ const str = (o: Record<string, unknown>, keys: readonly string[]): string => {
   return "";
 };
 
-/** A 2-letter last label other than "us" is a foreign ccTLD (acme.co.uk, x.com.pk, y.ca). A junk filter, not a country test. */
+/** 2-letter TLDs common for US companies: allowed like .us. */
+const ALLOWED_CC = new Set(["us", "io", "ai", "co"]);
+
+/** A 2-letter last label outside ALLOWED_CC is a foreign ccTLD (acme.co.uk, x.com.pk, y.ca). A junk filter, not a country test. */
 export function isForeignDomain(host: string): boolean {
   const labels = host.toLowerCase().replace(/\.+$/, "").split(".");
   const tld = labels[labels.length - 1] ?? "";
-  return /^[a-z]{2}$/.test(tld) && tld !== "us";
+  return /^[a-z]{2}$/.test(tld) && !ALLOWED_CC.has(tld);
 }
 
 /** null = junk (no name, no domain and no website, foreign ccTLD). Never carries a phone; social-profile URLs are dropped by sanitizeUrl. */
-export function mapOrg(item: unknown): ImportRowIn | null {
+export function mapOrg(item: unknown, row = 1): ImportRowIn | null {
   if (!isObj(item)) return null;
   const name = str(item, NAME_KEYS);
   if (!name) return null;
@@ -82,16 +82,18 @@ export function mapOrg(item: unknown): ImportRowIn | null {
   const host = site ? hostOf(site) : null;
   if (!host) return null;
   if (isForeignDomain(host)) return null;
-  return { name, website: site as string };
+  const nk = nameKey(name);
+  if (!nk) return null;
+  return { row, name, name_key: nk, website: site as string };
 }
 
 export function apolloClient(key: string, http: HttpJson) {
   const headers = { [KEY_HEADER]: key, "Content-Type": "application/json", Accept: "application/json" };
 
-  async function call(req: Omit<HttpRequest, "headers" | "timeoutMs">): Promise<unknown> {
+  async function call(req: { url: string; method: "GET" | "POST"; body?: unknown }): Promise<unknown> {
     let res: HttpResponse;
     try {
-      res = await http({ ...req, headers, timeoutMs: TIMEOUT_MS });
+      res = await http.request(req.method, req.url, { headers, body: req.body, timeoutMs: TIMEOUT_MS });
     } catch {
       throw new ApolloError(0); // the underlying message could echo the request: fixed text only
     }
