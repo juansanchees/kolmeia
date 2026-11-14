@@ -1,6 +1,6 @@
 # F3c: Subir lista + Qualificador + Cobertura
 
-Data: 14/11/2026. Status: **Aguardando aprovação do Juan**.
+Data: 14/11/2026. Status: **Aprovado para planejar (14/11/2026)**.
 Depende de: modo econômico (feito, branch `economy-mode`), F3a (tabela `leads`, feito), F3b (Caçador em segundo plano, próximo).
 Spec mãe: `2026-11-14-kolmeia-3-areas-design.md` (3 áreas, J1-J3, C1-C13).
 
@@ -9,6 +9,26 @@ Convenção (igual à spec mãe):
 - "(decisão do Claude — conferir)" = Claude decidiu no lugar; o Juan pode corrigir.
 - "(construtor decide)" = detalhe técnico livre.
 - "?" = não verificado (preço, limite, termo de uso).
+
+## Decisões fechadas em 14/11 (2)
+
+| # | Decisão | Quem |
+|---|---|---|
+| J-1 | Teto diário do Qualificador: padrão **US$ 5/dia**, editável pelo usuário na tela (dentro dos tetos duros que já existem). Dia contado em America/New_York | Juan |
+| J-2 | Transparência de gasto é requisito: tela **"Gastos"** mostrando onde foi cada centavo (por agente, passo, modelo, tokens, buscas/leituras web e por lead), gasto de hoje vs teto e controle **"mudar teto"**. Dado já está em `ai_calls`; acrescentar `lead_id` onde faltar. Mostrar **"estimativa US$ X"** antes de qualquer qualificação manual (seção 5.5) | Juan |
+| J-3 | Verificação cara (P5) roda dos DOIS jeitos: (A) **automática** só para leads que batem o perfil aprovado e são contactáveis, com **liga/desliga**; (B) **manual**: marca leads (caixinhas) ou "qualificar os próximos N do filtro atual", vê a estimativa e confirma. Os dois obedecem o teto diário | Juan |
+| J-4 | Google Places: **depois**. P3 fica desligado até o Juan dar `GOOGLE_PLACES_API_KEY`; o resto funciona sem ela | Juan |
+| K-1 | Lead importado aparece em LEADS na hora e conta para duplicata (Caçador C4 "só novos" o exclui). O construtor generaliza `link_lead` (mesma trava e chaves) para aceitar fonte "import"; sem execução de pesquisa sintética | Claude — conferir |
+| K-2 | Junção entre listas: guardar todos os telefones/e-mails distintos como valores separados em `lead_fields`, cada um com fonte; nunca sobrescrever | Claude — conferir |
+| K-3 | "Contactável" (nível ≥ 1) inclui valor só-importado, mostrado com ⚠ "sem prova". Nível nunca cai em silêncio: campo refutado gera alerta e o nível é recalculado de forma visível | Claude — conferir |
+| K-4 | Prioridade da fila: leads do Caçador e que batem o perfil primeiro; depois nível maior; depois os mais antigos; pedido manual fura a fila. Qualificador e Caçador dividem o executor da F3b e o tempo do tick (construtor define a proporção); poucos leads por tick é aceitável | Claude — conferir |
+| K-5 | Termos do Places: guardar só `place_id` + valores confirmados por outra fonte; buscar de novo sob demanda | Claude — conferir |
+| K-6 | Limites de upload: 5 MB / 5.000 linhas por arquivo; leitura no navegador, envio em lotes com barra de progresso; erro por linha | Claude — conferir |
+| K-7 | Perfil aprendido = filtro + ranking + consultas de busca sugeridas; a **versão do perfil usada fica gravada em cada execução** (para medir J3). Não edita a config congelada do agente (A6): tabela própria e versionada | Claude — conferir |
+| K-8 | Cobertura: área coberta volta a "não coberta" após **90 dias sem busca**. Lista de cidades: MassGIS ou lista pública equivalente (?); regiões fora de MA aparecem como "fora de MA" | Claude — conferir |
+| K-9 | Desfazer import: apaga só os leads criados por aquele import (rastrear `created_by_import` vs já existia) | Claude — conferir |
+| K-10 | Teto do workspace continua pausando e avisando (C5); o teto diário do Qualificador zera sozinho todo dia | Claude — conferir |
+| K-11 | "Bate o perfil" é regra/filtro (sem chamada de IA extra por lead) | Claude — conferir |
 
 ## Decisões fechadas em 14/11
 
@@ -145,23 +165,52 @@ Por que o 1 (decisão do Claude — conferir): o objetivo é qualificar com prov
 - Lista LEADS ganha coluna "Nível" e filtro "Nível ≥ N".
 - Fontes possíveis: `importado` · `site` · `Places` · `IA` · `pesquisa` (motor atual).
 - Nível conta só valores confirmados (fonte ≠ importado). Importado não sobe nível sozinho (decisão do Claude — conferir).
-  Exceção: telefone/e-mail importado já deixa o lead "contactável, sem prova" (aparece com ⚠).
+  Exceção (K-3): telefone/e-mail importado já deixa o lead "contactável" (nível ≥ 1), com ⚠ "sem prova". Nível nunca cai em silêncio: campo refutado gera alerta e o nível é recalculado de forma visível.
+- Vários telefones/e-mails de listas diferentes ficam todos, cada um com sua fonte; nunca sobrescreve (K-2).
 
 ### 5.3 Cartão do Qualificador (em AGENTES)
 
 ```
 ┌ Qualificador ─────────────────────────── ● sempre ligado  [Pausar] ┐
-│ Na fila: 380      Hoje: 52 qualificados    Gasto hoje: US$ 0,40 / ? │
+│ Na fila: 380      Hoje: 52 qualificados    Gasto hoje: US$ 0,40 / 5,00 │
 │ Níveis:  0 ▓▓ 40   1 ▓▓▓▓▓ 210   2 ▓▓▓ 98   3 ▓ 22   4 ▏ 10          │
 │ Passos de hoje: grátis 48 · Places 20 · IA leve 15 · IA forte 4      │
 │ ⚠ Places desligado (sem chave)                                        │
-│ Teto por dia [US$ ? ▾]   Teto por lead [US$ ? ▾]                      │
+│ Teto por dia [US$ 5 ▾ mudar]   Teto por lead [US$ ? ▾]               │
+│ Verificação cara automática [ligada ▾]   [Ver gastos ▸]              │
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
+- Teto por dia: padrão US$ 5, editável aqui e em "Gastos" (J-1); dia em America/New_York.
+
 - Criado sozinho, 1 por workspace, não pode ser apagado nem duplicado; pode ser pausado (C-b).
 - Não conta no máximo de 3 Caçadores (C6).
-- Bateu teto: pausa até o dia seguinte e avisa (igual C5, mas volta sozinho no dia seguinte: decisão do Claude — conferir).
+- Bateu teto diário: pausa até o dia seguinte e avisa; volta sozinho (K-10). Teto do workspace (C5) continua pausando e avisando.
+
+### 5.5 Tela "Gastos" (J-2) e qualificação manual (J-3)
+
+```
+┌ Gastos ───────────────────── Hoje: US$ 1,90 de 5,00 ▓▓▓░░  [mudar teto] ┐
+│ Ver por: [Agente] [Passo] [Modelo] [Lead]        Período [Hoje ▾]      │
+│ Agente        passo      modelo   tokens ent/saí  buscas  leituras  US$ │
+│ Qualificador  P4 IA leve haiku    120k / 18k        -        -     0,22 │
+│ Qualificador  P5 forte   sonnet    80k / 12k        6        9     1,10 │
+│ Caçador A     pesquisa   sonnet   210k / 30k       14       22     0,58 │
+│ ▸ clicar numa linha abre os leads (custo por lead)                      │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+| Regra | Detalhe |
+|---|---|
+| Fonte | `ai_calls` (e chamadas do Places, quando ligado). Acrescentar `lead_id` onde faltar, para somar por lead |
+| Cada centavo | toda linha de gasto tem agente, passo, modelo, tokens, buscas/leituras web e lead (quando houver) |
+| Teto | mostra gasto de hoje vs teto; "mudar teto" edita o teto diário dentro dos tetos duros existentes |
+| Quem vê | owner/sdr; closer não vê (construtor confirma com RLS) |
+
+Qualificação manual (J-3 B), em LEADS:
+- Caixinhas por lead, ou botão "qualificar os próximos N do filtro atual".
+- Antes de rodar: **"estimativa US$ X"** (pior caso, mesma conta da reserva do modo econômico) + [Cancelar] [Confirmar].
+- Pedido manual fura a fila (K-4) e obedece o teto diário; se a estimativa passa do que resta no dia, avisa antes de confirmar.
 
 ### 5.4 Aba Cobertura (LEADS → [Leads] [Cobertura])
 
@@ -185,7 +234,8 @@ Por que o 1 (decisão do Claude — conferir): o objetivo é qualificar com prov
 |---|---|
 | 1º corte | tabela de cidades de MA (lista fixa, 351) agrupada por condado, com contagem. Sem mapa |
 | Mapa (opcional, F3c-5 fim) | Leaflet de cdnjs + GeoJSON público das cidades de MA (MassGIS ?) pintado por contagem. Só se a tabela já funcionar |
-| "Coberta" | cidade com ≥ 1 busca (Caçador/pesquisa com região que inclui a cidade, ou lista importada com leads dela) |
+| "Coberta" | cidade com ≥ 1 busca (Caçador/pesquisa com região que inclui a cidade, ou lista importada com leads dela). Expira: após 90 dias sem busca volta a "não coberta" (K-8) |
+| Lista de cidades | MassGIS ou lista pública equivalente (?); regiões fora de MA aparecem como "fora de MA" (K-8) |
 | [Caçar ▸] | abre a criação do Caçador já com a região preenchida |
 | Alimentar | o Juan pode marcar à mão "já procurei aqui fora do app" (fonte + data) (decisão do Claude — conferir) |
 
@@ -225,7 +275,10 @@ learned_profiles      perfil aprendido (seção 8)
 
 | Ponto | Regra |
 |---|---|
-| Lead sem candidato | hoje `leads` nasce de `research_candidates`. Import precisa entrar na MESMA trava e chave de `link_lead` (advisory lock por workspace). Generalizar `link_lead` para receber chaves soltas, ou criar candidato numa "execução de import": construtor decide; teste de duplicata da F3a tem de passar também para import |
+| Lead sem candidato | hoje `leads` nasce de `research_candidates`. Import entra na MESMA trava e chave de `link_lead` (advisory lock por workspace): o construtor generaliza `link_lead` para aceitar fonte "import", sem execução de pesquisa sintética (K-1). Lead importado aparece em LEADS na hora e conta para duplicata (Caçador C4 "só novos" o exclui). Teste de duplicata da F3a tem de passar também para import |
+| Desfazer import | apaga só os leads criados por aquele import; rastrear `created_by_import` vs já existia (K-9) |
+| Gastos | `ai_calls` ganha `lead_id` onde faltar; chamadas do Places entram no mesmo ledger (J-2) |
+| Perfil | tabela própria e versionada; cada execução grava a versão do perfil usada (K-7) |
 | Origem | `origin_kind` ganha `'import'` (+ `origin_import_id`). Mostra "Importado · nome da lista" |
 | Chaves | lead precisa de chaves próprias (nome/domínio/telefone) ou buscar em `lead_fields`; o construtor garante que um lead só-importado é achado pela busca de duplicata do Caçador (C4 "só novos") |
 | Nível | coluna `level` em `leads`, recalculada por função SQL a partir de `lead_fields` + provas |
@@ -234,7 +287,9 @@ learned_profiles      perfil aprendido (seção 8)
 
 ## 7. A esteira (Qualificador), passo a passo
 
-Roda no executor da F3b (cron, sem sessão, 1 lease por vez). Cada tick pega N leads da fila (mais antigos primeiro; leads novos do Caçador e do import entram na fila sozinhos).
+Roda no executor da F3b (cron, sem sessão, 1 lease por vez), dividindo o tempo do tick com o Caçador (proporção: construtor define; poucos leads por tick é aceitável). Leads novos do Caçador e do import entram na fila sozinhos.
+
+Prioridade da fila (K-4): 1) leads do Caçador e leads que batem o perfil; 2) nível maior primeiro; 3) mais antigos primeiro. Pedido manual (5.5) fura a fila.
 
 ```
  lead ─▶ P1 juntar ─▶ P2 site ─▶ P3 Places ─▶ P4 IA leve ─▶ P5 IA forte ─▶ fim
@@ -246,9 +301,9 @@ Roda no executor da F3b (cron, sem sessão, 1 lease por vez). Cada tick pega N l
 |---|---|---|---|---|
 | P1 Juntar | soma dados de outros registros com mesmo domínio/telefone/nome (outros imports, candidatos) | grátis | nada a juntar | nunca sobrescreve valor confirmado com não confirmado |
 | P2 Site | baixa o site da própria empresa (home + até 3 páginas: contato/sobre) e extrai JSON-LD schema.org (Organization/LocalBusiness), `tel:`, `mailto:`, endereço | grátis (sem IA) | sem site; ou telefone+e-mail+endereço já confirmados | ver "Regras de fetch" abaixo |
-| P3 Places | Google Places API (oficial): telefone, endereço, site, nota, status (aberta/fechada) | ~US$ ? por chamada | sem chave (`GOOGLE_PLACES_API_KEY` ausente = passo desligado); ou nível ≥ 2 | só campos pedidos (field mask); ver risco de termos abaixo |
+| P3 Places | Google Places API (oficial): telefone, endereço, site, nota, status (aberta/fechada) | ~US$ ? por chamada | sem chave (`GOOGLE_PLACES_API_KEY` ausente = passo desligado); ou nível ≥ 2 | **desligado até o Juan dar a chave (J-4); o resto funciona sem ela.** Só campos pedidos (field mask); guardar só `place_id` + valores confirmados por outra fonte, buscar de novo sob demanda (K-5) |
 | P4 IA leve | Haiku organiza o que P2/P3 trouxeram (tipo de empresa, cidade, porte) e extrai contato de texto da página já baixada | centavos ? | nada novo para organizar | sem web_search; só lê texto já baixado; saída estruturada |
-| P5 IA forte | Sonnet (Opus só no rigor "rigoroso") confere verdade: obra ativa, decisor, temperatura. Mesmas regras de prova do motor (URL vista, trecho, data) | ~US$ 0,25+ por chamada ? (menor "Checar" do modo econômico) | lead não bate o perfil (aprovado) ou nível < 2 | só para leads que valem: nível ≥ 2 E batem o perfil aprovado (decisão do Claude — conferir) |
+| P5 IA forte | Sonnet (Opus só no rigor "rigoroso") confere verdade: obra ativa, decisor, temperatura. Mesmas regras de prova do motor (URL vista, trecho, data) | ~US$ 0,25+ por chamada ? (menor "Checar" do modo econômico) | lead não bate o perfil (aprovado) ou nível < 2 | dois jeitos (J-3). (A) automático: só leads contactáveis (nível ≥ 1) que batem o perfil aprovado ("bate" = regra/filtro, sem IA extra: K-11), com liga/desliga. (B) manual: o usuário marca leads ou "próximos N do filtro", vê "estimativa US$ X" e confirma. Os dois obedecem o teto diário |
 
 Regras de fetch do P2 (decisão do Claude — conferir):
 - Só `http/https`, portas 80/443; bloquear IP privado/local (proteção SSRF), checar depois de cada redirecionamento (máx. 3).
@@ -257,13 +312,13 @@ Regras de fetch do P2 (decisão do Claude — conferir):
 - Bloqueou (403/429/captcha): marca "site bloqueou" e segue para o próximo passo. Nunca tentar contornar (C-f).
 - E-mail achado vale só se apareceu na página (R18: guardar URL). Nunca adivinhar padrão.
 
-Paradas (decisão do Claude — conferir; valores: pergunta em aberto 1):
+Paradas (decisão do Claude — conferir; teto diário = US$ 5 por padrão, editável: J-1; teto por lead: valor a definir pelo construtor, editável):
 
 | Para quando | Resultado |
 |---|---|
 | Lead chegou ao nível 4, ou ao máximo que o perfil pede | `done_reason = 'complete'` |
 | Gasto do lead bateu o teto por lead | `'lead_cap'`; mostra "parou no teto" |
-| Teto do dia do Qualificador ou teto do workspace (C5) | Qualificador pausa até amanhã; fila fica |
+| Teto do dia do Qualificador ou teto do workspace (C5) | Qualificador pausa e avisa; fila fica. Teto diário zera sozinho (dia em America/New_York); teto do workspace segue pausando e avisando (K-10) |
 | Empresa fechada (Places) ou site fora do ar + nada mais | `'dead'`, sugere descartar (o Juan decide) |
 | 3 erros seguidos no mesmo passo | pula o passo, anota |
 
@@ -298,6 +353,7 @@ Paradas (decisão do Claude — conferir; valores: pergunta em aberto 1):
 |---|---|
 | Custo | 1 chamada por lista (o import em si continua sem IA). Estimativa no botão antes de rodar |
 | Amostra | lista grande = amostra estratificada por cidade (tamanho: construtor decide, ?) |
+| Conteúdo | filtro + ranking + consultas de busca sugeridas (K-7); a versão usada fica gravada em cada execução (medir J3) |
 | Prova | cada ponto cita as linhas que o apoiam; ponto sem linhas não aparece |
 | Injeção | texto das linhas vai para a IA como DADO delimitado, nunca como instrução; notas tipo "ignore as regras" não mudam nada |
 | Aprovar | owner/sdr. Cria versão nova do perfil; o Caçador usa a versão aprovada na PRÓXIMA execução. Não edita `agents.config` direto (A6 da F3b): caminho próprio, auditado (construtor decide) |
@@ -319,9 +375,9 @@ Paradas (decisão do Claude — conferir; valores: pergunta em aberto 1):
 
 | Fase | O quê | Pronto quando |
 |---|---|---|
-| **F3c-1 Subir lista** | `lead_imports`, `lead_import_rows`, `lead_fields`; origem `import`; tela 5.1 (arquivo → colunas → prévia → pronto); CSV + XLSX; duplicata pela regra da F3a; erros por linha | o Juan sobe um CSV e um XLSX de teste; leads aparecem em LEADS como "Importado · lista"; subir a mesma lista de novo cria 0 leads; nenhuma chamada em `ai_calls`; fórmula `=HYPERLINK(...)` numa célula não executa em lugar nenhum |
+| **F3c-1 Subir lista** | `lead_imports`, `lead_import_rows`, `lead_fields`; origem `import`; tela 5.1 (arquivo → colunas → prévia → pronto); CSV + XLSX (5 MB / 5.000 linhas, leitura no navegador, lotes com progresso: K-6); duplicata pela regra da F3a; erros por linha; desfazer import (K-9) | o Juan sobe um CSV e um XLSX de teste; leads aparecem em LEADS como "Importado · lista"; subir a mesma lista de novo cria 0 leads; nenhuma chamada em `ai_calls`; fórmula `=HYPERLINK(...)` numa célula não executa em lugar nenhum |
 | **F3c-2 Esteira grátis** | Qualificador (criado sozinho, cartão 5.3); `qualifier_queue` no executor da F3b; P1 + P2; "de onde veio" e nível na tela 5.2 | um lead só com site ganha telefone/e-mail do próprio site, com URL; site que bloqueia vira "site bloqueou" sem erro; IP privado recusado (teste); custo do dia = 0 |
-| **F3c-3 Places + IA** | P3 (desligado sem chave), P4, P5; tetos por lead e por dia; pausa e aviso | sem chave: aviso no cartão e esteira segue; com chave: lead só-nome ganha endereço; teto do dia bate e o Qualificador pausa sem reservar além; P5 só roda em nível ≥ 2 que bate o perfil |
+| **F3c-3 Places + IA + Gastos** | P3 (desligado sem chave, J-4), P4, P5 (automático com liga/desliga + manual com estimativa); tetos por lead e por dia (padrão US$ 5, editável); pausa e aviso; tela "Gastos" (5.5) com `lead_id` em `ai_calls` | sem chave: aviso no cartão e esteira segue; com chave: lead só-nome ganha endereço; teto do dia bate e o Qualificador pausa sem reservar além; P5 automático só roda em contactável que bate o perfil e some com o liga/desliga; manual mostra estimativa e obedece o teto; "Gastos" soma por agente, passo, modelo e lead e bate com `ai_calls` |
 | **F3c-4 Perfil aprendido** | botão de treino, chamada única, cartão 8, aprovar/editar/descartar, versão usada pelo Caçador; relatório de gabarito | o Juan sobe uma lista do `data/gold/` como treino, vê o cartão com linhas de prova, aprova; a próxima execução do Caçador usa o perfil; sem aprovação nada muda |
 | **F3c-5 Cobertura** | `coverage_marks`; aba 5.4 com tabela de cidades MA por condado; [Caçar ▸]; marca manual; mapa só se sobrar | o Juan vê quais cidades já têm busca e quais não; um import com leads de Barnstable marca Barnstable; [Caçar ▸] abre o Caçador com a região |
 
@@ -339,11 +395,11 @@ Cada fase: testes vitest/PGlite, nenhum teste antigo quebra, nada toca o Supabas
 - Mapa: biblioteca e fonte do GeoJSON (só CDN permitido; arquivo pequeno).
 - Textos exatos da tela (português curto; nunca "pearchat").
 
-## 12. Perguntas em aberto (só o Juan responde)
+## 12. Perguntas em aberto
 
-| # | Pergunta | Por que importa |
+| # | Pergunta | Status |
 |---|---|---|
-| 1 | Teto do Qualificador: quanto por DIA e quanto por LEAD (US$)? | sem isso, valor padrão é chute do Claude |
-| 2 | Você vai criar a chave do Google Places (conta Google Cloud com cobrança)? Até lá o P3 fica desligado | Places é pago por chamada ? |
-| 3 | A IA forte (P5) roda sozinha em todo lead nível ≥ 2 que bate o perfil, ou só quando você clica "qualificar"? | é o passo mais caro |
-| 4 | Toda lista que você subir pode virar gabarito do Caçador, ou só as que você marcar? | mede o Caçador com listas de qualidade diferente |
+| 1 | Teto do Qualificador por dia e por lead | **Fechada (J-1):** US$ 5/dia, editável. Teto por lead: o construtor propõe um padrão editável |
+| 2 | Chave do Google Places | **Fechada (J-4):** depois; P3 desligado até a chave |
+| 3 | P5 automático ou só manual | **Fechada (J-3):** os dois, com liga/desliga no automático |
+| 4 | Toda lista vira gabarito ou só as marcadas | Aberta. Padrão atual: só as marcadas "usar como treino" (D2, C-d) |
