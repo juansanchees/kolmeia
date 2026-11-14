@@ -109,6 +109,14 @@ Valem para os e-mails da sequência, no clique e no relógio, em ensaio e em env
 - Só dono e SDR. A closer não vê o botão nem a tela.
 - **Antes de publicar** esta versão do app, aplicar `0011_lists.sql` (depende de 0001-0010).
 
+## Qualificador e Gastos (F3c-2)
+- **Qualificador**: sempre ligado. Cada lead passa pela cascata, do grátis ao pago: juntar dados, site, Places, IA leve, IA forte.
+- **Tetos** (editáveis em Gastos e no cartão de AGENTES): US$ 5 por dia (dia = meia-noite de Nova York) e US$ 0,50 por lead. A IA forte automática liga e desliga no mesmo formulário.
+- **Places** só roda com `GOOGLE_PLACES_API_KEY`; sem ela o cartão avisa e a cascata segue.
+- **Gastos** (`/agentes/gastos`, só dono e SDR): cada centavo por agente, passo, modelo, lead e dia, em hoje, 7 ou 30 dias. Abra uma linha para ver os leads dela. Fontes pagas (Apify, Apollo) aparecem à parte.
+- **LEADS**: marque leads ou use "Qualificar os próximos 10/25/50 do filtro". A estimativa aparece antes de [Confirmar].
+- Aplicar a migração 0014 antes do código. Nenhum cron novo.
+
 ## Pendências
 - O painel de uso das caixas (`mailbox_usage`) ainda conta as últimas 24 horas e pode divergir do portão de limite do dia até ser atualizado.
 

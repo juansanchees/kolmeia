@@ -251,4 +251,23 @@ describe("F3c-2 qualifier screens", () => {
   test("no copy names the forbidden site", () => {
     expect(read("src/messages/pt/qualifier.ts").toLowerCase()).not.toContain("linked" + "in");
   });
+  test("Gastos is sender-only and linked from the Qualificador card", () => {
+    const page = read("src/app/(app)/agentes/gastos/page.tsx");
+    expect(page).toContain("requireSender");
+    expect(page).toContain("QualifierCapForm");
+    expect(read("src/components/qualifier/QualifierCard.tsx")).toContain("/agentes/gastos");
+    expect(read("src/components/qualifier/QualifierCard.tsx")).toContain("QualifierCapForm");
+    const form = read("src/components/qualifier/QualifierCapForm.tsx");
+    expect(form).toContain("setQualifierAction");
+    expect(form).toContain("useState");
+    expect(read("src/messages/pt/spend.ts").toLowerCase()).not.toContain("linked" + "in");
+  });
+  test("LEADS asks to confirm the estimate before qualifying", () => {
+    const q = read("src/components/qualifier/QualifyControls.tsx");
+    for (const w of ["estimateQualifyAction", "estimate", "overDay", "requestQualifyAction"]) expect(q).toContain(w);
+    // the request lives in the confirm handler only
+    expect(q.split("requestQualifyAction(").length - 1).toBe(1);
+    expect(q.indexOf("requestQualifyAction(")).toBeGreaterThan(q.indexOf("const confirm"));
+    expect(read("src/components/leads/LeadsTable.tsx")).toContain("QualifyControls");
+  });
 });

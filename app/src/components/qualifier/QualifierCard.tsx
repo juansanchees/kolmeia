@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { setQualifierAction } from "@/app/(app)/agentes/qualifier-actions";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { btn } from "@/components/email/bits";
+import { QualifierCapForm } from "@/components/qualifier/QualifierCapForm";
 import { cardLines, type QualifierStatus } from "@/lib/qualifier/view";
 import { fill, t } from "@/messages/pt";
 
@@ -39,7 +40,7 @@ function Power({ running }: { running: boolean }) {
   );
 }
 
-/** The Qualificador on top of AGENTES. Caps are read-only here (edited on the Gastos screen). */
+/** The Qualificador on top of AGENTES. Caps can be edited here or on the Gastos screen. */
 export function QualifierCard({ status, placesOn }: { status: QualifierStatus; placesOn: boolean }) {
   const lines = cardLines(status, placesOn);
   const running = status.status === "on";
@@ -80,6 +81,10 @@ export function QualifierCard({ status, placesOn }: { status: QualifierStatus; p
           </li>
         ))}
       </ul>
+      <details className="text-sm">
+        <summary className="min-h-11 cursor-pointer py-2.5 text-blue">{t.spend.changeCap}</summary>
+        <QualifierCapForm status={status} />
+      </details>
       <Link href="/agentes/gastos" className="text-sm text-blue underline underline-offset-4">
         {Q.seeSpend}
       </Link>

@@ -9,6 +9,8 @@ import { TABS } from "@/lib/research/sheet";
 import { DEFAULT_LEAD_FILTERS, filterLeads, leadInTab, leadsCsv, originLabel, type LeadFilters, type LeadTab } from "@/lib/leads/view";
 import { LEAD_STATUSES, type LeadListItem } from "@/lib/leads/types";
 import { LevelBadge } from "@/components/qualifier/LevelBadge";
+import { QualifyControls, RowCheck } from "@/components/qualifier/QualifyControls";
+import { useRouter } from "next/navigation";
 import { fill, t } from "@/messages/pt";
 
 const F = t.leads.filters;
@@ -20,6 +22,15 @@ const linkBtn = "inline-flex min-h-11 items-center border border-blue bg-surface
 
 export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: false } }: { items: LeadListItem[]; canCreate: boolean; sources?: { maps: boolean; apollo: boolean } }) {
   const [f, setF] = useState<LeadFilters>(DEFAULT_LEAD_FILTERS);
+  const router = useRouter();
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const toggle = (id: string, on: boolean) =>
+    setPicked((p) => {
+      const n = new Set(p);
+      if (on) n.add(id);
+      else n.delete(id);
+      return n;
+    });
   const set = (patch: Partial<LeadFilters>) => setF((x) => ({ ...x, ...patch }));
   const filtered = useMemo(() => filterLeads(items, f), [items, f]);
   const agents = useMemo(() => {
@@ -121,13 +132,25 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
         </div>
       </div>
 
+      {canCreate && (
+        <QualifyControls
+          filteredIds={filtered.map((i) => i.lead.id)}
+          selected={filtered.filter((i) => picked.has(i.lead.id)).map((i) => i.lead.id)}
+          onDone={() => {
+            setPicked(new Set());
+            router.refresh();
+          }}
+        />
+      )}
+
       {filtered.length === 0 ? (
         <p className="text-sm text-muted">{t.research.list.emptyTab}</p>
       ) : (
         <ul className="m-0 flex list-none flex-col border border-line bg-surface p-0">
           {filtered.map((i) => (
-            <li key={i.lead.id} className="border-b border-line last:border-b-0">
-              <Link href={`/leads/${i.lead.id}`} className="flex min-w-0 flex-col gap-1 px-3.5 py-3 text-ink no-underline hover:bg-ground md:grid md:grid-cols-[minmax(0,2fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,1.2fr)] md:items-center md:gap-3">
+            <li key={i.lead.id} className="flex items-stretch border-b border-line last:border-b-0">
+              {canCreate && <RowCheck checked={picked.has(i.lead.id)} name={i.display.name} onChange={(v) => toggle(i.lead.id, v)} />}
+              <Link href={`/leads/${i.lead.id}`} className="flex min-w-0 flex-1 flex-col gap-1 px-3.5 py-3 text-ink no-underline hover:bg-ground md:grid md:grid-cols-[minmax(0,2fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,1.2fr)] md:items-center md:gap-3">
                 <span className="min-w-0">
                   <span className="sr-only">{t.leads.columns.company}: </span>
                   <span className="block truncate text-sm font-semibold">{i.display.name}</span>
