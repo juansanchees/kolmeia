@@ -63,9 +63,9 @@ export function QualifierCard({ status, placesOn }: { status: QualifierStatus; p
           {Q.paused[status.paused_reason]}
         </p>
       )}
-      {!placesOn && (
+      {lines.warning && (
         <p role="status" className="text-sm text-warn">
-          {Q.placesOff}
+          {lines.warning}
         </p>
       )}
       <p className="text-sm font-semibold">{lines.spent}</p>

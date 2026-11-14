@@ -59,5 +59,5 @@ export type LeadDetail = {
   /** import id -> list name, for the imports the fields cite. */
   importNames: Record<string, string>;
   /** The Qualificador's queue row (sender only: null for the closer, whom RLS hides it from). */
-  queue: { next_step: string; done_reason: string | null; notes: Record<string, string> } | null;
+  queue: { next_step: string; done_reason: string | null } | null;
 };

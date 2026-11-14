@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { SupabaseAgentStore } from "@/lib/agents/store";
 import type { AgentRow } from "@/lib/agents/types";
 import { AgentList } from "@/components/agents/AgentList";
+import { Notice } from "@/components/email/bits";
 import { QualifierCard } from "@/components/qualifier/QualifierCard";
 import type { QualifierStatus } from "@/lib/qualifier/view";
 import { NewResearchForm } from "@/components/research/NewResearchForm";
@@ -18,9 +19,11 @@ export default async function AgentsPage() {
   let agents: AgentRow[] = [];
   let runs: RunListItem[] = [];
   let qualifier: QualifierStatus | null = null;
+  let qualifierFailed = false;
   if (supabase) {
-    const { data: q } = await supabase.rpc("qualifier_status", { p_ws: workspace.id });
+    const { data: q, error: qErr } = await supabase.rpc("qualifier_status", { p_ws: workspace.id });
     qualifier = (q as QualifierStatus | null) ?? null;
+    qualifierFailed = Boolean(qErr) || !qualifier;
     agents = await new SupabaseAgentStore(supabase).listAgents(workspace.id);
     const { data } = await supabase
       .from("research_runs")
@@ -34,6 +37,7 @@ export default async function AgentsPage() {
   return (
     <div className="flex flex-col gap-8">
       {/* Places (Task 6) is off until its key check lands */}
+      {qualifierFailed && <Notice tone="warn">{t.qualifier.statusFailed}</Notice>}
       {qualifier && <QualifierCard status={qualifier} placesOn={false} />}
       <section aria-labelledby="mine" className="flex flex-col gap-3">
         <h2 id="mine" className="text-2xl">

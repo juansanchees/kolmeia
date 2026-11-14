@@ -70,7 +70,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
             <span className="font-semibold text-ink">{t.qualifier.lists}</span> {listNames.join(", ")}
           </p>
         )}
-        {lead.level_note && <LevelNote leadId={lead.id} note={lead.level_note} />}
+        {queue && lead.level_note && <LevelNote leadId={lead.id} note={lead.level_note} />}
 
         {best && (
           <>

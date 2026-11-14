@@ -20,9 +20,9 @@ export type QualifierStatus = {
   steps_today: { free: number; places: number; light: number; deep: number };
 };
 
-/** "●●○○○" for 2 (five dots; levels run 0-4, so 4 is "●●●●○"). Out-of-range values are clamped. */
+/** "●●○○○" for 2: five dots, levels run 0-4 (so 4 is "●●●●○"). Out-of-range values are clamped to 0..4. */
 export function levelDots(n: number): string {
-  const k = Math.max(0, Math.min(5, Math.trunc(Number.isFinite(n) ? n : 0)));
+  const k = Math.max(0, Math.min(4, Math.trunc(Number.isFinite(n) ? n : 0)));
   return "●".repeat(k) + "○".repeat(5 - k);
 }
 
@@ -30,6 +30,14 @@ export function levelDots(n: number): string {
 export function levelReason(_fields: LeadFieldRow[], level: number): string {
   const k = Math.max(0, Math.min(4, Math.trunc(level))) as 0 | 1 | 2 | 3 | 4;
   return Q.levelNames[k];
+}
+
+/** Portuguese name of what a level note cites: a lead field, a research check kind, or "candidate". */
+export function noteFieldLabel(field: string): string {
+  const own = Q.noteFields as Record<string, string>;
+  if (field in own) return own[field];
+  const lead = t.leads.fieldLabels as Record<string, string>;
+  return lead[field] ?? Q.noteFields.other;
 }
 
 export function nextStepLabel(nextStep: string, doneReason: string | null): string {

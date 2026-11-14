@@ -238,7 +238,8 @@ describe("F3c-2 qualifier screens", () => {
     expect(read("src/app/(app)/agentes/page.tsx")).toContain("QualifierCard");
     const card = read("src/components/qualifier/QualifierCard.tsx");
     expect(card).toContain("seeSpend");
-    expect(card).toContain("placesOff");
+    expect(card).toContain("lines.warning");
+    expect(read("src/lib/qualifier/view.ts")).toContain("placesOff");
     expect(card).toContain("Q.pause");
   });
   test("the Qualificador settings are written only by a sender, on the server", () => {

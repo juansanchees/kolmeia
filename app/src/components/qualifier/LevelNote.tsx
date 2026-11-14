@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { ackLevelNoteAction } from "@/app/(app)/agentes/qualifier-actions";
 import { btn, Notice } from "@/components/email/bits";
+import { noteFieldLabel } from "@/lib/qualifier/view";
 import { fill, t } from "@/messages/pt";
 
 /** "Nível caiu de 3 para 2: site refutado." stays until the sender presses Ok. */
@@ -12,7 +13,7 @@ export function LevelNote({ leadId, note }: { leadId: string; note: { from: numb
   return (
     <div className="flex flex-wrap items-center gap-3">
       <div className="min-w-0 flex-1">
-        <Notice tone="warn">{fill(t.qualifier.levelDrop, { from: note.from, to: note.to, field: t.leads.fieldLabels[note.field as keyof typeof t.leads.fieldLabels] ?? note.field })}</Notice>
+        <Notice tone="warn">{fill(t.qualifier.levelDrop, { from: note.from, to: note.to, field: noteFieldLabel(note.field) })}</Notice>
       </div>
       <button
         type="button"
