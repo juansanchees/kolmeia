@@ -636,3 +636,545 @@ select public.copy_candidate_fields(c.id)
  where c.lead_id is not null and c.verified_at is not null;
 
 select public.refresh_lead_level(l.id, null) from public.leads l;
+
+-- ============================================================================================================
+-- Part 2 (T2): the Qualificador's token-gated path. Same rules as 0010 hunter_* and 0013 source_*: SECURITY DEFINER,
+-- empty search_path, scheduler_authorized() first (42501), granted to anon only, every write under the tick's claim of
+-- ONE lead; workspace_id always comes from the lead. Caps are the Qualificador's own (day = New York) on the shared
+-- ledger: reserve/settle go through reserve_ai_call_core/settle_ai_call_core (0010) with p_run = null.
+-- ============================================================================================================
+create table if not exists public.qualifier_ticks (
+  id uuid primary key default gen_random_uuid(),
+  started_at timestamptz not null default now(),
+  lease_until timestamptz not null,
+  finished_at timestamptz,
+  counts jsonb not null default '{}'::jsonb,
+  error text constraint qualifier_ticks_error check (char_length(error) <= 60)
+);
+create index if not exists qualifier_ticks_started_idx on public.qualifier_ticks (started_at desc);
+alter table public.qualifier_ticks enable row level security;
+alter table public.qualifier_ticks force row level security;
+revoke all on table public.qualifier_ticks from public, anon, authenticated;
+
+-- Scope of one call: token, open tick, a lead with a queue row. A write also needs the lead's lock held by this tick
+-- and the lead not finished. Returns the lead's workspace. Not SECURITY DEFINER: runs with the entry point's rights.
+create or replace function public.qualifier_assert(p_tick uuid, p_lead uuid, p_write boolean)
+returns uuid
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v record;
+begin
+  if not public.scheduler_authorized() then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  if not exists (select 1 from public.qualifier_ticks t where t.id = p_tick and t.finished_at is null and t.lease_until > now()) then
+    raise exception 'tick is not open' using errcode = '55000';
+  end if;
+  select q.workspace_id, q.next_step, q.locked_by, q.locked_until into v
+    from public.qualifier_queue q where q.lead_id = p_lead;
+  if not found then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  if p_write then
+    if v.next_step = 'done' then
+      raise exception 'lead is finished' using errcode = '55000';
+    end if;
+    if v.locked_by is distinct from p_tick or v.locked_until is null or v.locked_until <= now() then
+      raise exception 'lead lock not held' using errcode = '55000';
+    end if;
+  end if;
+  return v.workspace_id;
+end;
+$$;
+
+create or replace function public.qualifier_begin_tick()
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_id uuid;
+begin
+  if not public.scheduler_authorized() then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  perform pg_advisory_xact_lock(hashtext('qualifier:tick'));
+  delete from public.qualifier_ticks where started_at < now() - interval '30 days';
+  if exists (select 1 from public.qualifier_ticks t where t.finished_at is null and t.lease_until > now()) then
+    return jsonb_build_object('tick_id', null, 'busy', true);
+  end if;
+  update public.qualifier_ticks set finished_at = now(), error = 'lease_expired' where finished_at is null;
+  insert into public.qualifier_ticks (lease_until) values (now() + interval '330 seconds') returning id into v_id;
+  return jsonb_build_object('tick_id', v_id, 'busy', false);
+end;
+$$;
+
+create or replace function public.qualifier_finish_tick(p_tick uuid, p_counts jsonb, p_error text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_counts jsonb;
+  v_n integer;
+begin
+  if not public.scheduler_authorized() then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  select coalesce(jsonb_object_agg(e.key, least(greatest((e.value #>> '{}')::numeric, 0), 100000)), '{}'::jsonb) into v_counts
+    from (
+      select j.key, j.value
+        from jsonb_each(case when jsonb_typeof(p_counts) = 'object' then p_counts else '{}'::jsonb end) j
+       where jsonb_typeof(j.value) = 'number' and j.key ~ '^[a-zA-Z_]{1,30}$'
+       limit 10
+    ) e;
+  update public.qualifier_ticks t
+     set finished_at = now(), counts = v_counts, error = left(p_error, 60)
+   where t.id = p_tick and t.finished_at is null;
+  get diagnostics v_n = row_count;
+  if v_n = 0 then
+    raise exception 'tick is not open' using errcode = '55000';
+  end if;
+  -- no lead lock outlives its tick
+  update public.qualifier_queue q set locked_by = null, locked_until = null where q.locked_by = p_tick;
+end;
+$$;
+
+-- The next lead (K-4): first a daily-cap pause whose New York midnight has passed ends; then manual requests (oldest
+-- first), then Caçador-born or profile-matching leads, then higher level, then oldest enqueued. Locks it for 180 s.
+create or replace function public.qualifier_claim_next(p_tick uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_lead uuid;
+  v_ws uuid;
+  v_out jsonb;
+begin
+  if not public.scheduler_authorized() then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  if not exists (select 1 from public.qualifier_ticks t where t.id = p_tick and t.finished_at is null and t.lease_until > now()) then
+    raise exception 'tick is not open' using errcode = '55000';
+  end if;
+  update public.qualifiers z
+     set status = 'on', paused_reason = null, paused_until = null
+   where z.status = 'paused' and z.paused_reason = 'daily_cap' and z.paused_until is not null and z.paused_until <= now();
+
+  select q.lead_id, q.workspace_id into v_lead, v_ws
+    from public.qualifier_queue q
+    join public.qualifiers z on z.workspace_id = q.workspace_id and z.status = 'on'
+    join public.leads l on l.id = q.lead_id
+   where q.next_step <> 'done' and (q.locked_until is null or q.locked_until <= now())
+   order by (q.manual_at is not null) desc, q.manual_at asc,
+            (q.priority_hunter or q.profile_match) desc, l.level desc, q.enqueued_at asc, q.lead_id
+   limit 1
+     for update of q skip locked;
+  if v_lead is null then
+    return null;
+  end if;
+  update public.qualifier_queue q set locked_by = p_tick, locked_until = now() + interval '180 seconds' where q.lead_id = v_lead;
+
+  select jsonb_build_object(
+    'lead_id', q.lead_id,
+    'workspace_id', q.workspace_id,
+    'next_step', q.next_step,
+    'level', l.level,
+    'spent_usd', q.spent_usd,
+    'fail_step', q.fail_step,
+    'fail_streak', q.fail_streak,
+    'deep_requested', q.deep_requested,
+    'manual', q.manual_at is not null,
+    'profile_match', q.profile_match,
+    'notes', q.notes,
+    'fields', coalesce((
+      select jsonb_agg(jsonb_build_object('id', f.id, 'lead_id', f.lead_id, 'field', f.field, 'value', f.value, 'source', f.source,
+                                          'source_ref', f.source_ref, 'status', f.status, 'excerpt', f.excerpt, 'seen_at', f.seen_at)
+                       order by f.seen_at, f.id)
+        from public.lead_fields f where f.lead_id = q.lead_id), '[]'::jsonb),
+    'best', (
+      select jsonb_build_object('name', c.name, 'website', c.website, 'phone', c.phone, 'city', c.city, 'state', c.state)
+        from public.research_candidates c where c.id = l.best_candidate_id and c.workspace_id = q.workspace_id),
+    'settings', jsonb_build_object(
+      'daily_cap_usd', z.daily_cap_usd, 'lead_cap_usd', z.lead_cap_usd, 'auto_deep', z.auto_deep,
+      'spent_today', public.qualifier_spent_today(q.workspace_id)),
+    -- F3c-3 sets the approved company profile; until then there is none
+    'company_profile', null
+  ) into v_out
+    from public.qualifier_queue q
+    join public.leads l on l.id = q.lead_id
+    join public.qualifiers z on z.workspace_id = q.workspace_id
+   where q.lead_id = v_lead;
+  return v_out;
+end;
+$$;
+
+-- P1 juntar (free): the lead's linked candidates copy their values; unlinked candidates of the workspace that share a
+-- key (name, site domain, phone) add theirs as unverified. Never overwrites: another value is another row.
+create or replace function public.qualifier_merge(p_tick uuid, p_lead uuid)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_ws uuid;
+  v_n integer := 0;
+  v_m integer;
+  v_c uuid;
+begin
+  if not public.scheduler_authorized() then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  v_ws := public.qualifier_assert(p_tick, p_lead, true);
+  for v_c in select c.id from public.research_candidates c where c.lead_id = p_lead and c.verified_at is not null loop
+    v_n := v_n + public.copy_candidate_fields(v_c);
+  end loop;
+  with keys as (
+    select f.field, f.key from public.lead_fields f
+     where f.lead_id = p_lead and f.status <> 'refuted' and f.key is not null and f.field in ('name', 'website', 'phone')
+  ), cand as (
+    select c.* from public.research_candidates c
+     where c.workspace_id = v_ws and c.lead_id is null
+       and (exists (select 1 from keys k where k.field = 'name' and k.key = c.name_key)
+         or exists (select 1 from keys k where k.field = 'website' and k.key = public.company_domain_key(c.website))
+         or exists (select 1 from keys k where k.field = 'phone' and k.key = public.company_phone_key(c.phone)))
+     order by c.created_at, c.id
+     limit 20
+  ), vals as (
+    select c.id as cid, v.field, v.value, v.key
+      from cand c
+      cross join lateral (values
+        ('name', c.name, c.name_key), ('website', c.website, null), ('phone', c.phone, null),
+        ('email', c.public_email, null), ('city', c.city, null), ('state', c.state, null)) v (field, value, key)
+     where v.value is not null and btrim(v.value) <> ''
+  ), ins as (
+    insert into public.lead_fields (workspace_id, lead_id, field, value, key, source, source_ref, status)
+    select v_ws, p_lead, v.field, left(btrim(v.value), 1000), v.key, 'research', v.cid::text, 'unverified' from vals v
+    on conflict do nothing
+    returning 1
+  )
+  select count(*) into v_m from ins;
+  return v_n + v_m;
+end;
+$$;
+
+create or replace function public.qualifier_add_fields(p_tick uuid, p_lead uuid, p_rows jsonb)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_ws uuid;
+  r jsonb;
+  k text;
+  v_n integer := 0;
+  v_i integer;
+  v_value text;
+begin
+  if not public.scheduler_authorized() then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  v_ws := public.qualifier_assert(p_tick, p_lead, true);
+  if p_rows is null or jsonb_typeof(p_rows) <> 'array' or jsonb_array_length(p_rows) > 50 then
+    raise exception 'rows must be an array of at most 50' using errcode = '22023';
+  end if;
+  for r in select e from jsonb_array_elements(p_rows) e loop
+    if jsonb_typeof(r) <> 'object' then
+      raise exception 'row must be an object' using errcode = '22023';
+    end if;
+    for k in select jsonb_object_keys(r) loop
+      if k <> all (array['field', 'value', 'key', 'source', 'source_ref', 'status', 'excerpt', 'seen_at']) then
+        raise exception 'key not allowed in a field row: %', k using errcode = '22023';
+      end if;
+    end loop;
+    if r->>'field' is null or r->>'field' <> all (array['name', 'phone', 'email', 'website', 'address', 'city', 'state', 'zip',
+         'contact_name', 'contact_title', 'company_type', 'note', 'active_project', 'place_id']) then
+      raise exception 'unknown field' using errcode = '22023';
+    end if;
+    if r->>'source' is null or r->>'source' <> all (array['site', 'places', 'ai']) then
+      raise exception 'source must be site, places or ai' using errcode = '22023';
+    end if;
+    if coalesce(r->>'status', 'unverified') <> all (array['confirmed', 'unverified']) then
+      raise exception 'status must be confirmed or unverified' using errcode = '22023';
+    end if;
+    v_value := btrim(r->>'value');
+    if v_value is null or char_length(v_value) not between 1 and 1000
+       or char_length(coalesce(r->>'excerpt', '')) > 300 or char_length(coalesce(r->>'source_ref', '')) > 2000 then
+      raise exception 'value, excerpt or source_ref out of range' using errcode = '22023';
+    end if;
+    insert into public.lead_fields (workspace_id, lead_id, field, value, key, source, source_ref, status, excerpt, seen_at)
+    values (v_ws, p_lead, r->>'field', v_value, nullif(r->>'key', ''), r->>'source', nullif(r->>'source_ref', ''),
+            coalesce(r->>'status', 'unverified'), nullif(r->>'excerpt', ''), coalesce((r->>'seen_at')::timestamptz, now()))
+    on conflict do nothing;
+    get diagnostics v_i = row_count;
+    v_n := v_n + v_i;
+  end loop;
+  return v_n;
+end;
+$$;
+
+create or replace function public.qualifier_refute(p_tick uuid, p_lead uuid, p_field_ids uuid[])
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not public.scheduler_authorized() then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  perform public.qualifier_assert(p_tick, p_lead, true);
+  if p_field_ids is null or coalesce(array_length(p_field_ids, 1), 0) > 200 then
+    raise exception 'at most 200 ids' using errcode = '22023';
+  end if;
+  update public.lead_fields f set status = 'refuted' where f.lead_id = p_lead and f.id = any (p_field_ids) and f.status <> 'refuted';
+end;
+$$;
+
+create or replace function public.qualifier_step_done(p_tick uuid, p_lead uuid, p_step text, p_outcome text, p_next text, p_done_reason text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_ws uuid;
+  v_err boolean := p_outcome = 'error';
+begin
+  if not public.scheduler_authorized() then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  v_ws := public.qualifier_assert(p_tick, p_lead, true);
+  if p_step is null or p_step <> all (array['p1', 'p2', 'p3', 'p4', 'p5']) then
+    raise exception 'invalid step' using errcode = '22023';
+  end if;
+  if p_outcome is null or char_length(p_outcome) not between 1 and 30 then
+    raise exception 'invalid outcome' using errcode = '22023';
+  end if;
+  if p_next is null or p_next <> all (array['p1', 'p2', 'p3', 'p4', 'p5', 'done']) then
+    raise exception 'invalid next step' using errcode = '22023';
+  end if;
+  if p_next = 'done' and (p_done_reason is null or p_done_reason <> all (array['complete', 'lead_cap', 'dead'])) then
+    raise exception 'done needs a reason: complete, lead_cap or dead' using errcode = '22023';
+  end if;
+  insert into public.qualifier_step_log (workspace_id, lead_id, step, outcome) values (v_ws, p_lead, p_step, p_outcome);
+  update public.qualifier_queue q
+     set notes = q.notes || jsonb_build_object(p_step, p_outcome),
+         last_step_at = now(),
+         fail_streak = case when v_err then (case when q.fail_step = p_step then q.fail_streak else 0 end) + 1 else 0 end,
+         fail_step = case when v_err then p_step else null end,
+         next_step = p_next,
+         done_reason = case when p_next = 'done' then p_done_reason else null end,
+         locked_by = case when p_next = 'done' then null else q.locked_by end,
+         locked_until = case when p_next = 'done' then null else q.locked_until end,
+         manual_at = case when p_next = 'done' then null else q.manual_at end,
+         deep_requested = case when p_next = 'done' then false else q.deep_requested end
+   where q.lead_id = p_lead;
+end;
+$$;
+
+create or replace function public.qualifier_release(p_tick uuid, p_lead uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not public.scheduler_authorized() then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  perform public.qualifier_assert(p_tick, p_lead, true);
+  update public.qualifier_queue q set locked_by = null, locked_until = null where q.lead_id = p_lead and q.locked_by = p_tick;
+end;
+$$;
+
+-- Pause the workspace's Qualificador. The tick must hold a lead of that workspace (call it before releasing); the
+-- pause frees this tick's locks there, so the leads go back to the queue unchanged. A user's own pause is not overwritten.
+create or replace function public.qualifier_pause(p_tick uuid, p_ws uuid, p_reason text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not public.scheduler_authorized() then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  if not exists (select 1 from public.qualifier_ticks t where t.id = p_tick and t.finished_at is null and t.lease_until > now()) then
+    raise exception 'tick is not open' using errcode = '55000';
+  end if;
+  if p_reason is null or p_reason <> all (array['daily_cap', 'workspace_cap', 'user_cap', 'global_cap', 'no_access']) then
+    raise exception 'invalid pause reason' using errcode = '22023';
+  end if;
+  if not exists (select 1 from public.qualifier_queue q where q.workspace_id = p_ws and q.locked_by = p_tick and q.locked_until > now()) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  update public.qualifiers z
+     set status = 'paused', paused_reason = p_reason,
+         paused_until = case when p_reason = 'daily_cap'
+                             then (date_trunc('day', now() at time zone 'America/New_York') + interval '1 day') at time zone 'America/New_York'
+                        end
+   where z.workspace_id = p_ws and z.status = 'on';
+  update public.qualifier_queue q set locked_by = null, locked_until = null where q.workspace_id = p_ws and q.locked_by = p_tick;
+end;
+$$;
+
+-- ---------------------------------------------------------------- AI on the Qualificador path
+-- Charged to the workspace creator (qualifiers.charge_user_id). Order: the Qualificador's own day, the lead cap, then the
+-- shared caps (workspace, user, global) in reserve_ai_call_core. The row carries lead_id.
+create or replace function public.qualifier_reserve_ai_call(
+  p_tick uuid,
+  p_lead uuid,
+  p_task text,
+  p_model text,
+  p_prompt_version text,
+  p_reserve_usd numeric,
+  p_user_cap_usd numeric,
+  p_global_cap_usd numeric
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_ws uuid;
+  q public.qualifiers;
+  v_lead_spent numeric;
+  v_id uuid;
+begin
+  if not public.scheduler_authorized() then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  v_ws := public.qualifier_assert(p_tick, p_lead, true);
+  if p_task is null or left(p_task, 8) <> 'qualify_' then
+    raise exception 'not a qualifier task' using errcode = '22023';
+  end if;
+  select * into q from public.qualifiers z where z.workspace_id = v_ws;
+  if not found or q.status <> 'on' then
+    raise exception 'qualifier is not on' using errcode = '55000';
+  end if;
+  if p_reserve_usd is null or p_reserve_usd <= 0 then
+    raise exception 'invalid reserve' using errcode = '22023';
+  end if;
+  perform pg_advisory_xact_lock(hashtext('public.reserve_ai_call'));
+  if public.qualifier_spent_today(v_ws) + p_reserve_usd > q.daily_cap_usd then
+    raise exception 'ai_cap:qualifier_daily' using errcode = 'P0001';
+  end if;
+  select qq.spent_usd + coalesce((select sum(greatest(c.reserve_usd - c.cost_usd, 0)) from public.ai_calls c
+                                   where c.lead_id = p_lead and c.status = 'pending'), 0)
+    into v_lead_spent from public.qualifier_queue qq where qq.lead_id = p_lead;
+  if v_lead_spent + p_reserve_usd > q.lead_cap_usd then
+    raise exception 'ai_cap:lead_cap' using errcode = 'P0001';
+  end if;
+  -- the creator must still be owner or sdr of the workspace; otherwise nothing is reserved
+  if q.charge_user_id is null or not exists (
+       select 1 from public.workspace_members m where m.workspace_id = v_ws and m.user_id = q.charge_user_id and m.role in ('owner', 'sdr')) then
+    raise exception 'ai_cap:no_access' using errcode = '42501';
+  end if;
+  v_id := public.reserve_ai_call_core(q.charge_user_id, v_ws, null, p_task, p_model, p_prompt_version, p_reserve_usd, p_user_cap_usd, p_global_cap_usd);
+  update public.ai_calls c set lead_id = p_lead where c.id = v_id;
+  return v_id;
+end;
+$$;
+
+-- Settling needs no live lock: a call in flight when the lock expired still records its cost. The row must be this
+-- lead's pending Qualificador row.
+create or replace function public.qualifier_settle_ai_call(
+  p_tick uuid,
+  p_lead uuid,
+  p_id uuid,
+  p_status text,
+  p_input_tokens integer,
+  p_output_tokens integer,
+  p_cache_read_tokens integer,
+  p_cache_write_tokens integer,
+  p_web_searches integer,
+  p_web_fetches integer,
+  p_cost_usd numeric,
+  p_error text,
+  p_duration_ms integer
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_ws uuid;
+  v_uid uuid;
+begin
+  if not public.scheduler_authorized() then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  v_ws := public.qualifier_assert(p_tick, p_lead, false);
+  select c.user_id into v_uid
+    from public.ai_calls c
+   where c.id = p_id and c.lead_id = p_lead and c.workspace_id = v_ws and c.status = 'pending' and left(c.task, 8) = 'qualify_';
+  if v_uid is null then
+    raise exception 'ai call is not a pending call of this lead' using errcode = '42501';
+  end if;
+  perform public.settle_ai_call_core(v_uid, p_id, p_status, p_input_tokens, p_output_tokens, p_cache_read_tokens,
+                                     p_cache_write_tokens, p_web_searches, p_web_fetches, p_cost_usd, p_error, p_duration_ms);
+end;
+$$;
+
+-- ---------------------------------------------------------------- session: "qualificar agora"
+create or replace function public.request_qualification(p_ws uuid, p_leads uuid[])
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_n integer;
+begin
+  if auth.uid() is null or p_ws is null or not public.is_workspace_sender(p_ws) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  if p_leads is null or coalesce(array_length(p_leads, 1), 0) > 500 then
+    raise exception 'at most 500 leads per request' using errcode = '22023';
+  end if;
+  update public.qualifier_queue q
+     set manual_at = now(), deep_requested = true, next_step = 'p1', done_reason = null, fail_step = null, fail_streak = 0
+   where q.workspace_id = p_ws and q.lead_id = any (p_leads)
+     and not (q.next_step = 'done' and q.done_reason = 'dead');
+  get diagnostics v_n = row_count;
+  return v_n;
+end;
+$$;
+
+-- ---------------------------------------------------------------- grants (part 2)
+revoke all on function public.qualifier_assert(uuid, uuid, boolean) from public, anon, authenticated;
+revoke all on function public.qualifier_begin_tick() from public, anon, authenticated;
+revoke all on function public.qualifier_finish_tick(uuid, jsonb, text) from public, anon, authenticated;
+revoke all on function public.qualifier_claim_next(uuid) from public, anon, authenticated;
+revoke all on function public.qualifier_merge(uuid, uuid) from public, anon, authenticated;
+revoke all on function public.qualifier_add_fields(uuid, uuid, jsonb) from public, anon, authenticated;
+revoke all on function public.qualifier_refute(uuid, uuid, uuid[]) from public, anon, authenticated;
+revoke all on function public.qualifier_step_done(uuid, uuid, text, text, text, text) from public, anon, authenticated;
+revoke all on function public.qualifier_release(uuid, uuid) from public, anon, authenticated;
+revoke all on function public.qualifier_pause(uuid, uuid, text) from public, anon, authenticated;
+revoke all on function public.qualifier_reserve_ai_call(uuid, uuid, text, text, text, numeric, numeric, numeric) from public, anon, authenticated;
+revoke all on function public.qualifier_settle_ai_call(uuid, uuid, uuid, text, integer, integer, integer, integer, integer, integer, numeric, text, integer) from public, anon, authenticated;
+revoke all on function public.request_qualification(uuid, uuid[]) from public, anon;
+grant execute on function public.qualifier_begin_tick() to anon;
+grant execute on function public.qualifier_finish_tick(uuid, jsonb, text) to anon;
+grant execute on function public.qualifier_claim_next(uuid) to anon;
+grant execute on function public.qualifier_merge(uuid, uuid) to anon;
+grant execute on function public.qualifier_add_fields(uuid, uuid, jsonb) to anon;
+grant execute on function public.qualifier_refute(uuid, uuid, uuid[]) to anon;
+grant execute on function public.qualifier_step_done(uuid, uuid, text, text, text, text) to anon;
+grant execute on function public.qualifier_release(uuid, uuid) to anon;
+grant execute on function public.qualifier_pause(uuid, uuid, text) to anon;
+grant execute on function public.qualifier_reserve_ai_call(uuid, uuid, text, text, text, numeric, numeric, numeric) to anon;
+grant execute on function public.qualifier_settle_ai_call(uuid, uuid, uuid, text, integer, integer, integer, integer, integer, integer, numeric, text, integer) to anon;
+grant execute on function public.request_qualification(uuid, uuid[]) to authenticated;

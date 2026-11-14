@@ -120,6 +120,10 @@ describe("proof that RLS is really enforced in PGlite", () => {
         "level_from_lead_fields", "level_from_check", "level_from_evidence", "level_from_candidate", "ack_level_note",
         "create_workspace_qualifier", "qualifier_workspace_cap", "enqueue_lead_for_qualifier", "requeue_lead_on_import",
         "add_ai_cost_to_lead", "qualifier_spent_today", "qualifier_status",
+        // 0014 part 2 (Qualificador path: token-gated, anon-only; qualifier_assert is NOT definer)
+        "qualifier_begin_tick", "qualifier_finish_tick", "qualifier_claim_next", "qualifier_merge", "qualifier_add_fields",
+        "qualifier_refute", "qualifier_step_done", "qualifier_release", "qualifier_pause", "qualifier_reserve_ai_call",
+        "qualifier_settle_ai_call", "request_qualification",
       ].sort(),
     );
     for (const r of rows) expect(r.proconfig).toContain("search_path=\"\"");
