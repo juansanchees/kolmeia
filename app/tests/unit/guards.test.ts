@@ -97,7 +97,7 @@ describe("ANTHROPIC_API_KEY stays on the server", () => {
       path.join(root, "src/lib/research/engine.ts"),
       path.join(root, "src/lib/research/supabase-store.ts"),
       ...walk(path.join(root, "src/lib/hunter")),
-      ...["net.ts", "reader.ts"].map((f) => path.join(root, "src/lib/qualifier/site", f)),
+      ...walk(path.join(root, "src/lib/qualifier")).filter((f) => !/\/qualifier\/site\/(robots|extract)\.ts$/.test(f) && f.endsWith(".ts")),
     ];
     for (const file of serverFiles) {
       expect(readFileSync(file, "utf8"), file).toMatch(/^import "server-only";/m);

@@ -8,7 +8,7 @@ import { parseRobots, robotsAllows, type RobotsRules } from "./robots";
 // only, robots.txt honoured, one request per second per host, bounded time and size. Every outcome is a value, never
 // a throw: a site that blocks or is down is information, not an error.
 
-export const SITE_LIMITS = { timeoutMs: 5000, maxBytes: 1_000_000, maxRedirects: 3, maxPages: 4, perHostGapMs: 1000 } as const;
+export const SITE_LIMITS = { timeoutMs: 5000, maxBytes: 1_000_000, maxRedirects: 3, maxPages: 4, perHostGapMs: 1000, totalMs: 30_000 } as const;
 export const USER_AGENT = "KolmeiaBot/1.0 (+https://kolmeia.solutions/bot)";
 const ROBOTS_AGENT = "KolmeiaBot";
 const HTML_ACCEPT = "text/html,application/xhtml+xml";
@@ -43,19 +43,25 @@ export async function readSite(website: string, deps: SiteDeps): Promise<SiteRea
   const robotsCache = new Map<string, RobotsRules | "allow">();
   const fail = (outcome: SiteRead["outcome"]): SiteRead => ({ outcome, pages: [], finalHome: null });
 
+  const started = deps.now();
+  const expired = () => deps.now() - started > SITE_LIMITS.totalMs;
+  const deadline = () => Object.assign(new Error("deadline"), { code: "deadline" });
+
   async function polite(url: URL, accept: string): Promise<RawResponse> {
+    if (expired()) throw deadline();
     const host = url.hostname;
     const last = deps.gaps.get(host);
     if (last !== undefined) {
       const wait = SITE_LIMITS.perHostGapMs - (deps.now() - last);
       if (wait > 0) await deps.sleep(wait);
     }
+    if (expired()) throw deadline();
     deps.gaps.set(host, deps.now());
     return deps.http.get(url.toString(), { timeoutMs: SITE_LIMITS.timeoutMs, maxBytes: SITE_LIMITS.maxBytes, userAgent: USER_AGENT, accept });
   }
 
   /** Rules for an origin, or the outcome that stops the read. */
-  async function rulesFor(url: URL): Promise<RobotsRules | "allow" | Fail> {
+  async function rulesFor(url: URL, hop: number): Promise<RobotsRules | "allow" | Fail> {
     const cached = robotsCache.get(url.origin);
     if (cached) return cached;
     let res: RawResponse;
@@ -63,6 +69,7 @@ export async function readSite(website: string, deps: SiteDeps): Promise<SiteRea
       res = await polite(new URL("/robots.txt", url.origin), "text/plain");
     } catch (e) {
       const c = errCode(e);
+      if (c === "deadline" || (c === "blocked_address" && hop > 0)) return "error";
       return c === "timeout" ? "robots" : DOWN_CODES.has(c) ? "site_down" : "robots";
     }
     let rules: RobotsRules | "allow";
@@ -74,10 +81,10 @@ export async function readSite(website: string, deps: SiteDeps): Promise<SiteRea
   }
 
   /** GET with manual redirects; robots read before any page body, on every host reached. */
-  async function fetchPage(start: URL): Promise<Fetched> {
+  async function fetchPage(start: URL, sameHost: string | null = null): Promise<Fetched> {
     let url = start;
     for (let hop = 0; ; hop++) {
-      const rules = await rulesFor(url);
+      const rules = await rulesFor(url, hop);
       if (typeof rules === "string" && rules !== "allow") return { ok: false, outcome: rules };
       if (rules !== "allow" && !robotsAllows(rules, url.pathname + url.search)) return { ok: false, outcome: "robots" };
       let res: RawResponse;
@@ -98,6 +105,7 @@ export async function readSite(website: string, deps: SiteDeps): Promise<SiteRea
           next = null;
         }
         if (!next) return { ok: false, outcome: "error" };
+        if (sameHost !== null && hostOf(next.toString()) !== sameHost) return { ok: false, outcome: "error" }; // refused before any request
         url = next;
         continue;
       }
@@ -120,10 +128,10 @@ export async function readSite(website: string, deps: SiteDeps): Promise<SiteRea
   const homeHost = hostOf(first.url);
 
   for (const link of homeFacts.links) {
-    if (pages.length >= SITE_LIMITS.maxPages) break;
+    if (pages.length >= SITE_LIMITS.maxPages || expired()) break;
     const u = allowedUrl(link);
     if (!u || hostOf(u.toString()) !== homeHost || seen.has(u.toString())) continue;
-    const r = await fetchPage(u);
+    const r = await fetchPage(u, homeHost);
     if (!r.ok || judge(r.res) || hostOf(r.url) !== homeHost || seen.has(r.url)) continue;
     const facts = extractFromHtml(r.res.body, r.url);
     if (looksLikeChallenge(r.res.body, facts.text)) continue;
