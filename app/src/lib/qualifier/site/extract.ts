@@ -32,7 +32,14 @@ const CONTACT_LINK = /contact|about|contato|sobre|team|company|empresa/i;
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|avif|ico|bmp|tiff?)$/i;
 const SKIP_TAGS = new Set(["script", "style", "noscript", "template", "svg"]);
 
-const clip = (s: string) => s.replace(/\s+/g, " ").trim().slice(0, MAX_EXCERPT);
+/** At most n UTF-16 units, never ending in half a surrogate pair (a cut emoji would be an invalid character). */
+export function cut(s: string, n: number): string {
+  if (s.length <= n) return s;
+  const r = s.slice(0, n);
+  const c = r.charCodeAt(n - 1);
+  return c >= 0xd800 && c <= 0xdbff ? r.slice(0, -1) : r;
+}
+const clip = (s: string) => cut(s.replace(/\s+/g, " ").trim(), MAX_EXCERPT);
 const squash = (s: string) => s.replace(/\s+/g, " ").trim();
 
 function emailOk(email: string): boolean {
@@ -76,7 +83,7 @@ function* jsonLdNodes(v: unknown, depth = 0): Generator<Record<string, unknown>>
 
 const str = (v: unknown): string | null => {
   const s = typeof v === "string" ? v.trim() : typeof v === "number" ? String(v) : "";
-  return s ? s.slice(0, MAX_VALUE) : null;
+  return s ? cut(s, MAX_VALUE) : null;
 };
 
 export function extractFromHtml(html: string, pageUrl: string): SiteFacts {
@@ -84,14 +91,14 @@ export function extractFromHtml(html: string, pageUrl: string): SiteFacts {
   const seenPhones = new Set<string>();
   const seenEmails = new Set<string>();
   const addPhone = (value: string, excerpt: string) => {
-    const v = value.trim().slice(0, MAX_VALUE);
+    const v = cut(value.trim(), MAX_VALUE);
     const digits = v.replace(/\D/g, "");
     if (digits.length < 7 || digits.length > 15 || seenPhones.has(digits)) return;
     seenPhones.add(digits);
     facts.phones.push({ value: v, url: pageUrl, excerpt: clip(excerpt) });
   };
   const addEmail = (value: string, excerpt: string) => {
-    const e = value.trim().toLowerCase().slice(0, MAX_VALUE);
+    const e = cut(value.trim().toLowerCase(), MAX_VALUE);
     if (!emailOk(e) || seenEmails.has(e)) return;
     seenEmails.add(e);
     facts.emails.push({ value: e, url: pageUrl, excerpt: clip(excerpt) });
@@ -118,7 +125,7 @@ export function extractFromHtml(html: string, pageUrl: string): SiteFacts {
         depth++;
         if (name === "script" && ldBlocks.length < MAX_JSONLD && /application\/ld\+json/i.test(attribs.type ?? "")) ld = "";
         if (SKIP_TAGS.has(name)) skip++;
-        if (name === "meta" && (attribs.property ?? "").toLowerCase() === "og:site_name" && attribs.content && !ogName) ogName = squash(attribs.content).slice(0, MAX_VALUE) || null;
+        if (name === "meta" && (attribs.property ?? "").toLowerCase() === "og:site_name" && attribs.content && !ogName) ogName = cut(squash(attribs.content), MAX_VALUE) || null;
         if (name === "a") {
           closeAnchor();
           if (typeof attribs.href === "string") anchor = { href: attribs.href.trim().slice(0, 2000), label: "" };

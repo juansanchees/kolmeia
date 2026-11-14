@@ -24,18 +24,77 @@ describe("runQualifierTick", () => {
     // budget: the clock jumps past it after the first lead
     let t = 0;
     const slow = fakeQualifierStore(many);
-    const r2 = await runQualifierTick({ store: slow, transport: null, http: fakeHttp({}), budgetMs: 1000, now: () => (t += 2000) });
+    const r2 = await runQualifierTick({ store: slow, transport: null, http: fakeHttp({}), budgetMs: 60_000, now: () => (t += 20_000) });
     expect(r2.leads).toBe(1);
-    // a throw inside a lead: released, counted, the next lead still runs, finishTick carries the short code
+    // a throw inside a lead: counted, kept locked for the tick (finishTick frees it), the next lead still runs, short code kept
     const bad = fakeQualifierStore([lead(1, { nextStep: "p1" }), lead(2, { nextStep: "p1" })], { failOn: { stepDone: new Error("rpc_step_failed") } });
     const r3 = await runQualifierTick({ store: bad, transport: null, http: fakeHttp({}) });
     expect(r3.outcome).toBe("error");
-    expect(names(bad)).toContain("release");
+    expect(names(bad)).not.toContain("release");
     expect(bad.log.at(-1)).toEqual(["finishTick", expect.objectContaining({ leads: 2 }), "rpc_step_failed"]);
     // a failing claim: finishTick still runs and the error propagates
     const dead = fakeQualifierStore([], { failOn: { claimNext: new Error("down") } });
     await expect(runQualifierTick({ store: dead, transport: null })).rejects.toThrow("down");
     expect(names(dead).at(-1)).toBe("finishTick");
+  });
+
+  test("I-1: with no budget nothing is claimed, but the tick is begun and finished", async () => {
+    const store = fakeQualifierStore([lead(1)]);
+    const r = await runQualifierTick({ store, transport: null, http: fakeHttp({}), budgetMs: 0 });
+    expect(r).toMatchObject({ outcome: "ok", leads: 0 });
+    expect(names(store)).toEqual(["beginTick", "finishTick"]);
+  });
+
+  test("I-2: no new lead is claimed with less than 35 s left", async () => {
+    let t = 0;
+    const store2 = fakeQualifierStore([lead(1), lead(2), lead(3)]);
+    const orig = store2.stepDone;
+    store2.stepDone = async (...a) => {
+      t += 7_000;
+      return orig(...a);
+    };
+    t = 0;
+    const r2 = await runQualifierTick({ store: store2, transport: null, http: fakeHttp({}), budgetMs: 60_000, now: () => t });
+    // 3 steps x 7 s = 21 s per lead: starts at 0 (60 left) and 21 (39 left); at 42 only 18 left -> stop
+    expect(r2.leads).toBe(2);
+    // a budget under the floor claims nothing
+    const small = fakeQualifierStore([lead(1)]);
+    expect((await runQualifierTick({ store: small, transport: null, budgetMs: 34_999, now: () => 0 })).leads).toBe(0);
+  });
+
+  test("m-3: a lead that failed is not released and not picked again in this tick", async () => {
+    const store = fakeQualifierStore([lead(1, { nextStep: "p1" }), lead(2, { nextStep: "p1" })], { failOn: { stepDone: new Error("rpc_x") } });
+    await runQualifierTick({ store, transport: null, http: fakeHttp({}) });
+    expect(store.log.filter((l) => l[0] === "release")).toEqual([]);
+  });
+
+  test("m-1: a refusal on one lead followed by a good claim is lead_gone; with no good claim it stays refused", async () => {
+    const gone = Object.assign(new Error("x"), { code: "42501" });
+    const calls = { n: 0 };
+    const a = fakeQualifierStore([lead(1, { nextStep: "p1" }), lead(2)], { failOn: {} });
+    const orig = a.stepDone;
+    a.stepDone = async (...args) => {
+      if (calls.n++ === 0) throw gone;
+      return orig(...args);
+    };
+    const r = await runQualifierTick({ store: a, transport: null, http: fakeHttp({}) });
+    expect(r.outcome).toBe("error");
+    expect(a.log.at(-1)).toEqual(["finishTick", expect.anything(), "lead_gone"]);
+    const b = fakeQualifierStore([lead(1, { nextStep: "p1" })]);
+    b.stepDone = async () => {
+      throw gone;
+    };
+    await runQualifierTick({ store: b, transport: null, http: fakeHttp({}) });
+    expect(b.log.at(-1)).toEqual(["finishTick", expect.anything(), "refused"]);
+  });
+
+  test("m-6: page text and secrets in an error never reach the heartbeat", async () => {
+    const store = fakeQualifierStore([lead(1, { nextStep: "p1" })], { failOn: { stepDone: new Error("<html>SECRET page text sk-ant-123</html>") } });
+    await runQualifierTick({ store, transport: null, http: fakeHttp({}) });
+    const fin = store.log.at(-1)!;
+    expect(fin[0]).toBe("finishTick");
+    expect(fin[2]).toBe("lead_error");
+    expect(JSON.stringify(fin)).not.toMatch(/SECRET|sk-ant/);
   });
 
   test("a finished lead is not released; a requeued one is; page text never reaches the heartbeat", async () => {

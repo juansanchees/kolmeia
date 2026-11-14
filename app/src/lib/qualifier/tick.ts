@@ -11,9 +11,16 @@ import type { PlacesClient, QualifierCounts, QualifierPauseReason } from "./type
 
 export const QUALIFIER_TICK_BUDGET_MS = 60_000;
 export const QUALIFIER_MAX_LEADS = 10;
+/** A lead can take up to SITE_LIMITS.totalMs (30 s) in P2: no new claim with less than that plus a margin left. */
+export const QUALIFIER_CLAIM_FLOOR_MS = 35_000;
 
 const CODE = /^[a-z0-9_:]{1,60}$/;
 export type QualifierTickResult = { tickId: string; outcome: "ok" | "busy" | "error" } & QualifierCounts;
+
+/** The database refused one lead (42501) or the path refused the token. */
+function isRefusal(e: unknown): boolean {
+  return e instanceof Error && (e.name === "HunterAuthError" || (e as { code?: unknown }).code === "42501");
+}
 
 function codeOf(e: unknown, fallback: string): string {
   if (e instanceof Error && e.name === "HunterAuthError") return "refused";
@@ -45,12 +52,19 @@ export async function runQualifierTick(opts: {
   let firstError: string | null = null;
   const gaps = new Map<string, number>();
   const paused = new Set<string>();
+  // leads that failed in this tick stay out of it (their lock is held until finishTick), so retries spread across ticks
+  let lostLead = false;
 
   try {
-    // the budget never blocks the first lead of a tick
-    while (counts.leads < maxLeads && (counts.leads === 0 || now() - started < budgetMs)) {
+    // no budget, nothing claimed; otherwise a lead is claimed only while enough time is left to finish it
+    while (counts.leads < maxLeads && budgetMs > 0 && budgetMs - (now() - started) >= QUALIFIER_CLAIM_FLOOR_MS) {
       const lead = await store.claimNext(tickId);
       if (!lead) break;
+      if (lostLead) {
+        // the next claim works: the refusal belonged to that one lead
+        firstError ??= "lead_gone";
+        lostLead = false;
+      }
       counts.leads++;
       // a pause is already recorded for this workspace in this tick: give the lead back and look no further
       if (paused.has(lead.workspaceId)) {
@@ -71,12 +85,13 @@ export async function runQualifierTick(opts: {
           gaps,
         });
         counts.steps += r.steps;
-        keep = r.result === "requeued";
+        // a failed lead is not released: it stays locked until finishTick frees it, out of the rest of this tick
+        keep = r.result === "requeued" && !r.errored;
         if (r.result === "paused") pauseReason = r.pauseReason;
       } catch (e) {
         counts.failed++;
-        firstError ??= codeOf(e, "lead_error");
-        keep = true;
+        if (isRefusal(e)) lostLead = true;
+        else firstError ??= codeOf(e, "lead_error");
       }
       if (pauseReason) {
         // pause first (it needs the lead's lock, and frees this tick's locks in the workspace), then nothing to release
@@ -93,6 +108,7 @@ export async function runQualifierTick(opts: {
         await store.release(tickId, lead.leadId).catch(() => undefined);
       }
     }
+    if (lostLead) firstError ??= "refused"; // no later claim proved the token fine
   } catch (e) {
     firstError ??= codeOf(e, "tick_error");
     await store.finishTick(tickId, counts, firstError).catch(() => undefined);

@@ -2,7 +2,7 @@ import "server-only";
 import type { AiTransport } from "@/lib/ai/types";
 import type { RawHttp } from "./site/net";
 import { readSite, type SiteRead } from "./site/reader";
-import { factsToFields, siteField } from "./site-facts";
+import { factsToFields, liveFields, liveLevel, siteField } from "./site-facts";
 import type { QualifierTickStore } from "./store";
 import type { DoneReason, LeadSnapshot, PlacesClient, QualifierPauseReason, QualifierStep, StepOutcome } from "./types";
 
@@ -21,7 +21,13 @@ export type CascadeDeps = {
   gaps: Map<string, number>;
 };
 
-export type CascadeResult = { steps: number; result: "done" | "paused" | "requeued"; pauseReason?: QualifierPauseReason };
+export type CascadeResult = {
+  steps: number;
+  result: "done" | "paused" | "requeued";
+  pauseReason?: QualifierPauseReason;
+  /** The lead was given back because a step failed: the tick keeps it out of the rest of this tick. */
+  errored?: boolean;
+};
 
 const ORDER: QualifierStep[] = ["p1", "p2", "p3", "p4", "p5"];
 const MAX_STREAK = 3;
@@ -34,6 +40,8 @@ type StepResult = {
   done?: DoneReason;
   /** The pass restarts from the next claim (fresh snapshot): used when P1 added values. */
   requeue?: boolean;
+  /** Stay on this step: the next claim runs it again (a second site is left to read). */
+  again?: boolean;
 };
 
 function isAuthError(e: unknown): boolean {
@@ -46,6 +54,7 @@ export async function qualifyLead(s: LeadSnapshot, d: CascadeDeps): Promise<Casc
   let steps = 0;
   // the live view of this lead's values: P2's refutations and additions show to later steps in the same pass
   let fields = s.fields;
+  let level = s.level;
   let site: SiteRead | null = null;
 
   const run = async (step: QualifierStep): Promise<StepResult> => {
@@ -63,18 +72,21 @@ export async function qualifyLead(s: LeadSnapshot, d: CascadeDeps): Promise<Casc
         site = read;
         const { add, refute } = factsToFields(read, { ...s, fields });
         if (add.length) await store.addFields(tickId, leadId, add);
-        if (refute.length) {
-          await store.refute(tickId, leadId, refute);
-          fields = fields.map((f) => (refute.includes(f.id) ? { ...f, status: "refuted" as const } : f));
-        }
+        if (refute.length) await store.refute(tickId, leadId, refute);
+        fields = liveFields({ ...s, fields }, add, refute);
+        level = liveLevel(level, fields);
         if (read.outcome === "site_down") {
-          // nothing left to reach and no Places to ask: the lead is dead (K-3)
+          const otherSite = fields.some((f) => f.field === "website" && f.status !== "refuted");
+          // another site is left after the refutation: read it on the next claim (only when this one was really refuted)
+          if (otherSite && refute.length) return { outcome: "site_down", again: true };
+          // nothing left to reach, no other site and no Places to ask: the lead is dead (K-3)
           const reach = fields.some((f) => REACH.has(f.field) && f.status !== "refuted");
-          if (!reach && d.places === null) return { outcome: "site_down", done: "dead" };
+          if (!reach && !otherSite && d.places === null) return { outcome: "site_down", done: "dead" };
         }
         return { outcome: read.outcome === "ok" ? "ok" : read.outcome };
       }
       case "p3":
+        if (level >= 2) return { outcome: "skipped" }; // what P2 just wrote counts (level is live)
         return { outcome: "places_off" }; // Task 6 replaces this
       case "p4":
       case "p5":
@@ -100,14 +112,14 @@ export async function qualifyLead(s: LeadSnapshot, d: CascadeDeps): Promise<Casc
         continue;
       }
       await store.stepDone(tickId, leadId, step, "error", step, null); // counts the failure, stays on this step
-      return { steps: steps + 1, result: "requeued" };
+      return { steps: steps + 1, result: "requeued", errored: true };
     }
     if (r.done) {
       await store.stepDone(tickId, leadId, step, r.outcome, "done", r.done);
       return { steps: steps + 1, result: "done" };
     }
-    if (r.requeue) {
-      await store.stepDone(tickId, leadId, step, r.outcome, next, null);
+    if (r.requeue || r.again) {
+      await store.stepDone(tickId, leadId, step, r.outcome, r.again ? step : next, null);
       return { steps: steps + 1, result: "requeued" };
     }
     await store.stepDone(tickId, leadId, step, r.outcome, next, next === "done" ? "complete" : null);

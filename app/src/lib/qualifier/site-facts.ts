@@ -1,5 +1,5 @@
 import { hostOf } from "@/lib/safe-url";
-import type { Found } from "./site/extract";
+import { cut, type Found } from "./site/extract";
 import type { SiteRead } from "./site/reader";
 import type { FieldIn, FieldRow, LeadSnapshot } from "./types";
 
@@ -36,9 +36,10 @@ export function factsToFields(read: SiteRead, s: LeadSnapshot): { add: FieldIn[]
   const add: FieldIn[] = [];
   const push = (field: string, value: string, url: string, excerpt: string | null) => {
     const id = `${field}:${norm(field, value)}`;
-    if (!norm(field, value) || have.has(id) || add.length >= MAX_ROWS) return;
+    // a value over the database's 1000 characters is skipped, never cut into a different value
+    if (!norm(field, value) || [...value].length > 1000 || have.has(id) || add.length >= MAX_ROWS) return;
     have.add(id);
-    add.push({ field, value: value.slice(0, 1000), source: "site", source_ref: url, status: "confirmed", excerpt: excerpt ? excerpt.slice(0, 300) : null });
+    add.push({ field, value, source: "site", source_ref: url, status: "confirmed", excerpt: excerpt ? cut(excerpt, 300) : null });
   };
 
   push("website", read.finalHome, read.finalHome, "Página inicial lida");
@@ -52,4 +53,28 @@ export function factsToFields(read: SiteRead, s: LeadSnapshot): { add: FieldIn[]
     one(field, first);
   }
   return { add, refute: [] };
+}
+
+/** The fields as the cascade now sees them: what was added counts as confirmed, what was refuted as refuted. */
+export function liveFields(s: LeadSnapshot, add: FieldIn[], refute: string[]): FieldRow[] {
+  const added: FieldRow[] = add.map((a, i) => ({
+    id: `new:${i}`,
+    leadId: s.leadId,
+    field: a.field,
+    value: a.value,
+    source: a.source,
+    sourceRef: a.source_ref ?? null,
+    status: a.status ?? "unverified",
+    excerpt: a.excerpt ?? null,
+    seenAt: null,
+  }));
+  return [...s.fields.map((f) => (refute.includes(f.id) ? { ...f, status: "refuted" as const } : f)), ...added];
+}
+
+/** Level the lead holds now, from what this pass wrote: never below the one the database reported (levels 3-4 come from research). */
+export function liveLevel(base: number, fields: FieldRow[]): number {
+  const live = fields.filter((f) => f.status !== "refuted");
+  const ok = (name: string) => live.some((f) => f.field === name && f.status === "confirmed");
+  const reach = live.some((f) => f.field === "phone" || f.field === "email");
+  return Math.max(base, ok("website") && ok("address") ? 2 : reach ? 1 : 0);
 }
