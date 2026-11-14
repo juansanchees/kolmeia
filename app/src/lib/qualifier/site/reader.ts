@@ -19,7 +19,7 @@ export type SiteRead = {
   finalHome: string | null;
 };
 
-export type SiteDeps = { http: RawHttp; sleep: (ms: number) => Promise<void>; now: () => number; gaps: Map<string, number> };
+export type SiteDeps = { http: RawHttp; sleep: (ms: number) => Promise<void>; now: () => number; gaps: Map<string, number>; /** Time left for this read (ms); the default is SITE_LIMITS.totalMs. */ totalMs?: number };
 
 type Fail = "site_blocked" | "robots" | "site_down" | "not_html" | "error";
 type Fetched = { ok: true; url: string; res: RawResponse } | { ok: false; outcome: Fail };
@@ -44,7 +44,7 @@ export async function readSite(website: string, deps: SiteDeps): Promise<SiteRea
   const fail = (outcome: SiteRead["outcome"]): SiteRead => ({ outcome, pages: [], finalHome: null });
 
   const started = deps.now();
-  const expired = () => deps.now() - started > SITE_LIMITS.totalMs;
+  const expired = () => deps.now() - started > (deps.totalMs ?? SITE_LIMITS.totalMs);
   const deadline = () => Object.assign(new Error("deadline"), { code: "deadline" });
 
   async function polite(url: URL, accept: string): Promise<RawResponse> {

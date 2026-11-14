@@ -51,41 +51,59 @@ function around(text: string, start: number, end: number): string {
   return text.slice(a, b).trim();
 }
 
-/**
- * Where a value the model returned is written in the page text, or null (dropped). Phones are compared by digits,
- * e-mails exactly (case aside, and not inside a longer address), anything else case- and space-folded.
- */
-export function keepIfInText(value: string, kind: "phone" | "email" | "text", pages: LightInput["pages"]): { url: string; excerpt: string } | null {
+/** A value found in a page: the page, the span as the page writes it, where it starts, and a short excerpt. */
+export type Located = { url: string; matched: string; index: number; excerpt: string };
+
+// North American numbers only, with digit boundaries: a zip code or a year before the number is never part of it.
+const NANP = /(?<!\d)(?:\+?1[\s.-]?)?\(?[2-9]\d{2}\)?[\s.-]?[2-9]\d{2}[\s.-]?\d{4}(?!\d)/g;
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Every place `value` is written in one page's text. Phones by digits, e-mails exact, text on word boundaries (Unicode-aware, case and space folded). */
+function locateIn(value: string, kind: "phone" | "email" | "text", p: LightInput["pages"][number]): Located[] {
+  const text = p.text.replace(/\s+/g, " ");
+  const out: Located[] = [];
+  if (kind === "phone") {
+    const want = phoneDigits(value);
+    if (want.length < 7) return out;
+    for (const m of text.matchAll(NANP)) {
+      if (phoneDigits(m[0]) === want) out.push({ url: p.url, matched: m[0], index: m.index, excerpt: around(text, m.index, m.index + m[0].length) });
+    }
+  } else if (kind === "email") {
+    const want = value.toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(want)) return out;
+    const low = text.toLowerCase();
+    for (let i = low.indexOf(want); i >= 0; i = low.indexOf(want, i + 1)) {
+      const before = low[i - 1] ?? " ";
+      const after = low.slice(i + want.length, i + want.length + 2);
+      if (/[a-z0-9._%+\-]/.test(before) || /^[a-z0-9\-]/.test(after) || /^\.[a-z0-9]/.test(after)) continue;
+      out.push({ url: p.url, matched: text.slice(i, i + want.length), index: i, excerpt: around(text, i, i + want.length) });
+    }
+  } else {
+    const want = fold(value);
+    if (want.length < 2) return out;
+    const re = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(want).replace(/ /g, "\\s+")}(?![\\p{L}\\p{N}])`, "giu");
+    for (const m of text.matchAll(re)) out.push({ url: p.url, matched: m[0], index: m.index, excerpt: around(text, m.index, m.index + m[0].length) });
+  }
+  return out;
+}
+
+/** The first place a value the model returned is written in the pages, or null (dropped). `matched` is the page's own text. */
+export function locateInPages(value: string, kind: "phone" | "email" | "text", pages: LightInput["pages"]): Located | null {
   const v = value.trim();
   if (!v || v.length > MAX_VALUE) return null;
   for (const p of pages) {
-    const text = p.text.replace(/\s+/g, " ");
-    if (kind === "phone") {
-      const want = phoneDigits(v);
-      if (want.length < 7) continue;
-      for (const m of text.matchAll(/\+?\d[\d\s().\-]{5,}\d/g)) {
-        if (phoneDigits(m[0]) === want) return { url: p.url, excerpt: around(text, m.index, m.index + m[0].length) };
-      }
-    } else if (kind === "email") {
-      const want = v.toLowerCase();
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(want)) continue;
-      const low = text.toLowerCase();
-      for (let i = low.indexOf(want); i >= 0; i = low.indexOf(want, i + 1)) {
-        const before = low[i - 1] ?? " ";
-        const after = low.slice(i + want.length, i + want.length + 2);
-        if (/[a-z0-9._%+\-]/.test(before) || /^[a-z0-9\-]/.test(after) || /^\.[a-z0-9]/.test(after)) continue;
-        return { url: p.url, excerpt: around(text, i, i + want.length) };
-      }
-    } else {
-      const want = fold(v);
-      if (want.length < 2) continue;
-      const low = text.toLowerCase();
-      const i = low.indexOf(want);
-      if (i >= 0) return { url: p.url, excerpt: around(text, i, i + want.length) };
-    }
+    const hit = locateIn(v, kind, p)[0];
+    if (hit) return hit;
   }
   return null;
 }
+
+export function keepIfInText(value: string, kind: "phone" | "email" | "text", pages: LightInput["pages"]): { url: string; excerpt: string } | null {
+  const h = locateInPages(value, kind, pages);
+  return h && { url: h.url, excerpt: h.excerpt };
+}
+
+const TITLE_NEAR = 200;
 
 export const lightDef: TaskDef<LightInput, LightParsed, LightOut> = {
   task: "qualify_light",
@@ -98,18 +116,26 @@ export const lightDef: TaskDef<LightInput, LightParsed, LightOut> = {
   buildUser: lightP.buildUser,
   normalize: (p, input) => {
     const values: LightOut["values"] = [];
-    const keep = (field: LightField, raw: string, kind: "phone" | "email" | "text") => {
+    const keep = (field: LightField, raw: string, kind: "phone" | "email" | "text"): Located | null => {
       const v = kind === "email" ? raw.trim().toLowerCase() : raw.trim();
-      if (!v) return;
-      const at = keepIfInText(v, kind, input.pages);
-      if (at) values.push({ field, value: v, url: at.url, excerpt: at.excerpt });
+      if (!v) return null;
+      const at = locateInPages(v, kind, input.pages);
+      if (!at) return null;
+      // what is stored is the page's own text (text and phones), never the model's spelling
+      values.push({ field, value: kind === "email" ? v : at.matched, url: at.url, excerpt: at.excerpt });
+      return at;
     };
     keep("city", p.city, "text");
     keep("state", p.state, "text");
     keep("address", p.address, "text");
     for (const c of p.contacts.slice(0, MAX_CONTACTS)) {
-      keep("contact_name", c.name, "text");
-      keep("contact_title", c.title, "text");
+      const who = keep("contact_name", c.name, "text");
+      // a title counts only next to its name: same page, within TITLE_NEAR characters
+      if (who && c.title.trim()) {
+        const page = input.pages.find((x) => x.url === who.url);
+        const near = page ? locateIn(c.title.trim(), "text", page).filter((h) => Math.abs(h.index - who.index) <= TITLE_NEAR).sort((a, b) => Math.abs(a.index - who.index) - Math.abs(b.index - who.index))[0] : null;
+        if (near) values.push({ field: "contact_title", value: near.matched, url: near.url, excerpt: near.excerpt });
+      }
       keep("email", c.email, "email");
       keep("phone", c.phone, "phone");
     }

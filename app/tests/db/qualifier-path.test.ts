@@ -328,9 +328,20 @@ describe("0014 qualifier path", () => {
     const { ws, lead } = await seedQualifierLead(db);
     const tick = await beginQualifierTick(db);
     expect((await claim(tick))!.lead_id).toBe(lead);
+    // explicit times: the claim was a minute ago, the import is now
+    await db.admin("update public.qualifier_queue set claimed_at = now() - interval '1 minute' where lead_id = $1", [lead]);
     await db.admin("insert into public.lead_fields (workspace_id, lead_id, field, value, source, source_ref) values ($1,$2,'phone','5085550188','import','late-list')", [ws, lead]);
     expect((await tryRpc("select public.qualifier_step_done($1,$2,'p5','ok','done','complete')", [tick, lead])).error).toBeUndefined();
     expect((await db.admin<{ next_step: string; done_reason: string | null; locked_by: string | null }>("select next_step, done_reason, locked_by from public.qualifier_queue where lead_id = $1", [lead]))[0]).toEqual({ next_step: "p1", done_reason: null, locked_by: null });
+  });
+
+  test("a manual request stamped at the very instant of the claim is not a second request: the lead closes", async () => {
+    const { lead } = await seedQualifierLead(db);
+    const tick = await beginQualifierTick(db);
+    expect((await claim(tick))!.lead_id).toBe(lead);
+    await db.admin("update public.qualifier_queue set manual_at = claimed_at, deep_requested = true where lead_id = $1", [lead]);
+    expect((await tryRpc("select public.qualifier_step_done($1,$2,'p5','ok','done','complete')", [tick, lead])).error).toBeUndefined();
+    expect((await db.admin("select next_step, done_reason from public.qualifier_queue where lead_id = $1", [lead]))[0]).toEqual({ next_step: "done", done_reason: "complete" });
   });
 
   test("qualifier_pause sets the reason; a daily-cap pause ends at the next New York midnight", async () => {
@@ -391,6 +402,7 @@ describe("0014 qualifier path", () => {
     expect((await q(l3)).manual_at).not.toBeNull();
     expect(await q(dead)).toMatchObject({ next_step: "done", done_reason: "dead", deep_requested: false, manual_at: null });
     expect(await q(foreign.lead)).toMatchObject({ manual_at: null, deep_requested: false });
+    await db.admin("update public.qualifier_queue set manual_at = now() - interval '1 minute' where lead_id = $1", [l3]); // explicit order
     await db.query(as(a.owner), "select public.request_qualification($1,$2::uuid[])", [a.ws, `{${l2}}`]);
     // the requested leads are claimed before the rest, oldest request first
     const tick = await beginQualifierTick(db);
@@ -409,6 +421,7 @@ describe("0014 qualifier path", () => {
     const s = await seedQualifierLead(db, { fields: [{ field: "name", value: "Acme Builders" }] });
     const tick = await beginQualifierTick(db);
     expect((await claim(tick))!.lead_id).toBe(s.lead);
+    await db.admin("update public.qualifier_queue set claimed_at = now() - interval '1 minute' where lead_id = $1", [s.lead]);
     await db.query(as(s.owner), "select public.request_qualification($1,$2::uuid[])", [s.ws, `{${s.lead}}`]);
     // a plain step in between does not clobber the request
     await rpc("select public.qualifier_step_done($1,$2,'p1','ok','p2',null)", [tick, s.lead]);
@@ -418,6 +431,7 @@ describe("0014 qualifier path", () => {
     // claimed again: the request is older than this claim, so finishing closes the lead and clears it
     await db.admin("update public.qualifier_queue set locked_until = null where lead_id = $1", [s.lead]);
     expect((await claim(tick))!.manual).toBe(true);
+    await db.admin("update public.qualifier_queue set claimed_at = now(), manual_at = now() - interval '1 minute' where lead_id = $1", [s.lead]);
     await rpc("select public.qualifier_step_done($1,$2,'p5','ok','done','complete')", [tick, s.lead]);
     expect((await db.admin("select next_step, manual_at is not null as m, deep_requested as d from public.qualifier_queue where lead_id = $1", [s.lead]))[0]).toEqual({ next_step: "done", m: false, d: false });
 

@@ -1119,11 +1119,12 @@ begin
   insert into public.qualifier_step_log (workspace_id, lead_id, step, outcome) values (v_ws, p_lead, p_step, p_outcome);
   -- imported values that arrived while the lead was claimed (the re-queue trigger only sees finished leads): do not close
   -- Also a manual request that came in while it was claimed (request_qualification wrote manual_at after the claim): it
-  -- keeps manual_at and deep_requested. A dead lead stays dead.
+  -- keeps manual_at and deep_requested (strictly after the claim: a same-instant tie is not a second request, so it never
+  -- causes a second paid pass). A dead lead stays dead.
   if p_next = 'done' and p_done_reason <> 'dead' and exists (
        select 1 from public.qualifier_queue z
         where z.lead_id = p_lead and z.claimed_at is not null
-          and (z.manual_at >= z.claimed_at
+          and (z.manual_at > z.claimed_at
                or exists (select 1 from public.lead_fields f
                            where f.lead_id = p_lead and f.source in ('import', 'apify_maps', 'apollo') and f.created_at >= z.claimed_at))) then
     update public.qualifier_queue q

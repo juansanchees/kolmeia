@@ -57,8 +57,6 @@ describe("Qualificador deep step on the real path", () => {
     const { ws, lead } = await seedQualifierLead(db, { fields: [{ field: "phone", value: "5085550177" }, { field: "name", value: "Beta Mechanical" }] });
     // what the lead page's "qualificar" button does (request_qualification, as a sender): manual, strong AI step on
     await db.admin("update public.qualifier_queue set manual_at = now(), deep_requested = true where lead_id = $1", [lead]);
-    // 0014 reads "manual_at >= claimed_at" as a request that came in during the claim: let the clock move past it
-    await new Promise((r) => setTimeout(r, 25));
     const ABOUT = "https://beta-mechanical.test/about";
     const ai = new FakeTransport({
       qualify_deep: () => ({

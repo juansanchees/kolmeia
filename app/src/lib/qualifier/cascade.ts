@@ -2,14 +2,14 @@ import "server-only";
 import { AiError, isAiError, type AiErrorCode } from "@/lib/ai/errors";
 import { lightQualify, verifyLead } from "@/lib/ai/qualify-tasks";
 import type { AiTransport } from "@/lib/ai/types";
-import { sanitizeUrl } from "@/lib/safe-url";
+import { hostOf, sanitizeUrl } from "@/lib/safe-url";
 import { PLACES_CALL_USD } from "./places";
 import type { RawHttp } from "./site/net";
 import { cut } from "./site/extract";
-import { readSite, type SiteRead } from "./site/reader";
+import { readSite, SITE_LIMITS, type SiteRead } from "./site/reader";
 import { factsToFields, fieldKey, liveFields, liveLevel, siteField } from "./site-facts";
 import type { QualifierTickStore } from "./store";
-import type { DoneReason, FieldIn, LeadSnapshot, PlaceHit, PlacesClient, QualifierPauseReason, QualifierStep, StepOutcome } from "./types";
+import type { DoneReason, FieldIn, FieldRow, LeadSnapshot, PlaceHit, PlacesClient, QualifierPauseReason, QualifierStep, StepOutcome } from "./types";
 
 // One lead through the cascade, cheapest step first, in one call: P1 juntar, P2 site, P3 Places, P4 IA leve, P5 IA
 // forte. The pages P2 reads stay in memory for P4. Page text is untrusted data: nothing here follows it, it only
@@ -40,6 +40,19 @@ const IMPORTED = new Set(["import", "apify_maps", "apollo"]);
 /** P5 runs for a lead the AI can still raise (level < 4) that was asked for, or contactable and matching the profile with the switch on. */
 export function deepEligible(s: LeadSnapshot, aiOn: boolean): boolean {
   return aiOn && s.level < 4 && (s.deepRequested || (s.settings.autoDeep && s.profileMatch && s.level >= 1));
+}
+
+const foldName = (v: string) => v.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+
+/** The Places hit shares its name, phone or address with something the lead already has. */
+function agreesWithLead(hit: PlaceHit, leadName: string, fields: FieldRow[]): boolean {
+  const live = fields.filter((f) => f.status !== "refuted");
+  const names = [leadName, ...live.filter((f) => f.field === "name").map((f) => f.value)].map(foldName).filter((n) => n.length >= 4);
+  const hn = hit.name ? foldName(hit.name) : "";
+  if (hn.length >= 4 && names.some((n) => n === hn || n.includes(hn) || hn.includes(n))) return true;
+  if (hit.phone && live.some((f) => f.field === "phone" && fieldKey("phone", f.value) === fieldKey("phone", hit.phone!))) return true;
+  if (hit.address && live.some((f) => f.field === "address" && fieldKey("address", f.value) === fieldKey("address", hit.address!))) return true;
+  return false;
 }
 
 const ORDER: QualifierStep[] = ["p1", "p2", "p3", "p4", "p5"];
@@ -84,6 +97,11 @@ export async function qualifyLead(s: LeadSnapshot, d: CascadeDeps): Promise<Casc
   // what this lead and the Qualificador's day have spent, kept current inside the pass (the snapshot is from the claim)
   let leadSpent = s.spentUsd;
   let daySpent = s.settings.spentToday;
+  // one deadline for every site read of this lead (P2 and the Places website), and the hosts already read in this pass
+  const leadStart = d.now();
+  const readHosts = new Set<string>();
+  const siteDeps = () => ({ http: d.http, sleep: d.sleep, now: d.now, gaps: d.gaps, totalMs: SITE_LIMITS.totalMs - (d.now() - leadStart) });
+  const otherSite = () => fields.some((f) => f.field === "website" && f.status !== "refuted");
   const reach = () => fields.some((f) => REACH.has(f.field) && f.status !== "refuted");
 
   const run = async (step: QualifierStep): Promise<StepResult> => {
@@ -97,7 +115,9 @@ export async function qualifyLead(s: LeadSnapshot, d: CascadeDeps): Promise<Casc
         if (!w) return { outcome: "no_site" };
         const confirmed = (f: string) => fields.some((x) => x.field === f && x.status === "confirmed");
         if (confirmed("phone") && confirmed("email") && confirmed("address")) return { outcome: "skipped" };
-        const read = await readSite(w.value, { http: d.http, sleep: d.sleep, now: d.now, gaps: d.gaps });
+        const read = await readSite(w.value, siteDeps());
+        readHosts.add(hostOf(w.value) ?? w.value);
+        if (read.finalHome) readHosts.add(hostOf(read.finalHome) ?? read.finalHome);
         site = read;
         const { add, refute } = factsToFields(read, { ...s, fields });
         if (add.length) await store.addFields(tickId, leadId, add);
@@ -106,50 +126,69 @@ export async function qualifyLead(s: LeadSnapshot, d: CascadeDeps): Promise<Casc
         level = liveLevel(level, fields);
         if (read.outcome === "site_down") {
           siteDown = true;
-          const otherSite = fields.some((f) => f.field === "website" && f.status !== "refuted");
           // another site is left after the refutation: read it on the next claim (only when this one was really refuted)
-          if (otherSite && refute.length) return { outcome: "site_down", again: true };
-          // nothing left to reach, no other site and no Places to ask: the lead is dead (K-3)
-          if (!reach() && !otherSite && d.places === null) return { outcome: "site_down", done: "dead" };
+          if (otherSite() && refute.length) return { outcome: "site_down", again: true };
+          // nothing left to reach and no other site: dead (K-3). With Places on, P3 gets its say first: Places can only save a lead.
+          if (!reach() && !otherSite() && d.places === null) return { outcome: "site_down", done: "dead" };
         }
         return { outcome: read.outcome === "ok" ? "ok" : read.outcome };
       }
       case "p3": {
+        if (resumedPastP3) return { outcome: "skipped" }; // Places already ran in an earlier pass: a resume at p2 must not pay again
         if (level >= 2) return { outcome: "skipped" }; // what P2 just wrote counts (level is live)
         if (!d.places) return { outcome: "places_off" };
         const name = s.best?.name?.trim();
-        if (!name) return siteDown && !reach() ? { outcome: "skipped", done: "dead" } : { outcome: "skipped" };
+        if (!name) return siteDown && !reach() && !otherSite() ? { outcome: "skipped", done: "dead" } : { outcome: "skipped" };
         const id = await store.reservePlaces(tickId, leadId, PLACES_CALL_USD);
         let hit: PlaceHit | null;
         try {
           hit = await d.places.search({ name, city: s.best?.city ?? null, state: s.best?.state ?? null });
         } catch (e) {
-          await store.settlePlaces(tickId, leadId, id, 0, false).catch(() => undefined); // a failed call costs nothing
+          // a definite non-200 answer is free; a network failure, a timeout or a bad body may still have been billed (outcome unknown)
+          const status = e && typeof e === "object" && "status" in e ? Number((e as { status: unknown }).status) : NaN;
+          const free = Number.isFinite(status) && status !== 0 && status !== 200;
+          const cost = free ? 0 : PLACES_CALL_USD;
+          await store.settlePlaces(tickId, leadId, id, cost, false).catch(() => undefined);
+          if (!free) {
+            leadSpent += cost;
+            daySpent += cost;
+          }
           throw e;
         }
-        await store.settlePlaces(tickId, leadId, id, PLACES_CALL_USD, true);
         leadSpent += PLACES_CALL_USD;
         daySpent += PLACES_CALL_USD;
-        // the place said nothing, or the site was already down and Places has nobody to reach: dead
-        if (!hit) return siteDown && !reach() ? { outcome: "ok", done: "dead" } : { outcome: "ok" };
+        try {
+          await store.settlePlaces(tickId, leadId, id, PLACES_CALL_USD, true);
+        } catch (e) {
+          if (isAuthError(e)) throw e;
+          // the call is made and paid for: never ask Places again for it, record the step as failed and move on
+          return { outcome: "error" };
+        }
+        const closed = hit?.status === "CLOSED_PERMANENTLY";
+        // "closed" is trusted only when the place's name, phone or address agrees with something the lead already has
+        const trusted = !!hit && closed && agreesWithLead(hit, name, fields);
+        if (!hit) return siteDown && !reach() && !otherSite() ? { outcome: "ok", done: "dead" } : { outcome: "ok" };
         const rows: FieldIn[] = [{ field: "place_id", value: hit.placeId, source: "places", status: "unverified", excerpt: "Google Places" }];
         // K-5: a Places value is kept only when another source already holds the same value
         const agrees = (field: string, value: string | null) => !!value && fields.some((f) => f.field === field && f.status !== "refuted" && fieldKey(field, f.value) === fieldKey(field, value));
         for (const [field, value] of [["phone", hit.phone], ["address", hit.address], ["website", hit.website]] as const) {
           if (value && agrees(field, value)) rows.push({ field, value, source: "places", status: "confirmed", excerpt: "Google Places" });
         }
-        const closed = hit.status === "CLOSED_PERMANENTLY";
         // a website nobody gave us: read in this same pass, in memory only (the website itself is not stored)
         const found = !closed && !siteField({ ...s, fields }) ? sanitizeUrl(hit.website ?? "") : null;
-        if (found) {
-          const read = await readSite(found, { http: d.http, sleep: d.sleep, now: d.now, gaps: d.gaps });
+        const foundHost = found ? (hostOf(found) ?? found) : null;
+        if (found && foundHost && !readHosts.has(foundHost) && SITE_LIMITS.totalMs - (d.now() - leadStart) > 0) {
+          const read = await readSite(found, siteDeps());
+          readHosts.add(foundHost);
           site = read;
           rows.push(...factsToFields(read, { ...s, fields }).add.filter((a) => a.field !== "website"));
         }
         await store.addFields(tickId, leadId, rows);
         fields = liveFields({ ...s, fields }, rows, []);
         level = liveLevel(level, fields);
-        if ((closed || siteDown) && !reach()) return { outcome: closed ? "closed" : "ok", done: "dead" };
+        // Places "closed" alone never kills a lead: it must be trusted AND nothing else is left to reach or read
+        if (trusted && !reach() && !otherSite()) return { outcome: "closed", done: "dead" };
+        if (siteDown && !reach() && !otherSite() && !closed) return { outcome: "ok", done: "dead" };
         return { outcome: closed ? "closed" : "ok" };
       }
       case "p4": {
@@ -161,7 +200,12 @@ export async function qualifyLead(s: LeadSnapshot, d: CascadeDeps): Promise<Casc
         daySpent += r.costUsd;
         const held = new Set(fields.map((f) => `${f.field}:${fieldKey(f.field, f.value)}`));
         const rows: FieldIn[] = [];
+        // I-1: the page's text can say anything, and the model may obey it. An e-mail or a phone is kept only when the
+        // deterministic reader also found it on that same page (tel:/mailto:/structured data); everything else is dropped.
+        const readerHas = (field: string, value: string, url: string) =>
+          (site?.pages ?? []).some((pg) => pg.url === url && (field === "email" ? pg.facts.emails : pg.facts.phones).some((f) => fieldKey(field, f.value) === fieldKey(field, value)));
         for (const v of r.data.values) {
+          if ((v.field === "email" || v.field === "phone") && !readerHas(v.field, v.value, v.url)) continue;
           const k = `${v.field}:${fieldKey(v.field, v.value)}`;
           if (held.has(k)) continue;
           held.add(k);
@@ -237,7 +281,11 @@ export async function qualifyLead(s: LeadSnapshot, d: CascadeDeps): Promise<Casc
     }
   };
 
-  for (let i = ORDER.indexOf(s.nextStep); i < ORDER.length; i++) {
+  // a resume at p4 or p5 has no pages in memory: go back to p2 (it re-reads the site) but never pay Places again
+  let first = ORDER.indexOf(s.nextStep);
+  const resumedPastP3 = first > ORDER.indexOf("p3");
+  if (first >= ORDER.indexOf("p4") && siteField(s)) first = ORDER.indexOf("p2");
+  for (let i = first; i < ORDER.length; i++) {
     const step = ORDER[i];
     const next = (ORDER[i + 1] ?? "done") as QualifierStep | "done";
     let streak = s.failStep === step ? s.failStreak : 0;
