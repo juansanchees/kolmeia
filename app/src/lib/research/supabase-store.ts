@@ -23,6 +23,7 @@ import {
   type SourceInsert,
   type SourceRow,
 } from "./rows";
+import { inChunks } from "@/lib/leads/queries";
 import type { Dedupable } from "./dedupe";
 import type { CheckWithEvidence, NewRun, ResearchStore } from "./store";
 
@@ -175,25 +176,51 @@ export class SupabaseResearchStore implements ResearchStore {
     return (data ?? []).map((r) => normalizeJob(r as Record<string, unknown>));
   }
 
+  /** Same list as hunter_known_companies: leads with a best candidate, plus import-only leads (oldest non-refuted values). */
   async knownCompanies(runId: string, workspaceId: string): Promise<Dedupable[]> {
     const { data: leads, error } = await this.db
       .from("leads")
       .select("id, best_candidate_id, origin_run_id, last_seen_at")
       .eq("workspace_id", workspaceId)
-      .not("best_candidate_id", "is", null)
       .or(`origin_run_id.is.null,origin_run_id.neq.${runId}`)
       .order("last_seen_at", { ascending: false })
       .order("id", { ascending: true })
       .limit(KNOWN_LEADS_MAX);
     if (error) this.fail("knownCompanies", error);
-    const ids = (leads ?? []).map((l) => l.best_candidate_id as string);
-    if (!ids.length) return [];
-    const { data: cands, error: e2 } = await this.db.from("research_candidates").select("id, name, website, phone").in("id", ids);
-    if (e2) this.fail("knownCompanies", e2);
-    const byId = new Map((cands ?? []).map((c) => [c.id as string, c as Dedupable]));
-    return ids.flatMap((id) => {
-      const c = byId.get(id);
-      return c ? [{ name: c.name, website: c.website ?? null, phone: c.phone ?? null }] : [];
+    const withCand = (leads ?? []).filter((l) => l.best_candidate_id);
+    const importOnly = (leads ?? []).filter((l) => !l.best_candidate_id);
+    const cands = await inChunks<{ id: string; name: string; website: string | null; phone: string | null }>(
+      withCand.map((l) => l.best_candidate_id as string),
+      (chunk) => this.db.from("research_candidates").select("id, name, website, phone").in("id", chunk) as never,
+      "knownCompanies",
+    );
+    const byId = new Map(cands.map((c) => [c.id, c]));
+    const fields = await inChunks<{ lead_id: string; field: string; value: string }>(
+      importOnly.map((l) => l.id as string),
+      (chunk) =>
+        this.db
+          .from("lead_fields")
+          .select("lead_id, field, value")
+          .in("lead_id", chunk)
+          .in("field", ["name", "website", "phone"])
+          .neq("status", "refuted")
+          .order("created_at", { ascending: true })
+          .order("id", { ascending: true }) as never,
+      "knownCompanies",
+    );
+    const oldest = new Map<string, Record<string, string>>(); // lead -> field -> oldest value
+    for (const f of fields) {
+      const m = oldest.get(f.lead_id) ?? {};
+      if (!(f.field in m)) m[f.field] = f.value;
+      oldest.set(f.lead_id, m);
+    }
+    return (leads ?? []).flatMap((l): Dedupable[] => {
+      if (l.best_candidate_id) {
+        const c = byId.get(l.best_candidate_id as string);
+        return c ? [{ name: c.name, website: c.website ?? null, phone: c.phone ?? null }] : [];
+      }
+      const m = oldest.get(l.id as string);
+      return m?.name ? [{ name: m.name, website: m.website ?? null, phone: m.phone ?? null }] : [];
     });
   }
 

@@ -175,10 +175,14 @@ export class SqlResearchStore implements ResearchStore {
 
   async knownCompanies(runId: string, workspaceId: string): Promise<Dedupable[]> {
     return this.q<Dedupable>(
-      `select c.name, c.website, c.phone from public.leads l join public.research_candidates c on c.id = l.best_candidate_id
-        where l.workspace_id = $1 and l.origin_run_id is distinct from $2 order by l.last_seen_at desc, l.id limit 2000`,
+      `select coalesce(c.name, (select f.value from public.lead_fields f where f.lead_id = l.id and f.field = 'name' and f.status <> 'refuted' order by f.created_at, f.id limit 1)) as name,
+              case when c.id is not null then c.website else (select f.value from public.lead_fields f where f.lead_id = l.id and f.field = 'website' and f.status <> 'refuted' order by f.created_at, f.id limit 1) end as website,
+              case when c.id is not null then c.phone else (select f.value from public.lead_fields f where f.lead_id = l.id and f.field = 'phone' and f.status <> 'refuted' order by f.created_at, f.id limit 1) end as phone
+         from public.leads l left join public.research_candidates c on c.id = l.best_candidate_id
+        where l.workspace_id = $1 and l.origin_run_id is distinct from $2
+        order by l.last_seen_at desc, l.id limit 2000`,
       [workspaceId, runId],
-    );
+    ).then((rows) => rows.filter((r) => r.name));
   }
 
   async reserve(r: AiReservation): Promise<string> {
