@@ -166,6 +166,23 @@ describe("0010 hunter path", () => {
     expect(await db.admin("select 1 from public.research_runs where agent_id is not null")).toHaveLength(3);
   });
 
+  test("a run paused for hours gets a fresh time window when due_work resumes it (no run_time on the next reserve)", async () => {
+    const a = await ready();
+    await db.admin("update public.research_runs set status = 'running' where id = $1", [a.run]);
+    await db.admin("update public.research_runs set status = 'paused' where id = $1", [a.run]);
+    // the guard trigger owns started_at, so the test ages it with the trigger off (superuser only)
+    await db.admin("alter table public.research_runs disable trigger guard_research_run");
+    await db.admin("update public.research_runs set started_at = now() - interval '2 hours' where id = $1", [a.run]);
+    await db.admin("alter table public.research_runs enable trigger guard_research_run");
+    expect(await ids(a.tick)).toContain(a.run);
+    const [r] = await db.admin<{ status: string; age: string }>("select status, extract(epoch from now() - started_at) as age from public.research_runs where id = $1", [a.run]);
+    expect(r.status).toBe("running");
+    expect(Number(r.age)).toBeLessThan(60);
+    expect(await claim(a.tick, a.run)).toBe(true);
+    expect((await reserveRaw(a.tick, a.run)).error).toBeUndefined();
+    await finish(a.tick);
+  });
+
   test("due_work resumes the paused run of a running agent, ends a finished once-agent, and pauses an agent with no setup plan or creator", async () => {
     const a = await ready();
     await db.admin("update public.research_runs set status = 'running' where id = $1", [a.run]);

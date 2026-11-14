@@ -46,6 +46,8 @@ export async function runHunterTick(opts: {
   const started = now();
   const counts: HunterCounts = { runs: 0, steps: 0, paused: 0, failed: 0 };
   let firstError: string | null = null;
+  // The budget never blocks the first step of a tick (budget 0 = exactly one step per tick).
+  const spent = () => counts.steps > 0 && now() - started >= budgetMs;
   const finish = () => store.finishTick(tickId, counts, firstError);
 
   try {
@@ -54,10 +56,10 @@ export async function runHunterTick(opts: {
     const ids = (await store.dueWork(tickId)).slice(0, HUNTER_MAX_RUNS);
     let stop = false;
     for (const runId of ids) {
-      if (stop || counts.steps >= HUNTER_MAX_STEPS || now() - started >= budgetMs) break;
+      if (stop || counts.steps >= HUNTER_MAX_STEPS || spent()) break;
       counts.runs++;
       try {
-        while (counts.steps < HUNTER_MAX_STEPS && now() - started < budgetMs) {
+        while (counts.steps < HUNTER_MAX_STEPS && !spent()) {
           const r = await step(research, runId, tickId);
           if (r.kind === "ai_error") {
             if (r.code === "not_configured") {

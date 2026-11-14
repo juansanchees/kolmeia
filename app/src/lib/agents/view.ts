@@ -12,7 +12,7 @@ function metricOf(a: AgentRow, now: Date): string {
         ? t.agents.detail.nextRun.replace("{when}", when(a.next_run_at))
         : t.agents.metric.searching;
     case "paused":
-      return a.paused_reason ? t.agents.paused[a.paused_reason] : t.agents.metric.neverRan;
+      return a.paused_reason ? t.agents.paused[a.paused_reason] : a.next_run_at ? t.agents.metric.pausedByYou : t.agents.metric.neverRan;
     case "done":
       return t.agents.metric.done;
   }

@@ -81,6 +81,14 @@ describe("runHunterTick", () => {
     expect(f2.finish).toHaveBeenCalledTimes(1);
   });
 
+  test("budgetMs 0 still runs exactly one step per tick", async () => {
+    const s = scripted({ a: [stepped(true), stepped(true)], b: [stepped(true)] });
+    const f = fakeStore({ runs: ["a", "b"] });
+    const r = await runHunterTick({ store: f.store, transport: null, step: s.step, budgetMs: 0 });
+    expect(r).toMatchObject({ outcome: "ok", steps: 1, runs: 1 });
+    expect(s.seen).toEqual(["a"]);
+  });
+
   test("at most 3 runs and 12 steps per tick", async () => {
     const many = Array.from({ length: 20 }, () => stepped(true));
     const s = scripted({ a: many, b: many, c: many, d: many });

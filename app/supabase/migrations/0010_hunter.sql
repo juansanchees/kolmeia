@@ -210,9 +210,9 @@ begin
     end if;
   end if;
 
-  -- The clock belongs to the database: started_at on ready -> running, finished_at when the run ends.
+  -- The clock belongs to the database: started_at on ready -> running and on paused -> running (the time window restarts after a pause), finished_at when the run ends.
   ending := new.status is distinct from old.status and new.status in ('done', 'failed', 'cancelled');
-  new.started_at := case when old.status = 'ready' and new.status = 'running' then now() else old.started_at end;
+  new.started_at := case when old.status in ('ready', 'paused') and new.status = 'running' then now() else old.started_at end;
   new.finished_at := case when ending then now() else old.finished_at end;
 
   -- Partial flags and the limits notes are written once, when the run ends.

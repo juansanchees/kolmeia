@@ -11,7 +11,7 @@ export const agents = {
   restart: "Recomeçar",
   types: { hunter: "Caçador", email: "E-mail", call: "Ligação" },
   statuses: { draft: "rascunho", paused: "pausado", running: "rodando", done: "concluído" },
-  metric: { draft: "Falta terminar a criação", neverRan: "Ainda não rodou", searching: "Buscando agora", done: "Concluído" },
+  metric: { draft: "Falta terminar a criação", neverRan: "Ainda não rodou", pausedByYou: "Pausado por você", searching: "Buscando agora", done: "Concluído" },
   paused: {
     daily_cap: "Pausado: teto de IA do workspace atingido",
     user_cap: "Pausado: teto de IA do usuário atingido",
@@ -97,6 +97,7 @@ export const agents = {
     pause: "Pausar",
     turnOnHelp: "Ligado, o Caçador busca sozinho na frequência escolhida, mesmo com a aba fechada. Só traz empresas novas.",
     nextRun: "Próxima busca: {when}",
+    pausedRun: "Este agente está pausado. A busca continua quando você ligar o agente de novo.",
     background: "Este agente roda sozinho em segundo plano. Esta tela só mostra o progresso.",
     history: "Execuções",
   },

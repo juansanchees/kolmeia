@@ -39,8 +39,8 @@ select cron.schedule(
 -- (para tudo de uma vez, inclusive o e-mail, veja scheduler_cron.sql: apagar o hash faz o banco recusar todas as chamadas)
 
 -- ---------------------------------------------------------------- SE A VERCEL RECUSAR maxDuration = 300 (plano) — plano B, nesta ordem:
---   a) no codigo: maxDuration = 60 em src/app/api/hunter/tick/route.ts; HUNTER_TICK_BUDGET_MS = 0 (um passo por chamada)
---      em src/lib/hunter/tick.ts; batchSize: 1 no runHunterTick da rota;
+--   a) no codigo: maxDuration = 60 em src/app/api/hunter/tick/route.ts; HUNTER_MAX_STEPS = 1 (mantenha o orcamento;
+--      um passo por chamada) em src/lib/hunter/tick.ts; batchSize: 1 no runHunterTick da rota;
 --   b) aqui: troque '*/2 * * * *' por '* * * * *' e timeout_milliseconds := 60000
 --      (select cron.unschedule('kolmeia-hunter'); e rode o passo 2 de novo);
 --   c) se UM passo de busca ainda nao couber em 60 s: PARE e pergunte ao Juan (upgrade de plano).

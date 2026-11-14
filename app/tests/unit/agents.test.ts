@@ -99,6 +99,7 @@ describe("F2 agents", () => {
     expect(agentRowView(row({ status: "paused", paused_reason: "daily_cap" }), now).metric).toBe(t.agents.paused.daily_cap);
     expect(agentRowView(row({ status: "paused", paused_reason: "error" }), now).metric).toBe(t.agents.paused.error);
     expect(agentRowView(row({ status: "paused" }), now).metric).toBe(t.agents.metric.neverRan);
+    expect(agentRowView(row({ status: "paused", next_run_at: "2026-11-10T12:00:00Z" }), now).metric).toBe(t.agents.metric.pausedByYou);
     expect(agentRowView(row({ status: "done" }), now).metric).toBe(t.agents.metric.done);
   });
 

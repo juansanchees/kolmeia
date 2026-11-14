@@ -44,7 +44,12 @@ export default async function ResearchRunPage({
     <div className="flex flex-col gap-5">
       {/* Agent runs are driven by the cron only: this page never claims a step for them, it just re-reads every 20 s. */}
       {ai && needsAdvance(run) && !run.agent_id && <RunDriver runId={run.id} status={run.status} />}
-      {run.agent_id && needsAdvance(run) && (
+      {run.agent_id && run.status === "paused" && (
+        <p role="status" className="bg-warn-soft px-3 py-2.5 text-sm text-warn">
+          {t.agents.detail.pausedRun}
+        </p>
+      )}
+      {run.agent_id && needsAdvance(run) && run.status !== "paused" && (
         <>
           <AutoRefresh seconds={20} />
           <p role="status" className="bg-blue-wash px-3 py-2.5 text-sm text-blue-ink">
