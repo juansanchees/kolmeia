@@ -37,6 +37,7 @@ export function mapPlace(item: unknown, row = 1): ImportRowIn | null {
   if (!item || typeof item !== "object" || Array.isArray(item)) return null;
   const p = item as Record<string, unknown>;
   if (p.permanentlyClosed === true) return null;
+  // A missing or empty countryCode is kept on purpose: the actor usually sends one, and dropping the place for a blank field would lose real US results. Only a known non-US code drops it.
   const cc = typeof p.countryCode === "string" ? p.countryCode.trim() : "";
   if (cc && cc.toUpperCase() !== "US") return null;
   const name = str(p.title, 200);

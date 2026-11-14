@@ -24,6 +24,15 @@ const DOMAIN_KEYS = ["primary_domain", "domain"] as const;
 const WEBSITE_KEYS = ["website_url"] as const;
 /** ? Body error code returned when the plan does not include the endpoint ("not included in your Free plan"). */
 const PLAN_ERROR_CODE = "API_INACCESSIBLE";
+/** ? A 403 with no body error_code is also read as a plan block. Unverified: a real 403 could mean a missing permission instead. */
+function isPlanError(status: number, code: unknown): boolean {
+  return code === PLAN_ERROR_CODE || (status === 403 && code === undefined);
+}
+/** ? Website: website_url first, else https:// + the domain (normalized here). Unverified: the real item may not carry website_url. */
+function orgWebsite(item: Record<string, unknown>): string | null {
+  const domain = str(item, DOMAIN_KEYS).toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+  return sanitizeUrl(str(item, WEBSITE_KEYS)) ?? (domain ? sanitizeUrl(`https://${domain}`) : null);
+}
 // ----------------------------------------------------------------
 
 export const APOLLO_PLAN_MESSAGE = "Seu plano do Apollo não libera esta busca pela API";
@@ -77,8 +86,7 @@ export function mapOrg(item: unknown, row = 1): ImportRowIn | null {
   if (!isObj(item)) return null;
   const name = str(item, NAME_KEYS);
   if (!name) return null;
-  const domain = str(item, DOMAIN_KEYS).toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
-  const site = sanitizeUrl(str(item, WEBSITE_KEYS)) ?? (domain ? sanitizeUrl(`https://${domain}`) : null);
+  const site = orgWebsite(item);
   const host = site ? hostOf(site) : null;
   if (!host) return null;
   if (isForeignDomain(host)) return null;
@@ -98,7 +106,7 @@ export function apolloClient(key: string, http: HttpJson) {
       throw new ApolloError(0); // the underlying message could echo the request: fixed text only
     }
     const code = isObj(res.json) ? res.json.error_code : undefined;
-    if (code === PLAN_ERROR_CODE || (res.status === 403 && code === undefined)) throw new ApolloPlanError();
+    if (isPlanError(res.status, code)) throw new ApolloPlanError();
     if (res.status === 401) throw new ApolloKeyError();
     if (res.status < 200 || res.status >= 300) throw new ApolloError(res.status);
     return res.json;

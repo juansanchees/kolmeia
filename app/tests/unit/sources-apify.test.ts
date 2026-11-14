@@ -158,4 +158,9 @@ describe("mapPlace", () => {
   it("omits an unusable phone instead of importing it", () => {
     expect(mapPlace({ ...full, phone: "n/a", phoneUnformatted: "" })).not.toHaveProperty("phone");
   });
+
+  it("keeps a place with no countryCode (the actor usually sends one)", () => {
+    expect(mapPlace({ ...full, countryCode: undefined })?.name).toBe(full.title);
+    expect(mapPlace({ ...full, countryCode: "" })?.name).toBe(full.title);
+  });
 });
