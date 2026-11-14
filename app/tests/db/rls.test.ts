@@ -99,6 +99,8 @@ describe("proof that RLS is really enforced in PGlite", () => {
         "scheduler_authorized", "scheduler_begin_run", "scheduler_campaign", "scheduler_claim_next_email", "scheduler_due_work",
         "scheduler_finish_email_send", "scheduler_finish_run", "scheduler_holds_lease", "scheduler_message", "scheduler_prospect", "scheduler_renew_lease",
         "scheduler_sender",
+        // 0009 (leads: the database links candidates to leads; clients have no grant on these)
+        "backfill_leads", "link_candidate_lead", "link_lead", "unlink_candidate_lead",
       ].sort(),
     );
     for (const r of rows) expect(r.proconfig).toContain("search_path=\"\"");
