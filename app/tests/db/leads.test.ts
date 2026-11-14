@@ -185,6 +185,9 @@ describe("0009 leads", () => {
     const leads = await leadsOf(wsA);
     expect(leads).toHaveLength(1);
     expect(leads[0]).toMatchObject({ origin_kind: "one_off", origin_run_id: r1, best_candidate_id: newer });
+    const [d] = await db.admin<{ f: string; l: string }>("select first_seen_at::text as f, last_seen_at::text as l from public.leads where workspace_id = $1", [wsA]);
+    expect(new Date(d.f).toISOString()).toBe("2026-01-01T00:00:00.000Z");
+    expect(new Date(d.l).toISOString()).toBe("2026-02-01T00:00:00.000Z");
 
     const [second] = await db.admin<{ n: number }>("select public.backfill_leads() as n");
     expect(second.n).toBe(0);

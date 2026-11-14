@@ -76,7 +76,7 @@ create index if not exists research_candidates_ws_phone_idx on public.research_c
 create index if not exists research_candidates_lead_idx on public.research_candidates (lead_id);
 
 -- ---------------------------------------------------------------- L2 link (or create) the lead of a verified candidate
-create or replace function public.link_lead(p_ws uuid, p_run uuid, p_candidate uuid, p_name_key text, p_website text, p_phone text)
+create or replace function public.link_lead(p_ws uuid, p_run uuid, p_candidate uuid, p_name_key text, p_website text, p_phone text, p_seen_at timestamptz)
 returns uuid
 language plpgsql
 security definer
@@ -112,11 +112,11 @@ begin
 
   if v_lead is null then
     select r.agent_id into v_agent from public.research_runs r where r.id = p_run;
-    insert into public.leads (workspace_id, best_candidate_id, origin_kind, origin_agent_id, origin_run_id)
-    values (p_ws, p_candidate, case when v_agent is null then 'one_off' else 'agent' end, v_agent, p_run)
+    insert into public.leads (workspace_id, best_candidate_id, origin_kind, origin_agent_id, origin_run_id, first_seen_at, last_seen_at)
+    values (p_ws, p_candidate, case when v_agent is null then 'one_off' else 'agent' end, v_agent, p_run, p_seen_at, p_seen_at)
     returning id into v_lead;
   else
-    update public.leads set best_candidate_id = p_candidate, last_seen_at = now(), updated_at = now() where id = v_lead;
+    update public.leads set best_candidate_id = p_candidate, last_seen_at = greatest(last_seen_at, p_seen_at), updated_at = now() where id = v_lead;
   end if;
   return v_lead;
 end;
@@ -137,11 +137,11 @@ begin
       return new; -- already counted
     end if;
     if new.lead_id is not null then -- verified again after being cleared: same lead, newest verification
-      update public.leads set best_candidate_id = new.id, last_seen_at = now(), updated_at = now() where id = new.lead_id;
+      update public.leads set best_candidate_id = new.id, last_seen_at = greatest(last_seen_at, new.verified_at), updated_at = now() where id = new.lead_id;
       return new;
     end if;
   end if;
-  new.lead_id := public.link_lead(new.workspace_id, new.run_id, new.id, new.name_key, new.website, new.phone);
+  new.lead_id := public.link_lead(new.workspace_id, new.run_id, new.id, new.name_key, new.website, new.phone, new.verified_at);
   return new;
 end;
 $$;
@@ -161,6 +161,8 @@ as $$
 declare
   v_best uuid;
 begin
+  -- same per-workspace lock as link_lead: a delete cannot race a link and drop a lead that just gained a candidate
+  perform pg_advisory_xact_lock(hashtext('lead:' || old.workspace_id::text));
   select c.id into v_best
     from public.research_candidates c
    where c.lead_id = old.lead_id and c.verified_at is not null
@@ -193,13 +195,13 @@ declare
   n integer := 0;
 begin
   for r in
-    select c.id, c.workspace_id, c.run_id, c.name_key, c.website, c.phone
+    select c.id, c.workspace_id, c.run_id, c.name_key, c.website, c.phone, c.verified_at
       from public.research_candidates c
      where c.verified_at is not null and c.lead_id is null
      order by c.verified_at, c.created_at, c.id
   loop
     update public.research_candidates
-       set lead_id = public.link_lead(r.workspace_id, r.run_id, r.id, r.name_key, r.website, r.phone)
+       set lead_id = public.link_lead(r.workspace_id, r.run_id, r.id, r.name_key, r.website, r.phone, r.verified_at)
      where id = r.id;
     n := n + 1;
   end loop;
@@ -208,7 +210,7 @@ end;
 $$;
 
 -- ---------------------------------------------------------------- privileges
-revoke all on function public.link_lead(uuid, uuid, uuid, text, text, text) from public, anon, authenticated;
+revoke all on function public.link_lead(uuid, uuid, uuid, text, text, text, timestamptz) from public, anon, authenticated;
 revoke all on function public.link_candidate_lead() from public, anon, authenticated;
 revoke all on function public.unlink_candidate_lead() from public, anon, authenticated;
 revoke all on function public.backfill_leads() from public, anon, authenticated;

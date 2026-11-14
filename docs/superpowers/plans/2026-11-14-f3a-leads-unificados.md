@@ -156,6 +156,7 @@
 ## Manual checklist (after the plan, with Juan)
 - [ ] C9 pre-check (Claude, read-only, in the Supabase SQL editor or MCP with Juan's OK): `select to_regclass('public.scheduler_state') s5, to_regclass('public.email_send_log') s3, to_regprocedure('public.scheduler_authorized()') f5, to_regclass('public.agents') s8;` plus, for 0006/0007, the objects their headers name. Record which of 0005-0008 exist. 0009 needs 0001-0008 applied in order.
 - [ ] With Juan's OK, apply any missing 0005-0008, then `0009_leads.sql`. Then `select count(*) from public.leads;` > 0 if there were verified searches (C1 back-fill). Then deploy the code.
+- [ ] Apply 0009 in a quiet window: it rewrites research_candidates (generated columns) and back-fills row by row.
 - [ ] Juan, at 1280 px and 390 px: LEADS shows his old companies once each, tagged "Pesquisa avulsa"; filters and CSV work; a lead opens with proof; no horizontal scroll at 390 px.
 
 ## Fora da F3a
