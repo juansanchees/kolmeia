@@ -112,9 +112,17 @@ describe("robots", () => {
     expect(robotsAllows(parseRobots("User-agent: KolmeiaBot/1.0\nDisallow: /\n", "KolmeiaBot"), "/x")).toBe(false);
     expect(robotsAllows(parseRobots("User-agent: *\nDisallow: /a\nUser-agent: bot\nDisallow: /\n", "KolmeiaBot"), "/b")).toBe(true);
   });
+  test("a Disallow rule over 500 chars shuts its whole group; a long Allow is ignored", () => {
+    const long = "x".repeat(600);
+    expect(robotsAllows(parseRobots(`User-agent: *\nDisallow: /a\nDisallow: /${long}\n`, "KolmeiaBot"), "/anything")).toBe(false);
+    expect(robotsAllows(parseRobots(`User-agent: KolmeiaBot\nDisallow: /${long}\nUser-agent: other\nDisallow: /z\n`, "KolmeiaBot"), "/ok")).toBe(false);
+    expect(robotsAllows(parseRobots(`User-agent: *\nDisallow: /a\nAllow: /${long}\n`, "KolmeiaBot"), "/b")).toBe(true);
+    // the other group keeps its own rules
+    expect(robotsAllows(parseRobots(`User-agent: bot\nDisallow: /${long}\nUser-agent: *\nDisallow: /a\n`, "KolmeiaBot"), "/b")).toBe(true);
+  });
   test("hostile wildcard rules finish fast (no exponential backtracking)", () => {
     const evil = `${"*a".repeat(240)}*b`;
-    const r = parseRobots(`User-agent: *\n${Array.from({ length: 600 }, () => `Disallow: ${evil}`).join("\n")}\nDisallow: ${"x".repeat(600)}\n`, "KolmeiaBot");
+    const r = parseRobots(`User-agent: *\n${Array.from({ length: 600 }, () => `Disallow: ${evil}`).join("\n")}\n`, "KolmeiaBot");
     expect(r.disallow.length).toBeLessThanOrEqual(500);
     const t = performance.now();
     expect(robotsAllows(r, `/${"a".repeat(2000)}`)).toBe(true);
@@ -136,6 +144,40 @@ describe("robots", () => {
     const star = parseRobots(txt.split("\n\n")[0], "KolmeiaBot");
     expect(robotsAllows(star, "/anything")).toBe(false);
     expect(robotsAllows(parseRobots("User-agent: *\nDisallow:\n", "KolmeiaBot"), "/x")).toBe(true);
+  });
+});
+
+describe("extractFromHtml: visible-text phones, caps and flags", () => {
+  const pg = "https://acme-heat.test/";
+  test("a footer phone in plain text is found like a tel: phone; zip and year digits are not", () => {
+    const f = extractFromHtml(`<footer><p>Acme Heating, 12 Main St, Worcester MA 01608 since 1998. Call (508) 555-0143 today</p><p>Fax 508.555.0188</p></footer><a href="tel:+1-508-555-0143">x</a>`, pg);
+    expect(f.phones.map((p) => p.value)).toEqual(["+1-508-555-0143", "508.555.0188"]);
+    expect(f.phones[1].excerpt).toContain("Fax");
+    const g = extractFromHtml(`<p>Zip 01608 5085550143 and 20245085550143 and 15085550101</p>`, pg);
+    expect(g.phones.map((p) => p.value.replace(/\D/g, ""))).toEqual(["5085550143", "15085550101"]);
+  });
+  test("at most 10 text phones per page", () => {
+    const many = Array.from({ length: 30 }, (_, i) => `508-555-${String(1000 + i)}`).join(" , ");
+    expect(extractFromHtml(`<p>${many}</p>`, pg).phones).toHaveLength(10);
+  });
+  test("a 1 MB flood of digits and separators is scanned in linear time", () => {
+    for (const flood of ["1".repeat(1_000_000), "5085550143".repeat(100_000), "1 ".repeat(500_000), "(508) ".repeat(160_000), "1-".repeat(500_000)]) {
+      const t = performance.now();
+      const f = extractFromHtml(`<p>${flood}</p>`, pg);
+      expect(performance.now() - t).toBeLessThan(2000);
+      expect(f.phones.length).toBeLessThanOrEqual(10);
+    }
+  });
+  test("deep nesting sets depthCapped; the content already read is kept", () => {
+    const f = extractFromHtml(`<p>Call 508-555-0143</p>${"<div>".repeat(60_000)}tail`, pg);
+    expect(f.depthCapped).toBe(true);
+    expect(f.phones).toHaveLength(1);
+    expect(extractFromHtml("<div><p>ok</p></div>", pg).depthCapped).toBeUndefined();
+  });
+  test("the 200 e-mail limit counts accepted candidates only", () => {
+    const junk = "@@ x@y ".repeat(300);
+    const good = Array.from({ length: 5 }, (_, i) => `u${i}@acme-heat.test`).join(" ");
+    expect(extractFromHtml(`<p>${junk} ${good}</p>`, pg).emails).toHaveLength(5);
   });
 });
 
@@ -179,13 +221,13 @@ describe("extractFromHtml", () => {
     expect(f.address?.value.length).toBe(300);
     expect(f.address!.excerpt.length).toBeLessThanOrEqual(300);
   });
-  test("ignores e-mails in scripts, image names and placeholder domains, and takes no phone from loose digits", () => {
+  test("ignores e-mails in scripts, image names and placeholder domains, and takes a phone from the text only with a NANP shape", () => {
     const doc = `<script>var m = "dev@secret-tool.test";</script><style>.a{}</style>
       <img src="logo@2x.png"> logo@2x.png you@example.com me@sample.example.org
       Write to real@acme-heat.test or call 508 555 0100 today. Zip 01608 1234567890`;
     const f = extractFromHtml(doc, page);
     expect(f.emails.map((e) => e.value)).toEqual(["real@acme-heat.test"]);
-    expect(f.phones).toEqual([]);
+    expect(f.phones.map((p) => p.value)).toEqual(["508 555 0100"]); // written in the text: found; "1234567890" and the zip are not
     expect(f.text).not.toContain("secret-tool");
     expect(f.text.length).toBeLessThanOrEqual(20_000);
     expect(extractFromHtml(`<p>${"a ".repeat(30_000)}&amp; &#65;</p>`, page).text.length).toBe(20_000);
@@ -257,6 +299,12 @@ describe("readSite", () => {
     expect((await readSite(HOME, loop.deps)).outcome).toBe("error");
     const three = fakeHttp({ [HOME]: redir("https://a.test/"), "https://a.test/": redir("https://b.test/"), "https://b.test/": redir("https://c.test/"), "https://c.test/": html("exactly 3 hops") });
     expect((await readSite(HOME, three.deps)).outcome).toBe("ok");
+  });
+
+  test("an https to http redirect is refused (error) before the plain-http page is asked for", async () => {
+    const f = fakeHttp({ [HOME]: { status: 301, headers: { location: "http://acme-heat.test/" }, body: "", truncated: false }, "http://acme-heat.test/": html("plain") });
+    expect((await readSite(HOME, f.deps)).outcome).toBe("error");
+    expect(f.calls.some((c) => c.url.startsWith("http://"))).toBe(false);
   });
 
   test("a subpage that redirects off the home host is refused before it is fetched", async () => {

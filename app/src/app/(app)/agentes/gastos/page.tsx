@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Notice } from "@/components/email/bits";
 import { QualifierCapForm } from "@/components/qualifier/QualifierCapForm";
+import { TakeOverButton } from "@/components/qualifier/TakeOverButton";
 import { SourceSpend, SpendTable, money } from "@/components/spend/SpendTable";
 import { loadSourceRuns, loadSpend, loadWorkspaceToday } from "@/lib/spend/queries";
 import { sourceRows, spendRows, spendTotal, type SpendBy, type SpendPeriod } from "@/lib/spend/view";
@@ -54,7 +55,14 @@ export default async function GastosPage({ searchParams }: { searchParams: Promi
         </Link>
         <h2 className="text-3xl">{S.title}</h2>
       </div>
-      {q.status === "paused" && q.paused_reason && <Notice tone="warn">{t.qualifier.paused[q.paused_reason]}</Notice>}
+      {q.status === "paused" && q.paused_reason && (
+        <Notice tone="warn">
+          <span className="flex flex-wrap items-center gap-3">
+            <span>{t.qualifier.paused[q.paused_reason]}</span>
+            {workspace.role === "owner" && q.paused_reason === "no_access" && <TakeOverButton />}
+          </span>
+        </Notice>
+      )}
       <div className="flex flex-col gap-1 text-sm font-semibold">
         <p>{fill(S.qualifierToday, { spent: money(q.spent_today), cap: money(q.daily_cap_usd) })}</p>
         <p>{fill(S.workspaceToday, { spent: money(ws.spent), cap: money(ws.cap) })}</p>

@@ -141,5 +141,5 @@ function createRawHttp(cfg: RawHttpOptions = {}): RawHttp {
 }
 
 export const nodeRawHttp: RawHttp = createRawHttp();
-/** Test only: the same client with the address and port guards swapped, so a loopback server can be read. */
+/** Test only (guards.test.ts forbids importing it from src/): the same client with the address and port guards swapped, so a loopback server can be read. */
 export const createRawHttpForTest = createRawHttp;

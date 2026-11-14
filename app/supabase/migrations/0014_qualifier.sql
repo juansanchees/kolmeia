@@ -1319,6 +1319,28 @@ begin
 end;
 $$;
 
+-- ---------------------------------------------------------------- owner: take over the charge
+-- The Qualificador's AI is charged to qualifiers.charge_user_id. When that account lost access (paused: no_access), the
+-- owner makes it their own and the Qualificador resumes. Any other pause reason is left as it is.
+create or replace function public.take_over_qualifier_charge(p_ws uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if auth.uid() is null or p_ws is null or not public.is_workspace_owner(p_ws) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  update public.qualifiers z
+     set charge_user_id = auth.uid(),
+         status = case when z.paused_reason = 'no_access' then 'on' else z.status end,
+         paused_reason = case when z.paused_reason = 'no_access' then null else z.paused_reason end,
+         paused_until = case when z.paused_reason = 'no_access' then null else z.paused_until end
+   where z.workspace_id = p_ws;
+end;
+$$;
+
 -- ---------------------------------------------------------------- grants (part 2)
 revoke all on function public.qualifier_assert(uuid, uuid, boolean) from public, anon, authenticated;
 revoke all on function public.qualifier_begin_tick() from public, anon, authenticated;
@@ -1333,6 +1355,7 @@ revoke all on function public.qualifier_pause(uuid, uuid, text) from public, ano
 revoke all on function public.qualifier_reserve_ai_call(uuid, uuid, text, text, text, numeric, numeric, numeric) from public, anon, authenticated;
 revoke all on function public.qualifier_settle_ai_call(uuid, uuid, uuid, text, integer, integer, integer, integer, integer, integer, numeric, text, integer) from public, anon, authenticated;
 revoke all on function public.request_qualification(uuid, uuid[]) from public, anon;
+revoke all on function public.take_over_qualifier_charge(uuid) from public, anon;
 grant execute on function public.qualifier_begin_tick() to anon;
 grant execute on function public.qualifier_finish_tick(uuid, jsonb, text) to anon;
 grant execute on function public.qualifier_claim_next(uuid) to anon;
@@ -1345,3 +1368,4 @@ grant execute on function public.qualifier_pause(uuid, uuid, text) to anon;
 grant execute on function public.qualifier_reserve_ai_call(uuid, uuid, text, text, text, numeric, numeric, numeric) to anon;
 grant execute on function public.qualifier_settle_ai_call(uuid, uuid, uuid, text, integer, integer, integer, integer, integer, integer, numeric, text, integer) to anon;
 grant execute on function public.request_qualification(uuid, uuid[]) to authenticated;
+grant execute on function public.take_over_qualifier_charge(uuid) to authenticated;

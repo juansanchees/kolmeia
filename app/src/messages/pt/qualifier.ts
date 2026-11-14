@@ -11,6 +11,8 @@ export const qualifier = {
     global_cap: "Pausado: o teto geral de IA acabou. Ligue de novo quando liberar.",
     no_access: "Pausado: a conta que paga a IA não tem acesso. Fale com o dono do workspace.",
   },
+  takeOver: "Assumir a cobrança",
+  takeOverHelp: "A IA passa a ser cobrada na sua conta e o Qualificador volta a rodar.",
   pause: "Pausar",
   turnOn: "Ligar",
   queued: "{queued} na fila",
@@ -48,5 +50,5 @@ export const qualifier = {
   },
   outcomes: { site_blocked: "site bloqueou", lead_cap: "parou no teto" },
   started: "Qualificador já começou ▸",
-  errors: { cap: "Teto fora do limite.", failed: "Não deu certo. Tente de novo." },
+  errors: { cap: "Teto fora do limite.", failed: "Não deu certo. Tente de novo.", notOwner: "Só o dono do workspace pode assumir a cobrança." },
 } as const;

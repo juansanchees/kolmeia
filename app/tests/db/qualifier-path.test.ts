@@ -417,6 +417,29 @@ describe("0014 qualifier path", () => {
     expect(code((await db.try(as(a.owner), "select public.request_qualification($1,$2::uuid[])", [a.ws, many])).error)).toBe("22023");
   });
 
+  test("take_over_qualifier_charge: owner only; a no_access pause resumes, other pauses stay", async () => {
+    const a = await seedQualifierLead(db);
+    const sdr = (await import("node:crypto")).randomUUID();
+    const closer = (await import("node:crypto")).randomUUID();
+    await db.addUser(sdr);
+    await db.addUser(closer);
+    await db.admin("insert into public.workspace_members (workspace_id, user_id, role) values ($1,$2,'sdr'), ($1,$3,'closer')", [a.ws, sdr, closer]);
+    const state = async () => (await db.admin<{ charge_user_id: string | null; status: string; paused_reason: string | null }>("select charge_user_id, status, paused_reason from public.qualifiers where workspace_id = $1", [a.ws]))[0];
+    await db.admin("update public.qualifiers set charge_user_id = $2, status = 'paused', paused_reason = 'no_access' where workspace_id = $1", [a.ws, sdr]);
+    for (const who of [sdr, closer]) expect(code((await db.try(as(who), "select public.take_over_qualifier_charge($1)", [a.ws])).error)).toBe("42501");
+    expect(code((await db.try(anon, "select public.take_over_qualifier_charge($1)", [a.ws])).error)).toBe("42501");
+    expect(await state()).toMatchObject({ charge_user_id: sdr, status: "paused", paused_reason: "no_access" });
+    await db.query(as(a.owner), "select public.take_over_qualifier_charge($1)", [a.ws]);
+    expect(await state()).toEqual({ charge_user_id: a.owner, status: "on", paused_reason: null });
+    // another pause reason stays paused, the charge still moves
+    await db.admin("update public.qualifiers set charge_user_id = $2, status = 'paused', paused_reason = 'daily_cap' where workspace_id = $1", [a.ws, sdr]);
+    await db.query(as(a.owner), "select public.take_over_qualifier_charge($1)", [a.ws]);
+    expect(await state()).toEqual({ charge_user_id: a.owner, status: "paused", paused_reason: "daily_cap" });
+    // another workspace's owner is refused
+    const foreign = await seedQualifierLead(db);
+    expect(code((await db.try(as(foreign.owner), "select public.take_over_qualifier_charge($1)", [a.ws])).error)).toBe("42501");
+  });
+
   test("I-B a request that arrives while the lead is claimed survives; m-1 a dead lead is not revived; m-2 refuted candidates are skipped; m-3 bad seen_at is 22023", async () => {
     const s = await seedQualifierLead(db, { fields: [{ field: "name", value: "Acme Builders" }] });
     const tick = await beginQualifierTick(db);

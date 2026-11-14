@@ -1,4 +1,5 @@
 import { Parser } from "htmlparser2";
+import { NANP } from "@/lib/nanp";
 import { hostOf } from "@/lib/safe-url";
 
 // Facts read from one HTML page. Pure; regex based on purpose (no DOM in the node runtime). Only what is written on
@@ -15,6 +16,8 @@ export type SiteFacts = {
   zip: Found | null;
   links: string[];
   text: string;
+  /** The parser stopped early (tag nesting passed the cap): what follows the cut was not read. */
+  depthCapped?: boolean;
 };
 
 const MAX_TEXT = 20_000;
@@ -28,6 +31,8 @@ const CHUNK = 16_384;
 const MAX_JSONLD = 20;
 const MAX_JSONLD_CHARS = 200_000;
 const MAX_EMAIL_CANDIDATES = 200;
+const MAX_TEXT_PHONES = 10;
+const MAX_EMAIL_SCAN = 5000;
 const CONTACT_LINK = /contact|about|contato|sobre|team|company|empresa/i;
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|avif|ico|bmp|tiff?)$/i;
 const SKIP_TAGS = new Set(["script", "style", "noscript", "template", "svg"]);
@@ -52,8 +57,9 @@ function emailOk(email: string): boolean {
 function* emailsIn(text: string): Generator<{ email: string; at: number }> {
   const left = /[A-Za-z0-9._%+-]/;
   const right = /[A-Za-z0-9.-]/;
-  let seen = 0;
-  for (let i = text.indexOf("@"); i >= 0 && seen < MAX_EMAIL_CANDIDATES; i = text.indexOf("@", i + 1), seen++) {
+  let accepted = 0;
+  let scanned = 0; // a flood of rejected "@" is bounded too: the scan is linear either way
+  for (let i = text.indexOf("@"); i >= 0 && accepted < MAX_EMAIL_CANDIDATES && scanned < MAX_EMAIL_SCAN; i = text.indexOf("@", i + 1), scanned++) {
     let l = i;
     while (l > 0 && i - l < 64 && left.test(text[l - 1])) l--;
     let r = i + 1;
@@ -61,6 +67,7 @@ function* emailsIn(text: string): Generator<{ email: string; at: number }> {
     const local = text.slice(l, i);
     const domain = text.slice(i + 1, r).replace(/^[.-]+|[.-]+$/g, "");
     if (!local || !/^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/.test(domain)) continue;
+    accepted++;
     yield { email: `${local}@${domain}`, at: l };
   }
 }
@@ -92,7 +99,7 @@ export function extractFromHtml(html: string, pageUrl: string): SiteFacts {
   const seenEmails = new Set<string>();
   const addPhone = (value: string, excerpt: string) => {
     const v = cut(value.trim(), MAX_VALUE);
-    const digits = v.replace(/\D/g, "");
+    const digits = v.replace(/\D/g, "").replace(/^1(?=\d{10}$)/, ""); // +1 and no +1 are one number
     if (digits.length < 7 || digits.length > 15 || seenPhones.has(digits)) return;
     seenPhones.add(digits);
     facts.phones.push({ value: v, url: pageUrl, excerpt: clip(excerpt) });
@@ -162,10 +169,17 @@ export function extractFromHtml(html: string, pageUrl: string): SiteFacts {
     { decodeEntities: true },
   );
   const input = html.slice(0, MAX_INPUT);
-  for (let i = 0; i < input.length && depth <= MAX_DEPTH; i += CHUNK) parser.write(input.slice(i, i + CHUNK));
+  for (let i = 0; i < input.length; i += CHUNK) {
+    if (depth > MAX_DEPTH) {
+      facts.depthCapped = true;
+      break;
+    }
+    parser.write(input.slice(i, i + CHUNK));
+  }
   parser.end();
 
-  facts.text = squash(pieces.join("")).slice(0, MAX_TEXT);
+  const fullText = squash(pieces.join(""));
+  facts.text = fullText.slice(0, MAX_TEXT);
 
   // JSON-LD
   for (const block of ldBlocks) {
@@ -219,6 +233,15 @@ export function extractFromHtml(html: string, pageUrl: string): SiteFacts {
 
   // e-mails written in the visible text
   for (const { email, at } of emailsIn(facts.text)) addEmail(email, facts.text.slice(Math.max(0, at - 60), at + email.length + 60));
+
+  // phones written in the visible text (same status as tel: phones: found by this reader, not by a model); at most 10
+  let textPhones = 0;
+  for (const m of fullText.matchAll(NANP)) {
+    if (textPhones >= MAX_TEXT_PHONES) break;
+    const before = facts.phones.length;
+    addPhone(m[0], fullText.slice(Math.max(0, m.index - 60), m.index + m[0].length + 60));
+    if (facts.phones.length > before) textPhones++;
+  }
 
   // same-host contact / about links
   const pageHost = hostOf(pageUrl);

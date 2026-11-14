@@ -38,7 +38,7 @@ export default async function AgentsPage() {
   return (
     <div className="flex flex-col gap-8">
       {qualifierFailed && <Notice tone="warn">{t.qualifier.statusFailed}</Notice>}
-      {qualifier && <QualifierCard status={qualifier} placesOn={hasPlaces()} />}
+      {qualifier && <QualifierCard status={qualifier} placesOn={hasPlaces()} isOwner={workspace.role === "owner"} />}
       <section aria-labelledby="mine" className="flex flex-col gap-3">
         <h2 id="mine" className="text-2xl">
           {t.agents.mine}

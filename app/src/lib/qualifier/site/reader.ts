@@ -105,6 +105,7 @@ export async function readSite(website: string, deps: SiteDeps): Promise<SiteRea
           next = null;
         }
         if (!next) return { ok: false, outcome: "error" };
+        if (url.protocol === "https:" && next.protocol === "http:") return { ok: false, outcome: "error" }; // never downgrade
         if (sameHost !== null && hostOf(next.toString()) !== sameHost) return { ok: false, outcome: "error" }; // refused before any request
         url = next;
         continue;

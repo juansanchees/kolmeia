@@ -6,6 +6,7 @@ import { setQualifierAction } from "@/app/(app)/agentes/qualifier-actions";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { btn } from "@/components/email/bits";
 import { QualifierCapForm } from "@/components/qualifier/QualifierCapForm";
+import { TakeOverButton } from "@/components/qualifier/TakeOverButton";
 import { cardLines, type QualifierStatus } from "@/lib/qualifier/view";
 import { fill, t } from "@/messages/pt";
 
@@ -41,7 +42,7 @@ function Power({ running }: { running: boolean }) {
 }
 
 /** The Qualificador on top of AGENTES. Caps can be edited here or on the Gastos screen. */
-export function QualifierCard({ status, placesOn }: { status: QualifierStatus; placesOn: boolean }) {
+export function QualifierCard({ status, placesOn, isOwner = false }: { status: QualifierStatus; placesOn: boolean; isOwner?: boolean }) {
   const lines = cardLines(status, placesOn);
   const running = status.status === "on";
   return (
@@ -60,9 +61,10 @@ export function QualifierCard({ status, placesOn }: { status: QualifierStatus; p
         </div>
       </div>
       {!running && status.paused_reason && (
-        <p role="status" className="bg-warn-soft px-3 py-2.5 text-sm text-warn">
-          {Q.paused[status.paused_reason]}
-        </p>
+        <div role="status" className="flex flex-wrap items-center gap-3 bg-warn-soft px-3 py-2.5 text-sm text-warn">
+          <p className="m-0">{Q.paused[status.paused_reason]}</p>
+          {isOwner && status.paused_reason === "no_access" && <TakeOverButton />}
+        </div>
       )}
       {lines.warning && (
         <p role="status" className="text-sm text-warn">

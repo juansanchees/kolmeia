@@ -10,6 +10,7 @@ import type { ProfileInput } from "./prompts/shared";
 import { TASK_DEFS, type VerifyResult } from "./tasks";
 import * as lightP from "./prompts/qualify-light";
 import type { LightInput } from "./prompts/qualify-light";
+import { NANP } from "@/lib/nanp";
 
 // The Qualificador's own AI tasks. P4 (qualify_light): Haiku, no web tools, reads page text the app already fetched.
 // Page text is untrusted data. A value is kept only when it is literally written in that text (R18); the model's word
@@ -54,8 +55,6 @@ function around(text: string, start: number, end: number): string {
 /** A value found in a page: the page, the span as the page writes it, where it starts, and a short excerpt. */
 export type Located = { url: string; matched: string; index: number; excerpt: string };
 
-// North American numbers only, with digit boundaries: a zip code or a year before the number is never part of it.
-const NANP = /(?<!\d)(?:\+?1[\s.-]?)?\(?[2-9]\d{2}\)?[\s.-]?[2-9]\d{2}[\s.-]?\d{4}(?!\d)/g;
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Every place `value` is written in one page's text. Phones by digits, e-mails exact, text on word boundaries (Unicode-aware, case and space folded). */

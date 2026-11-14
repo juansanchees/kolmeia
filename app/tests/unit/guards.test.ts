@@ -12,6 +12,15 @@ function walk(dir: string): string[] {
   });
 }
 
+describe("test-only seams stay out of the product", () => {
+  test("createRawHttpForTest is only defined in net.ts and never imported by anything in src/", () => {
+    for (const file of walk(path.join(root, "src"))) {
+      if (file === path.join(root, "src/lib/qualifier/site/net.ts")) continue;
+      expect(readFileSync(file, "utf8"), file).not.toContain("createRawHttpForTest");
+    }
+  });
+});
+
 describe("R14: no service-role key in the product", () => {
   test("the string SERVICE_ROLE does not appear in product/src (any case)", () => {
     for (const file of walk(path.join(root, "src"))) {

@@ -43,3 +43,14 @@ export async function ackLevelNoteAction(leadId: string): Promise<FormState> {
   revalidatePath(`/leads/${leadId}`);
   return { status: "success" };
 }
+
+/** Owner only (the database enforces it with 42501; the server action reports a fixed code, never the raw error). */
+export async function takeOverChargeAction(): Promise<FormState> {
+  const workspace = await requireSender();
+  const supabase = await createClient();
+  if (!supabase) return { status: "error", message: E.failed };
+  const { error } = await supabase.rpc("take_over_qualifier_charge", { p_ws: workspace.id });
+  if (error) return { status: "error", message: error.code === "42501" ? E.notOwner : E.failed };
+  revalidatePath("/agentes", "layout");
+  return { status: "success" };
+}

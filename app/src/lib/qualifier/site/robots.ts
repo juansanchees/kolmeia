@@ -32,7 +32,12 @@ export function parseRobots(text: string, agent: string): RobotsRules {
       collecting = true;
     } else if (key === "allow" || key === "disallow") {
       collecting = false;
-      if (!cur || !val || val.length > MAX_RULE_CHARS) continue; // an empty Disallow allows everything: no rule
+      if (!cur || !val) continue; // an empty Disallow allows everything: no rule
+      // a rule too long to match safely is read the conservative way: a Disallow shuts the whole group, an Allow is ignored
+      if (val.length > MAX_RULE_CHARS) {
+        if (key === "disallow" && !cur.disallow.includes("/")) cur.disallow.unshift("/"); // first, so the rule cap never drops it
+        continue;
+      }
       (key === "allow" ? cur.allow : cur.disallow).push(val);
     } else {
       collecting = false;
