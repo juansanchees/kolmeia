@@ -9,7 +9,7 @@ vi.mock("@/lib/hunter/tick", () => ({ runHunterTick: (...a: unknown[]) => runHun
 const createSourceTickStore = vi.fn();
 const runSourceTick = vi.fn();
 vi.mock("@/lib/sources/store", () => ({ createSourceTickStore: (...a: unknown[]) => createSourceTickStore(...a) }));
-vi.mock("@/lib/sources/tick", () => ({ runSourceTick: (...a: unknown[]) => runSourceTick(...a) }));
+vi.mock("@/lib/sources/tick", () => ({ SOURCE_TICK_BUDGET_MS: 30_000, runSourceTick: (...a: unknown[]) => runSourceTick(...a) }));
 vi.mock("@/lib/ai/config", () => ({ hasAi: () => hasAi() }));
 vi.mock("@/lib/ai/gateway", () => ({ defaultTransport: () => ({ fake: true }) }));
 
@@ -83,6 +83,36 @@ describe("POST /api/hunter/tick", () => {
     const res = await call(ok);
     expect(createHunterTickStore).toHaveBeenCalledWith(TOKEN);
     expect(await res.json()).toEqual({ outcome: "ok", runs: 2, steps: 5, paused: 1, failed: 0, sources: NO_SOURCES });
+  });
+
+  test("a fast hunter leaves the sources their default budget; a slow one shrinks it; an exhausted one gives 0", async () => {
+    createHunterTickStore.mockReturnValue({});
+    const spy = vi.spyOn(Date, "now");
+    try {
+      let t = 1_000_000;
+      spy.mockImplementation(() => t);
+      runHunterTick.mockImplementation(async () => {
+        t += 10_000;
+        return { tickId: "t", outcome: "ok", runs: 0, steps: 0, paused: 0, failed: 0 };
+      });
+      await call(ok);
+      expect(runSourceTick.mock.calls.at(-1)?.[0].budgetMs).toBe(30_000);
+      runHunterTick.mockImplementation(async () => {
+        t += 225_000;
+        return { tickId: "t", outcome: "ok", runs: 0, steps: 0, paused: 0, failed: 0 };
+      });
+      await call(ok);
+      expect(runSourceTick.mock.calls.at(-1)?.[0].budgetMs).toBe(15_000);
+      runHunterTick.mockImplementation(async () => {
+        t += 290_000;
+        return { tickId: "t", outcome: "ok", runs: 0, steps: 0, paused: 0, failed: 0 };
+      });
+      const res = await call(ok);
+      expect(res.status).toBe(200);
+      expect(runSourceTick.mock.calls.at(-1)?.[0].budgetMs).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   test("maxDuration is 300, HunterAuthError is 401, other errors are a bare 500", async () => {

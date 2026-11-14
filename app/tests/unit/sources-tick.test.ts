@@ -307,6 +307,18 @@ describe("runSourceTick", () => {
     expect(f.log.at(-1)?.fn).toBe("finish");
   });
 
+  test("budgetMs 0: begin, enqueue, claimed starts and finish still run, with no polls", async () => {
+    const f = fakeStore({
+      start: [run({ id: "S1" })],
+      poll: [run({ id: "P1", external_run_id: "AR1", dataset_id: "DS1", started_at: new Date(NOW - 1000).toISOString() })],
+    });
+    const http = fakeHttp({ [startRoute]: startOk });
+    const r = await runSourceTick({ store: f.store, http, now: () => NOW, budgetMs: 0 });
+    expect(r.started).toBe(1);
+    expect(r.polled).toBe(0);
+    expect(f.log.map((l) => l.fn)).toEqual(["begin", "enqueue", "nextWork", "started", "finish"]);
+  });
+
   test("an Apollo run found in poll (crash leftover) fails as interrupted", async () => {
     const f = fakeStore({ poll: [run({ id: "R2", provider: "apollo", started_at: new Date(NOW - 1000).toISOString() })] });
     const r = await runSourceTick({ store: f.store, http: fakeHttp({}), now: () => NOW });
