@@ -4,6 +4,7 @@ vi.mock("server-only", () => ({}));
 import { sealKey } from "@/lib/sources/connections";
 import type { SourceCounts, SourceRunRow, SourceTickStore } from "@/lib/sources/store";
 import { runSourceTick } from "@/lib/sources/tick";
+import { SourceHttpError } from "@/lib/sources/http";
 import { fakeHttp } from "./sources-fakes";
 
 const WS = "11111111-1111-4111-8111-111111111111";
@@ -40,7 +41,7 @@ function run(o: Partial<SourceRunRow> & { id: string }): SourceRunRow {
 }
 
 type Log = { fn: string; args: unknown[] }[];
-function fakeStore(work: { start?: SourceRunRow[]; poll?: SourceRunRow[] }, o: { busy?: boolean; importError?: (runId: string) => unknown; failOn?: string } = {}) {
+function fakeStore(work: { start?: SourceRunRow[]; poll?: SourceRunRow[] }, o: { busy?: boolean; importError?: (runId: string) => unknown; failOn?: string; failError?: () => unknown; startedError?: (runId: string) => unknown } = {}) {
   const log: Log = [];
   const rec = (fn: string, ...args: unknown[]) => log.push({ fn, args });
   const store: SourceTickStore = {
@@ -62,9 +63,13 @@ function fakeStore(work: { start?: SourceRunRow[]; poll?: SourceRunRow[] }, o: {
     async markStarted(_t, id, ext, ds) {
       rec("started", id, ext, ds);
       if (o.failOn === id) throw new Error("db down");
+      const e = o.startedError?.(id);
+      if (e) throw e;
     },
     async markFailed(_t, id, err, cost) {
       rec("failed", id, err, cost);
+      const e = o.failError?.();
+      if (e) throw e;
     },
     async importRows(_t, id, rows, found, dropped, cost) {
       rec("import", id, rows, found, dropped, cost);
@@ -172,7 +177,7 @@ describe("runSourceTick", () => {
     const r = await runSourceTick({ store: f.store, http, now: () => NOW });
     expect(r.failed).toBe(1);
     expect(http.calls.some((c) => c.method === "POST" && c.url.endsWith("/abort"))).toBe(true);
-    expect(f.of("failed")[0].args.slice(0, 2)).toEqual(["R1", "stale"]);
+    expect(f.of("failed")[0].args).toEqual(["R1", "stale", null]);
   });
 
   const apolloHttp = (items: unknown[]) => fakeHttp({ "POST https://api.apollo.io/api/v1/mixed_companies/search": { status: 200, json: { organizations: items } } });
@@ -200,11 +205,20 @@ describe("runSourceTick", () => {
     expect(f.of("import")[0].args).toEqual(["R2", [], 0, 0, 0]);
   });
 
-  test("source_import 22023 (already imported) is handled, not a failure", async () => {
+  test("a SUCCEEDED run whose import is refused (22023) fails once as import_refused and is not re-polled", async () => {
     const f = fakeStore({ poll: [polling()] }, { importError: () => Object.assign(new Error("run is not importable"), { code: "22023" }) });
+    const http = succeeded(0.1);
+    const r = await runSourceTick({ store: f.store, http, now: () => NOW });
+    expect(r).toMatchObject({ outcome: "ok", imported: 0, failed: 1 });
+    expect(f.of("failed")).toHaveLength(1);
+    expect(f.of("failed")[0].args).toEqual(["R1", "import_refused", 0.1]);
+    expect(http.calls.filter((c) => c.url.endsWith("/actor-runs/AR1"))).toHaveLength(1);
+  });
+
+  test("if markFailed itself answers 22023 (already settled) nothing is counted and nothing throws", async () => {
+    const f = fakeStore({ poll: [polling()] }, { importError: () => Object.assign(new Error("x"), { code: "22023" }), failError: () => Object.assign(new Error("x"), { code: "22023" }) });
     const r = await runSourceTick({ store: f.store, http: succeeded(0.1), now: () => NOW });
     expect(r).toMatchObject({ outcome: "ok", imported: 0, failed: 0 });
-    expect(f.of("failed")).toHaveLength(0);
   });
 
   test("one failing run does not stop the others; finishTick always runs; errors carry no key", async () => {
@@ -224,12 +238,89 @@ describe("runSourceTick", () => {
     expect(JSON.stringify(f.log)).not.toContain(APIFY_KEY);
   });
 
-  test("a database error on one run is reported but later runs and finishTick still happen", async () => {
+  const startRoute = `POST ${A}/acts/compass~crawler-google-places/runs`;
+  const startOk = { status: 201, json: { data: { id: "AR9", defaultDatasetId: "DS9" } } };
+
+  test("a database error on one run is reported, the Apify run is aborted and settled at the reserve, later runs and finishTick still happen", async () => {
     const f = fakeStore({ start: [run({ id: "R1" }), run({ id: "R2" })] }, { failOn: "R1" });
-    const http = fakeHttp({ [`POST ${A}/acts/`]: { status: 201, json: { data: { id: "AR", defaultDatasetId: "DS" } } } });
+    const http = fakeHttp({ [startRoute]: startOk, [`POST ${A}/actor-runs/AR9/abort`]: { status: 200, json: {} } });
     const r = await runSourceTick({ store: f.store, http, now: () => NOW });
     expect(f.of("started").map((l) => l.args[0])).toEqual(["R1", "R2"]);
-    expect(r.started).toBeGreaterThanOrEqual(1);
+    expect(f.of("failed").map((l) => l.args)).toEqual([["R1", "start_unrecorded", 0.5]]);
+    expect(http.calls.some((c) => c.url.endsWith("/abort"))).toBe(true);
+    expect(r).toMatchObject({ started: 1, failed: 1 });
     expect(f.log.at(-1)?.fn).toBe("finish");
+  });
+
+  test.each([
+    ["timeout", new SourceHttpError("timeout"), 0.5],
+    ["network", new SourceHttpError("network"), 0.5],
+    ["5xx", { status: 503, json: {} }, 0.5],
+    ["429", { status: 429, json: {} }, 0.5],
+    ["bad_response", { status: 201, json: { data: {} } }, 0.5],
+    ["401", { status: 401, json: { echo: APIFY_KEY } }, 0],
+    ["403", { status: 403, json: {} }, 0],
+    ["400", { status: 400, json: {} }, 0],
+  ])("start failure %s settles at cost %s", async (_n, route, cost) => {
+    const f = fakeStore({ start: [run({ id: "R1" })] });
+    const http = fakeHttp({ [startRoute]: route as never });
+    const r = await runSourceTick({ store: f.store, http, now: () => NOW });
+    expect(r.failed).toBe(1);
+    expect(f.of("failed")[0].args[2]).toBe(cost);
+    expect(f.of("started")).toHaveLength(0);
+  });
+
+  test("a key that fails to open settles at 0", async () => {
+    const f = fakeStore({ start: [run({ id: "R1", ciphertext: "v1:garbage" })] });
+    const r = await runSourceTick({ store: f.store, http: fakeHttp({}), now: () => NOW });
+    expect(r.failed).toBe(1);
+    expect(f.of("failed")[0].args).toEqual(["R1", "key_unreadable", 0]);
+  });
+
+  test("ids Apify returned that fail validation: abort, then settle at the reserve", async () => {
+    const f = fakeStore({ start: [run({ id: "R1" })] });
+    const http = fakeHttp({ [startRoute]: { status: 201, json: { data: { id: "A/../B", defaultDatasetId: "DS9" } } }, [`POST ${A}/actor-runs/`]: { status: 200, json: {} } });
+    await runSourceTick({ store: f.store, http, now: () => NOW });
+    expect(http.calls.some((c) => c.url.includes("/abort"))).toBe(true);
+    expect(f.of("started")).toHaveLength(0);
+    expect(f.of("failed")[0].args).toEqual(["R1", "bad_response", 0.5]);
+  });
+
+  test("markStarted answering 22023 aborts the Apify run and settles at the reserve", async () => {
+    const f = fakeStore({ start: [run({ id: "R1" })] }, { startedError: () => Object.assign(new Error("x"), { code: "22023" }) });
+    const http = fakeHttp({ [startRoute]: startOk, [`POST ${A}/actor-runs/AR9/abort`]: { status: 200, json: {} } });
+    await runSourceTick({ store: f.store, http, now: () => NOW });
+    expect(http.calls.some((c) => c.url.endsWith("/abort"))).toBe(true);
+    expect(f.of("failed")[0].args).toEqual(["R1", "start_refused", 0.5]);
+  });
+
+  test("the budget only limits polls: every claimed start still runs", async () => {
+    let t = NOW;
+    const f = fakeStore({
+      start: [run({ id: "S1" }), run({ id: "S2" }), run({ id: "S3" })],
+      poll: [run({ id: "P1", external_run_id: "AR1", dataset_id: "DS1", started_at: new Date(NOW - 1000).toISOString() })],
+    });
+    const http = fakeHttp({ [startRoute]: startOk, [`GET ${A}/actor-runs/AR1`]: { status: 200, json: { data: { status: "RUNNING" } } } });
+    const r = await runSourceTick({ store: f.store, http, now: () => (t += 20_000), budgetMs: 10_000 });
+    expect(r.started).toBe(3);
+    expect(r.polled).toBe(0);
+    expect(f.log.at(-1)?.fn).toBe("finish");
+  });
+
+  test("an Apollo run found in poll (crash leftover) fails as interrupted", async () => {
+    const f = fakeStore({ poll: [run({ id: "R2", provider: "apollo", started_at: new Date(NOW - 1000).toISOString() })] });
+    const r = await runSourceTick({ store: f.store, http: fakeHttp({}), now: () => NOW });
+    expect(r.failed).toBe(1);
+    expect(f.of("failed")[0].args).toEqual(["R2", "interrupted", 0]);
+  });
+
+  test("a transient poll error is left for the next tick, but ages out after 2x the stale window", async () => {
+    const http = () => fakeHttp({ [`GET ${A}/actor-runs/AR1`]: new SourceHttpError("timeout") });
+    const young = fakeStore({ poll: [polling()] });
+    expect(await runSourceTick({ store: young.store, http: http(), now: () => NOW })).toMatchObject({ outcome: "ok", failed: 0 });
+    expect(young.of("failed")).toHaveLength(0);
+    const old = fakeStore({ poll: [run({ id: "R1", external_run_id: "AR1", dataset_id: "DS1", started_at: new Date(NOW - 31 * 60_000).toISOString() })] });
+    expect((await runSourceTick({ store: old.store, http: http(), now: () => NOW })).failed).toBe(1);
+    expect(old.of("failed")[0].args).toEqual(["R1", "stale", null]);
   });
 });

@@ -38,6 +38,11 @@ function isTransient(e: unknown): boolean {
 const ID_OK = /^[A-Za-z0-9]{1,100}$/;
 const clampUsd = (n: number | null): number | null => (n === null ? null : Math.min(1000, Math.max(0, Number.isFinite(n) ? n : 0)));
 
+/** A start that Apify definitely did not take: 401/403 or another 4xx except 429. */
+function isDefiniteRefusal(e: unknown): boolean {
+  return e instanceof ApifyError && (e.code === "refused" || (/^http_4\d\d$/.test(e.code) && e.code !== "http_429"));
+}
+
 const isAlreadyHandled = (e: unknown) => (e as { code?: string } | null)?.code === "22023";
 const strs = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 
@@ -62,7 +67,7 @@ export async function runSourceTick(opts: { store: SourceTickStore; http?: HttpJ
     }
   };
 
-  /** Imports; a 22023 means somebody already did (or the state moved): handled, not an error. */
+  /** Imports. A 22023 is a refusal by the database: the run fails 'import_refused' (fail() swallows its own 22023, the real "already handled" case). */
   const importRun = async (run: SourceRunRow, rows: ImportRowIn[], found: number, cost: number | null) => {
     try {
       // validate our own inputs first: the database refuses out-of-range values with 22023, which must not pass for "already imported"
@@ -72,6 +77,7 @@ export async function runSourceTick(opts: { store: SourceTickStore; http?: HttpJ
       counts.imported++;
     } catch (e) {
       if (!isAlreadyHandled(e)) throw e;
+      await fail(run, "import_refused", cost);
     }
   };
 
@@ -81,17 +87,34 @@ export async function runSourceTick(opts: { store: SourceTickStore; http?: HttpJ
       key = openKey(run.workspace_id, run.provider, run.ciphertext);
       if (run.kind === "maps") {
         const q = run.query;
-        const r = await apifyClient(key, http).start(MAPS_ACTOR, mapsInput({ terms: strs(q.terms), location: String(q.location ?? ""), max: run.max_results }), run.reserve_usd);
-        if (!ID_OK.test(r.runId) || !ID_OK.test(r.datasetId)) {
+        const client = apifyClient(key, http);
+        let r: { runId: string; datasetId: string };
+        try {
+          r = await client.start(MAPS_ACTOR, mapsInput({ terms: strs(q.terms), location: String(q.location ?? ""), max: run.max_results }), run.reserve_usd);
+        } catch (e) {
+          // only a definite refusal costs nothing; a timeout, network error, 5xx, 429 or unreadable answer may have started a billed run
+          await fail(run, codeOf(e), isDefiniteRefusal(e) ? 0 : run.reserve_usd);
+          return;
+        }
+        // from here Apify has a run: anything that goes wrong aborts it (best effort) and settles at the reserve
+        const abortAndFail = async (code: string) => {
           try {
-            await apifyClient(key, http).abort(r.runId);
+            await client.abort(r.runId);
           } catch {
             // best effort
           }
-          await fail(run, "bad_response", 0);
+          await fail(run, code, run.reserve_usd);
+        };
+        if (!ID_OK.test(r.runId) || !ID_OK.test(r.datasetId)) {
+          await abortAndFail("bad_response");
           return;
         }
-        await store.markStarted(tick, run.id, r.runId, r.datasetId);
+        try {
+          await store.markStarted(tick, run.id, r.runId, r.datasetId);
+        } catch (e) {
+          await abortAndFail(isAlreadyHandled(e) ? "start_refused" : "start_unrecorded");
+          return;
+        }
         counts.started++;
       } else if (run.kind === "apollo") {
         // Apollo answers right away: mark it running, look up the pages, import in this same tick.
@@ -163,13 +186,18 @@ export async function runSourceTick(opts: { store: SourceTickStore; http?: HttpJ
           } catch {
             // the abort is best effort: the run is settled either way
           }
-          await fail(run, "stale", st.usageUsd);
+          await fail(run, "stale", null);
         }
         // else: still running, left for the next tick
       }
     } catch (e) {
       if (isAlreadyHandled(e)) return;
-      if (isTransient(e)) return; // next tick tries again
+      if (isTransient(e)) {
+        // next tick tries again, but not forever
+        const started = run.started_at ? Date.parse(run.started_at) : NaN;
+        if (Number.isFinite(started) && now() - started > 2 * SOURCE_STALE_MS) await fail(run, "stale", null);
+        return;
+      }
       if (e instanceof ApifyError && e.code === "http_404") {
         await fail(run, "not_found", null); // the run is gone on Apify (key rotated, run deleted)
         return;
@@ -192,8 +220,8 @@ export async function runSourceTick(opts: { store: SourceTickStore; http?: HttpJ
   try {
     await store.enqueueAgentRuns(tick);
     const work = await store.nextWork(tick);
+    // claimed start rows are never returned again, so every one runs; only polls obey the budget
     for (const run of work.start) {
-      if (now() >= deadline) break;
       await guarded(() => startRun(run));
     }
     for (const run of work.poll) {

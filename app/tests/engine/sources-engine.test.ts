@@ -64,6 +64,10 @@ describe("sources tick against the database", () => {
     expect(r).toMatchObject({ status: "imported", found: 2, dropped: 0 });
     expect(Number(r.cost_usd)).toBe(0.07);
     expect((await db.admin<{ n: number }>("select count(*)::int n from public.lead_imports where workspace_id = $1 and kind = 'apify_maps'", [ws]))[0].n).toBe(1);
+    // a direct second import of the same run is refused by the database (22023)
+    const t = (await pgRpc(db, TOKEN)("source_begin_tick", {})) as { tick_id: string };
+    await expect(store().importRows(t.tick_id, runId, [], 0, 0, 0)).rejects.toMatchObject({ code: "22023" });
+    await pgRpc(db, TOKEN)("source_finish_tick", { p_tick: t.tick_id, p_counts: {}, p_error: null });
     expect((await db.admin<{ n: number }>("select count(*)::int n from public.leads where workspace_id = $1", [ws]))[0].n).toBe(2);
   });
 
