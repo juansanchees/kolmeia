@@ -52,16 +52,28 @@ const PAGE = 1000;
  */
 export const FIELD_CHUNK = 50;
 
-async function inLeadChunks<T>(ids: string[], run: (chunk: string[]) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>, label: string): Promise<T[]> {
+/** PostgREST answers at most this many rows per request, silently dropping the rest. */
+const RESPONSE_CAP = 1000;
+
+/**
+ * Like inChunks, for lead ids. A chunk that comes back with RESPONSE_CAP rows may have been truncated, so it is re-run in
+ * smaller pieces (per 10 leads, then per lead). One lead that alone fills the cap throws: truncating silently is worse.
+ */
+export async function inLeadChunks<T>(ids: string[], run: (chunk: string[]) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>, label: string): Promise<T[]> {
+  const settle = async (chunk: string[]): Promise<T[]> => {
+    const r = await run(chunk);
+    if (r.error) throw new Error(`${label}: ${r.error.message}`);
+    const rows = r.data ?? [];
+    if (rows.length < RESPONSE_CAP) return rows;
+    if (chunk.length === 1) throw new Error(`${label}: one lead has ${RESPONSE_CAP}+ rows`);
+    const size = chunk.length > 10 ? 10 : 1;
+    const parts: string[][] = [];
+    for (let i = 0; i < chunk.length; i += size) parts.push(chunk.slice(i, i + size));
+    return (await Promise.all(parts.map(settle))).flat();
+  };
   const chunks: string[][] = [];
   for (let i = 0; i < ids.length; i += FIELD_CHUNK) chunks.push(ids.slice(i, i + FIELD_CHUNK));
-  const results = await Promise.all(chunks.map((c) => run(c)));
-  const out: T[] = [];
-  for (const r of results) {
-    if (r.error) throw new Error(`${label}: ${r.error.message}`);
-    out.push(...(r.data ?? []));
-  }
-  return out;
+  return (await Promise.all(chunks.map(settle))).flat();
 }
 
 /** Leads of a workspace with their best candidate. Runs as the user, so RLS decides what the closer sees. */
@@ -163,7 +175,8 @@ export async function getLead(db: SupabaseClient, id: string): Promise<LeadDetai
   rawChecks.sort((a, b) => Date.parse(String(a.created_at)) - Date.parse(String(b.created_at)));
   const checks = toChecks(rawChecks);
 
-  // All values of the lead, oldest first (a lead has a few dozen at most; the range keeps PostgREST's cap explicit).
+  // All values of the lead, oldest first. A lead has a few dozen values at most (imports write <= 11 kinds per list); the
+  // range only makes PostgREST's 1000-row cap explicit, it is not a pager: a lead with more than 1000 values would be cut.
   const { data: fieldRows, error: fErr } = await db
     .from("lead_fields")
     .select(LEAD_FIELD_COLUMNS)

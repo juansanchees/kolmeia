@@ -1,7 +1,8 @@
 // Row validation for "Subir lista": pure, runs in the browser. A row with any error is not imported.
 import { dedupe, domainKey, nameKey, phoneKey } from "@/lib/research/dedupe";
 import { hostOf, sanitizeUrl } from "@/lib/safe-url";
-import type { ImportField, Mapping } from "./fields";
+import { fill, t } from "@/messages/pt";
+import { IMPORT_FIELDS, type ImportField, type Mapping } from "./fields";
 
 export type ImportRow = { row: number; name: string; name_key: string } & Partial<Record<Exclude<ImportField, "name">, string>>;
 export type RowErrorCode = "empty" | "phone" | "email" | "website" | "too_long";
@@ -69,4 +70,45 @@ export function previewOutcomes(rows: ImportRow[], existing: Map<number, string 
   const pending = rows.filter((r) => !existing.get(r.row));
   const fresh = new Set(dedupe([], pending.map((r) => ({ name: r.name, website: r.website, phone: r.phone, row: r.row }))).fresh.map((r) => r.row));
   return rows.map((r) => ({ row: r.row, outcome: existing.get(r.row) || !fresh.has(r.row) ? "merged" : "new" }));
+}
+
+const ERROR_CODES: readonly RowErrorCode[] = ["empty", "phone", "email", "website", "too_long"];
+
+/**
+ * The server's verdict (R1): never trust a row the browser called valid. A RowError passes through with its data capped
+ * and reduced to known text fields; an ImportRow is rebuilt from its known text fields and run through mapRow again
+ * (unknown keys dropped, name_key recomputed, every rule re-applied). `row` is kept.
+ */
+export function revalidateRow(r: ImportRow | RowError): ImportRow | RowError {
+  const raw = r as unknown as Record<string, unknown>;
+  const text = (v: unknown) => (typeof v === "string" ? v : "");
+  if ("error" in r) {
+    const src = raw.data && typeof raw.data === "object" ? (raw.data as Record<string, unknown>) : {};
+    const data: Record<string, string> = {};
+    for (const f of IMPORT_FIELDS) {
+      const v = text(src[f]);
+      if (v) data[f] = v.length > IMPORT_CAPS.note ? v.slice(0, IMPORT_CAPS.note) : v;
+    }
+    const error = ERROR_CODES.includes(raw.error as RowErrorCode) ? (raw.error as RowErrorCode) : "empty";
+    return { row: r.row, error, data };
+  }
+  const out = mapRow(IMPORT_FIELDS.map((f) => text(raw[f])), [...IMPORT_FIELDS], r.row);
+  return out ?? { row: r.row, error: "empty", data: {} };
+}
+
+/** Header = first row; every later row gets its DATA-row index (1 = the first row under the header). Blank rows are skipped but keep their place. */
+export function mapGrid(grid: string[][], mapping: Mapping): (ImportRow | RowError)[] {
+  const out: (ImportRow | RowError)[] = [];
+  for (let i = 1; i < grid.length; i++) {
+    const r = mapRow(grid[i], mapping, i);
+    if (r) out.push(r);
+  }
+  return out;
+}
+
+/** "linha 7: telefone inválido (formate a coluna como texto no Excel)". */
+export function rowErrorText(row: number, code: RowErrorCode): string {
+  const hint = (t.imports.rowErrorHints as Partial<Record<RowErrorCode, string>>)[code];
+  const base = t.imports.rowErrors[code];
+  return fill(t.imports.rowError, { row, error: hint ? `${base} (${hint})` : base });
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ID_CHUNK, getLead, inChunks, listLeads } from "@/lib/leads/queries";
+import { FIELD_CHUNK, ID_CHUNK, getLead, inChunks, inLeadChunks, listLeads } from "@/lib/leads/queries";
 
 describe("F3a leads reads", () => {
   it("inChunks: 250 ids -> 3 requests of at most 100, merged in order", async () => {
@@ -110,5 +110,26 @@ describe("F3a leads reads", () => {
     };
     const d = await getLead(db as never, "l1");
     expect(d?.checks.map((c) => c.id)).toEqual(["k-a", "k-b", "k-c", "k-d"]);
+  });
+
+  it("inLeadChunks: a chunk that hits PostgREST's 1000-row cap is re-run in smaller pieces", async () => {
+    const ids = Array.from({ length: FIELD_CHUNK }, (_, i) => `l${i}`);
+    const sizes: number[] = [];
+    // fake server: 25 rows per lead, capped at 1000 rows per answer
+    const run = async (c: string[]) => {
+      sizes.push(c.length);
+      const all = c.flatMap((id) => Array.from({ length: 25 }, (_, k) => `${id}:${k}`));
+      return { data: all.slice(0, 1000), error: null };
+    };
+    const rows = await inLeadChunks<string>(ids, run, "t");
+    expect(rows).toHaveLength(FIELD_CHUNK * 25);
+    expect(new Set(rows).size).toBe(rows.length);
+    expect(sizes.length).toBeGreaterThan(1);
+    expect(Math.min(...sizes)).toBeLessThan(FIELD_CHUNK);
+  });
+
+  it("inLeadChunks: a single lead at the cap is an error, never a silent truncation", async () => {
+    const run = async () => ({ data: Array.from({ length: 1000 }, (_, i) => `r${i}`), error: null });
+    await expect(inLeadChunks<string>(["only"], run, "lbl")).rejects.toThrow(/lbl/);
   });
 });

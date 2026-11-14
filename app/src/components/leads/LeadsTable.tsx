@@ -31,9 +31,14 @@ export function LeadsTable({ items, canCreate }: { items: LeadListItem[]; canCre
       <div className="flex flex-col items-start gap-3">
         <p className="text-sm text-muted">{canCreate ? t.leads.empty : t.leads.emptyCloser}</p>
         {canCreate && (
-          <Link href="/agentes/novo" className="inline-flex min-h-11 items-center border border-blue bg-surface px-4 text-sm font-semibold text-blue no-underline hover:bg-blue-wash">
-            {t.leads.emptyCta}
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/agentes/novo" className="inline-flex min-h-11 items-center border border-blue bg-surface px-4 text-sm font-semibold text-blue no-underline hover:bg-blue-wash">
+              {t.leads.emptyCta}
+            </Link>
+            <Link href="/leads/subir" className="inline-flex min-h-11 items-center border border-blue bg-surface px-4 text-sm font-semibold text-blue no-underline hover:bg-blue-wash">
+              {t.imports.button}
+            </Link>
+          </div>
         )}
       </div>
     );
@@ -91,9 +96,16 @@ export function LeadsTable({ items, canCreate }: { items: LeadListItem[]; canCre
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-mono text-xs text-muted">{filtered.length} / {items.length}</span>
-        <button type="button" onClick={download} className="min-h-11 border border-blue bg-surface px-4 text-sm font-semibold text-blue hover:bg-blue-wash">
-          {t.leads.csv}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {canCreate && (
+            <Link href="/leads/subir" className="inline-flex min-h-11 items-center border border-blue bg-surface px-4 text-sm font-semibold text-blue no-underline hover:bg-blue-wash">
+              {t.imports.button}
+            </Link>
+          )}
+          <button type="button" onClick={download} className="min-h-11 border border-blue bg-surface px-4 text-sm font-semibold text-blue hover:bg-blue-wash">
+            {t.leads.csv}
+          </button>
+        </div>
       </div>
 
       {filtered.length === 0 ? (

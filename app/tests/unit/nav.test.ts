@@ -80,7 +80,7 @@ describe("F2 roles", () => {
     expect([isSender("owner"), isSender("sdr"), isSender("closer")]).toEqual([true, true, false]);
   });
   test("J2 AGENTES and CAMPANHAS send the closer to LEADS", () => {
-    const SENDER_ONLY = ["src/app/(app)/campanhas/layout.tsx", "src/app/(app)/agentes/page.tsx", "src/app/(app)/agentes/novo/page.tsx", "src/app/(app)/agentes/[id]/page.tsx", "src/app/(app)/agentes/pesquisa/layout.tsx"];
+    const SENDER_ONLY = ["src/app/(app)/campanhas/layout.tsx", "src/app/(app)/agentes/page.tsx", "src/app/(app)/agentes/novo/page.tsx", "src/app/(app)/agentes/[id]/page.tsx", "src/app/(app)/agentes/pesquisa/layout.tsx", "src/app/(app)/leads/subir/page.tsx"];
     for (const f of SENDER_ONLY) expect(read(f), f).toContain("requireSender()");
     expect(read("src/lib/workspace.ts")).toContain('redirect("/leads")');
   });
@@ -176,5 +176,31 @@ describe("F3b agent screens", () => {
     expect(read("src/components/agents/ArchiveButton.tsx")).toContain("archiveConfirm");
     const hits = walk(join(process.cwd(), "src")).filter((f) => readFileSync(f, "utf8").includes("turnOnSoon"));
     expect(hits).toEqual([]);
+  });
+});
+
+describe("F3c-1 upload screen", () => {
+  test("the upload screen is sender-only and batches of 500 go through server actions", () => {
+    expect(read("src/app/(app)/leads/subir/page.tsx")).toContain("requireSender");
+    const actions = read("src/app/(app)/leads/subir/actions.ts");
+    expect(actions).toContain('"use server"');
+    expect(actions).toContain("requireSender");
+    expect(actions).toContain("IMPORT_LIMITS.batch");
+    expect(actions).toContain("revalidateRow");
+    const table = read("src/components/leads/LeadsTable.tsx");
+    const uses = table.split("t.imports.button").length - 1;
+    expect(uses).toBeGreaterThan(0);
+    expect(table.match(/canCreate && \([\s\S]{0,500}?t\.imports\.button/g)?.length).toBe(uses);
+    const hits = walk(join(process.cwd(), "src")).filter((f) => /file\.text\(\)|read-excel-file/.test(readFileSync(f, "utf8")));
+    expect(hits.map((f) => f.replace(process.cwd() + "/", ""))).toEqual(["src/lib/imports/parse.ts"]);
+  });
+  test("the history lists incomplete imports with undo", () => {
+    const h = read("src/components/imports/ImportHistory.tsx");
+    expect(h).toContain("statuses");
+    expect(h).toContain("undoConfirm");
+    expect(read("src/messages/pt/imports.ts")).toContain("leads já trabalhados ou com a closer ficam");
+  });
+  test("the wizard numbers rows from the data, not through its own counter", () => {
+    expect(read("src/components/imports/ImportWizard.tsx")).toContain("mapGrid(");
   });
 });

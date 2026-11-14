@@ -5,10 +5,11 @@ import { ai } from "./ai";
 import { areas } from "./areas";
 import { common } from "./common";
 import { email } from "./email";
+import { imports } from "./imports";
 import { leads } from "./leads";
 import { research } from "./research";
 
-export const pt = { ...common, ...areas, leads, agents, ai, research, email } as const;
+export const pt = { ...common, ...areas, leads, agents, ai, research, email, imports } as const;
 
 export type Messages = typeof pt;
 export const t = pt;

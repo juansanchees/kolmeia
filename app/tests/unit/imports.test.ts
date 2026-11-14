@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { detectMapping, hasIdColumn, type Mapping } from "@/lib/imports/fields";
-import { mapRow, previewOutcomes, type ImportRow, type RowError } from "@/lib/imports/rows";
+import { mapGrid, mapRow, previewOutcomes, revalidateRow, rowErrorText, type ImportRow, type RowError } from "@/lib/imports/rows";
 import { parseDelimited, sheetRows } from "@/lib/imports/parse";
 
 const m = (...f: (string | null)[]) => f as Mapping;
@@ -116,5 +116,43 @@ describe("previewOutcomes", () => {
       { row: 4, outcome: "new" },
     ]);
     expect(previewOutcomes(rows, new Map([[4, "lead-1"]]))[2].outcome).toBe("merged");
+  });
+});
+
+describe("Task 5 server re-validation and screen helpers", () => {
+  it("server re-validation wins over what the browser sent", () => {
+    const bad = revalidateRow({ row: 4, name: "Acme Test Builders", name_key: "x", phone: "555-0199" } as ImportRow) as RowError;
+    expect(bad.error).toBe("phone");
+    expect(bad.row).toBe(4);
+    const ok = revalidateRow({ row: 5, name: "Acme Test Builders", name_key: "FORGED", phone: "508-555-0101", evil: "x", website: "https://acme.example" } as unknown as ImportRow) as ImportRow;
+    expect(ok.name_key).not.toBe("FORGED");
+    expect(ok.name_key).toBe(asRow(mapRow(["Acme Test Builders"], m("name"), 5)).name_key);
+    expect(ok.phone).toBe("508-555-0101");
+    expect(ok.website).toBe("https://acme.example/");
+    expect(revalidateRow(ok)).toEqual(ok);
+    expect(Object.keys(ok)).not.toContain("evil");
+    expect(ok.row).toBe(5);
+    const hostile = revalidateRow({ row: 6, name: "X", name_key: "x", website: "https://javascript:alert(1)" } as ImportRow) as RowError;
+    expect(hostile.error).toBe("website");
+    const nonText = revalidateRow({ row: 7, name: 5, name_key: null } as unknown as ImportRow) as RowError;
+    expect(nonText.error).toBe("empty");
+  });
+  it("revalidateRow passes a RowError through with its data capped", () => {
+    const e = revalidateRow({ row: 9, error: "phone", data: { phone: "x".repeat(5000), junk: "y" } }) as RowError;
+    expect(e.error).toBe("phone");
+    expect(e.data.phone.length).toBe(1000);
+    expect(e.data.junk).toBeUndefined();
+    expect((revalidateRow({ row: 9, error: "bogus", data: {} } as unknown as RowError) as RowError).error).toBe("empty");
+  });
+  it("mapGrid gives data-row indexes: the header is not counted and blank rows keep their place", () => {
+    const grid = [["Empresa", "Telefone"], ["Acme Test Builders", "508-555-0101"], ["", ""], ["Beta Test Co", "5.08E+09"]];
+    const out = mapGrid(grid, m("name", "phone"));
+    expect(out.map((r) => r.row)).toEqual([1, 3]);
+    expect(out[0]).toMatchObject({ row: 1, name: "Acme Test Builders" });
+    expect((out[1] as RowError).error).toBe("phone");
+  });
+  it("the phone error tells the user to format the column as text; the others do not", () => {
+    expect(rowErrorText(7, "phone")).toBe("linha 7: telefone inválido (formate a coluna como texto no Excel)");
+    expect(rowErrorText(8, "email")).toBe("linha 8: e-mail inválido");
   });
 });

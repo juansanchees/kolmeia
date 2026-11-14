@@ -100,6 +100,15 @@ Valem para os e-mails da sequência, no clique e no relógio, em ensaio e em env
   `BASELINE_FOUND=<run.csv> BASELINE_GOLD_DIR=<pasta> BASELINE_SCHEDULE=weekly BASELINE_AGENT="<agente>" BASELINE_RUN_DATE="dd/mm/aaaa" BASELINE_ALREADY_KNOWN=<n> BASELINE_OUT=<arquivo.md fora de kolmeia/> npm run baseline`
 - **Ordem de publicação**: aplicar `0010_hunter.sql`, depois publicar o código, e só então rodar `supabase/manual/hunter_cron.sql`.
 
+## Subir lista (F3c-1)
+- **LEADS → Subir lista**: CSV ou XLSX, até **5 MB e 5.000 linhas**. O arquivo é lido no navegador; só as linhas mapeadas vão para o servidor (em lotes de 500), e o servidor confere todas de novo.
+- As colunas são detectadas pelo nome do cabeçalho (empresa, site, telefone, e-mail...). Você confere na tela, vê a **prévia** (novos, já existem, com erro) e só então importa.
+- **Sem IA** e sem gasto de IA. **Sem duplicar**: empresa que já está em LEADS (mesmo nome, site ou telefone) recebe os dados novos, não vira outro lead.
+- Tudo que vem da lista fica **"sem prova"** (importado, não conferido) até alguém conferir. Linha com erro não entra e aparece na lista de erros (telefone em notação científica, ex. 5.08E+09: formate a coluna como texto no Excel).
+- **Listas subidas**: se a aba fechar no meio, a lista aparece como "incompleta"; subir o mesmo arquivo de novo só cria o que faltou. **Desfazer import** apaga os leads que a lista criou; leads com dados de outras fontes, já trabalhados ou com a closer ficam.
+- Só dono e SDR. A closer não vê o botão nem a tela.
+- **Antes de publicar** esta versão do app, aplicar `0011_lists.sql` (depende de 0001-0010).
+
 ## Pendências
 - O painel de uso das caixas (`mailbox_usage`) ainda conta as últimas 24 horas e pode divergir do portão de limite do dia até ser atualizado.
 
