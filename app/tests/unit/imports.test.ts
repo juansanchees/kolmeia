@@ -23,7 +23,7 @@ describe("mapRow", () => {
     expect(a.website).toBe("https://acme.example");
     expect(a.name).toBe("acme.example");
     const b = asRow(mapRow(["joe@gmail.com", "508-555-0104"], m("email", "phone"), 3));
-    expect(b.website).toBeNull();
+    expect(b.website).toBeUndefined();
     expect(b.name).toBe("joe@gmail.com");
   });
 
@@ -41,6 +41,28 @@ describe("mapRow", () => {
   it("refuses a phone in scientific notation, even one with enough digits", () => {
     expect(asErr(mapRow(["Acme", "5.09E+09"], m("name", "phone"), 2)).error).toBe("phone");
     expect(asErr(mapRow(["Acme", "5.085550103E+09"], m("name", "phone"), 2)).error).toBe("phone");
+  });
+
+  it("caps the final name and website, not only the raw cells", () => {
+    const longEmail = `${"a".repeat(195)}@gmail.com`;
+    expect(asErr(mapRow([longEmail], m("email"), 2)).error).toBe("too_long");
+    const site = `http://${"b".repeat(285)}.com`; // 296 chars raw, 297 normalised with a trailing slash: stays ok
+    expect(asRow(mapRow(["Acme", site], m("name", "website"), 2)).website!.length).toBeLessThanOrEqual(300);
+    const edge = `http://${"b".repeat(289)}.com`; // 300 raw, 301 once normalised
+    expect(asErr(mapRow(["Acme", edge], m("name", "website"), 2)).error).toBe("too_long");
+  });
+
+  it("produces no null-valued keys and uses the data-row index", () => {
+    const r = asRow(mapRow(["Acme", "", "508-555-0105"], m("name", "website", "phone"), 5000));
+    expect(r.row).toBe(5000);
+    expect(Object.values(r).every((x) => x !== null && x !== undefined)).toBe(true);
+    expect(Object.keys(r).sort()).toEqual(["name", "name_key", "phone", "row"]);
+  });
+
+  it("unicode spaces are trimmed before validation", () => {
+    const r = asRow(mapRow(["Acme", "\u00a0a@acme.example\u3000", "\u00a0508-555-0105 "], m("name", "email", "phone"), 2));
+    expect(r.email).toBe("a@acme.example");
+    expect(r.phone).toBe("508-555-0105");
   });
 
   it("blank rows are skipped", () => {

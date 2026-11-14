@@ -3,7 +3,7 @@ import { dedupe, domainKey, nameKey, phoneKey } from "@/lib/research/dedupe";
 import { hostOf, sanitizeUrl } from "@/lib/safe-url";
 import type { ImportField, Mapping } from "./fields";
 
-export type ImportRow = { row: number; name: string; name_key: string } & Partial<Record<Exclude<ImportField, "name">, string | null>>;
+export type ImportRow = { row: number; name: string; name_key: string } & Partial<Record<Exclude<ImportField, "name">, string>>;
 export type RowErrorCode = "empty" | "phone" | "email" | "website" | "too_long";
 export type RowError = { row: number; error: RowErrorCode; data: Record<string, string> };
 
@@ -15,13 +15,20 @@ export const IMPORT_CAPS = { name: 200, field: 300, note: 1000 };
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** null = blank row (skipped, not an error). Cell text is kept verbatim: a formula or markup is only ever text. */
+/** Trims ASCII and unicode spaces (NBSP, en/em spaces, zero-width space, ideographic space), as the server's [[:space:]] does. */
+const trimU = (s: string) => s.replace(/^[\s\u200b]+|[\s\u200b]+$/g, "");
+
+/**
+ * null = blank row (skipped, not an error). Cell text is kept verbatim: a formula or markup is only ever text.
+ * `row` is the DATA-row index, 1..5000 (the header is not counted); the server accepts only that range.
+ * Empty values are omitted from the result (never JSON null): the server rejects a null where it expects a string.
+ */
 export function mapRow(cells: string[], mapping: Mapping, row: number): ImportRow | RowError | null {
   const v: Partial<Record<ImportField, string>> = {};
   const data: Record<string, string> = {};
   let any = false;
   mapping.forEach((f, i) => {
-    const raw = (cells[i] ?? "").trim();
+    const raw = trimU(cells[i] ?? "");
     if (raw) any = true;
     if (f && raw && v[f] === undefined) {
       v[f] = raw;
@@ -49,9 +56,11 @@ export function mapRow(cells: string[], mapping: Mapping, row: number): ImportRo
   }
   const name = v.name || (website ? hostOf(website) : null) || v.email || v.phone;
   if (!name) return fail("empty");
+  // The server caps the final values: name 200, website 300 (the fallback name and the normalised URL can be longer than the cell).
+  if (name.length > IMPORT_CAPS.name || (website && website.length > IMPORT_CAPS.field)) return fail("too_long");
   const out: ImportRow = { row, name, name_key: nameKey(name) };
-  out.website = website;
-  for (const f of ["phone", "email", "address", "city", "state", "zip", "contact_name", "contact_title", "note"] as const) out[f] = v[f] ?? null;
+  if (website) out.website = website;
+  for (const f of ["phone", "email", "address", "city", "state", "zip", "contact_name", "contact_title", "note"] as const) if (v[f]) out[f] = v[f];
   return out;
 }
 
