@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { TestDb, as, UUID_A, UUID_B, UUID_C } from "./helpers";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { MIGRATIONS_DIR, TestDb, as, UUID_A, UUID_B, UUID_C } from "./helpers";
 import { nameKey } from "@/lib/research/dedupe";
 import { PHONE_VECTORS, WEBSITE_VECTORS } from "../fixtures/company-key-vectors";
 import { row, seedImport } from "./lists-seed";
@@ -411,7 +413,41 @@ describe("0011 import RPCs", () => {
       { origin_kind: "import", origin_import_id: null },
       { origin_kind: "import", origin_import_id: null },
     ]);
-    expect(await count("lead_fields")).toBe(0);
+    // the worked leads keep this list's values: a re-upload still finds them (no duplicate, no blank lead)
+    expect(await count("lead_fields")).toBe(2);
+    const again = await seedImport(db, UUID_A, wsA, [row(1, "Worked Status Co"), row(2, "Assigned Co")]);
+    expect(again.result).toEqual({ new: 0, merged: 2, errors: 0 });
+    expect(await leadIds(wsA)).toHaveLength(2);
+  });
+
+  test("undo removes a lead that only an import value kept alive (its candidate is gone), never leaves a blank one", async () => {
+    await clean();
+    const cand = await verified(UUID_A, wsA, await run(UUID_A, wsA), { name: "Ghost Builders", website: "https://ghost.example" });
+    const a = await seedImport(db, UUID_A, wsA, [row(1, "Ghost Builders", { website: "https://ghost.example" })]);
+    expect(a.result.merged).toBe(1);
+    await db.admin("delete from public.research_candidates where id = $1", [cand]);
+    expect(await leadIds(wsA)).toHaveLength(1);
+    expect(await rpc(UUID_A, "select public.undo_lead_import($1) as r", [a.importId])).toEqual({ deleted: 1, kept: 0 });
+    expect(await leadIds(wsA)).toHaveLength(0);
+  });
+
+  test("applying 0011 a second time on a database with data loses nothing", async () => {
+    // own database: re-applying leaves stale planner statistics (no autovacuum in PGlite) that would slow the 5,000-row test below
+    const db2 = await TestDb.create();
+    try {
+      await db2.addUser(UUID_A);
+      const ws = (await db2.query<{ create_workspace: string }>(as(UUID_A), "select public.create_workspace($1)", ["Empresa R"]))[0].create_workspace;
+      await seedImport(db2, UUID_A, ws, [row(1, "Rerun Co", { phone: "508-555-0188" }), row(2, "Rerun Two")]);
+      const n = async (t: string) => Number((await db2.admin<{ n: string }>(`select count(*) as n from public.${t}`))[0].n);
+      const snap = async () => [await n("leads"), await n("lead_fields"), await n("lead_imports"), await n("lead_import_rows")];
+      const before = await snap();
+      expect(before[0]).toBe(2);
+      expect(before[1]).toBeGreaterThan(2);
+      await db2.pg.exec(readFileSync(path.join(MIGRATIONS_DIR, "0011_lists.sql"), "utf8"));
+      expect(await snap()).toEqual(before);
+    } finally {
+      await db2.pg.close();
+    }
   });
 
   test("a 1,000-character multi-byte note imports (index entries stay small)", async () => {

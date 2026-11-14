@@ -47,6 +47,11 @@ alter table public.leads
 create index if not exists leads_origin_import_idx on public.leads (origin_import_id) where origin_import_id is not null;
 
 -- Workspace integrity: a row of a child table always carries the workspace of its parent (composite foreign keys).
+-- Re-run safety: the composite FKs depend on the unique keys, so they go first (they are re-added below / with lead_fields).
+alter table if exists public.lead_import_rows
+  drop constraint if exists lead_import_rows_import_ws_fkey,
+  drop constraint if exists lead_import_rows_lead_ws_fkey;
+alter table if exists public.lead_fields drop constraint if exists lead_fields_lead_ws_fkey;
 alter table public.lead_imports drop constraint if exists lead_imports_id_ws_key;
 alter table public.lead_imports add constraint lead_imports_id_ws_key unique (id, workspace_id);
 alter table public.leads drop constraint if exists leads_id_ws_key;
@@ -527,6 +532,8 @@ declare
   v_other uuid;
   v_deleted int := 0;
   v_kept int := 0;
+  v_touched uuid[] := '{}';
+  v_gone int;
 begin
   v_imp := public.lead_import_guard(p_import, array['importing', 'done'], true);
   v_ws := v_imp.workspace_id;
@@ -548,6 +555,7 @@ begin
       v_deleted := v_deleted + 1;
     else
       v_kept := v_kept + 1;
+      v_touched := v_touched || v_lead.id;
       if v_lead.origin_import_id is not distinct from p_import then
         select i.id into v_other
           from public.lead_fields f
@@ -561,7 +569,20 @@ begin
     end if;
   end loop;
 
-  delete from public.lead_fields where workspace_id = v_ws and source = 'import' and source_ref = p_import::text;
+  -- A lead somebody already worked (status moved or owner set) keeps this list's values: they may be all it has, and
+  -- without them a re-upload could not match it and would create a duplicate.
+  delete from public.lead_fields f
+   where f.workspace_id = v_ws and f.source = 'import' and f.source_ref = p_import::text
+     and not exists (select 1 from public.leads w where w.id = f.lead_id and (w.status <> 'new' or w.owner_id is not null));
+  -- An untouched lead left with no candidate and no value at all would show as a blank "Sem nome": remove it.
+  delete from public.leads l
+   where l.workspace_id = v_ws and l.id = any (v_touched)
+     and l.status = 'new' and l.owner_id is null
+     and not exists (select 1 from public.research_candidates c where c.lead_id = l.id)
+     and not exists (select 1 from public.lead_fields f where f.lead_id = l.id);
+  get diagnostics v_gone = row_count;
+  v_deleted := v_deleted + v_gone;
+  v_kept := v_kept - v_gone;
   delete from public.lead_import_rows where import_id = p_import;
   update public.lead_imports set status = 'undone' where id = p_import;
   return jsonb_build_object('deleted', v_deleted, 'kept', v_kept);

@@ -65,7 +65,9 @@ export async function readFileGrid(file: File, sheet?: string): Promise<{ sheets
     throw e instanceof ImportFileError ? e : new ImportFileError("unreadable");
   }
   const first = grid.findIndex((r) => !isBlank(r));
-  const rows = first < 0 ? [] : grid.slice(first);
+  let end = grid.length;
+  while (end > first && isBlank(grid[end - 1])) end--; // trailing blank rows (common in xlsx) do not count toward the cap
+  const rows = first < 0 ? [] : grid.slice(first, end);
   if (rows.length - 1 > IMPORT_LIMITS.maxRows) throw new ImportFileError("tooManyRows");
   return { sheets, sheet: chosen, rows };
 }

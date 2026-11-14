@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { detectMapping, hasIdColumn, type Mapping } from "@/lib/imports/fields";
 import { ERROR_DATA_CAP, mapGrid, mapRow, previewOutcomes, revalidateRow, rowErrorText, type ImportRow, type RowError } from "@/lib/imports/rows";
-import { parseDelimited, sheetRows } from "@/lib/imports/parse";
+import { IMPORT_LIMITS, ImportFileError, parseDelimited, readFileGrid, sheetRows } from "@/lib/imports/parse";
 
 const m = (...f: (string | null)[]) => f as Mapping;
 const asRow = (r: ReturnType<typeof mapRow>) => r as ImportRow;
@@ -92,6 +92,13 @@ describe("file reading", () => {
 
   it("sheetRows turns numbers, dates, booleans and nulls into text", () => {
     expect(sheetRows([[5085550103, new Date("2026-11-14"), true, null, "  x "]])).toEqual([["5085550103", "2026-11-14", "true", "", "x"]]);
+  });
+
+  it("trailing blank rows do not count toward the 5,000-row cap", async () => {
+    const body = (n: number, blanks: number) => "Company,Phone\n" + Array.from({ length: n }, (_, i) => `C${i},508`).join("\n") + "\n,".repeat(blanks) + "\n";
+    const g = await readFileGrid(new File([body(IMPORT_LIMITS.maxRows, 300)], "a.csv", { type: "text/csv" }));
+    expect(g.rows).toHaveLength(IMPORT_LIMITS.maxRows + 1);
+    await expect(readFileGrid(new File([body(IMPORT_LIMITS.maxRows + 1, 0)], "b.csv", { type: "text/csv" }))).rejects.toBeInstanceOf(ImportFileError);
   });
 
   it("the XLSX fixture reads as text through read-excel-file", async () => {

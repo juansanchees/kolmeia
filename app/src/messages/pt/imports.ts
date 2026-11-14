@@ -7,7 +7,7 @@ export const imports = {
   sheet: "Aba",
   listName: "Nome da lista",
   listNameRequired: "Dê um nome à lista.",
-  lockedNote: "Para mudar o nome ou o treino, desfaça o import e suba de novo.",
+  lockedNote: "O nome e o treino ficam salvos neste arquivo. Para mudar, desfaça o import e suba de novo.",
   training: "Usar como treino",
   trainingHelp: "A lista também ensina o Caçador o que você procura. Nada muda sem o seu OK.",
   ignore: "(ignorar)",

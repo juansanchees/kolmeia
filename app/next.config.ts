@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // Mail libraries run only on the server (E-mail area); load them with Node's require instead of bundling them.
   // A batch of 500 import rows is usually ~100 KB but can reach ~2 MB with long notes: above the 1 MB default.
+  // NOTE: bodySizeLimit is GLOBAL (every server action), not just the import ones; Next has no per-action limit.
   experimental: { serverActions: { bodySizeLimit: "4mb" } },
   serverExternalPackages: ["nodemailer", "imapflow", "mailparser"],
   // Old URLs from the 3-area move keep working (308); query strings pass through.

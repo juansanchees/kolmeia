@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { finishImportAction, importBatchAction, previewBatchAction, startImportAction } from "@/app/(app)/leads/subir/actions";
+import { finishImportAction, undoImportAction, importBatchAction, previewBatchAction, startImportAction } from "@/app/(app)/leads/subir/actions";
 import { btn, input, Notice } from "@/components/email/bits";
 import { detectMapping, hasIdColumn, IMPORT_FIELDS, type ImportField, type Mapping } from "@/lib/imports/fields";
 import { ImportFileError, IMPORT_LIMITS, readFileGrid } from "@/lib/imports/parse";
@@ -57,13 +57,17 @@ export function ImportWizard() {
         setError(M.fileErrors.tooManyColumns);
         return;
       }
+      if (!wanted && importId && file !== f) {
+        // a different file: the earlier, never-finished import would stay in the history as "importing"
+        void undoImportAction(importId).catch(() => {});
+        setImportId(null);
+      }
       setFile(f);
       setGrid(g.rows);
       setSheets(g.sheets);
       setSheet(g.sheet);
       setMapping(detectMapping(g.rows[0]));
       if (!wanted) setListName(f.name.replace(/\.[^.]+$/, "").slice(0, 80));
-      setImportId(null);
       setStep("columns");
     } catch (e) {
       setError(e instanceof ImportFileError ? M.fileErrors[e.code] : M.fileErrors.unreadable);
@@ -131,6 +135,8 @@ export function ImportWizard() {
       setBusy(false);
     }
   };
+
+  const back = () => setStep("file"); // keeps the file session and its import row: no orphan "importing" entry
 
   const reset = () => {
     setStep("file");
@@ -212,7 +218,7 @@ export function ImportWizard() {
           {noId && <Notice tone="warn" role="alert">{M.fileErrors.noIdColumn}</Notice>}
           {!listName.trim() && <p className="m-0 text-sm text-muted">{M.listNameRequired}</p>}
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={reset} className={btn.ghost}>{M.back}</button>
+            <button type="button" onClick={back} className={btn.ghost}>{M.back}</button>
             <button type="button" disabled={busy || noId || !listName.trim()} onClick={() => void toPreview()} className={btn.primary}>
               {busy ? M.previewLoading : M.next}
             </button>
