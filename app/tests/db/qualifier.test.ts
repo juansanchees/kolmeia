@@ -142,9 +142,9 @@ describe("0014 level, Qualificador and queue", () => {
     await okCheck(run, cand, "has_work");
     expect(await levelOf(l2)).toBe(4);
     await db.admin("update public.research_candidates set second_pass = 'refuted' where id = $1", [cand]);
-    expect(await levelOf(l2)).toBe(1);
+    expect(await levelOf(l2)).toBe(0); // its copied phone is refuted with it (I-2)
     const note = await db.admin<{ level_note: { from: number; to: number; field: string } }>("select level_note from public.leads where id = $1", [l2]);
-    expect(note[0].level_note).toEqual({ from: 4, to: 1, field: "second_pass" });
+    expect(note[0].level_note).toMatchObject({ from: 4, to: 0 });
   });
 
   test("K-3 a refuted field lowers the level visibly", async () => {
@@ -300,5 +300,82 @@ describe("0014 level, Qualificador and queue", () => {
     // deleting the lead keeps the ledger row (lead_id set null)
     await db.admin("delete from public.leads where id = $1", [lead]);
     expect(Number((await db.admin<{ n: string }>("select count(*) n from public.ai_calls where task like 'qualify_%' and lead_id is null"))[0].n)).toBe(4);
+    // I-5: deleting leads does not free the Qualificador's cap
+    expect(Number((await db.admin<{ s: string }>("select public.qualifier_spent_today($1) s", [wsA]))[0].s)).toBeCloseTo(0.14, 6);
+  });
+  test("I-1 a check that flips ok to no drops the level with a note; rewriting it in one call does not", async () => {
+    await clean();
+    const run = await newRun();
+    const cand = await candidate(run, { name: "Flip LLC", phone: "508-555-0111", temperature: "hot" });
+    const lead = await leadOf(cand);
+    await okCheck(run, cand, "has_work");
+    expect(await levelOf(lead)).toBe(4);
+    await db.admin("update public.research_checks set result = 'no' where candidate_id = $1 and kind = 'has_work'", [cand]);
+    expect(await levelOf(lead)).toBe(1);
+    expect((await db.admin<{ level_note: unknown }>("select level_note from public.leads where id = $1", [lead]))[0].level_note).toEqual({ from: 4, to: 1, field: "has_work" });
+    // back to ok (evidence rewritten): the level returns and the note goes away
+    await db.pg.transaction(async (tx) => {
+      const k = await tx.query<{ id: string }>("select id from public.research_checks where candidate_id = $1 and kind = 'has_work'", [cand]);
+      await tx.query("delete from public.research_evidence where check_id = $1", [k.rows[0].id]);
+      await tx.query("update public.research_checks set result = 'ok' where id = $1", [k.rows[0].id]);
+      await tx.query("insert into public.research_evidence (workspace_id, check_id, url, title, excerpt) values ($1,$2,'https://example.com/p2','P','proof')", [wsA, k.rows[0].id]);
+    });
+    expect(await levelOf(lead)).toBe(4);
+    expect((await db.admin<{ level_note: unknown }>("select level_note from public.leads where id = $1", [lead]))[0].level_note).toBeNull();
+    // a check deleted outright also drops the level
+    await db.admin("delete from public.research_checks where candidate_id = $1 and kind = 'has_work'", [cand]);
+    expect(await levelOf(lead)).toBe(1);
+  });
+
+  test("I-2 a refuted candidate's copied values stop counting; contact values need their proof", async () => {
+    await clean();
+    const run = await newRun();
+    const cand = await candidate(run, { name: "Gamma Co", phone: "508-555-0112", phoneUrl: "https://g.example/c", askName: "Ana Reis", askTitle: "Owner" });
+    const lead = await leadOf(cand);
+    const st = async (f: string) => (await db.admin<{ status: string }>("select status from public.lead_fields where lead_id = $1 and field = $2 and source = 'research'", [lead, f]))[0].status;
+    expect(await st("contact_name")).toBe("unverified");
+    await okCheck(run, cand, "decision_maker");
+    expect(await st("contact_name")).toBe("confirmed");
+    expect(await levelOf(lead)).toBe(3);
+    await db.admin("update public.research_checks set result = 'no' where candidate_id = $1 and kind = 'decision_maker'", [cand]);
+    expect(await st("contact_name")).toBe("unverified");
+    expect(await st("contact_title")).toBe("unverified");
+    expect(await levelOf(lead)).toBe(1);
+    // refuting the candidate refutes everything it copied
+    await db.admin("update public.research_candidates set second_pass = 'refuted' where id = $1", [cand]);
+    expect(await st("phone")).toBe("refuted");
+    expect(await st("name")).toBe("refuted");
+    expect(await levelOf(lead)).toBe(0);
+  });
+
+  test("I-3 the workspace of a queue row, a step and an AI call always comes from its lead", async () => {
+    await clean();
+    const lead = await importLead();
+    await db.admin("update public.qualifier_queue set workspace_id = $1 where lead_id = $2", [wsB, lead]);
+    expect((await db.admin<{ workspace_id: string }>("select workspace_id from public.qualifier_queue where lead_id = $1", [lead]))[0].workspace_id).toBe(wsA);
+    await db.admin("insert into public.qualifier_step_log (workspace_id, lead_id, step, outcome) values ($1,$2,'p1','ok')", [wsB, lead]);
+    expect((await db.admin<{ workspace_id: string }>("select workspace_id from public.qualifier_step_log where lead_id = $1", [lead]))[0].workspace_id).toBe(wsA);
+    await expect(
+      db.admin("insert into public.ai_calls (workspace_id, user_id, lead_id, task, model, prompt_version, status, reserve_usd) values ($1,$2,$3,'qualify_light','m','v','pending',0.1)", [wsB, UUID_B, lead]),
+    ).rejects.toMatchObject({ code: "42501" });
+    await db.admin("insert into public.ai_calls (workspace_id, user_id, lead_id, task, model, prompt_version, status, reserve_usd) values ($1,$2,$3,'qualify_light','m','v','pending',0.1)", [wsA, UUID_A, lead]);
+  });
+
+  test("I-4 a deleted candidate takes its copied values off every lead; m-1 a deleted value is silent", async () => {
+    await clean();
+    const run = await newRun();
+    const cand = await candidate(run, { name: "Delta Merge", phone: "508-555-0113" });
+    const other = await importLead();
+    await field(other, "phone", "5085550113", "unverified", "research", cand); // what P1 merge writes onto another lead
+    await field(other, "name", "Keep Me");
+    await db.admin("delete from public.research_candidates where id = $1", [cand]);
+    expect((await db.admin<{ field: string }>("select field from public.lead_fields where lead_id = $1 order by field", [other])).map((f) => f.field)).toEqual(["name"]);
+    // m-1: deleting a value lowers the level without a "refutado" note
+    const l2 = await importLead();
+    await field(l2, "phone", "5085550114");
+    expect(await levelOf(l2)).toBe(1);
+    await db.admin("delete from public.lead_fields where lead_id = $1", [l2]);
+    expect(await levelOf(l2)).toBe(0);
+    expect((await db.admin<{ level_note: unknown }>("select level_note from public.leads where id = $1", [l2]))[0].level_note).toBeNull();
   });
 });

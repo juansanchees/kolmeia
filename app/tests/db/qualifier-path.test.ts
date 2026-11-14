@@ -324,6 +324,15 @@ describe("0014 qualifier path", () => {
     expect(code((await done("p1", "ok", "p2")).error)).toBe("55000");
   });
 
+  test("m-6 values imported while the lead was claimed re-queue it instead of closing it", async () => {
+    const { ws, lead } = await seedQualifierLead(db);
+    const tick = await beginQualifierTick(db);
+    expect((await claim(tick))!.lead_id).toBe(lead);
+    await db.admin("insert into public.lead_fields (workspace_id, lead_id, field, value, source, source_ref) values ($1,$2,'phone','5085550188','import','late-list')", [ws, lead]);
+    expect((await tryRpc("select public.qualifier_step_done($1,$2,'p5','ok','done','complete')", [tick, lead])).error).toBeUndefined();
+    expect((await db.admin<{ next_step: string; done_reason: string | null; locked_by: string | null }>("select next_step, done_reason, locked_by from public.qualifier_queue where lead_id = $1", [lead]))[0]).toEqual({ next_step: "p1", done_reason: null, locked_by: null });
+  });
+
   test("qualifier_pause sets the reason; a daily-cap pause ends at the next New York midnight", async () => {
     const a = await seedQualifierLead(db);
     const b = await seedQualifierLead(db);

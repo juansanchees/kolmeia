@@ -79,7 +79,9 @@ create trigger copy_candidate_fields
   when (new.verified_at is not null and new.lead_id is not null)
   execute function public.copy_candidate_fields_trg();
 
--- A deleted candidate takes the values it copied with it (they have no other source). Runs before unlink_candidate_lead.
+-- A deleted candidate takes the values it copied with it, on its lead and on any lead P1 merged them into (they have
+-- no other source). Runs before unlink_candidate_lead.
+create index if not exists lead_fields_research_ref_idx on public.lead_fields (source_ref) where source = 'research';
 create or replace function public.delete_candidate_fields()
 returns trigger
 language plpgsql
@@ -88,7 +90,7 @@ set search_path = ''
 as $$
 begin
   delete from public.lead_fields f
-   where f.lead_id = old.lead_id and f.source = 'research' and f.source_ref = old.id::text;
+   where f.workspace_id = old.workspace_id and f.source = 'research' and f.source_ref = old.id::text;
   return old;
 end;
 $$;
@@ -96,7 +98,7 @@ $$;
 drop trigger if exists delete_candidate_fields on public.research_candidates;
 create trigger delete_candidate_fields
   before delete on public.research_candidates
-  for each row when (old.lead_id is not null)
+  for each row
   execute function public.delete_candidate_fields();
 
 -- ================================================================ Q2 level
@@ -147,9 +149,11 @@ begin
          level_note = case
            when p_field is not null and v_new < l.level
              then jsonb_build_object('from', l.level, 'to', v_new, 'field', p_field)
+           -- the level came back to what the note said it fell from (a check rewritten in one call): nothing to tell
+           when l.level_note is not null and v_new >= (l.level_note->>'from')::smallint then null
            else l.level_note
          end
-   where l.id = p_lead and l.level is distinct from v_new;
+   where l.id = p_lead and (l.level is distinct from v_new or (l.level_note is not null and v_new >= (l.level_note->>'from')::smallint));
 end;
 $$;
 
@@ -168,7 +172,8 @@ begin
       perform public.refresh_lead_level(old.lead_id, old.field);
     end if;
   else
-    perform public.refresh_lead_level(old.lead_id, old.field);
+    -- a deleted value (undo of an import, a deleted candidate) is not a refutation: silent
+    perform public.refresh_lead_level(old.lead_id, null);
   end if;
   return null;
 end;
@@ -179,6 +184,36 @@ create trigger level_from_lead_fields
   after insert or update or delete on public.lead_fields
   for each row execute function public.level_from_lead_fields();
 
+-- The contact values of a candidate are 'confirmed' only while its decision_maker proof (an ok check with evidence)
+-- exists; without it they stop counting (unverified); with it again they count again. Refuted rows stay refuted.
+create or replace function public.sync_candidate_contact(p_candidate uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  c public.research_candidates;
+  v_proof boolean;
+begin
+  select * into c from public.research_candidates x where x.id = p_candidate;
+  if not found or c.lead_id is null then
+    return;
+  end if;
+  v_proof := exists (
+    select 1 from public.research_checks k
+     where k.candidate_id = c.id and k.kind = 'decision_maker' and k.result = 'ok'
+       and exists (select 1 from public.research_evidence e where e.check_id = k.id));
+  update public.lead_fields f
+     set status = case when v_proof then 'confirmed' else 'unverified' end
+   where f.workspace_id = c.workspace_id and f.source = 'research' and f.source_ref = c.id::text
+     and f.field in ('contact_name', 'contact_title') and f.status <> 'refuted'
+     and f.status is distinct from case when v_proof then 'confirmed' else 'unverified' end;
+end;
+$$;
+
+-- Checks and their evidence change by upsert (result flips) and by delete-then-insert: every such change refreshes the
+-- level. A fall writes the note; the level coming back to its old height in the same call clears it again.
 create or replace function public.level_from_check()
 returns trigger
 language plpgsql
@@ -186,11 +221,13 @@ security definer
 set search_path = ''
 as $$
 declare
+  v_cand uuid := case when tg_op = 'DELETE' then old.candidate_id else new.candidate_id end;
   v_lead uuid;
 begin
-  select c.lead_id into v_lead from public.research_candidates c where c.id = new.candidate_id;
+  select c.lead_id into v_lead from public.research_candidates c where c.id = v_cand;
   if v_lead is not null then
-    perform public.refresh_lead_level(v_lead, null);
+    perform public.sync_candidate_contact(v_cand);
+    perform public.refresh_lead_level(v_lead, case when tg_op = 'INSERT' then null else (case when tg_op = 'DELETE' then old.kind else new.kind end) end);
   end if;
   return null;
 end;
@@ -198,10 +235,10 @@ $$;
 
 drop trigger if exists level_from_check on public.research_checks;
 create trigger level_from_check
-  after insert on public.research_checks
+  after insert or update of result or delete on public.research_checks
   for each row execute function public.level_from_check();
 
--- Evidence is written after its check: the proof only counts once it exists.
+-- Evidence is written after its check: the proof only counts once it exists, and stops when it is deleted.
 create or replace function public.level_from_evidence()
 returns trigger
 language plpgsql
@@ -209,14 +246,18 @@ security definer
 set search_path = ''
 as $$
 declare
+  v_check uuid := case when tg_op = 'DELETE' then old.check_id else new.check_id end;
   v_lead uuid;
+  v_cand uuid;
+  v_kind text;
 begin
-  select c.lead_id into v_lead
+  select c.lead_id, c.id, k.kind into v_lead, v_cand, v_kind
     from public.research_checks k
     join public.research_candidates c on c.id = k.candidate_id
-   where k.id = new.check_id;
+   where k.id = v_check;
   if v_lead is not null then
-    perform public.refresh_lead_level(v_lead, null);
+    perform public.sync_candidate_contact(v_cand);
+    perform public.refresh_lead_level(v_lead, case when tg_op = 'DELETE' then v_kind else null end);
   end if;
   return null;
 end;
@@ -224,7 +265,7 @@ $$;
 
 drop trigger if exists level_from_evidence on public.research_evidence;
 create trigger level_from_evidence
-  after insert on public.research_evidence
+  after insert or delete on public.research_evidence
   for each row execute function public.level_from_evidence();
 
 create or replace function public.level_from_candidate()
@@ -234,6 +275,11 @@ security definer
 set search_path = ''
 as $$
 begin
+  -- a refuted candidate's copied values stop counting
+  if new.second_pass = 'refuted' and old.second_pass is distinct from 'refuted' then
+    update public.lead_fields f set status = 'refuted'
+     where f.workspace_id = new.workspace_id and f.source = 'research' and f.source_ref = new.id::text and f.status <> 'refuted';
+  end if;
   perform public.refresh_lead_level(
     new.lead_id,
     case
@@ -496,7 +542,7 @@ create trigger add_ai_cost_to_lead
 create or replace function public.qualifier_day_start_at(p_now timestamptz)
 returns timestamptz
 language sql
-immutable
+stable
 set search_path = ''
 as $$
   select date_trunc('day', p_now at time zone 'America/New_York') at time zone 'America/New_York';
@@ -521,7 +567,7 @@ set search_path = ''
 as $$
   select coalesce(sum(case when c.status = 'pending' then greatest(c.reserve_usd, c.cost_usd) else c.cost_usd end), 0)
     from public.ai_calls c
-   where c.workspace_id = p_ws and c.lead_id is not null and left(c.task, 8) = 'qualify_'
+   where c.workspace_id = p_ws and left(c.task, 8) = 'qualify_'
      and c.created_at >= public.qualifier_day_start();
 $$;
 
@@ -636,6 +682,51 @@ select public.copy_candidate_fields(c.id)
  where c.lead_id is not null and c.verified_at is not null;
 
 select public.refresh_lead_level(l.id, null) from public.leads l;
+
+-- ================================================================ workspace always comes from the lead
+create or replace function public.workspace_from_lead()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  select l.workspace_id into new.workspace_id from public.leads l where l.id = new.lead_id;
+  if new.workspace_id is null then
+    raise exception 'lead not found' using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists workspace_from_lead on public.qualifier_queue;
+create trigger workspace_from_lead before insert or update of lead_id, workspace_id on public.qualifier_queue
+  for each row execute function public.workspace_from_lead();
+drop trigger if exists workspace_from_lead on public.qualifier_step_log;
+create trigger workspace_from_lead before insert or update of lead_id, workspace_id on public.qualifier_step_log
+  for each row execute function public.workspace_from_lead();
+
+create or replace function public.ai_call_lead_in_workspace()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.lead_id is not null and not exists (select 1 from public.leads l where l.id = new.lead_id and l.workspace_id = new.workspace_id) then
+    raise exception 'lead is not in the workspace' using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists ai_call_lead_in_workspace on public.ai_calls;
+create trigger ai_call_lead_in_workspace before insert or update of lead_id, workspace_id on public.ai_calls
+  for each row execute function public.ai_call_lead_in_workspace();
+revoke all on function public.workspace_from_lead() from public, anon, authenticated;
+revoke all on function public.ai_call_lead_in_workspace() from public, anon, authenticated;
+revoke all on function public.sync_candidate_contact(uuid) from public, anon, authenticated;
+
+-- when a tick claimed the lead (new imported values after it re-queue the lead instead of closing it)
+alter table public.qualifier_queue add column if not exists claimed_at timestamptz;
 
 -- ============================================================================================================
 -- Part 2 (T2): the Qualificador's token-gated path. Same rules as 0010 hunter_* and 0013 source_*: SECURITY DEFINER,
@@ -779,7 +870,7 @@ begin
   if v_lead is null then
     return null;
   end if;
-  update public.qualifier_queue q set locked_by = p_tick, locked_until = now() + interval '180 seconds' where q.lead_id = v_lead;
+  update public.qualifier_queue q set locked_by = p_tick, locked_until = now() + interval '180 seconds', claimed_at = now() where q.lead_id = v_lead;
 
   select jsonb_build_object(
     'lead_id', q.lead_id,
@@ -966,6 +1057,16 @@ begin
     raise exception 'done needs a reason: complete, lead_cap or dead' using errcode = '22023';
   end if;
   insert into public.qualifier_step_log (workspace_id, lead_id, step, outcome) values (v_ws, p_lead, p_step, p_outcome);
+  -- imported values that arrived while the lead was claimed (the re-queue trigger only sees finished leads): do not close
+  if p_next = 'done' and exists (
+       select 1 from public.lead_fields f, public.qualifier_queue z
+        where z.lead_id = p_lead and f.lead_id = p_lead and f.source in ('import', 'apify_maps', 'apollo') and f.created_at > z.claimed_at) then
+    update public.qualifier_queue q
+       set notes = q.notes || jsonb_build_object(p_step, p_outcome), last_step_at = now(), fail_streak = 0, fail_step = null,
+           next_step = 'p1', done_reason = null, enqueued_at = now(), locked_by = null, locked_until = null, claimed_at = null
+     where q.lead_id = p_lead;
+    return;
+  end if;
   update public.qualifier_queue q
      set notes = q.notes || jsonb_build_object(p_step, p_outcome),
          last_step_at = now(),
