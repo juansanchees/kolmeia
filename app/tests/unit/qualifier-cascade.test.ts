@@ -175,7 +175,7 @@ const places = (hit: PlaceHit | null) => {
   return { client, calls };
 };
 const NAME_ONLY = { name: "Acme HVAC", website: null, phone: null, city: "Worcester", state: "MA" };
-const added = (store: { log: unknown[][] }) => store.log.filter((l) => l[0] === "addFields").flatMap((l) => l[2] as { field: string; value: string; source: string; status: string; source_ref?: string }[]);
+const added = (store: { log: unknown[][] }) => store.log.filter((l) => l[0] === "addFields").flatMap((l) => l[2] as { field: string; value: string; source: string; status: string; source_ref?: string; excerpt?: string }[]);
 
 describe("P3 Places", () => {
   test("P3 off without a key says places_off and the cascade goes on", async () => {
@@ -320,5 +320,145 @@ describe("P4 IA leve", () => {
       const x = await qualifyLead(snapshot({ nextStep: "p2", fields: [withSite()] }), deps(st, fakeHttp({ [SITE]: LIGHT }), { transport: model([]) }));
       expect(x).toMatchObject({ result: "paused", pauseReason: reason });
     }
+  });
+});
+
+describe("P5 IA forte", () => {
+  const ABOUT = "https://acme-hvac.test/about";
+  const PERMIT = "https://permits.worcester.example/p/12-main";
+  const ev = (url: string, excerpt: string) => ({ url, title: "Page", excerpt });
+  type Checks = { exists?: "ok" | "no" | "unknown"; work?: "ok" | "no" | "unknown"; dm?: "ok" | "no" | "unknown" };
+  const deepAnswer = (c: Checks, extra: object = {}) => ({
+    companies: [
+      {
+        ref: "L1",
+        urls_tried: [],
+        checks: [
+          { kind: "exists_active", result: c.exists ?? "ok", summary: "ativa", evidence: [ev(ABOUT, "Acme HVAC since 1998")] },
+          { kind: "has_work", result: c.work ?? "unknown", summary: "Obra nova de 24 unidades em Worcester", evidence: c.work === "ok" ? [ev(PERMIT, "Permit issued 2026-10-20, 24 units")] : [] },
+          { kind: "decision_maker", result: c.dm ?? "unknown", summary: "dona", evidence: c.dm === "unknown" || !c.dm ? [] : [ev(ABOUT, "Pat Doe, President, handles mechanical subs")] },
+        ],
+        permit_count: "", total_value_usd: "", last_permit_date: "", biggest_job_address: "", biggest_job_value_usd: "", biggest_job_type: "", biggest_job_description: "", signal_match: "",
+        ask_for_name: c.dm === "ok" ? "Pat Doe" : "",
+        ask_for_title: c.dm === "ok" ? "President" : "",
+        name_confidence: c.dm === "ok" ? "medium" : "none",
+        name_source_url: c.dm === "ok" ? ABOUT : "",
+        name_note: "",
+        phone: "", phone_source_url: "", website: "", public_email: "", email_type: "none", email_source_url: "", google_rating: "", review_count: "", rating_source_url: "",
+        is_large_contractor: false, supplier_portal_url: "", hook: "", notes: "",
+        ...extra,
+      },
+    ],
+    jobs_without_builder: [],
+  });
+  const deepModel = (c: Checks, extra: object = {}) => new FakeTransport({ qualify_deep: () => ({ json: deepAnswer(c, extra) }) });
+  const ledgerOf = (rows: { reserve: number[]; settled: number }) => ({
+    dailyCapUsd: async () => 10,
+    spentTodayUsd: async () => 0,
+    record: async () => undefined,
+    reserve: async (r: { reserveUsd: number }) => {
+      rows.reserve.push(r.reserveUsd);
+      return "c1";
+    },
+    settle: async () => void rows.settled++,
+  });
+  const base = { nextStep: "p5" as const, level: 1, profileMatch: true, fields: [field({ field: "phone", value: "5085550100" }), field({ field: "name", value: "Acme HVAC" })], best: { name: "Acme HVAC", website: null, phone: null, city: "Worcester", state: "MA" } };
+  const run = async (over: Partial<ReturnType<typeof snapshot>>, t: FakeTransport) => {
+    const rows = { reserve: [] as number[], settled: 0 };
+    const store = fakeQualifierStore([], { ledger: ledgerOf(rows) });
+    const r = await qualifyLead(snapshot({ ...base, ...over }), deps(store, undefined, { transport: t }));
+    return { r, store, rows };
+  };
+
+  test("P5 auto runs only for contactable leads that match the profile, and never with the switch off or no profile", async () => {
+    const calls = async (over: Partial<ReturnType<typeof snapshot>>) => {
+      const t = deepModel({});
+      await run(over, t);
+      return t.callsFor("qualify_deep").length;
+    };
+    expect(await calls({})).toBe(1);
+    expect(await calls({ profileMatch: false })).toBe(0); // no profile, or it does not match
+    expect(await calls({ settings: { ...snapshot().settings, autoDeep: false } })).toBe(0);
+    expect(await calls({ level: 0 })).toBe(0); // not contactable
+    expect(await calls({ level: 4 })).toBe(0);
+    const { store } = await run({ profileMatch: false }, deepModel({}));
+    expect(steps(store)).toEqual(["p5:skipped:done:complete"]);
+    const none = fakeQualifierStore([]);
+    await qualifyLead(snapshot({ ...base }), deps(none, undefined, { transport: null }));
+    expect(steps(none)).toEqual(["p5:no_ai:done:complete"]);
+  });
+
+  test("P5 manual runs for a requested lead whatever the profile", async () => {
+    const t = deepModel({});
+    const { rows } = await run({ deepRequested: true, manual: true, profileMatch: false, level: 0, fields: [], best: base.best }, t);
+    expect(t.callsFor("qualify_deep")).toHaveLength(1);
+    expect(rows.settled).toBe(1);
+    // the request names one company, "L1", and the deep question
+    expect(t.calls[0].user).toContain("L1");
+    expect(t.calls[0].user).toContain("who decides on HVAC");
+  });
+
+  test("P5 writes the decision maker and active work with their proof; a \"no\" with evidence refutes an imported contact; a closed company is dead", async () => {
+    const { r, store } = await run({}, deepModel({ work: "ok", dm: "ok" }, { phone: "(508) 555-0188", phone_source_url: ABOUT, public_email: "Pat@Acme-HVAC.test", email_source_url: ABOUT, email_type: "named" }));
+    expect(r.result).toBe("done");
+    const rows = added(store);
+    expect(rows.find((a) => a.field === "contact_name")).toMatchObject({ value: "Pat Doe", source: "ai", status: "confirmed", source_ref: ABOUT, excerpt: "Pat Doe, President, handles mechanical subs" });
+    expect(rows.find((a) => a.field === "contact_title")).toMatchObject({ value: "President", status: "confirmed" });
+    const work = rows.find((a) => a.field === "active_project")!;
+    expect(work).toMatchObject({ value: "Obra nova de 24 unidades em Worcester", status: "confirmed", source_ref: PERMIT, excerpt: "Permit issued 2026-10-20, 24 units" });
+    expect(rows.find((a) => a.field === "phone")).toMatchObject({ value: "(508) 555-0188", status: "confirmed", source_ref: ABOUT });
+    expect(rows.find((a) => a.field === "email")).toMatchObject({ value: "pat@acme-hvac.test", status: "confirmed" });
+    expect(steps(store)).toEqual(["p5:ok:done:complete"]);
+    // a "no" with evidence refutes an unverified imported contact (and only that)
+    const old = field({ field: "contact_name", value: "Old Owner" });
+    const mine = field({ field: "contact_title", value: "Boss", source: "site", status: "confirmed" });
+    const phone = field({ field: "phone", value: "5085550100" });
+    const refuted = await run({ fields: [old, mine, phone] }, deepModel({ dm: "no" }));
+    expect(refuted.store.log.find((l) => l[0] === "refute")![2]).toEqual([old.id]);
+    expect(added(refuted.store).some((a) => a.field === "contact_name")).toBe(false);
+    // "no" without evidence is not a refutation (the check comes back "unknown" or with no proof)
+    const unsure = await run({ fields: [old, phone] }, deepModel({ dm: "unknown" }));
+    expect(unsure.store.log.some((l) => l[0] === "refute")).toBe(false);
+    // a closed company is dead
+    const dead = await run({}, deepModel({ exists: "no" }));
+    expect(dead.r.result).toBe("done");
+    expect(steps(dead.store)).toEqual(["p5:ok:done:dead"]);
+    expect(dead.store.log.some((l) => l[0] === "addFields")).toBe(false);
+  });
+
+  test("the deep call shrinks to the lead's cap and otherwise stops as \"parou no teto\"", async () => {
+    // the full call reserves 0.85; the lead has 0.40 left: fewer searches, same task, nothing refused
+    const t = deepModel({});
+    const { rows, r } = await run({ spentUsd: 0.1, settings: { ...snapshot().settings, leadCapUsd: 0.5 } }, t);
+    expect(r.result).toBe("done");
+    expect(t.callsFor("qualify_deep")).toHaveLength(1);
+    expect(rows.reserve).toHaveLength(1);
+    expect(rows.reserve[0]).toBeLessThanOrEqual(0.4);
+    expect(t.calls[0].web?.search?.maxUses).toBeLessThan(3);
+    // 0.10 left: not even the smallest call fits; nothing is reserved, the lead ends "lead_cap"
+    const small = deepModel({});
+    const out = await run({ spentUsd: 0.4, settings: { ...snapshot().settings, leadCapUsd: 0.5 } }, small);
+    expect(small.calls).toHaveLength(0);
+    expect(out.rows.reserve).toEqual([]);
+    expect(out.r.result).toBe("done");
+    expect(steps(out.store)).toEqual(["p5:lead_cap:done:lead_cap"]);
+    // the database's own lead_cap answer ends the lead the same way
+    const db = fakeQualifierStore([], { ledger: { dailyCapUsd: async () => 10, spentTodayUsd: async () => 0, record: async () => undefined, reserve: async () => Promise.reject(new AiError("lead_cap")) } });
+    await qualifyLead(snapshot({ ...base }), deps(db, undefined, { transport: deepModel({}) }));
+    expect(steps(db)).toEqual(["p5:lead_cap:done:lead_cap"]);
+  });
+
+  test("J-1 the daily cap pauses the Qualificador before reserving past it; the lead stays queued", async () => {
+    const t = deepModel({});
+    // 0.20 left today, the lead has plenty: the day is the tighter limit
+    const { r, store, rows } = await run({ settings: { ...snapshot().settings, dailyCapUsd: 5, spentToday: 4.8, leadCapUsd: 0.5 } }, t);
+    expect(r).toMatchObject({ result: "paused", pauseReason: "daily_cap" });
+    expect(t.calls).toHaveLength(0);
+    expect(rows.reserve).toEqual([]);
+    expect(steps(store)).toEqual([]); // nothing written: the lead goes back to the queue unchanged
+    // the database refusing at reserve time pauses the same way
+    const db = fakeQualifierStore([], { ledger: { dailyCapUsd: async () => 10, spentTodayUsd: async () => 0, record: async () => undefined, reserve: async () => Promise.reject(new AiError("qualifier_daily")) } });
+    const r2 = await qualifyLead(snapshot({ ...base }), deps(db, undefined, { transport: deepModel({}) }));
+    expect(r2).toMatchObject({ result: "paused", pauseReason: "daily_cap" });
   });
 });

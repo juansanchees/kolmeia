@@ -1,8 +1,13 @@
 import "server-only";
 import { z } from "zod";
+import { displayOf } from "@/lib/leads/view";
+import type { LeadFieldRow } from "@/lib/leads/types";
+import type { LeadSnapshot } from "@/lib/qualifier/types";
 import { COMPANY_TYPES, type CompanyType } from "@/lib/research/types";
 import { runTask, type AiContext, type TaskDef, type TaskResult } from "./gateway";
 import { MODELS } from "./models";
+import type { ProfileInput } from "./prompts/shared";
+import { TASK_DEFS, type VerifyResult } from "./tasks";
 import * as lightP from "./prompts/qualify-light";
 import type { LightInput } from "./prompts/qualify-light";
 
@@ -114,4 +119,47 @@ export const lightDef: TaskDef<LightInput, LightParsed, LightOut> = {
 
 export function lightQualify(ctx: AiContext, input: LightInput): Promise<TaskResult<LightOut>> {
   return runTask(ctx, lightDef, input);
+}
+
+// P5 (qualify_deep): the research verify task under its own task name, so the ledger and Gastos tell it apart. Same
+// model (Sonnet), same "careful" web budget and the same evidence rules (an "ok" needs a source the web tools returned).
+// One company per call; the page and web text it reads is untrusted data, as in research.
+
+export const DEEP_REQUEST =
+  "Confirm this company is active, whether it has construction work happening now (with a dated public source), and who decides on HVAC or mechanical subcontractors.";
+export const deepDef = { ...TASK_DEFS.verifyDef, task: "qualify_deep" as const };
+const DEEP_KINDS = ["exists_active", "has_work", "decision_maker"] as const;
+
+/** The approved company profile as the verify prompt wants it; anything else is "not filled in yet". */
+function profileOf(raw: unknown): ProfileInput {
+  const r = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
+  if (!r) return null;
+  const s = (v: unknown) => (typeof v === "string" ? v : "");
+  const wanted = Array.isArray(r.wanted_work) ? r.wanted_work.filter((x): x is string => typeof x === "string") : [];
+  return { what_we_do: s(r.what_we_do), service_area: s(r.service_area), wanted_work: wanted, good_customer: s(r.good_customer), not_wanted: s(r.not_wanted) };
+}
+
+export function verifyLead(ctx: AiContext, s: LeadSnapshot, today: string): Promise<TaskResult<VerifyResult>> {
+  const epoch = new Date(0).toISOString();
+  const rows: LeadFieldRow[] = s.fields.map((f) => ({
+    id: f.id,
+    lead_id: f.leadId,
+    field: f.field as LeadFieldRow["field"],
+    value: f.value,
+    source: f.source as LeadFieldRow["source"],
+    source_ref: f.sourceRef,
+    status: f.status,
+    excerpt: f.excerpt,
+    seen_at: f.seenAt ?? epoch,
+  }));
+  const shown = displayOf(null, rows);
+  const company = {
+    ref: "L1",
+    name: s.best?.name ?? shown.name,
+    city: s.best?.city ?? shown.city,
+    state: s.best?.state ?? null,
+    website: s.best?.website ?? shown.website,
+    phone: s.best?.phone ?? shown.phone,
+  };
+  return runTask(ctx, deepDef, { rigor: "careful", kinds: DEEP_KINDS, profile: profileOf(s.companyProfile), request: DEEP_REQUEST, today, companies: [company] });
 }

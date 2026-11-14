@@ -5,6 +5,7 @@ import { runQualifierTick } from "@/lib/qualifier/tick";
 import { TestDb, setSchedulerToken } from "../db/helpers";
 import { TOKEN } from "../db/scheduler-seed";
 import { seedQualifierLead } from "../db/qualifier-seed";
+import { FakeTransport } from "./fake-ai";
 import { fakeHttp, htmlPage } from "../unit/qualifier-fakes";
 import { pgRpc } from "./pg-rpc";
 
@@ -48,5 +49,58 @@ describe("Qualificador tick on the real path", () => {
     expect((await run()).leads).toBe(0);
     const ticks = await db.admin("select 1 from public.qualifier_ticks where finished_at is null");
     expect(ticks).toHaveLength(0);
+  });
+});
+
+describe("Qualificador deep step on the real path", () => {
+  test("with a fake AI, a manual request reaches level 3 with proof; its ai_calls rows carry lead_id and qualify_deep; the queue's spent equals the ledger", async () => {
+    const { ws, lead } = await seedQualifierLead(db, { fields: [{ field: "phone", value: "5085550177" }, { field: "name", value: "Beta Mechanical" }] });
+    // what the lead page's "qualificar" button does (request_qualification, as a sender): manual, strong AI step on
+    await db.admin("update public.qualifier_queue set manual_at = now(), deep_requested = true where lead_id = $1", [lead]);
+    // 0014 reads "manual_at >= claimed_at" as a request that came in during the claim: let the clock move past it
+    await new Promise((r) => setTimeout(r, 25));
+    const ABOUT = "https://beta-mechanical.test/about";
+    const ai = new FakeTransport({
+      qualify_deep: () => ({
+        json: {
+          companies: [
+            {
+              ref: "L1",
+              urls_tried: [],
+              checks: [
+                { kind: "exists_active", result: "ok", summary: "ativa", evidence: [{ url: ABOUT, title: "About", excerpt: "Beta Mechanical, est. 2004" }] },
+                { kind: "has_work", result: "unknown", summary: "", evidence: [] },
+                { kind: "decision_maker", result: "ok", summary: "dono", evidence: [{ url: ABOUT, title: "About", excerpt: "Lee Beta, Owner" }] },
+              ],
+              permit_count: "", total_value_usd: "", last_permit_date: "", biggest_job_address: "", biggest_job_value_usd: "", biggest_job_type: "", biggest_job_description: "", signal_match: "",
+              ask_for_name: "Lee Beta", ask_for_title: "Owner", name_confidence: "medium", name_source_url: ABOUT, name_note: "",
+              phone: "", phone_source_url: "", website: "", public_email: "", email_type: "none", email_source_url: "", google_rating: "", review_count: "", rating_source_url: "",
+              is_large_contractor: false, supplier_portal_url: "", hook: "", notes: "",
+            },
+          ],
+          jobs_without_builder: [],
+        },
+      }),
+    });
+    const r = await runQualifierTick({ store: rpcQualifierStore(pgRpc(db, TOKEN)), transport: ai, http: fakeHttp({}), sleep: async () => undefined });
+    expect(r).toMatchObject({ outcome: "ok", failed: 0 });
+    expect(ai.callsFor("qualify_deep")).toHaveLength(1);
+    const [l] = await db.admin<{ level: number }>("select level from public.leads where id = $1", [lead]);
+    expect(l.level).toBe(3);
+    const proof = await db.admin<{ field: string; status: string; source: string; source_ref: string; excerpt: string }>(
+      "select field, status, source, source_ref, excerpt from public.lead_fields where lead_id = $1 and source = 'ai' order by field",
+      [lead],
+    );
+    expect(proof).toEqual([
+      { field: "contact_name", status: "confirmed", source: "ai", source_ref: ABOUT, excerpt: "Lee Beta, Owner" },
+      { field: "contact_title", status: "confirmed", source: "ai", source_ref: ABOUT, excerpt: "Lee Beta, Owner" },
+    ]);
+    const calls = await db.admin<{ lead_id: string; task: string; status: string; cost_usd: string }>("select lead_id, task, status, cost_usd from public.ai_calls where workspace_id = $1", [ws]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ lead_id: lead, task: "qualify_deep", status: "ok" });
+    const [q] = await db.admin<{ spent_usd: string; next_step: string; done_reason: string }>("select spent_usd, next_step, done_reason from public.qualifier_queue where lead_id = $1", [lead]);
+    expect(Number(q.spent_usd)).toBeCloseTo(Number(calls[0].cost_usd), 6);
+    expect(Number(q.spent_usd)).toBeGreaterThan(0);
+    expect(q).toMatchObject({ next_step: "done", done_reason: "complete" });
   });
 });

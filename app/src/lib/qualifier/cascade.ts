@@ -1,10 +1,11 @@
 import "server-only";
-import { isAiError, type AiErrorCode } from "@/lib/ai/errors";
-import { lightQualify } from "@/lib/ai/qualify-tasks";
+import { AiError, isAiError, type AiErrorCode } from "@/lib/ai/errors";
+import { lightQualify, verifyLead } from "@/lib/ai/qualify-tasks";
 import type { AiTransport } from "@/lib/ai/types";
 import { sanitizeUrl } from "@/lib/safe-url";
 import { PLACES_CALL_USD } from "./places";
 import type { RawHttp } from "./site/net";
+import { cut } from "./site/extract";
 import { readSite, type SiteRead } from "./site/reader";
 import { factsToFields, fieldKey, liveFields, liveLevel, siteField } from "./site-facts";
 import type { QualifierTickStore } from "./store";
@@ -32,6 +33,14 @@ export type CascadeResult = {
   /** The lead was given back because a step failed: the tick keeps it out of the rest of this tick. */
   errored?: boolean;
 };
+
+/** Imported values a "no" from the decision-maker check may refute (research values follow their own proof in the database). */
+const IMPORTED = new Set(["import", "apify_maps", "apollo"]);
+
+/** P5 runs for a lead the AI can still raise (level < 4) that was asked for, or contactable and matching the profile with the switch on. */
+export function deepEligible(s: LeadSnapshot, aiOn: boolean): boolean {
+  return aiOn && s.level < 4 && (s.deepRequested || (s.settings.autoDeep && s.profileMatch && s.level >= 1));
+}
 
 const ORDER: QualifierStep[] = ["p1", "p2", "p3", "p4", "p5"];
 const MAX_STREAK = 3;
@@ -72,6 +81,9 @@ export async function qualifyLead(s: LeadSnapshot, d: CascadeDeps): Promise<Casc
   let site: SiteRead | null = null;
   // P2 found the site down and there is no other site left to read
   let siteDown = false;
+  // what this lead and the Qualificador's day have spent, kept current inside the pass (the snapshot is from the claim)
+  let leadSpent = s.spentUsd;
+  let daySpent = s.settings.spentToday;
   const reach = () => fields.some((f) => REACH.has(f.field) && f.status !== "refuted");
 
   const run = async (step: QualifierStep): Promise<StepResult> => {
@@ -116,6 +128,8 @@ export async function qualifyLead(s: LeadSnapshot, d: CascadeDeps): Promise<Casc
           throw e;
         }
         await store.settlePlaces(tickId, leadId, id, PLACES_CALL_USD, true);
+        leadSpent += PLACES_CALL_USD;
+        daySpent += PLACES_CALL_USD;
         // the place said nothing, or the site was already down and Places has nobody to reach: dead
         if (!hit) return siteDown && !reach() ? { outcome: "ok", done: "dead" } : { outcome: "ok" };
         const rows: FieldIn[] = [{ field: "place_id", value: hit.placeId, source: "places", status: "unverified", excerpt: "Google Places" }];
@@ -143,6 +157,8 @@ export async function qualifyLead(s: LeadSnapshot, d: CascadeDeps): Promise<Casc
         const pages = (site?.pages ?? []).filter((p) => p.text.trim()).map((p) => ({ url: p.url, text: p.text }));
         if (pages.length === 0) return { outcome: "skipped" }; // only pages read in this pass
         const r = await lightQualify({ workspaceId: s.workspaceId, runId: null, ledger: store.ledger(tickId, leadId), transport: d.transport }, { pages });
+        leadSpent += r.costUsd;
+        daySpent += r.costUsd;
         const held = new Set(fields.map((f) => `${f.field}:${fieldKey(f.field, f.value)}`));
         const rows: FieldIn[] = [];
         for (const v of r.data.values) {
@@ -160,8 +176,64 @@ export async function qualifyLead(s: LeadSnapshot, d: CascadeDeps): Promise<Casc
         }
         return { outcome: "ok" };
       }
-      case "p5":
-        return { outcome: d.transport ? "skipped" : "no_ai" }; // Task 7 replaces this
+      case "p5": {
+        if (!d.transport) return { outcome: "no_ai" };
+        if (!deepEligible({ ...s, level }, true)) return { outcome: "skipped" };
+        const { leadCapUsd, dailyCapUsd } = s.settings;
+        // the call shrinks to what is left of the lead's cap and of the day; the gateway raises run_cap when even the smallest does not fit
+        const runBudget = { spentUsd: leadSpent, maxUsd: Math.min(leadCapUsd, leadSpent + (dailyCapUsd - daySpent)) };
+        let r;
+        try {
+          r = await verifyLead({ workspaceId: s.workspaceId, runId: null, ledger: store.ledger(tickId, leadId), transport: d.transport, runBudget }, { ...s, fields }, new Date().toISOString().slice(0, 10));
+        } catch (e) {
+          // not even the smallest call fits: the lead's cap if that is the tighter limit, else the day's
+          if (isAiError(e) && e.code === "run_cap") throw new AiError(leadCapUsd - leadSpent <= dailyCapUsd - daySpent ? "lead_cap" : "qualifier_daily");
+          throw e;
+        }
+        const c = r.data[0];
+        if (!c) return { outcome: "ok" };
+        const check = (kind: string) => c.checks.find((k) => k.kind === kind);
+        const proved = (kind: string) => {
+          const k = check(kind);
+          return k && k.result === "ok" && k.evidence.length > 0 ? k : null;
+        };
+        const no = (kind: string) => {
+          const k = check(kind);
+          return k && k.result === "no" && k.evidence.length > 0 ? k : null;
+        };
+        // a closed company: nothing else is worth writing
+        if (no("exists_active")) return { outcome: "ok", done: "dead" };
+        const held = new Set(fields.filter((f) => f.status === "confirmed").map((f) => `${f.field}:${fieldKey(f.field, f.value)}`));
+        const rows: FieldIn[] = [];
+        const push = (row: FieldIn) => {
+          const k = `${row.field}:${fieldKey(row.field, row.value)}`;
+          if (held.has(k) || [...row.value].length > 1000) return;
+          held.add(k);
+          rows.push(row);
+        };
+        const dm = proved("decision_maker");
+        if (dm && c.askForName && c.nameSourceUrl) {
+          const ev = dm.evidence[0];
+          const base = { source: "ai" as const, source_ref: c.nameSourceUrl, status: "confirmed" as const, excerpt: cut(ev.excerpt, 300), seen_at: ev.seenAt };
+          push({ field: "contact_name", value: c.askForName, ...base });
+          if (c.askForTitle) push({ field: "contact_title", value: c.askForTitle, ...base });
+        }
+        const work = proved("has_work");
+        if (work) {
+          const ev = work.evidence[0];
+          const value = cut(work.summary.trim() || c.signalMatch || ev.title, 300);
+          if (value) push({ field: "active_project", value, source: "ai", source_ref: ev.url, status: "confirmed", excerpt: cut(ev.excerpt, 300), seen_at: ev.seenAt });
+        }
+        if (c.phone && c.phoneSourceUrl) push({ field: "phone", value: c.phone, source: "ai", source_ref: c.phoneSourceUrl, status: "confirmed" });
+        if (c.publicEmail && c.emailSourceUrl) push({ field: "email", value: c.publicEmail.toLowerCase(), source: "ai", source_ref: c.emailSourceUrl, status: "confirmed" });
+        // nobody decides there, with proof: an imported contact nobody confirmed is refuted
+        const refute = no("decision_maker") ? fields.filter((f) => (f.field === "contact_name" || f.field === "contact_title") && f.status === "unverified" && IMPORTED.has(f.source)).map((f) => f.id) : [];
+        if (rows.length) await store.addFields(tickId, leadId, rows);
+        if (refute.length) await store.refute(tickId, leadId, refute);
+        fields = liveFields({ ...s, fields }, rows, refute);
+        level = liveLevel(level, fields);
+        return { outcome: "ok" };
+      }
     }
   };
 

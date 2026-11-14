@@ -76,5 +76,6 @@ export function liveLevel(base: number, fields: FieldRow[]): number {
   const live = fields.filter((f) => f.status !== "refuted");
   const ok = (name: string) => live.some((f) => f.field === name && f.status === "confirmed");
   const reach = live.some((f) => f.field === "phone" || f.field === "email");
-  return Math.max(base, ok("website") && ok("address") ? 2 : reach ? 1 : 0);
+  const own = ok("active_project") ? 4 : ok("contact_name") && ok("contact_title") ? 3 : ok("website") && ok("address") ? 2 : reach ? 1 : 0;
+  return Math.max(base, own);
 }
