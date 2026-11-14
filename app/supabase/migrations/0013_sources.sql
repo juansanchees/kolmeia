@@ -234,6 +234,9 @@ begin
   if auth.uid() is null or p_ws is null or not public.is_workspace_owner(p_ws) then
     raise exception 'not allowed' using errcode = '42501';
   end if;
+  if p_provider is null or p_provider not in ('apify', 'apollo') then
+    raise exception 'invalid provider' using errcode = '22023';
+  end if;
   perform pg_advisory_xact_lock(hashtext('source:' || p_ws::text));
   update public.source_runs r
      set status = 'refused', error = 'disconnected', finished_at = now()
@@ -242,8 +245,17 @@ begin
 end;
 $$;
 
--- The ciphertext, for the server to decrypt in memory and test-save (owner only; never sent to the browser).
+-- The ciphertext, for the clock's route to decrypt in memory. Token-gated like 0010's hunter_* (scheduler token header,
+-- anon key only); no client can read a stored ciphertext. The old session function is revoked from every client role.
+-- source_secret(p_ws, p_provider) (owner session read) is kept only as a revoked stub: no role may execute it.
 create or replace function public.source_secret(p_ws uuid, p_provider text)
+returns text
+language sql
+stable
+security definer
+set search_path = ''
+as $$ select null::text $$;
+create or replace function public.source_secret_for_tick(p_ws uuid, p_provider text)
 returns text
 language plpgsql
 stable
@@ -253,13 +265,10 @@ as $$
 declare
   v_ct text;
 begin
-  if auth.uid() is null or p_ws is null or not public.is_workspace_owner(p_ws) then
+  if not public.scheduler_authorized() then
     raise exception 'not allowed' using errcode = '42501';
   end if;
   select c.secret_ciphertext into v_ct from public.source_connections c where c.workspace_id = p_ws and c.provider = p_provider;
-  if v_ct is null then
-    raise exception 'source_not_connected' using errcode = '22023';
-  end if;
   return v_ct;
 end;
 $$;
@@ -690,7 +699,8 @@ revoke all on function public.list_source_connections(uuid) from public, anon;
 revoke all on function public.set_source_connection(uuid, text, text, text, numeric) from public, anon;
 revoke all on function public.set_source_cap(uuid, text, numeric) from public, anon;
 revoke all on function public.delete_source_connection(uuid, text) from public, anon;
-revoke all on function public.source_secret(uuid, text) from public, anon;
+revoke all on function public.source_secret(uuid, text) from public, anon, authenticated;
+revoke all on function public.source_secret_for_tick(uuid, text) from public, authenticated;
 revoke all on function public.set_agent_source_settings(uuid, jsonb) from public, anon;
 revoke all on function public.enqueue_source_run(uuid, text, jsonb, int) from public, anon;
 revoke all on function public.import_lead_rows(uuid, jsonb) from public, anon;
@@ -699,7 +709,7 @@ grant execute on function public.list_source_connections(uuid) to authenticated;
 grant execute on function public.set_source_connection(uuid, text, text, text, numeric) to authenticated;
 grant execute on function public.set_source_cap(uuid, text, numeric) to authenticated;
 grant execute on function public.delete_source_connection(uuid, text) to authenticated;
-grant execute on function public.source_secret(uuid, text) to authenticated;
+grant execute on function public.source_secret_for_tick(uuid, text) to anon;
 grant execute on function public.set_agent_source_settings(uuid, jsonb) to authenticated;
 grant execute on function public.enqueue_source_run(uuid, text, jsonb, int) to authenticated;
 grant execute on function public.import_lead_rows(uuid, jsonb) to authenticated;

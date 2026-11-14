@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { TestDb, as } from "./helpers";
+import { TestDb, anon, as, setSchedulerToken } from "./helpers";
+import { TOKEN } from "./scheduler-seed";
+import { clock } from "./hunter-seed";
 import { nameKey } from "@/lib/research/dedupe";
 import { MAPS_QUERY, SOURCE_CIPHER, seedSources } from "./sources-seed";
 import { row, seedImport } from "./lists-seed";
@@ -47,7 +49,7 @@ describe("0013 connections", () => {
         "select public.set_source_connection($1,'apify',$2,'WX12',1)",
         "select public.set_source_cap($1,'apify',$2)",
         "select public.delete_source_connection($1,'apify')",
-        "select public.source_secret($1,'apify')",
+        "select public.delete_source_connection($1,'serpapi')",
       ]) {
         const params = sql.includes("set_source_connection") ? [ws, SOURCE_CIPHER] : sql.includes("set_source_cap") ? [ws, 1] : [ws];
         expect(code((await db.try(as(u), sql, params)).error), sql).toBe("42501");
@@ -62,14 +64,21 @@ describe("0013 connections", () => {
     expect(code((await db.try(as(owner), "select public.set_source_connection($1,'apify','short','AB12',1)", [ws])).error)).toBe("23514");
     expect(code((await db.try(as(owner), "select public.set_source_connection($1,'apify',$2,'AB-2',1)", [ws, SOURCE_CIPHER])).error)).toBe("23514");
     expect(code((await db.try(as(owner), "select public.set_source_connection($1,'serpapi',$2,'AB12',1)", [ws, SOURCE_CIPHER])).error)).toBe("22023");
-    // the owner reads the ciphertext back (the server decrypts it in memory), and a new key keeps the cap
-    expect((await db.query<{ s: string }>(as(owner), "select public.source_secret($1,'apify') as s", [ws]))[0].s).toBe(SOURCE_CIPHER);
+    expect(code((await db.try(as(owner), "select public.delete_source_connection($1,'serpapi')", [ws])).error)).toBe("22023");
+    // no client reads the stored ciphertext: the old session function is gone, the tick path needs the clock's token
+    expect(code((await db.try(as(owner), "select public.source_secret($1,'apify')", [ws])).error)).toBe("42501");
+    expect((await db.try(as(owner), "select public.source_secret_for_tick($1,'apify')", [ws])).error?.message).toMatch(/permission denied/);
+    expect(code((await db.try(anon, "select public.source_secret_for_tick($1,'apify')", [ws])).error)).toBe("42501");
+    await setSchedulerToken(db, TOKEN);
+    expect((await db.query<{ s: string }>(clock, "select public.source_secret_for_tick($1,'apify') as s", [ws]))[0].s).toBe(SOURCE_CIPHER);
+    expect((await db.query<{ s: string | null }>(clock, "select public.source_secret_for_tick($1,'serpapi') as s", [ws]))[0].s).toBeNull();
+    // a new key keeps the cap
     await db.query(as(owner), "select public.set_source_connection($1,'apify',$2,'ZZ99',null)", [ws, SOURCE_CIPHER]);
     const c = (await db.query<{ last4: string; daily_cap_usd: string }>(as(owner), "select * from public.list_source_connections($1) where provider = 'apify'", [ws]))[0];
     expect([c.last4, Number(c.daily_cap_usd)]).toEqual(["ZZ99", 1.5]);
     // another workspace's owner gets nothing
     const other = await seedSources(db);
-    expect(code((await db.try(as(other.owner), "select public.source_secret($1,'apify')", [ws])).error)).toBe("42501");
+    expect(code((await db.try(as(other.owner), "select public.delete_source_connection($1,'apify')", [ws])).error)).toBe("42501");
   });
 
   test("deleting a connection refuses its queued runs", async () => {
