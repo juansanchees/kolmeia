@@ -96,6 +96,7 @@ describe("ANTHROPIC_API_KEY stays on the server", () => {
       ...walk(path.join(root, "src/lib/ai")),
       path.join(root, "src/lib/research/engine.ts"),
       path.join(root, "src/lib/research/supabase-store.ts"),
+      ...walk(path.join(root, "src/lib/hunter")),
     ];
     for (const file of serverFiles) {
       expect(readFileSync(file, "utf8"), file).toMatch(/^import "server-only";/m);
@@ -283,7 +284,7 @@ describe("E1 scheduler: anon key and scheduler_* functions only, no logging, no 
   });
   test("the clock is public to the proxy (no session) and nothing else new is", () => {
     const text = readFileSync(path.join(root, "src/lib/supabase/proxy.ts"), "utf8");
-    expect(text).toMatch(/PUBLIC_PATHS = \["\/login", "\/u", "\/api\/unsubscribe", "\/api\/scheduler"\]/);
+    expect(text).toMatch(/PUBLIC_PATHS = \["\/login", "\/u", "\/api\/unsubscribe", "\/api\/scheduler", "\/api\/hunter"\]/);
   });
   test("no new environment variable: the eight known names are the only ones named anywhere in src", () => {
     const known = new Set(["AI_GLOBAL_DAILY_CAP_USD", "AI_USER_DAILY_CAP_USD", "ANTHROPIC_API_KEY", "APP_PUBLIC_ORIGIN", "MAILBOX_ENC_KEY", "MAILBOX_ENC_KEY_PREVIOUS", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_URL"]);

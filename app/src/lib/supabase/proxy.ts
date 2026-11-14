@@ -4,7 +4,8 @@ import { env } from "@/lib/env";
 
 // /u and /api/unsubscribe: the public unsubscribe page and its one-click endpoint (read by e-mail recipients).
 // /api/scheduler: the clock (E1) has no session; it proves itself with a token that the database checks.
-const PUBLIC_PATHS = ["/login", "/u", "/api/unsubscribe", "/api/scheduler"];
+// /api/hunter: the Caçador clock (F3b), same rule as /api/scheduler (bearer token checked by the database).
+const PUBLIC_PATHS = ["/login", "/u", "/api/unsubscribe", "/api/scheduler", "/api/hunter"];
 
 /** Refreshes the session cookie and sends anonymous visitors to /login. No-op when the database is not configured. */
 export async function updateSession(request: NextRequest) {
