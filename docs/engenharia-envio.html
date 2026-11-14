@@ -1,0 +1,491 @@
+<title>Kolmeia Motor de Envio</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geologica:wght@400;600;700&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --bg: #FBF7EE;
+  --surface: #FFFDF8;
+  --surface-2: #F3EDDD;
+  --fg: #15171C;
+  --muted: #5B5E66;
+  --line: #D6CEB9;
+  --accent: #E9A21B;
+  --on-accent: #15171C;
+  --arrow: #B9770A;
+  --ok-bg: #DFEFE2; --ok-fg: #1B5A2D; --ok-line: #9CC9A6;
+  --miss-bg: #FBE1D6; --miss-fg: #A23610; --miss-line: #E6A58A;
+  --part-bg: #FBF0D0; --part-fg: #7A5200; --part-line: #E3C57A;
+  --dec-bg: #DDE8F8; --dec-fg: #1F4C8F; --dec-line: #9DB8E3;
+  --code-bg: #EFE8D6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15171C;
+    --surface: #1D2027;
+    --surface-2: #252932;
+    --fg: #F1EEE6;
+    --muted: #A5A8B0;
+    --line: #363A44;
+    --accent: #E9A21B;
+    --on-accent: #15171C;
+    --arrow: #E9A21B;
+    --ok-bg: #1D3826; --ok-fg: #91D5A3; --ok-line: #2F6040;
+    --miss-bg: #482416; --miss-fg: #FFA583; --miss-line: #85452B;
+    --part-bg: #3C3112; --part-fg: #F1C85F; --part-line: #6E581F;
+    --dec-bg: #1D3156; --dec-fg: #A2C2F6; --dec-line: #3B5C96;
+    --code-bg: #2A2E38;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15171C;
+  --surface: #1D2027;
+  --surface-2: #252932;
+  --fg: #F1EEE6;
+  --muted: #A5A8B0;
+  --line: #363A44;
+  --accent: #E9A21B;
+  --on-accent: #15171C;
+  --arrow: #E9A21B;
+  --ok-bg: #1D3826; --ok-fg: #91D5A3; --ok-line: #2F6040;
+  --miss-bg: #482416; --miss-fg: #FFA583; --miss-line: #85452B;
+  --part-bg: #3C3112; --part-fg: #F1C85F; --part-line: #6E581F;
+  --dec-bg: #1D3156; --dec-fg: #A2C2F6; --dec-line: #3B5C96;
+  --code-bg: #2A2E38;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Onest", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+.wrap {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px;
+  max-width: 1040px;
+  margin-inline: auto;
+}
+h1, h2, h3 { font-family: "Geologica", system-ui, sans-serif; text-wrap: balance; margin: 0; line-height: 1.2; }
+p { margin: 0; }
+code {
+  font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.86em;
+  background: var(--code-bg);
+  padding: 1px 5px;
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* header */
+.label {
+  display: flex; align-items: center; gap: 10px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted);
+}
+.mark { flex: none; width: 22px; height: 24px; }
+.mark polygon { fill: var(--accent); }
+h1 { font-size: clamp(30px, 6vw, 44px); font-weight: 700; margin-top: 14px; }
+.sub { color: var(--muted); margin-top: 8px; font-size: 18px; }
+.strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 24px; }
+.cell { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 14px; min-width: 0; }
+.cell b { display: block; font-family: "Geologica", sans-serif; font-size: 14px; margin-bottom: 4px; }
+.cell p { font-size: 14px; color: var(--muted); }
+.cell.c-ok { border-top: 3px solid var(--ok-fg); }
+.cell.c-miss { border-top: 3px solid var(--miss-fg); }
+.cell.c-no { border-top: 3px solid var(--line); }
+
+/* sections */
+section { margin-top: 48px; }
+.sec-head { display: flex; align-items: baseline; gap: 12px; border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 16px; }
+.num {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 13px; font-weight: 500;
+  color: var(--on-accent); background: var(--accent);
+  border-radius: 4px; padding: 2px 8px; flex: none;
+}
+h2 { font-size: clamp(20px, 3.4vw, 26px); font-weight: 600; }
+.intro { color: var(--muted); margin-bottom: 14px; }
+
+/* pills */
+.pill {
+  display: inline-block;
+  width: 96px;
+  text-align: center;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px; font-weight: 500; line-height: 1;
+  padding: 6px 0;
+  border-radius: 4px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+.pill.ok { background: var(--ok-bg); color: var(--ok-fg); border-color: var(--ok-line); }
+.pill.miss { background: var(--miss-bg); color: var(--miss-fg); border-color: var(--miss-line); }
+.pill.part { background: var(--part-bg); color: var(--part-fg); border-color: var(--part-line); border-style: dashed; }
+.pill.dec { background: var(--dec-bg); color: var(--dec-fg); border-color: var(--dec-line); }
+.note { display: block; font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+/* callout */
+.callout { border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 6px; background: var(--surface); padding: 16px; display: grid; gap: 8px; }
+.callout p:first-child { font-weight: 500; }
+
+/* flow */
+.flow-title { font-family: "Geologica", sans-serif; font-size: 15px; font-weight: 600; margin: 24px 0 10px; }
+.flow { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; counter-reset: step; }
+.flow.small { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.flow li {
+  position: relative; min-width: 0;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--surface);
+  padding: 12px 12px 12px; display: grid; gap: 6px; align-content: start;
+  counter-increment: step;
+}
+.flow li::before {
+  content: counter(step);
+  font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; color: var(--muted);
+}
+.flow li b { font-family: "Geologica", sans-serif; font-size: 15px; font-weight: 600; }
+.flow li span.cap { font-size: 13px; color: var(--muted); }
+.flow li .pill { justify-self: start; margin-top: 2px; }
+.flow li.hot { border: 2px solid var(--accent); background: var(--surface-2); }
+.flow li::after {
+  content: "\2192";
+  position: absolute; right: -24px; top: 50%; transform: translateY(-50%);
+  color: var(--arrow); font-weight: 700; font-size: 20px; line-height: 1;
+}
+.flow li:last-child::after, .flow:not(.small) li:nth-child(3n)::after { content: none; }
+.flow.small li::after { content: none; }
+.flow.small { gap: 12px; }
+
+/* tables */
+.tw { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+th { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); background: var(--surface-2); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.n { font-variant-numeric: tabular-nums; font-family: "JetBrains Mono", ui-monospace, monospace; width: 36px; }
+.t-gates { min-width: 720px; }
+.t-db { min-width: 640px; }
+.t-no { min-width: 420px; }
+
+/* two lists */
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.col { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 16px; min-width: 0; }
+.col h3 { font-size: 16px; display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.col ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 14px; }
+.col li { padding-left: 18px; position: relative; }
+.col li::before { content: ""; position: absolute; left: 0; top: 0.55em; width: 8px; height: 8px; border-radius: 2px; }
+.col.have li::before { background: var(--ok-fg); }
+.col.lack li::before { border: 2px solid var(--miss-fg); }
+
+/* cards */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 14px; }
+.card { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 16px; min-width: 0; display: grid; gap: 10px; align-content: start; }
+.card h3 { font-size: 17px; display: flex; align-items: center; gap: 10px; }
+.card dl { margin: 0; display: grid; gap: 8px; font-size: 14px; }
+.card dt { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.card dd { margin: 0; }
+
+/* stepper */
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.steps li { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 14px; position: relative; padding-bottom: 18px; }
+.steps li:last-child { padding-bottom: 0; }
+.steps li::before { content: ""; position: absolute; left: 27px; top: 34px; bottom: 0; width: 2px; background: var(--line); }
+.steps li:last-child::before { content: none; }
+.code { width: 56px; height: 34px; display: grid; place-items: center; background: var(--accent); color: var(--on-accent); border-radius: 4px; font-family: "JetBrains Mono", ui-monospace, monospace; font-weight: 500; font-size: 14px; position: relative; z-index: 1; }
+.step-body { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 12px 14px; min-width: 0; display: grid; gap: 4px; }
+.step-body h3 { font-size: 16px; }
+.step-body p { font-size: 14px; }
+.step-body .done { color: var(--muted); }
+.step-body .done b { color: var(--fg); font-weight: 600; }
+.warn { margin-top: 16px; border: 1px dashed var(--accent); border-radius: 6px; background: var(--surface); padding: 14px 16px; }
+.warn b { font-family: "Geologica", sans-serif; display: block; margin-bottom: 6px; }
+.warn ul { margin: 0; padding-left: 20px; font-size: 14px; display: grid; gap: 2px; }
+
+/* decisions */
+.counter { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); padding: 8px 12px; display: inline-block; margin-bottom: 14px; }
+.decs { display: grid; gap: 14px; }
+.dec { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 16px; min-width: 0; display: grid; gap: 10px; }
+.dec h3 { font-size: 17px; display: flex; align-items: center; gap: 10px; }
+.dec .q { font-size: 14px; color: var(--muted); }
+.opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.opt { border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; font-size: 14px; min-width: 0; background: var(--bg); }
+.opt b { font-family: "JetBrains Mono", ui-monospace, monospace; color: var(--arrow); margin-right: 6px; }
+.rec { font-size: 14px; border-left: 3px solid var(--accent); padding-left: 10px; }
+.rec b { font-weight: 600; }
+.chk { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 500; cursor: pointer; min-height: 36px; }
+.chk input { width: 20px; height: 20px; accent-color: var(--accent); flex: none; margin: 0; }
+
+footer { margin-top: 48px; border-top: 1px solid var(--line); padding-top: 14px; font-size: 13px; color: var(--muted); }
+
+@media (max-width: 760px) {
+  .strip, .two, .opts { grid-template-columns: minmax(0, 1fr); }
+  .flow { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+  .flow.small { gap: 12px; grid-template-columns: minmax(0, 1fr); }
+  .flow li::after, .flow:not(.small) li:nth-child(3n)::after {
+    content: "\2193"; right: auto; left: 50%; top: auto; bottom: -25px; transform: translateX(-50%);
+  }
+  .flow li:last-child::after, .flow.small li::after { content: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="label">
+    <svg class="mark" viewBox="0 0 22 24" aria-hidden="true" focusable="false"><polygon points="11,1 21,6.5 21,17.5 11,23 1,17.5 1,6.5"/></svg>
+    <span>Kolmeia · engenharia do motor de envio · 13/11/2026</span>
+  </div>
+  <h1>Motor de envio</h1>
+  <p class="sub">Como o e-mail sai sozinho, com segurança, depois que você aprova.</p>
+  <div class="strip">
+    <div class="cell c-ok"><b>Já existe</b><p>o motor que envia 1 e-mail por clique, com aprovação, descadastro e diário</p></div>
+    <div class="cell c-miss"><b>Falta</b><p>o relógio que faz isso sozinho, e as regras que vimos no Instantly</p></div>
+    <div class="cell c-no"><b>Não vamos fazer</b><p>pool de aquecimento, banco de contatos, agentes que enviam sozinhos</p></div>
+  </div>
+</header>
+
+<section>
+  <div class="sec-head"><span class="num">01</span><h2>O achado</h2></div>
+  <div class="callout">
+    <p>O motor de envio já existe no código (<code>kolmeia/app/src/lib/email/</code>). Hoje ele só anda com a tela aberta: 1 e-mail por clique.</p>
+    <p>Então não é para construir do zero. É para dar um relógio a ele e apertar as regras.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">02</span><h2>O caminho de um e-mail</h2></div>
+  <ol class="flow">
+    <li><b>Lista aprovada</b><span class="cap">vem da Pesquisa, com prova</span><span class="pill ok">já existe</span></li>
+    <li><b>Campanha</b><span class="cap">3 passos com espera em dias</span><span class="pill ok">já existe</span></li>
+    <li><b>IA rascunha</b><span class="cap">um texto por pessoa, com o gancho</span><span class="pill ok">já existe</span></li>
+    <li><b>Você aprova</b><span class="cap">nada sai sem o seu ok</span><span class="pill ok">já existe</span></li>
+    <li><b>Fila</b><span class="cap">cada e-mail com data para sair</span><span class="pill ok">já existe</span></li>
+    <li class="hot"><b>Relógio</b><span class="cap">acorda a cada 5 min e olha a fila</span><span class="pill miss">falta</span></li>
+    <li><b>Portões</b><span class="cap">7 checagens antes de cada envio</span><span class="pill part">parte existe</span></li>
+    <li><b>Caixa envia</b><span class="cap">SMTP da caixa do cliente</span><span class="pill ok">já existe</span></li>
+    <li><b>Diário</b><span class="cap">tudo anotado, não apaga</span><span class="pill ok">já existe</span></li>
+  </ol>
+
+  <h3 class="flow-title">A volta (respostas)</h3>
+  <ol class="flow small">
+    <li><b>Relógio lê as caixas</b><span class="cap">IMAP, a cada 5 min</span><span class="pill miss">falta</span><span class="note">hoje só com a tela aberta</span></li>
+    <li><b>IA classifica</b><span class="cap">interessado, não agora, fora, pessoa errada, descadastro</span><span class="pill ok">já existe</span></li>
+    <li><b>Para a sequência</b><span class="cap">da pessoa e da empresa inteira</span><span class="pill part">parte existe</span></li>
+    <li><b>Blocklist</b><span class="cap">descadastro e pessoa errada entram sozinhos</span><span class="pill part">parte existe</span></li>
+    <li><b>Passar pra closer</b><span class="cap">com resumo pronto</span><span class="pill ok">já existe</span></li>
+  </ol>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">03</span><h2>Os 7 portões</h2></div>
+  <p class="intro">Antes de cada e-mail, o relógio pergunta 7 coisas. Um "não" e o e-mail espera.</p>
+  <div class="tw"><table class="t-gates">
+    <thead><tr><th>#</th><th>Portão</th><th>Regra padrão</th><th>De onde veio</th><th>Hoje</th></tr></thead>
+    <tbody>
+      <tr><td class="n">1</td><td>Aprovado por você</td><td>só sai texto aprovado, igual ao aprovado</td><td>regra nossa (R1)</td><td><span class="pill ok">já existe</span></td></tr>
+      <tr><td class="n">2</td><td>Fora da blocklist</td><td>e-mail, domínio, descadastro e bounce bloqueiam</td><td>regra nossa (R3)</td><td><span class="pill ok">já existe</span></td></tr>
+      <tr><td class="n">3</td><td>Dentro do horário</td><td>dias úteis, horário comercial, no fuso da campanha</td><td>visto no Instantly</td><td><span class="pill miss">falta</span></td></tr>
+      <tr><td class="n">4</td><td>Limite do dia</td><td>30 por caixa e 30 por campanha, vale o menor; zera no fuso da campanha</td><td>visto no Instantly</td><td><span class="pill part">parte existe</span><span class="note">só por caixa</span></td></tr>
+      <tr><td class="n">5</td><td>Intervalo</td><td>9 min + até 5 min sorteados, por caixa</td><td>visto no Instantly</td><td><span class="pill dec">muda</span><span class="note">hoje sorteia 60 a 180 s</span></td></tr>
+      <tr><td class="n">6</td><td>Uma pessoa por empresa</td><td>no máximo 1 pessoa da mesma empresa por dia</td><td>visto no Instantly, regra R7</td><td><span class="pill miss">falta</span></td></tr>
+      <tr><td class="n">7</td><td>Caixa saudável</td><td>conectada, sem bounce alto; bounce acima de 2% depois de 50 envios pausa a caixa</td><td>regra nossa (R6)</td><td><span class="pill miss">falta</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">04</span><h2>O que já existe e o que falta</h2></div>
+  <div class="two">
+    <div class="col have">
+      <h3><span class="pill ok">já existe</span></h3>
+      <ul>
+        <li>Aprovação humana com registro</li>
+        <li>Campanha em ensaio por padrão</li>
+        <li>3 passos com espera em dias</li>
+        <li>Limite diário por caixa</li>
+        <li>Descadastro com um clique (RFC 8058)</li>
+        <li>Rodapé com endereço (CAN-SPAM)</li>
+        <li>Diário que não apaga (<code>email_send_log</code>)</li>
+        <li>Leitura de respostas e bounces</li>
+        <li>Classificação por IA</li>
+        <li>Resumo para a closer</li>
+        <li>Senha da caixa cifrada no banco</li>
+        <li>Isolamento por empresa (workspace)</li>
+      </ul>
+    </div>
+    <div class="col lack">
+      <h3><span class="pill miss">falta</span></h3>
+      <ul>
+        <li>Relógio (hoje depende da tela aberta)</li>
+        <li>Várias caixas por campanha, em rodízio</li>
+        <li>Caixa fixa por pessoa (follow-up na mesma conversa)</li>
+        <li>Horário e fuso por campanha</li>
+        <li>Limite por campanha</li>
+        <li>Intervalo de 9 + 5 min</li>
+        <li>Subir devagar (rampa) por caixa</li>
+        <li>1 pessoa por empresa por dia</li>
+        <li>Pausa automática por bounce</li>
+        <li>Aviso quando a caixa desconecta</li>
+        <li>Botão de emergência que pausa tudo</li>
+        <li>Assinatura e reply-to por caixa</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">05</span><h2>As 5 peças novas</h2></div>
+  <div class="cards">
+    <article class="card"><h3><span class="num">1</span>Relógio</h3><dl>
+      <dt>o que faz</dt><dd>Faz a fila andar sem ninguém com a tela aberta.</dd>
+      <dt>como</dt><dd>A cada 5 min chama uma rota protegida que roda um passo de envio e um de leitura.</dd>
+      <dt>pronto quando</dt><dd>Um e-mail aprovado sai sozinho, em ensaio, com a aba fechada.</dd></dl></article>
+    <article class="card"><h3><span class="num">2</span>Portões novos</h3><dl>
+      <dt>o que faz</dt><dd>Horário, fuso, limite por campanha, 9 + 5 min, 1 por empresa.</dd>
+      <dt>como</dt><dd>Dentro de <code>claim_next_email()</code>, que já decide o próximo e-mail.</dd>
+      <dt>pronto quando</dt><dd>Cada portão tem um teste que prova o "não".</dd></dl></article>
+    <article class="card"><h3><span class="num">3</span>Rodízio de caixas</h3><dl>
+      <dt>o que faz</dt><dd>Divide a campanha entre 2 ou 3 caixas e mantém cada pessoa sempre na mesma.</dd>
+      <dt>como</dt><dd>Tabela <code>campaign_mailboxes</code> + <code>email_prospects.mailbox_id</code>.</dd>
+      <dt>pronto quando</dt><dd>O passo 2 sai pela mesma caixa do passo 1, na mesma conversa.</dd></dl></article>
+    <article class="card"><h3><span class="num">4</span>Saúde da caixa</h3><dl>
+      <dt>o que faz</dt><dd>Sobe o volume devagar, pausa em bounce alto, avisa se desconectar.</dd>
+      <dt>como</dt><dd>Colunas novas em <code>mailboxes</code> + contagem pelo diário.</dd>
+      <dt>pronto quando</dt><dd>Uma caixa com bounce alto para sozinha e a campanha segue pelas outras.</dd></dl></article>
+    <article class="card"><h3><span class="num">5</span>Botão de emergência</h3><dl>
+      <dt>o que faz</dt><dd>Pausa todos os envios da empresa de uma vez.</dd>
+      <dt>como</dt><dd>Uma chave em <code>workspace_settings</code> que o relógio lê primeiro.</dd>
+      <dt>pronto quando</dt><dd>Com a chave ligada, nada sai, nem aprovado.</dd></dl></article>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">06</span><h2>O que muda no banco</h2></div>
+  <p class="intro">Nenhuma tabela some. É a migração <code>0005</code>.</p>
+  <div class="tw"><table class="t-db">
+    <thead><tr><th>Onde</th><th>O que entra</th><th>Para quê</th></tr></thead>
+    <tbody>
+      <tr><td><code>email_campaigns</code></td><td><code>timezone</code>, <code>window_start</code>, <code>window_end</code>, <code>send_days</code>, <code>daily_limit</code>, <code>min_gap_minutes</code>, <code>random_gap_minutes</code>, <code>stop_company_on_reply</code>, <code>stop_on_auto_reply</code></td><td>horário, fuso, limite e chaves por campanha</td></tr>
+      <tr><td><code>campaign_mailboxes</code> (nova)</td><td><code>campaign_id</code>, <code>mailbox_id</code></td><td>várias caixas por campanha</td></tr>
+      <tr><td><code>email_prospects</code></td><td><code>mailbox_id</code></td><td>caixa fixa por pessoa</td></tr>
+      <tr><td><code>mailboxes</code></td><td><code>ramp_enabled</code>, <code>ramp_start</code>, <code>ramp_step</code>, <code>health_status</code>, <code>paused_reason</code>, <code>signature</code>, <code>reply_to</code></td><td>rampa, saúde, assinatura</td></tr>
+      <tr><td><code>workspace_settings</code></td><td><code>sending_paused</code></td><td>botão de emergência</td></tr>
+      <tr><td><code>scheduler_runs</code> (nova)</td><td><code>started_at</code>, <code>finished_at</code>, <code>sent</code>, <code>read</code>, <code>error</code></td><td>batimento do relógio, para saber se ele parou</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">07</span><h2>Ordem de construção</h2></div>
+  <p class="intro">Tudo roda em ensaio até o E6.</p>
+  <ol class="steps">
+    <li><div class="code">E1</div><div class="step-body"><h3>Relógio</h3><p>rota protegida + agendamento + batimento</p><p class="done"><b>Pronto quando:</b> e-mail aprovado sai sozinho em ensaio, aba fechada</p></div></li>
+    <li><div class="code">E2</div><div class="step-body"><h3>Portões novos</h3><p>horário, fuso, limite por campanha, 9 + 5 min, 1 por empresa</p><p class="done"><b>Pronto quando:</b> 5 testes novos passam, um por portão</p></div></li>
+    <li><div class="code">E3</div><div class="step-body"><h3>Rodízio</h3><p>várias caixas + caixa fixa por pessoa</p><p class="done"><b>Pronto quando:</b> follow-up sai pela mesma caixa</p></div></li>
+    <li><div class="code">E4</div><div class="step-body"><h3>Saúde da caixa</h3><p>rampa, pausa por bounce, aviso de desconexão, botão de emergência</p><p class="done"><b>Pronto quando:</b> caixa ruim para sozinha</p></div></li>
+    <li><div class="code">E5</div><div class="step-body"><h3>Respostas no relógio</h3><p>leitura automática + blocklist automática</p><p class="done"><b>Pronto quando:</b> resposta para a sequência sem ninguém abrir a tela</p></div></li>
+    <li><div class="code">E6</div><div class="step-body"><h3>Primeiro envio real</h3><p>ligar o modo real em 1 campanha pequena</p><p class="done"><b>Pronto quando:</b> 10 e-mails reais entregues e anotados no diário</p></div></li>
+  </ol>
+  <div class="warn">
+    <b>Antes do E6 precisa existir</b>
+    <ul>
+      <li>domínio de prospecção separado</li>
+      <li>2 ou 3 caixas pagas com SPF, DKIM e DMARC</li>
+      <li>endereço físico para o rodapé</li>
+      <li>ok do dono da Air HVAC</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">08</span><h2>Não vamos fazer</h2></div>
+  <div class="tw"><table class="t-no">
+    <thead><tr><th>O quê</th><th>Por quê</th></tr></thead>
+    <tbody>
+      <tr><td>Pool de aquecimento</td><td>manda texto inventado em nome do cliente (vimos no teste: "Your KPIs")</td></tr>
+      <tr><td>Banco de contatos</td><td>a nossa Pesquisa acha poucos alvos com prova, não milhares</td></tr>
+      <tr><td>Agente que envia sozinho</td><td>aqui a IA rascunha e o humano aprova</td></tr>
+      <tr><td>Variantes A/Z</td><td>1 texto por passo basta no começo</td></tr>
+      <tr><td>Webhooks e 199 integrações</td><td>fora do MVP</td></tr>
+      <tr><td>SMS e ligação automática</td><td>regra do projeto: nunca SMS frio</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">09</span><h2>Decisões suas (5)</h2></div>
+  <p class="intro">Marque aqui para lembrar, e me diga no chat. Só começo a programar com as 5 respondidas.</p>
+  <div class="counter" id="counter" aria-live="polite">0 de 5 decisões marcadas</div>
+  <div class="decs">
+    <article class="dec">
+      <h3><span class="pill dec">decisão 1</span>Onde fica o código</h3>
+      <p class="q">Hoje há duas cópias iguais.</p>
+      <div class="opts"><div class="opt"><b>A</b><code>kolmeia/app/</code> vira a fonte única</div><div class="opt"><b>B</b>continua em <code>.claude/worktrees/product-fix/product/</code></div></div>
+      <p class="rec"><b>Minha recomendação:</b> Recomendo A: Kolmeia é o produto, o worktree vira arquivo.</p>
+      <label class="chk"><input type="checkbox" id="dec-1">Concordo com a recomendação</label>
+    </article>
+    <article class="dec">
+      <h3><span class="pill dec">decisão 2</span>Quantos passos</h3>
+      <p class="q">O motor tem 3 passos fixos. O Instantly deixa criar quantos quiser.</p>
+      <div class="opts"><div class="opt"><b>A</b>manter 3 passos fixos agora</div><div class="opt"><b>B</b>passos livres já</div></div>
+      <p class="rec"><b>Minha recomendação:</b> Recomendo A: menos coisa para quebrar; passos livres entram depois do E6.</p>
+      <label class="chk"><input type="checkbox" id="dec-2">Concordo com a recomendação</label>
+    </article>
+    <article class="dec">
+      <h3><span class="pill dec">decisão 3</span>O relógio</h3>
+      <p class="q">Precisa rodar a cada 5 min sem ninguém logado.</p>
+      <div class="opts"><div class="opt"><b>A</b><code>pg_cron</code> do Supabase chamando uma rota protegida</div><div class="opt"><b>B</b>cron da Vercel (limite do plano: ?)</div></div>
+      <p class="rec"><b>Minha recomendação:</b> Recomendo A. O relógio usa um código secreto que só o banco confere e que só consegue chamar as funções do relógio. Nenhuma chave de administrador vai para a Vercel. (Correção de 13/11: a regra R14 fala de ferramenta de IA, não de chave na Vercel; a frase antiga estava errada.)</p>
+      <label class="chk"><input type="checkbox" id="dec-3">Concordo com a recomendação</label>
+    </article>
+    <article class="dec">
+      <h3><span class="pill dec">decisão 4</span>Pessoas por empresa por dia</h3>
+      <p class="q">O plano antigo dizia 2. A regra que anotamos do Instantly é 1 por empresa.</p>
+      <div class="opts"><div class="opt"><b>A</b>1 por dia</div><div class="opt"><b>B</b>2 por dia</div></div>
+      <p class="rec"><b>Minha recomendação:</b> Recomendo A: mais seguro para entrega.</p>
+      <label class="chk"><input type="checkbox" id="dec-4">Concordo com a recomendação</label>
+    </article>
+    <article class="dec">
+      <h3><span class="pill dec">decisão 5</span>Intervalo entre e-mails</h3>
+      <p class="q">Hoje o motor sorteia 60 a 180 segundos. O padrão do Instantly é 9 min + até 5.</p>
+      <div class="opts"><div class="opt"><b>A</b>9 + 5 min</div><div class="opt"><b>B</b>manter 60 a 180 s</div></div>
+      <p class="rec"><b>Minha recomendação:</b> Recomendo A: com 30 por dia por caixa não faz falta ser rápido.</p>
+      <label class="chk"><input type="checkbox" id="dec-5">Concordo com a recomendação</label>
+    </article>
+  </div>
+</section>
+
+<footer>Fontes: <code>docs/raw/re_instantly.md</code> (seções 9 a 17), <code>docs/mvp-harness.md</code> (regras R1 a R12) e o código em <code>kolmeia/app/</code>. Padrões marcados como "visto no Instantly" foram lidos na conta de teste em 13/11/2026.</footer>
+
+</div>
+
+<script>
+(function () {
+  var KEY = "kolmeia-envio-decisoes";
+  var boxes = Array.prototype.slice.call(document.querySelectorAll('input[type="checkbox"][id^="dec-"]'));
+  var out = document.getElementById("counter");
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { saved = {}; }
+  function update() {
+    var n = boxes.filter(function (b) { return b.checked; }).length;
+    out.textContent = n + " de 5 decisões marcadas";
+  }
+  boxes.forEach(function (b) {
+    if (saved[b.id]) b.checked = true;
+    b.addEventListener("change", function () {
+      saved[b.id] = b.checked;
+      try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
+      update();
+    });
+  });
+  update();
+})();
+</script>

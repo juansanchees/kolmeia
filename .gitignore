@@ -1,0 +1,10 @@
+# local only
+.backups/
+.superpowers/
+.DS_Store
+node_modules/
+.next/
+.vercel/
+.env*
+!.env.example
+*.tsbuildinfo

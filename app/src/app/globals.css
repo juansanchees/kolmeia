@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+/* Light theme only. Orange (#FF7A1A) is reserved for ONE button: "Passar pra closer" (E-mail, approved prototype). */
+@theme {
+  --color-ink: #0f1b3d;
+  --color-blue: #1757d6;
+  --color-line: #d5dae3;
+  --color-ground: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-danger: #b3261e;
+  --color-muted: #5b6478;
+  --color-edge: #8a93a6;
+  --color-blue-soft: #e8effc;
+  --color-blue-wash: #f3f7fe;
+  --color-blue-ink: #0f3f9e;
+  --color-ok: #0b6b47;
+  --color-ok-soft: #e2f3eb;
+  --color-warn: #7a3e00;
+  --color-warn-soft: #fff1e0;
+  --color-cold: #eceef2;
+  --color-cold-ink: #3a4358;
+  --color-cta: #ff7a1a;
+  --color-cta-edge: #c85a00;
+  --color-cta-ink: #1a0e00;
+  --font-display: var(--font-archivo-narrow), "Arial Narrow", sans-serif;
+  --font-body: var(--font-plex-sans), system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+  --radius-*: initial;
+}
+
+html {
+  background: var(--color-ground);
+  color: var(--color-ink);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+h1,
+h2 {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+  margin: 0;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-blue);
+  outline-offset: 2px;
+}

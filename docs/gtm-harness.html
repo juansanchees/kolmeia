@@ -1,0 +1,345 @@
+<title>Kolmeia GTM Harness</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+:root{
+  --bg:#FBF8F2;--surface:#FFFFFF;--subtle:#F4EFE6;--fg:#1A1712;--fg2:#57524A;--muted:#6A645A;--border:#E3DACA;
+  --accent:#F5A400;--on-accent:#1A1712;--honey-text:#7A4E00;--honey-soft:#FBEBC4;--honey-soft-fg:#5C3A00;
+  --ok-bg:#E6F2EA;--ok-fg:#1F5A35;--bad-bg:#FBE9E7;--bad-fg:#8A2A1B;--info-bg:#E8EEF8;--info-fg:#23426E;
+  --shadow:0 1px 2px rgba(26,23,18,0.05);--focus:#23426E;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#1A1712;--surface:#26221C;--subtle:#201C16;--fg:#F4EFE6;--fg2:#C9C3B8;--muted:#A8A196;--border:#3A352C;
+    --accent:#F5A400;--on-accent:#1A1712;--honey-text:#F5C25A;--honey-soft:#4A3711;--honey-soft-fg:#FBE3A8;
+    --ok-bg:#1F3A2A;--ok-fg:#9AD6B0;--bad-bg:#4A2520;--bad-fg:#F2B3A8;--info-bg:#22344F;--info-fg:#B4CBEE;
+    --shadow:none;--focus:#B4CBEE;color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1A1712;--surface:#26221C;--subtle:#201C16;--fg:#F4EFE6;--fg2:#C9C3B8;--muted:#A8A196;--border:#3A352C;
+  --accent:#F5A400;--on-accent:#1A1712;--honey-text:#F5C25A;--honey-soft:#4A3711;--honey-soft-fg:#FBE3A8;
+  --ok-bg:#1F3A2A;--ok-fg:#9AD6B0;--bad-bg:#4A2520;--bad-fg:#F2B3A8;--info-bg:#22344F;--info-fg:#B4CBEE;
+  --shadow:none;--focus:#B4CBEE;color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.55}
+.wrap{max-width:1080px;margin-inline:auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px}
+h1,h2,h3,.num{font-family:"Space Grotesk",Inter,system-ui,sans-serif;text-wrap:balance}
+h1{font-size:clamp(28px,5vw,40px);line-height:1.1;margin:8px 0 8px;font-weight:700}
+h2{font-size:clamp(20px,3vw,26px);line-height:1.2;margin:0 0 12px;font-weight:600;display:flex;gap:12px;align-items:baseline}
+h2 .n{color:var(--honey-text);font-size:.8em;font-variant-numeric:tabular-nums}
+h3{font-size:16px;margin:0 0 6px;font-weight:600}
+p{margin:0 0 12px;color:var(--fg2)}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.88em;background:var(--subtle);border:1px solid var(--border);border-radius:6px;padding:1px 6px;color:var(--fg);overflow-wrap:anywhere}
+section{margin-top:48px;min-width:0}
+a:focus-visible,input:focus-visible,button:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.label{font-size:13px;color:var(--muted);font-weight:500;letter-spacing:.02em}
+.brand{display:flex;align-items:center;gap:10px}
+.brand svg{width:28px;height:28px;flex:none}
+.sub{font-size:18px;color:var(--fg2);margin:0 0 24px;max-width:62ch}
+.strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.cell{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:16px;min-width:0}
+.cell .label{display:block;margin-bottom:6px}
+.cell b{display:block;font-weight:500}
+.tw{overflow-x:auto;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:480px;font-size:15px}
+th,td{text-align:left;vertical-align:top;padding:10px 14px;border-bottom:1px solid var(--border);min-width:0}
+th{background:var(--subtle);font-weight:600;font-size:13px;color:var(--muted);letter-spacing:.02em}
+tr:last-child td{border-bottom:0}
+td:first-child{font-weight:500}
+.pill{display:inline-block;min-width:76px;text-align:center;font-size:12px;font-weight:600;line-height:1;padding:6px 10px;border-radius:999px;white-space:nowrap}
+.p-ok{background:var(--ok-bg);color:var(--ok-fg)}
+.p-bad{background:var(--bad-bg);color:var(--bad-fg)}
+.p-info{background:var(--info-bg);color:var(--info-fg)}
+.p-you{background:var(--honey-soft);color:var(--honey-soft-fg)}
+.pills{display:flex;gap:6px;flex-wrap:wrap}
+.def{margin-top:14px;padding:12px 14px;background:var(--subtle);border-radius:12px;color:var(--fg2);font-size:15px}
+.rowlabel{font-family:"Space Grotesk",Inter,sans-serif;font-weight:600;font-size:14px;color:var(--honey-text);margin:24px 0 10px;letter-spacing:.04em;text-transform:uppercase}
+.flow{display:grid;gap:26px;margin-bottom:6px}
+.box{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:14px;min-width:0;display:flex;flex-direction:column;gap:8px}
+.box h3{margin:0;font-size:15px}
+.box .cap{font-size:14px;color:var(--fg2);margin:0;flex:1}
+.box .note{font-size:12px;color:var(--muted);margin:0}
+.box .st{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+.box:not(:last-child)::after{content:"\2193";position:absolute;left:50%;bottom:-24px;transform:translateX(-50%);color:var(--muted);font-size:18px;line-height:1}
+.idx{font-family:"Space Grotesk",Inter,sans-serif;font-variant-numeric:tabular-nums;font-size:12px;color:var(--muted);font-weight:600}
+@media (min-width:900px){
+  .flow.c6{grid-template-columns:repeat(6,minmax(0,1fr));gap:22px}
+  .flow.c3{grid-template-columns:repeat(3,minmax(0,1fr));gap:22px}
+  .flow.c4{grid-template-columns:repeat(4,minmax(0,1fr));gap:22px}
+  .box:not(:last-child)::after{content:"\2192";left:auto;right:-19px;bottom:auto;top:50%;transform:translateY(-50%)}
+}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.col{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:16px;min-width:0}
+.col ul{margin:10px 0 0;padding-left:20px;color:var(--fg2)}
+.col li{margin-bottom:6px}
+.col .pill{margin-bottom:2px}
+.steps{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.step{display:grid;grid-template-columns:56px minmax(0,1fr);gap:14px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:14px 16px}
+.step .code{font-family:"Space Grotesk",Inter,sans-serif;font-weight:700;font-size:20px;background:var(--accent);color:var(--on-accent);border-radius:10px;height:44px;display:flex;align-items:center;justify-content:center}
+.step h3{margin:0 0 4px}
+.step p{margin:0 0 6px;font-size:15px}
+.step .done{margin:0;font-size:14px;color:var(--ok-fg);background:var(--ok-bg);border-radius:10px;padding:6px 10px;display:inline-block}
+.note-box{margin-top:14px;border:1px solid var(--accent);border-radius:12px;padding:12px 14px;background:var(--honey-soft);color:var(--honey-soft-fg);font-size:15px}
+.keep{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:var(--shadow)}
+.keep p:last-child{margin:0}
+.counter{font-family:"Space Grotesk",Inter,sans-serif;font-weight:600;font-variant-numeric:tabular-nums;margin:0 0 14px;color:var(--honey-text)}
+.decs{display:grid;gap:14px}
+.dec{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:16px;min-width:0}
+.dec .q{font-weight:500;color:var(--fg);margin:0 0 10px}
+.opts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:10px}
+.opt{background:var(--subtle);border-radius:12px;padding:10px 12px;font-size:14px;color:var(--fg2);min-width:0}
+.opt b{color:var(--fg)}
+.rec{font-size:15px;margin:0 0 10px;color:var(--fg2)}
+.rec b{color:var(--honey-text)}
+.chk{display:flex;align-items:center;gap:10px;font-size:15px;cursor:pointer;min-height:32px}
+.chk input{width:20px;height:20px;accent-color:var(--accent);flex:none}
+footer{margin-top:48px;padding-top:16px;border-top:1px solid var(--border);font-size:14px;color:var(--muted)}
+@media (max-width:760px){
+  .strip,.two,.opts{grid-template-columns:minmax(0,1fr)}
+  .wrap{padding-block:24px}
+  section{margin-top:40px}
+  .step{grid-template-columns:44px minmax(0,1fr)}
+  .step .code{font-size:16px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+</style>
+<div class="wrap">
+<header>
+  <div class="brand">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><path style="fill:var(--accent)" d="M16 2 L28 9 L28 23 L16 30 L4 23 L4 9 Z"/><path style="fill:var(--fg)" d="M16 10 L21.2 13 L21.2 19 L16 22 L10.8 19 L10.8 13 Z"/></svg>
+    <span class="label">Kolmeia · engenharia do produto · 14/11/2026</span>
+  </div>
+  <h1>Kolmeia, um GTM harness</h1>
+  <p class="sub">A Kolmeia diz quem tem obra agora, por quê, com quem falar e o que dizer. Você só aperta enviar.</p>
+  <div class="strip">
+    <div class="cell"><span class="label">O que a Kolmeia faz</span><b>acha e confere leads, com prova em cada linha</b></div>
+    <div class="cell"><span class="label">O que fica com parceiro</span><b>enviar e-mail, aquecer caixas, cuidar da entrega</b></div>
+    <div class="cell"><span class="label">O que fica com você</span><b>aprovar, ligar, fechar</b></div>
+  </div>
+</header>
+
+<section>
+  <h2><span class="n">01</span>A virada</h2>
+  <div class="tw"><table>
+    <thead><tr><th></th><th>Antes (até ontem)</th><th>Agora</th></tr></thead>
+    <tbody>
+      <tr><td>O produto</td><td>plataforma de envio de e-mail, igual ao Instantly</td><td>GTM harness: achar quem abordar, com motivo e prova</td></tr>
+      <tr><td>O trabalho pesado</td><td>entrega, aquecimento, suporte, para sempre</td><td>qualidade da pesquisa</td></tr>
+      <tr><td>Concorrente</td><td>Instantly, de frente</td><td>Instantly vira parceiro</td></tr>
+      <tr><td>Vale pelo</td><td>volume</td><td>acerto</td></tr>
+    </tbody>
+  </table></div>
+  <div class="def">GTM é go-to-market: tudo que leva o produto até o cliente. Harness é o arreio em volta da IA: ferramentas, regras, provas e pontos onde um humano aprova.</div>
+</section>
+
+<section>
+  <h2><span class="n">02</span>O caminho de um lead</h2>
+  <div class="rowlabel">Achar</div>
+  <div class="flow c6">
+    <div class="box"><span class="idx">1</span><h3>Você pede</h3><p class="cap">no Copiloto, em português: quem quer alcançar e onde</p><div class="st"><span class="pill p-ok">já existe</span></div></div>
+    <div class="box"><span class="idx">2</span><h3>A IA pergunta de volta</h3><p class="cap">3 a 5 perguntas em cartões, com opções</p><div class="st"><span class="pill p-ok">já existe</span></div></div>
+    <div class="box"><span class="idx">3</span><h3>Plano para aprovar</h3><p class="cap">fontes, tempo e custo antes de buscar</p><div class="st"><span class="pill p-ok">já existe</span></div></div>
+    <div class="box"><span class="idx">4</span><h3>Pesquisa em segundo plano</h3><p class="cap">você fecha a aba e é avisado no fim</p><div class="st"><span class="pill p-bad">falta</span></div></div>
+    <div class="box"><span class="idx">5</span><h3>Confere</h3><p class="cap">segunda passada que só vê as provas; 2 fontes ou fica ?</p><div class="st"><span class="pill p-ok">já existe</span></div></div>
+    <div class="box"><span class="idx">6</span><h3>Lista com prova</h3><p class="cap">temperatura, motivo, decisor, telefone, gancho</p><div class="st"><span class="pill p-ok">já existe</span><p class="note">decisor e telefone ainda fracos</p></div></div>
+  </div>
+  <div class="rowlabel">Agir</div>
+  <div class="flow c3">
+    <div class="box"><span class="idx">7</span><h3>Você aprova</h3><p class="cap">fica, sai, ou mais como esta</p><div class="st"><span class="pill p-ok">já existe</span></div></div>
+    <div class="box"><span class="idx">8</span><h3>Sai para o e-mail</h3><p class="cap">lista vira campanha no Instantly</p><div class="st"><span class="pill p-info">parceiro</span></div></div>
+    <div class="box"><span class="idx">9</span><h3>Sai para a ligação</h3><p class="cap">lista do dia com telefone e o gancho</p><div class="st"><span class="pill p-bad">falta</span></div></div>
+  </div>
+  <div class="rowlabel">Voltar</div>
+  <div class="flow c4">
+    <div class="box"><span class="idx">10</span><h3>Respostas voltam</h3><p class="cap">do Instantly para a Kolmeia</p><div class="st"><span class="pill p-bad">falta</span></div></div>
+    <div class="box"><span class="idx">11</span><h3>IA classifica</h3><p class="cap">interessado, não agora, fora, pessoa errada</p><div class="st"><span class="pill p-ok">já existe</span></div></div>
+    <div class="box"><span class="idx">12</span><h3>Passar pra closer</h3><p class="cap">com resumo pronto</p><div class="st"><span class="pill p-ok">já existe</span></div></div>
+    <div class="box"><span class="idx">13</span><h3>Aprende</h3><p class="cap">quem respondeu vira mais como esta</p><div class="st"><span class="pill p-bad">falta</span></div></div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">03</span>O arreio (as regras que a IA obedece)</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Regra</th><th>O que garante</th><th>Hoje</th></tr></thead>
+    <tbody>
+      <tr><td>Toda afirmação tem fonte e data</td><td>dá para conferir cada linha</td><td><span class="pill p-ok">já existe</span></td></tr>
+      <tr><td>Sem confirmação, fica "?"</td><td>a IA não inventa</td><td><span class="pill p-ok">já existe</span></td></tr>
+      <tr><td>Duas fontes independentes</td><td>um site só não basta</td><td><span class="pill p-ok">já existe</span></td></tr>
+      <tr><td>Segunda passada que só vê as provas</td><td>uma checagem não confirma a si mesma</td><td><span class="pill p-ok">já existe</span></td></tr>
+      <tr><td>Teto de gasto por pesquisa e por dia</td><td>a IA não estoura a conta</td><td><span class="pill p-ok">já existe</span></td></tr>
+      <tr><td>Nada sai sem aprovação humana</td><td>nenhum e-mail ou ligação automática</td><td><span class="pill p-ok">já existe</span></td></tr>
+      <tr><td>Gabarito com as suas listas (<code>data/gold/</code>)</td><td>dá para dizer "acerta X de cada 10"</td><td><span class="pill p-bad">falta</span></td></tr>
+      <tr><td>Sem LinkedIn raspado, sem SMS frio, dado do Google Maps não é vendido</td><td>fica dentro das regras e da lei</td><td><span class="pill p-ok">já existe</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2><span class="n">04</span>Quem faz o quê</h2>
+  <p>A lista que você pediu, dividida entre a Kolmeia e o parceiro de envio.</p>
+  <div class="tw"><table>
+    <thead><tr><th>Você pediu</th><th>Quem faz</th><th>Como</th></tr></thead>
+    <tbody>
+      <tr><td>Cadastrar vários e-mails</td><td><div class="pills"><span class="pill p-info">parceiro</span></div></td><td>caixas conectadas no Instantly</td></tr>
+      <tr><td>Campanhas</td><td><div class="pills"><span class="pill p-info">parceiro</span></div></td><td>a lista aprovada vira campanha lá</td></tr>
+      <tr><td>Automações</td><td><div class="pills"><span class="pill p-you">Kolmeia</span><span class="pill p-info">parceiro</span></div></td><td>regras simples: respondeu interessado, avisa e passa pra closer</td></tr>
+      <tr><td>Aquecimento</td><td><div class="pills"><span class="pill p-info">parceiro</span></div></td><td>o Instantly já tem</td></tr>
+      <tr><td>Receber e responder</td><td><div class="pills"><span class="pill p-info">parceiro</span><span class="pill p-you">Kolmeia</span></div></td><td>resposta chega lá, volta para cá, a IA rascunha, você aprova</td></tr>
+      <tr><td>Análise das campanhas</td><td><div class="pills"><span class="pill p-info">parceiro</span><span class="pill p-you">Kolmeia</span></div></td><td>números de envio lá; reuniões e fechamentos aqui</td></tr>
+      <tr><td>Telefone dos leads</td><td><div class="pills"><span class="pill p-you">Kolmeia</span></div></td><td>lista de ligação com telefone e o gancho</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2><span class="n">05</span>O que já existe no código e o que falta</h2>
+  <div class="two">
+    <div class="col">
+      <span class="pill p-ok">já existe</span>
+      <h3 style="margin-top:8px">Já existe (reaproveita)</h3>
+      <ul>
+        <li>Pesquisa com perguntas, plano e aprovação</li>
+        <li>Busca e checagens com prova</li>
+        <li>Segunda passada</li>
+        <li>Lista com temperatura e gancho</li>
+        <li>Teto de gasto da IA</li>
+        <li>Acesso à IA só para quem é liberado</li>
+        <li>Classificação de resposta</li>
+        <li>Resumo para a closer</li>
+        <li>Relógio do motor (o mesmo jeito serve para a pesquisa rodar sozinha)</li>
+      </ul>
+    </div>
+    <div class="col">
+      <span class="pill p-bad">falta</span>
+      <h3 style="margin-top:8px">Falta</h3>
+      <ul>
+        <li>Pesquisa em segundo plano</li>
+        <li>Gabarito e medição do acerto</li>
+        <li>Decisor e e-mail do decisor (parceiro de dados)</li>
+        <li>Verificação de e-mail antes de exportar</li>
+        <li>Exportar para o Instantly</li>
+        <li>Respostas voltando do Instantly</li>
+        <li>Lista de ligação</li>
+        <li>Copiloto como tela inicial, com sugestões a partir do site do cliente</li>
+        <li>Busca salva que roda toda semana</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">06</span>Ordem de construção</h2>
+  <ol class="steps">
+    <li class="step"><div class="code">G1</div><div><h3>Pesquisa sozinha</h3><p>a pesquisa anda com a aba fechada, como o relógio do motor</p><p class="done"><b>Pronto quando:</b> você pede, fecha a aba, e a lista aparece pronta</p></div></li>
+    <li class="step"><div class="code">G2</div><div><h3>Gabarito</h3><p>medir a Pesquisa contra as suas listas padrão-ouro</p><p class="done"><b>Pronto quando:</b> aparece um número: acerta X de cada 10</p></div></li>
+    <li class="step"><div class="code">G3</div><div><h3>Pesquisa mais funda</h3><p>alvará onde existe, decisor e telefone com prova</p><p class="done"><b>Pronto quando:</b> o número do G2 sobe</p></div></li>
+    <li class="step"><div class="code">G4</div><div><h3>Saída para o e-mail</h3><p>primeiro um arquivo CSV no formato do Instantly; depois, ligação direta por API</p><p class="done"><b>Pronto quando:</b> lista aprovada vira campanha no Instantly</p></div></li>
+    <li class="step"><div class="code">G5</div><div><h3>Lista de ligação</h3><p>telefone, gancho e botão para anotar o resultado</p><p class="done"><b>Pronto quando:</b> você liga pela lista do dia e anota</p></div></li>
+    <li class="step"><div class="code">G6</div><div><h3>Volta das respostas</h3><p>respostas do Instantly entram, a IA classifica</p><p class="done"><b>Pronto quando:</b> interessado vai pra closer sozinho, com resumo</p></div></li>
+    <li class="step"><div class="code">G7</div><div><h3>Copiloto na frente</h3><p>tela inicial com sugestões a partir do site, e busca salva semanal</p><p class="done"><b>Pronto quando:</b> cliente novo recebe 3 sugestões no primeiro acesso</p></div></li>
+  </ol>
+  <div class="note-box">Antes de mandar e-mail real precisa existir: domínio de prospecção separado, caixas no Instantly, endereço físico para o rodapé e o ok do dono da Air HVAC.</div>
+</section>
+
+<section>
+  <h2><span class="n">07</span>O que fica guardado</h2>
+  <div class="keep">
+    <p>O motor de envio próprio fica parado, sem apagar: relógio (E1) e portões (E2) prontos e revisados; rodízio de caixas (E3) pela metade. Só roda em ensaio. Se um dia fizer sentido, ele volta.</p>
+    <p>Nada disso foi aplicado em banco de verdade.</p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">08</span>As suas telas</h2>
+  <p>O design que você fez continua valendo. Muda o que cada tela faz.</p>
+  <div class="tw"><table>
+    <thead><tr><th>Tela do seu design</th><th>Agora</th></tr></thead>
+    <tbody>
+      <tr><td>Copiloto</td><td>tela inicial: você pede, a IA pesquisa</td></tr>
+      <tr><td>Busca de leads</td><td>Meus leads: a base da sua conta, que cresce com as pesquisas</td></tr>
+      <tr><td>Campanhas</td><td>Enviar: escolhe a lista e manda para o Instantly</td></tr>
+      <tr><td>Contas de e-mail</td><td>fica no Instantly (atalho para lá)</td></tr>
+      <tr><td>Caixa unificada</td><td>Respostas: o que voltou do Instantly</td></tr>
+      <tr><td>Agentes, CRM, Relatórios</td><td>em breve</td></tr>
+      <tr><td>(nova) Lista de ligação</td><td>telefone, gancho e resultado</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2><span class="n">09</span>Decisões suas (5)</h2>
+  <p>Marque aqui para lembrar e me diga no chat. Começo pelo G1 quando as 5 estiverem respondidas.</p>
+  <p class="counter" id="counter" aria-live="polite">0 de 5 decisões marcadas</p>
+  <div class="decs">
+    <div class="dec">
+      <h3>1. Parceiro de envio</h3>
+      <p class="q">Qual ferramenta envia os e-mails?</p>
+      <div class="opts"><div class="opt"><b>A:</b> Instantly</div><div class="opt"><b>B:</b> Smartlead</div></div>
+      <p class="rec"><b>Minha recomendação:</b> Recomendo A: já vimos por dentro e você já tem conta de teste.</p>
+      <label class="chk"><input type="checkbox" id="dec-1"> Concordo com a recomendação</label>
+    </div>
+    <div class="dec">
+      <h3>2. Como ligar no Instantly</h3>
+      <p class="q">Arquivo ou ligação direta?</p>
+      <div class="opts"><div class="opt"><b>A:</b> começar com arquivo CSV, funciona em qualquer plano</div><div class="opt"><b>B:</b> ligação direta por API (plano com API: ?; no app, o pacote que mostra API é o Scale, US$ 265/mês no anual; webhook só a partir do Hyper Growth, US$ 107/mês)</div></div>
+      <p class="rec"><b>Minha recomendação:</b> Recomendo A: zero custo extra para começar; a API vem quando o volume pedir.</p>
+      <label class="chk"><input type="checkbox" id="dec-2"> Concordo com a recomendação</label>
+    </div>
+    <div class="dec">
+      <h3>3. Primeiro nicho</h3>
+      <p class="q">Por onde começar?</p>
+      <div class="opts"><div class="opt"><b>A:</b> construção e HVAC em Massachusetts</div><div class="opt"><b>B:</b> qualquer ramo, qualquer lugar</div></div>
+      <p class="rec"><b>Minha recomendação:</b> Recomendo A: é onde já temos alvará, listas e o gabarito.</p>
+      <label class="chk"><input type="checkbox" id="dec-3"> Concordo com a recomendação</label>
+    </div>
+    <div class="dec">
+      <h3>4. Quem usa primeiro</h3>
+      <p class="q">Quem opera no começo?</p>
+      <div class="opts"><div class="opt"><b>A:</b> você opera para a Air HVAC</div><div class="opt"><b>B:</b> cliente usa sozinho desde o início</div></div>
+      <p class="rec"><b>Minha recomendação:</b> Recomendo A: prova o acerto com um cliente real antes de abrir.</p>
+      <label class="chk"><input type="checkbox" id="dec-4"> Concordo com a recomendação</label>
+    </div>
+    <div class="dec">
+      <h3>5. O motor próprio</h3>
+      <p class="q">O que fazer com o código de envio?</p>
+      <div class="opts"><div class="opt"><b>A:</b> guardar parado</div><div class="opt"><b>B:</b> apagar</div></div>
+      <p class="rec"><b>Minha recomendação:</b> Recomendo A: não custa nada guardado.</p>
+      <label class="chk"><input type="checkbox" id="dec-5"> Concordo com a recomendação</label>
+    </div>
+  </div>
+</section>
+
+<footer>
+  Fontes: análise do Instantly por dentro em <code>docs/raw/re_instantly.md</code>, listas padrão-ouro em <code>data/gold/</code>, código em <code>kolmeia/app/</code>, design em <code>kolmeia/design-telas/</code>. Preços do Instantly lidos no app em 13/11/2026.
+</footer>
+</div>
+<script>
+(function(){
+  var ids=["dec-1","dec-2","dec-3","dec-4","dec-5"];
+  var key="kolmeia-gtm-decisions";
+  var saved={};
+  try{saved=JSON.parse(localStorage.getItem(key)||"{}")||{};}catch(e){saved={};}
+  var counter=document.getElementById("counter");
+  function update(){
+    var n=0;
+    ids.forEach(function(id){var el=document.getElementById(id);if(el&&el.checked)n++;});
+    counter.textContent=n+" de 5 decisões marcadas";
+  }
+  function save(){
+    var o={};
+    ids.forEach(function(id){var el=document.getElementById(id);if(el)o[id]=el.checked;});
+    try{localStorage.setItem(key,JSON.stringify(o));}catch(e){}
+  }
+  ids.forEach(function(id){
+    var el=document.getElementById(id);
+    if(!el)return;
+    if(saved[id])el.checked=true;
+    el.addEventListener("change",function(){update();save();});
+  });
+  update();
+})();
+</script>

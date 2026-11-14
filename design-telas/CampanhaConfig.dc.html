@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Kolmeia — Campanhas</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FBF8F2}
+a{color:#1A1712}a:hover{color:#7A4E00}
+h1,h2,h3{font-family:'Space Grotesk',Inter,system-ui,sans-serif}
+.k-nav:hover{background:#26221C;color:#FFFFFF !important}
+.k-btn:hover{background:#F4EFE6}
+.k-tab:hover{color:#7A4E00}
+input:focus,button:focus-visible{outline:2px solid #F5A400;outline-offset:1px}
+.k-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media (max-width: 860px){ .k-side{max-width:none !important; flex-basis:100% !important} .k-side .k-navlist{flex-direction:row !important; flex-wrap:wrap} .k-side .k-bottom{display:none !important} }
+</style>
+</helmet>
+<div style="font-family: Inter, system-ui, sans-serif; color: #1A1712; background: #FBF8F2; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch">
+
+  <nav aria-label="Principal" class="k-side" style="flex: 1 1 232px; max-width: 232px; background: #1A1712; color: #F4EFE6; padding: 20px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px">
+    <a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; padding: 0 12px; min-height: 44px; text-decoration: none; color: #F4EFE6">
+      <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2 L28 9 L28 23 L16 30 L4 23 L4 9 Z" fill="{{accent}}"></path><path d="M16 10 L21.2 13 L21.2 19 L16 22 L10.8 19 L10.8 13 Z" fill="#1A1712"></path></svg>
+      <span style="font-family: 'Space Grotesk', Inter, sans-serif; font-weight: 700; font-size: 20px">Kolmeia</span>
+    </a>
+    <button type="button" style="display: flex; align-items: center; justify-content: space-between; min-height: 40px; margin: 6px 0 12px; padding: 0 12px; background: #26221C; color: #F4EFE6; border: 1px solid #3A352C; border-radius: 10px; font: 500 14px Inter, sans-serif; cursor: pointer">
+      <span>Conecta Growth</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C9C3B8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+    </button>
+    <div class="k-navlist" style="display: flex; flex-direction: column; gap: 4px">
+      <a class="k-nav" href="Copiloto.dc.html" style="display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 0 12px; border-radius: 10px; font: 500 14px Inter, sans-serif; color: #C9C3B8; text-decoration: none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path><path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"></path></svg>Copiloto</a>
+      <a class="k-nav" href="BuscaLeads.dc.html" style="display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 0 12px; border-radius: 10px; font: 500 14px Inter, sans-serif; color: #C9C3B8; text-decoration: none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg>Busca de leads</a>
+      <a class="k-nav" href="Main.dc.html" aria-current="page" style="display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 0 12px; border-radius: 10px; font: 500 14px Inter, sans-serif; background: #26221C; color: #FFFFFF; text-decoration: none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{accent}}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13"></path><path d="M22 2l-7 20-4-9-9-4z"></path></svg>Campanhas</a>
+      <a class="k-nav" href="Agentes.dc.html" style="display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 0 12px; border-radius: 10px; font: 500 14px Inter, sans-serif; color: #C9C3B8; text-decoration: none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="8" width="16" height="11" rx="3"></rect><path d="M12 8V4"></path><circle cx="9" cy="13.5" r="1"></circle><circle cx="15" cy="13.5" r="1"></circle></svg>Agentes</a>
+      <a class="k-nav" href="CRM.dc.html" style="display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 0 12px; border-radius: 10px; font: 500 14px Inter, sans-serif; color: #C9C3B8; text-decoration: none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"></circle><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"></path><path d="M16 5.5a3 3 0 010 5.5"></path><path d="M18 14.5c1.8.8 3 2.6 3 5.5"></path></svg>CRM</a>
+      <a class="k-nav" href="ContasEmail.dc.html" style="display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 0 12px; border-radius: 10px; font: 500 14px Inter, sans-serif; color: #C9C3B8; text-decoration: none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 7l9 6 9-6"></path></svg>Contas de e-mail</a>
+      <a class="k-nav" href="Unibox.dc.html" style="display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 0 12px; border-radius: 10px; font: 500 14px Inter, sans-serif; color: #C9C3B8; text-decoration: none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 13l3-8h12l3 8v6H3z"></path><path d="M3 13h5l1 3h6l1-3h5"></path></svg>Caixa unificada</a>
+      <a class="k-nav" href="Relatorios.dc.html" style="display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 0 12px; border-radius: 10px; font: 500 14px Inter, sans-serif; color: #C9C3B8; text-decoration: none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20V10"></path><path d="M12 20V4"></path><path d="M19 20v-7"></path></svg>Relatórios</a>
+    </div>
+    <div class="k-bottom" style="margin-top: auto; display: flex; flex-direction: column; gap: 14px">
+      <div style="border: 1px solid {{accent}}; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px">
+        <span style="font-size: 13px; font-weight: 500; color: #F4EFE6">Teste grátis · 7 dias restantes</span>
+        <a href="Planos.dc.html" style="display: flex; align-items: center; justify-content: center; min-height: 40px; border-radius: 10px; background: {{accent}}; color: #1A1712; font: 600 14px Inter, sans-serif; text-decoration: none">Ver planos</a>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 4px 6px">
+        <span style="width: 36px; height: 36px; border-radius: 50%; background: {{accent}}; color: #1A1712; display: flex; align-items: center; justify-content: center; font: 700 13px 'Space Grotesk', sans-serif">JS</span>
+        <div style="display: flex; flex-direction: column; line-height: 1.3">
+          <span style="font-size: 14px; font-weight: 500; color: #F4EFE6">Juan</span>
+          <a href="Configuracoes.dc.html" style="font-size: 12px; color: #C9C3B8; text-decoration: none; display: flex; align-items: center; gap: 4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"></path></svg>Configurações</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+    <header style="min-height: 64px; padding: 8px 32px; border-bottom: 1px solid #EAE3D6; background: #FBF8F2; display: flex; flex-wrap: wrap; align-items: center; gap: 16px">
+      <a href="Main.dc.html" aria-label="Voltar para Campanhas" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 10px; color: #1A1712"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"></path><path d="M11 6l-6 6 6 6"></path></svg></a>
+      <h1 style="margin: 0; font-size: 22px; font-weight: 700">Prospecção HVAC Boston</h1>
+      <div role="tablist" aria-label="Seções da campanha" style="display: flex; flex-wrap: wrap; gap: 4px; margin-left: 8px">
+        <a class="k-tab" href="CampanhaAnalytics.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 14px; font: 500 14px Inter, sans-serif; color: #57524A; text-decoration: none; border-bottom: 2px solid transparent">Analytics</a>
+        <a class="k-tab" href="CampanhaEditor.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 14px; font: 500 14px Inter, sans-serif; color: #57524A; text-decoration: none; border-bottom: 2px solid transparent">Editor</a>
+        <a class="k-tab" href="CampanhaLeads.dc.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 14px; font: 500 14px Inter, sans-serif; color: #57524A; text-decoration: none; border-bottom: 2px solid transparent">Leads</a>
+        <a class="k-tab" href="CampanhaConfig.dc.html" aria-current="page" style="display: flex; align-items: center; min-height: 40px; padding: 0 14px; font: 600 14px Inter, sans-serif; color: #1A1712; text-decoration: none; border-bottom: 2px solid {{accent}}">Configurações</a>
+      </div>
+      <div style="margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 12px">
+        <span style="display: inline-flex; align-items: center; min-height: 28px; padding: 0 12px; border-radius: 999px; background: #F4EFE6; color: #57524A; font: 500 13px Inter, sans-serif">Rascunho</span>
+        <button type="button" style="min-height: 40px; padding: 0 20px; border: 0; border-radius: 10px; background: {{accent}}; color: #1A1712; font: 600 14px Inter, sans-serif; cursor: pointer">Lançar</button>
+      </div>
+    </header>
+
+    <main style="padding: 28px 32px 48px; max-width: 1320px; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px">
+      <div style="max-width: 880px; width: 100%; display: flex; flex-direction: column; gap: 20px">
+        <div style="display: flex; flex-direction: column; gap: 4px">
+          <h2 style="margin: 0; font-size: 24px; font-weight: 700">Configure sua campanha antes de enviar</h2>
+          <p style="margin: 0; font-size: 14px; color: #57524A">Defina quem envia, quando envia e como a Kolmeia acompanha cada lead.</p>
+        </div>
+
+        <section aria-labelledby="sec-contas" style="background: #FFFFFF; border: 1px solid #E3DACA; border-radius: 16px; box-shadow: 0 1px 2px rgba(26,23,18,0.05); padding: 24px; display: flex; flex-direction: column; gap: 14px">
+          <h3 id="sec-contas" style="margin: 0; font-size: 17px; font-weight: 600">Contas para envio</h3>
+          <span id="contas-label" style="font-size: 13px; font-weight: 500; color: #57524A">Selecione uma ou mais contas para enviar e-mails</span>
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px">
+            <div role="listbox" aria-multiselectable="true" aria-labelledby="contas-label" style="flex: 1 1 320px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; min-height: 48px; padding: 6px 12px; border: 1px solid #D9D0BF; border-radius: 10px; background: #FFFFFF; box-sizing: border-box">
+              <span role="option" aria-selected="true" style="display: inline-flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 6px 0 12px; border-radius: 999px; background: {{accentSoft}}; color: #5C3A00; font: 500 13px Inter, sans-serif">
+                juan@kolmeia.example
+                <button type="button" aria-label="Remover juan@kolmeia.example" style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border: 0; background: transparent; border-radius: 999px; color: #5C3A00; cursor: pointer"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+              </span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#57524A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+            </div>
+            <a href="ContasEmail.dc.html" class="k-btn" style="display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 16px; border: 1px solid #D9D0BF; border-radius: 10px; background: #FFFFFF; font: 500 14px Inter, sans-serif; text-decoration: none; color: #7A4E00">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+              Obter mais contas
+            </a>
+          </div>
+        </section>
+
+        <section aria-labelledby="sec-agenda" style="background: #FFFFFF; border: 1px solid #E3DACA; border-radius: 16px; box-shadow: 0 1px 2px rgba(26,23,18,0.05); padding: 24px; display: flex; flex-direction: column; gap: 16px">
+          <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px">
+            <h3 id="sec-agenda" style="margin: 0; font-size: 17px; font-weight: 600">Agenda e limites</h3>
+            <span style="display: inline-flex; align-items: center; min-height: 28px; padding: 0 12px; border-radius: 999px; background: #E8EEF8; color: #23426E; font: 500 13px Inter, sans-serif">1 agenda</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px">
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <label for="inicio" style="font-size: 13px; font-weight: 500; color: #57524A">Começar a enviar</label>
+              <input id="inicio" type="text" value="13 nov 2026" style="min-height: 44px; padding: 0 14px; border: 1px solid #D9D0BF; border-radius: 10px; font: 400 14px Inter, sans-serif; color: #1A1712; box-sizing: border-box; width: 100%">
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <label for="fim" style="font-size: 13px; font-weight: 500; color: #57524A">Parar de enviar</label>
+              <input id="fim" type="text" value="Nunca" style="min-height: 44px; padding: 0 14px; border: 1px solid #D9D0BF; border-radius: 10px; font: 400 14px Inter, sans-serif; color: #1A1712; box-sizing: border-box; width: 100%">
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <label for="limite" style="font-size: 13px; font-weight: 500; color: #57524A">Limite diário</label>
+              <input id="limite" type="text" value="30 e-mails" style="min-height: 44px; padding: 0 14px; border: 1px solid #D9D0BF; border-radius: 10px; font: 400 14px Inter, sans-serif; color: #1A1712; box-sizing: border-box; width: 100%">
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <span style="font-size: 13px; font-weight: 500; color: #57524A">Dias de envio</span>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px">
+              <sc-for list="{{days}}" as="d" hint-placeholder-count="7">
+                <button type="button" aria-pressed="{{d.pressed}}" onClick="{{d.onToggle}}" style="min-width: 56px; min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid {{d.border}}; background: {{d.bg}}; color: {{d.color}}; font: {{d.weight}} 14px Inter, sans-serif; cursor: pointer">{{d.label}}</button>
+              </sc-for>
+            </div>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 14px; background: #F8F5EF; border: 1px solid #EFE8DC; border-radius: 12px">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#57524A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+            <span style="font-size: 14px; font-weight: 500">09:00 – 18:00</span>
+            <span style="font-size: 13px; color: #57524A">(America/New_York)</span>
+          </div>
+        </section>
+
+        <section aria-labelledby="sec-crm" style="background: #FFFFFF; border: 1px solid #E3DACA; border-radius: 16px; box-shadow: 0 1px 2px rgba(26,23,18,0.05); padding: 24px; display: flex; flex-direction: column; gap: 16px">
+          <h3 id="sec-crm" style="margin: 0; font-size: 17px; font-weight: 600">CRM e tags</h3>
+          <div style="display: flex; flex-wrap: wrap; gap: 16px">
+            <div style="flex: 1 1 260px; display: flex; flex-direction: column; gap: 6px">
+              <label for="resp" style="font-size: 13px; font-weight: 500; color: #57524A">Responsável</label>
+              <input id="resp" type="text" value="juan@kolmeia.example" style="min-height: 44px; padding: 0 14px; border: 1px solid #D9D0BF; border-radius: 10px; font: 400 14px Inter, sans-serif; color: #1A1712; box-sizing: border-box; width: 100%">
+            </div>
+            <div style="flex: 1 1 260px; display: flex; flex-direction: column; gap: 6px">
+              <span style="font-size: 13px; font-weight: 500; color: #57524A">Tags</span>
+              <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; min-height: 44px">
+                <span style="font-size: 14px; color: #57524A">Sem tags</span>
+                <button type="button" class="k-btn" style="display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; background: #FFFFFF; border: 1px dashed #D9D0BF; border-radius: 10px; font: 500 13px Inter, sans-serif; color: #1A1712; cursor: pointer">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+                  Adicionar tag
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section aria-labelledby="sec-adv" style="background: #FFFFFF; border: 1px solid #E3DACA; border-radius: 16px; box-shadow: 0 1px 2px rgba(26,23,18,0.05); padding: 8px 24px; display: flex; flex-direction: column">
+          <h3 id="sec-adv" style="margin: 0">
+            <button type="button" onClick="{{toggleAdv}}" aria-expanded="{{advExpanded}}" style="width: 100%; display: flex; align-items: center; justify-content: space-between; min-height: 56px; padding: 0; background: transparent; border: 0; font: 600 17px 'Space Grotesk', Inter, sans-serif; color: #1A1712; cursor: pointer; text-align: left">
+              Configurações avançadas
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="transform: {{advRotate}}"><path d="M6 9l6 6 6-6"></path></svg>
+            </button>
+          </h3>
+          <sc-if value="{{advOpen}}" hint-placeholder-val="{{ true }}">
+            <div style="display: flex; flex-direction: column; padding-bottom: 8px">
+              <sc-for list="{{toggles}}" as="t" hint-placeholder-count="6">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 64px; padding: 10px 0; border-top: 1px solid #F1EBE0">
+                  <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+                    <span style="font-size: 14px; font-weight: 500">{{t.label}}</span>
+                    <span style="font-size: 13px; color: #57524A">{{t.hint}}</span>
+                  </div>
+                  <button type="button" role="switch" aria-checked="{{t.checked}}" aria-label="{{t.label}}" onClick="{{t.onToggle}}" style="flex: none; position: relative; width: 48px; height: 40px; padding: 0; background: transparent; border: 0; cursor: pointer">
+                    <span style="position: absolute; top: 8px; left: 0; width: 48px; height: 24px; border-radius: 999px; background: {{t.track}}; transition: background 0.15s"></span>
+                    <span style="position: absolute; top: 11px; left: {{t.knob}}; width: 18px; height: 18px; border-radius: 50%; background: #FFFFFF; box-shadow: 0 1px 2px rgba(26,23,18,0.25); transition: left 0.15s"></span>
+                  </button>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </section>
+
+        <div style="position: sticky; bottom: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px; background: #FFFFFF; border: 1px solid #E3DACA; border-radius: 16px; box-shadow: 0 -2px 12px rgba(26,23,18,0.06)">
+          <span style="font-size: 13px; color: #57524A">Alterações ainda não salvas ficam apenas neste rascunho.</span>
+          <button type="button" style="min-height: 44px; padding: 0 28px; border: 0; border-radius: 10px; background: {{accent}}; color: #1A1712; font: 600 14px Inter, sans-serif; cursor: pointer">Salvar</button>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#F5A400","options":["#F5A400","#FFB81C","#E8950C"],"section":"Tema"},"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#F5A400';
+    const soft = /^#[0-9a-fA-F]{6}$/.test(accent) ? accent + '29' : 'rgba(245,164,0,0.16)';
+    const st = this.state || {};
+    const dayState = st.days || { seg: true, ter: true, qua: true, qui: true, sex: true, sab: false, dom: false };
+    const advOpen = st.advOpen === undefined ? true : st.advOpen;
+    const togState = st.toggles || { abert: false, cliques: false, parar: true, texto: false, pular: true, fuso: true };
+    const dayDefs = [['seg', 'Seg'], ['ter', 'Ter'], ['qua', 'Qua'], ['qui', 'Qui'], ['sex', 'Sex'], ['sab', 'Sáb'], ['dom', 'Dom']];
+    const days = dayDefs.map(([id, label]) => {
+      const on = !!dayState[id];
+      return {
+        label: label, pressed: on ? 'true' : 'false',
+        bg: on ? accent : '#FFFFFF', border: on ? accent : '#D9D0BF',
+        color: '#1A1712', weight: on ? '600' : '500',
+        onToggle: () => this.setState({ days: Object.assign({}, dayState, { [id]: !on }) })
+      };
+    });
+    const togDefs = [
+      ['abert', 'Rastrear aberturas', 'Registra quando o lead abre o e-mail. Pode afetar a entregabilidade.'],
+      ['cliques', 'Rastrear cliques', 'Registra cliques nos links enviados.'],
+      ['parar', 'Parar ao responder', 'Interrompe a sequência assim que o lead responder.'],
+      ['texto', 'Enviar como texto simples', 'Envia sem formatação HTML, como um e-mail pessoal.'],
+      ['pular', 'Pular leads de outras campanhas', 'Evita contatar quem já está em outra sequência ativa.'],
+      ['fuso', 'Fuso horário do lead', 'Envia dentro da janela de horário local de cada lead.']
+    ];
+    const toggles = togDefs.map(([id, label, hint]) => {
+      const on = !!togState[id];
+      return {
+        label: label, hint: hint, checked: on ? 'true' : 'false',
+        track: on ? accent : '#D9D0BF', knob: on ? '27px' : '3px',
+        onToggle: () => this.setState({ toggles: Object.assign({}, togState, { [id]: !on }) })
+      };
+    });
+    return {
+      accent: accent, accentSoft: soft, brace: '{{', braceEnd: '}}',
+      days: days, toggles: toggles, advOpen: advOpen,
+      advExpanded: advOpen ? 'true' : 'false',
+      advRotate: advOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+      toggleAdv: () => this.setState({ advOpen: !advOpen })
+    };
+  }
+}
+</script>
+</body>
+</html>

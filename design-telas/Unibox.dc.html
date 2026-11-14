@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Kolmeia — Caixa unificada</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FBF8F2}
+a{color:#1A1712}a:hover{color:#7A4E00}
+h1,h2,h3{font-family:'Space Grotesk',Inter,system-ui,sans-serif}
+.k-nav:hover{background:#26221C !important;color:#FFFFFF !important}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid #7A4E00;outline-offset:2px}
+@media (max-width: 860px){ .k-side{max-width:none !important; flex-basis:100% !important} .k-side .k-navlist{flex-direction:row !important; flex-wrap:wrap} .k-side .k-bottom{display:none !important} }
+
+</style>
+</helmet>
+<div style="font-family: Inter, system-ui, sans-serif; color: #1A1712; background: #FBF8F2; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch">
+  <nav aria-label="Principal" class="k-side" style="flex: 1 1 232px; max-width: 232px; background: #1A1712; color: #F4EFE6; padding: 20px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px">
+    <a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; padding: 0 12px; min-height: 40px; text-decoration: none; color: #F4EFE6; font-family: 'Space Grotesk', Inter, sans-serif; font-weight: 700; font-size: 20px"><svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2 L28 9 L28 23 L16 30 L4 23 L4 9 Z" fill="{{accent}}"></path><path d="M16 10 L21.2 13 L21.2 19 L16 22 L10.8 19 L10.8 13 Z" fill="#1A1712"></path></svg>Kolmeia</a>
+    <button type="button" style="display: flex; align-items: center; justify-content: space-between; min-height: 40px; margin: 6px 0 10px; padding: 0 12px; background: #26221C; color: #F4EFE6; border: 1px solid #3A352C; border-radius: 10px; font: 500 14px Inter, sans-serif; cursor: pointer"><span>Conecta Growth</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></button>
+    <div class="k-navlist" style="display: flex; flex-direction: column; gap: 4px">
+      <a href="Copiloto.dc.html" class="k-nav" style="min-height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; text-decoration: none; color: #C9C3B8; background: transparent"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path><path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"></path></svg><span style="flex: 1">Copiloto</span></a>
+      <a href="BuscaLeads.dc.html" class="k-nav" style="min-height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; text-decoration: none; color: #C9C3B8; background: transparent"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg><span style="flex: 1">Busca de leads</span></a>
+      <a href="Main.dc.html" class="k-nav" style="min-height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; text-decoration: none; color: #C9C3B8; background: transparent"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13"></path><path d="M22 2l-7 20-4-9-9-4z"></path></svg><span style="flex: 1">Campanhas</span></a>
+      <a href="Agentes.dc.html" class="k-nav" style="min-height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; text-decoration: none; color: #C9C3B8; background: transparent"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l9 5v10l-9 5-9-5V7z"></path><circle cx="12" cy="12" r="2.5"></circle></svg><span style="flex: 1">Agentes</span></a>
+      <a href="CRM.dc.html" class="k-nav" style="min-height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; text-decoration: none; color: #C9C3B8; background: transparent"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"></path><circle cx="10" cy="7" r="4"></circle><path d="M21 21v-2a4 4 0 0 0-3-3.9"></path><path d="M16 3.1a4 4 0 0 1 0 7.8"></path></svg><span style="flex: 1">CRM</span></a>
+      <a href="ContasEmail.dc.html" class="k-nav" style="min-height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; text-decoration: none; color: #C9C3B8; background: transparent"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 7l9 6 9-6"></path></svg><span style="flex: 1">Contas de e-mail</span></a>
+      <a href="Unibox.dc.html" class="k-nav k-on" style="min-height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; text-decoration: none; color: #FFFFFF; background: #26221C"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="stroke: {{accent}}"><path d="M22 12h-6l-2 3h-4l-2-3H2"></path><path d="M5.5 5h13L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6z"></path></svg><span style="flex: 1">Caixa unificada</span><span style="width: 4px; height: 4px; border-radius: 999px; background: {{accent}}"></span></a>
+      <a href="Relatorios.dc.html" class="k-nav" style="min-height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; text-decoration: none; color: #C9C3B8; background: transparent"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10"></path><path d="M10 20V4"></path><path d="M16 20v-7"></path><path d="M22 20H2"></path></svg><span style="flex: 1">Relatórios</span></a>
+    </div>
+    <div class="k-bottom" style="margin-top: auto; display: flex; flex-direction: column; gap: 12px">
+      <div style="border: 1px solid {{accent}}; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+        <span style="font-size: 13px; font-weight: 600; color: #F4EFE6">Teste grátis · 7 dias restantes</span>
+        <button type="button" style="min-height: 40px; border: 0; border-radius: 10px; background: {{accent}}; color: #1A1712; font: 600 14px Inter, sans-serif; cursor: pointer">Ver planos</button>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 0 4px">
+        <span style="width: 34px; height: 34px; border-radius: 999px; background: {{accent}}; color: #1A1712; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600">JS</span>
+        <div style="display: flex; flex-direction: column; line-height: 1.3"><span style="font-size: 14px; font-weight: 500">Juan</span><a href="Main.dc.html" style="display: flex; align-items: center; gap: 4px; font-size: 12px; color: #C9C3B8; text-decoration: none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"></path></svg>Configurações</a></div>
+      </div>
+    </div>
+  </nav>
+  <main style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+    <header style="min-height: 64px; padding: 8px 32px; border-bottom: 1px solid #EAE3D6; background: #FBF8F2; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px">
+      <h1 style="margin: 0; font-size: 22px; font-weight: 700">Caixa unificada</h1>
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px">
+        <div style="position: relative; display: flex; align-items: center">
+          <label for="gsearch" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Buscar</label>
+          <span style="position: absolute; left: 12px; display: flex; color: #6A645A"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg></span>
+          <input id="gsearch" type="search" placeholder="Buscar" style="height: 40px; width: 200px; box-sizing: border-box; padding: 0 12px 0 36px; border: 1px solid #D9D0BF; border-radius: 10px; background: #FFFFFF; font: 14px Inter, sans-serif; color: #1A1712">
+        </div>
+        <a href="Copiloto.dc.html" style="min-height: 40px; padding: 0 14px; display: flex; align-items: center; gap: 8px; border: 1px solid #D9D0BF; border-radius: 10px; background: #FFFFFF; font-size: 14px; font-weight: 500; text-decoration: none; color: #1A1712"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path><path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"></path></svg>Copiloto</a>
+        <button type="button" aria-label="Notificações" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border: 1px solid #D9D0BF; border-radius: 10px; background: #FFFFFF; color: #1A1712; cursor: pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"></path></svg></button>
+      </div>
+    </header>
+    <div style="padding: 20px 32px 48px; max-width: 1320px; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 16px">
+      <div role="tablist" aria-label="Canais" style="display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid #E3DACA">
+        <sc-for list="{{channels}}" as="c" hint-placeholder-count="3">
+          <button type="button" role="tab" aria-selected="{{c.sel}}" onClick="{{c.pick}}" style="min-height: 44px; padding: 0 18px; background: transparent; border: 0; border-bottom: 2px solid {{c.line}}; margin-bottom: -1px; font: 600 14px Inter, sans-serif; color: {{c.color}}; cursor: pointer">{{c.label}}</button>
+        </sc-for>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch">
+        <aside aria-label="Filtros" style="flex: 1 1 240px; max-width: 240px; background: #FFFFFF; border: 1px solid #E3DACA; border-radius: 16px; box-shadow: 0 1px 2px rgba(26,23,18,0.05); padding: 16px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px">
+          <h2 style="margin: 0 8px 8px; font-size: 13px; font-weight: 600; color: #6A645A; text-transform: uppercase; letter-spacing: 0.04em">Status</h2>
+          <sc-for list="{{statuses}}" as="s" hint-placeholder-count="9">
+            <button type="button" onClick="{{s.pick}}" style="min-height: 40px; padding: 0 8px; display: flex; align-items: center; gap: 10px; border: 0; border-radius: 10px; background: {{s.bg}}; font: 500 14px Inter, sans-serif; color: #1A1712; cursor: pointer; text-align: left">
+              <span style="width: 8px; height: 8px; border-radius: 999px; background: {{s.dot}}"></span>
+              <span style="flex: 1">{{s.label}}</span>
+              <span style="font-size: 13px; color: #6A645A">{{s.count}}</span>
+            </button>
+          </sc-for>
+          <div style="height: 1px; background: #EFE8DC; margin: 10px 8px"></div>
+          <sc-for list="{{groups}}" as="g" hint-placeholder-count="4">
+            <button type="button" style="min-height: 40px; padding: 0 8px; display: flex; align-items: center; justify-content: space-between; border: 0; border-radius: 10px; background: transparent; font: 500 14px Inter, sans-serif; color: #57524A; cursor: pointer; text-align: left">
+              <span>{{g}}</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+            </button>
+          </sc-for>
+        </aside>
+        <section aria-label="Conversas" style="flex: 1 1 320px; max-width: 400px; background: #FFFFFF; border: 1px solid #E3DACA; border-radius: 16px; box-shadow: 0 1px 2px rgba(26,23,18,0.05); box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden">
+          <div style="padding: 14px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid #EFE8DC">
+            <div style="position: relative; display: flex; align-items: center">
+              <label for="tsearch" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Buscar conversas</label>
+              <span style="position: absolute; left: 12px; display: flex; color: #6A645A"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg></span>
+              <input id="tsearch" type="search" placeholder="Buscar e-mail, lead ou empresa" style="width: 100%; height: 40px; box-sizing: border-box; padding: 0 12px 0 36px; border: 1px solid #D9D0BF; border-radius: 10px; background: #FCFAF6; font: 14px Inter, sans-serif; color: #1A1712">
+            </div>
+            <div role="group" aria-label="Caixa" style="display: flex; padding: 3px; background: #F4EFE6; border-radius: 12px; gap: 3px">
+              <sc-for list="{{segments}}" as="g" hint-placeholder-count="2">
+                <button type="button" aria-pressed="{{g.sel}}" onClick="{{g.pick}}" style="flex: 1; min-height: 40px; border: 0; border-radius: 9px; background: {{g.bg}}; font: 600 14px Inter, sans-serif; color: {{g.color}}; cursor: pointer">{{g.label}}</button>
+              </sc-for>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column">
+            <sc-for list="{{threads}}" as="t" hint-placeholder-count="4">
+              <button type="button" onClick="{{t.pick}}" aria-current="{{t.sel}}" style="display: flex; flex-direction: column; gap: 6px; padding: 14px; border: 0; border-bottom: 1px solid #F1EBE0; background: {{t.bg}}; text-align: left; cursor: pointer; font-family: Inter, sans-serif; color: #1A1712">
+                <span style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px">
+                  <span style="font-size: 14px; font-weight: 600">{{t.name}}</span>
+                  <span style="font-size: 12px; color: #6A645A">{{t.time}}</span>
+                </span>
+                <span style="font-size: 12px; color: #6A645A">{{t.company}}</span>
+                <span style="font-size: 13px; color: #57524A">{{t.snippet}}</span>
+                <span style="align-self: flex-start; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: {{t.pillBg}}; color: {{t.pillFg}}">{{t.status}}</span>
+              </button>
+            </sc-for>
+          </div>
+        </section>
+        <section aria-label="Leitura" style="flex: 999 1 380px; min-width: 0; background: #FFFFFF; border: 1px solid #E3DACA; border-radius: 16px; box-shadow: 0 1px 2px rgba(26,23,18,0.05); box-sizing: border-box; display: flex; flex-direction: column">
+          <div style="padding: 16px 20px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #EFE8DC">
+            <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+              <h2 style="margin: 0; font-size: 18px; font-weight: 700">{{cur.name}}</h2>
+              <span style="font-size: 13px; color: #6A645A">{{cur.email}} · {{cur.company}}</span>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+              <label for="stsel" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Status do lead</label>
+              <select id="stsel" style="height: 40px; padding: 0 12px; border: 1px solid #D9D0BF; border-radius: 10px; background: #FCFAF6; font: 500 14px Inter, sans-serif; color: #1A1712">
+                <sc-for list="{{statusOptions}}" as="o" hint-placeholder-count="9">
+                  <option value="{{o.value}}" selected="{{o.sel}}">{{o.value}}</option>
+                </sc-for>
+              </select>
+              <button type="button" style="min-height: 40px; padding: 0 16px; border: 0; border-radius: 10px; background: {{accent}}; color: #1A1712; font: 600 14px Inter, sans-serif; cursor: pointer">Responder</button>
+              <button type="button" style="min-height: 40px; padding: 0 16px; border: 1px solid #D9D0BF; border-radius: 10px; background: #FFFFFF; color: #1A1712; font: 500 14px Inter, sans-serif; cursor: pointer">Encaminhar</button>
+              <button type="button" style="min-height: 40px; padding: 0 16px; border: 1px solid #D9D0BF; border-radius: 10px; background: #FFFFFF; color: #1A1712; font: 500 14px Inter, sans-serif; cursor: pointer">Mais</button>
+            </div>
+          </div>
+          <div style="padding: 20px; display: flex; flex-direction: column; gap: 16px">
+            <span style="align-self: center; font-size: 12px; color: #6A645A">{{cur.date}} · Campanha: {{cur.campaign}}</span>
+            <article style="align-self: flex-start; max-width: 560px; background: #F8F5EF; border: 1px solid #EFE8DC; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px">
+              <span style="font-size: 13px; font-weight: 600">{{cur.name}}</span>
+              <p style="margin: 0; font-size: 14px; line-height: 1.55; color: #1A1712">{{cur.message}}</p>
+              <span style="font-size: 12px; color: #6A645A">{{cur.time}}</span>
+            </article>
+            <sc-if value="{{cur.hasDraft}}" hint-placeholder-val="{{ true }}">
+              <div style="background: #FFFFFF; border: 1px solid {{accent}}; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px">
+                <div style="display: flex; align-items: center; gap: 8px">
+                  <span style="width: 28px; height: 28px; border-radius: 999px; background: {{accentSoft}}; color: #5C3A00; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path></svg></span>
+                  <h3 style="margin: 0; font-size: 15px; font-weight: 600">Agente de respostas sugeriu</h3>
+                </div>
+                <p style="margin: 0; padding: 12px 14px; background: #FCFAF6; border: 1px dashed #D9D0BF; border-radius: 12px; font-size: 14px; line-height: 1.55; color: #1A1712">{{cur.draft}}</p>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px">
+                  <button type="button" onClick="{{sendDraft}}" style="min-height: 40px; padding: 0 16px; border: 0; border-radius: 10px; background: {{accent}}; color: #1A1712; font: 600 14px Inter, sans-serif; cursor: pointer">Enviar</button>
+                  <button type="button" onClick="{{editDraft}}" style="min-height: 40px; padding: 0 16px; border: 1px solid #D9D0BF; border-radius: 10px; background: #FFFFFF; color: #1A1712; font: 500 14px Inter, sans-serif; cursor: pointer">Editar</button>
+                  <button type="button" onClick="{{discardDraft}}" style="min-height: 40px; padding: 0 16px; border: 1px solid #D9D0BF; border-radius: 10px; background: #FFFFFF; color: #57524A; font: 500 14px Inter, sans-serif; cursor: pointer">Descartar</button>
+                </div>
+              </div>
+            </sc-if>
+            <sc-if value="{{notice}}" hint-placeholder-val="{{ false }}">
+              <p role="status" style="margin: 0; padding: 10px 14px; border-radius: 12px; background: #E6F2EA; color: #1F5A35; font-size: 14px">{{notice}}</p>
+            </sc-if>
+          </div>
+          <div style="margin: 0 20px 20px; border: 1px solid #D9D0BF; border-radius: 12px; background: #FFFFFF; display: flex; flex-direction: column">
+            <label for="composer" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Escrever resposta</label>
+            <textarea id="composer" rows="4" placeholder="Escreva sua resposta para {{cur.name}}..." style="border: 0; resize: vertical; padding: 14px; background: transparent; border-radius: 12px; font: 14px/1.5 Inter, sans-serif; color: #1A1712">{{composerText}}</textarea>
+            <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-top: 1px solid #EFE8DC">
+              <span style="font-size: 13px; color: #6A645A">Enviando de contato@conectagrowth.example</span>
+              <button type="button" style="min-height: 40px; padding: 0 18px; border: 0; border-radius: 10px; background: {{accent}}; color: #1A1712; font: 600 14px Inter, sans-serif; cursor: pointer">Enviar resposta</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#F5A400","options":["#F5A400","#FFB81C","#E8950C"],"section":"Tema"},"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  set(p) {
+    if (typeof this.setState === 'function') { this.setState(p); }
+    else { this.state = Object.assign({}, this.state || {}, p); if (typeof this.forceUpdate === 'function') this.forceUpdate(); }
+  }
+  renderVals() {
+    const accent = this.props.accent ?? '#F5A400';
+    const soft = /^#[0-9a-fA-F]{6}$/.test(accent) ? accent + '29' : 'rgba(245,164,0,0.16)';
+    const st = this.state || {};
+    const tab = st.tab || 'email';
+    const seg = st.seg || 'principal';
+    const sel = st.sel || 0;
+    const filter = st.filter || null;
+    const draftState = st.draft || {};
+    const pills = {
+      'Interessado': ['#E6F2EA', '#1F5A35'], 'Reunião marcada': ['#E8EEF8', '#23426E'],
+      'Fora do escritório': ['#F4EFE6', '#57524A'], 'Sem interesse': ['#FBE9E7', '#8A2A1B']
+    };
+    const dots = ['#6A645A', '#2E7D4F', '#2F5D9E', '#2F5D9E', '#B07A00', '#8A8478', '#8A8478', '#B8402E', '#B8402E'];
+    const names = ['Lead', 'Interessado', 'Reunião marcada', 'Reunião realizada', 'Ganho', 'Fora do escritório', 'Pessoa errada', 'Sem interesse', 'Perdido'];
+    const all = [
+      { name: 'Marcos Lima', email: 'marcos@neaihvac.example', company: 'Neai HVAC', time: '10:42', date: '13 nov 2026', campaign: 'Prospecção HVAC Boston', status: 'Interessado', seg: 'principal', message: 'Tenho interesse, pode mandar valores?', snippet: 'Tenho interesse, pode mandar valores?', draft: 'Oi Marcos, obrigado pelo retorno! O plano de captação começa em R$ 2.000 por mês e inclui estratégia de conteúdo, gestão de Meta Ads e relatório mensal. Posso te enviar a proposta completa ainda hoje?' },
+      { name: 'Ana Ribeiro', email: 'ana@clinicavida.example', company: 'Clínica Vida', time: 'Ontem', date: '12 nov 2026', campaign: 'Clínicas Saquarema', status: 'Reunião marcada', seg: 'principal', message: 'Pode ser na quinta às 15h?', snippet: 'Pode ser na quinta às 15h?', draft: 'Oi Ana, quinta às 15h funciona perfeitamente. Vou enviar o convite com o link da videochamada. Até lá!' },
+      { name: 'Paulo Souza', email: 'paulo@construtoraexemplo.example', company: 'Construtora Exemplo', time: 'Ter', date: '10 nov 2026', campaign: 'Construção Boston', status: 'Fora do escritório', seg: 'outros', message: 'Estou fora até segunda, retorno assim que possível.', snippet: 'Estou fora até segunda', draft: '' },
+      { name: 'Carla Mendes', email: 'carla@studioexemplo.example', company: 'Studio Exemplo', time: 'Seg', date: '9 nov 2026', campaign: 'Prospecção HVAC Boston', status: 'Sem interesse', seg: 'outros', message: 'Não temos interesse no momento, obrigada.', snippet: 'Não temos interesse no momento', draft: 'Sem problema, Carla, agradeço a resposta. Se o cenário mudar, fico à disposição.' }
+    ];
+    const visible = all.map((t, i) => Object.assign({ i }, t)).filter(t => t.seg === seg && (!filter || t.status === filter));
+    let curI = sel;
+    if (!visible.some(t => t.i === curI) && visible.length) curI = visible[0].i;
+    const c = all[curI];
+    const hasDraft = !!c.draft && !draftState[curI];
+    const mk = (obj) => Object.assign({}, obj);
+    return {
+      accent: accent, accentSoft: soft, brace: '{{', braceEnd: '}}',
+      channels: [['email', 'E-mail'], ['calls', 'Ligações'], ['whatsapp', 'WhatsApp']].map(x => ({
+        label: x[1], sel: tab === x[0] ? 'true' : 'false', color: tab === x[0] ? '#1A1712' : '#57524A',
+        line: tab === x[0] ? accent : 'transparent', pick: () => this.set({ tab: x[0] })
+      })),
+      statuses: names.map((n, i) => ({
+        label: n, count: 0, dot: dots[i], bg: filter === n ? '#F4EFE6' : 'transparent',
+        pick: () => this.set({ filter: filter === n ? null : n })
+      })),
+      groups: ['Todas as campanhas', 'Agentes de vendas com IA', 'Todas as caixas', 'Mais'],
+      segments: [['principal', 'Principal'], ['outros', 'Outros']].map(x => ({
+        label: x[1], sel: seg === x[0] ? 'true' : 'false', bg: seg === x[0] ? '#FFFFFF' : 'transparent',
+        color: seg === x[0] ? '#1A1712' : '#57524A', pick: () => this.set({ seg: x[0] })
+      })),
+      threads: visible.map(t => ({
+        name: t.name, company: t.company, snippet: t.snippet, time: t.time, status: t.status,
+        pillBg: pills[t.status][0], pillFg: pills[t.status][1],
+        bg: t.i === curI ? soft : '#FFFFFF', sel: t.i === curI ? 'true' : 'false',
+        pick: () => this.set({ sel: t.i })
+      })),
+      cur: { name: c.name, email: c.email, company: c.company, message: c.message, time: c.time, date: c.date, campaign: c.campaign, draft: c.draft, hasDraft: hasDraft },
+      statusOptions: names.map(n => ({ value: n, sel: n === c.status ? 'true' : 'false' })),
+      notice: st.notice || '',
+      composerText: st['text' + curI] || '',
+      sendDraft: () => this.set({ draft: Object.assign({}, draftState, { [curI]: 'sent' }), notice: 'Resposta enviada (exemplo ilustrativo).' }),
+      editDraft: () => this.set({ ['text' + curI]: c.draft, draft: Object.assign({}, draftState, { [curI]: 'edit' }), notice: '' }),
+      discardDraft: () => this.set({ draft: Object.assign({}, draftState, { [curI]: 'discarded' }), notice: '' })
+    };
+  }
+}
+</script>
+</body>
+</html>

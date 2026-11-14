@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 64" width="600" height="128" role="img" aria-labelledby="t">
+  <title id="t">Kolmeia</title>
+  <defs>
+    <style>@import url('https://fonts.googleapis.com/css2?family=Geologica:wght@600&amp;display=swap');</style>
+  </defs>
+  <path fill="#15171C" fill-rule="evenodd" d="M32 4 56 18v28L32 60 8 46V18Z M20 17h7v11l11.5-11H48L33.5 32 48 47h-9.5L27 36v11h-7Z"/>
+  <path fill="#E9A21B" d="M30.5 28 34 30v4l-3.5 2-3.5-2v-4Z"/>
+  <!-- Wordmark: Geologica 600, caixa baixa, tracking -2%. Em produção, converter o texto em curvas. -->
+  <text x="72" y="45" fill="#15171C" font-family="Geologica, 'Onest', system-ui, sans-serif" font-weight="600" font-size="40" letter-spacing="-0.8">kolmeia</text>
+</svg>

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Kolmeia — Relatórios</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FBF8F2}
+a{color:#1A1712}a:hover{color:#7A4E00}
+h1,h2,h3{font-family:'Space Grotesk',Inter,system-ui,sans-serif}
+.k-nav:hover{background:#26221C !important;color:#FFFFFF !important}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid #7A4E00;outline-offset:2px}
+@media (max-width: 860px){ .k-side{max-width:none !important; flex-basis:100% !important} .k-side .k-navlist{flex-direction:row !important; flex-wrap:wrap} .k-side .k-bottom{display:none !important} }
+
+</style>
+</helmet>
+<div style="font-family: Inter, system-ui, sans-serif; color: #1A1712; background: #FBF8F2; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch">
+  <nav aria-label="Principal" class="k-side" style="flex: 1 1 232px; max-width: 232px; background: #1A1712; color: #F4EFE6; padding: 20px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px">
+    <a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; padding: 0 12px; min-height: 40px; text-decoration: none; color: #F4EFE6; font-family: 'Space Grotesk', Inter, sans-serif; font-weight: 700; font-size: 20px"><svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2 L28 9 L28 23 L16 30 L4 23 L4 9 Z" fill="{{accent}}"></path><path d="M16 10 L21.2 13 L21.2 19 L16 22 L10.8 19 L10.8 13 Z" fill="#1A1712"></path></svg>Kolmeia</a>
+    <button type="button" style="display: flex; align-items: center; justify-content: space-between; min-height: 40px; margin: 6px 0 10px; padding: 0 12px; background: #26221C; color: #F4EFE6; border: 1px solid #3A352C; border-radius: 10px; font: 500 14px Inter, sans-serif; cursor: pointer"><span>Conecta Growth</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></button>
+    <div class="k-navlist" style="display: flex; flex-direction: column; gap: 4px">
+      <a href="Copiloto.dc.html" class="k-nav" style="min-height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; text-decoration: none; color: #C9C3B8; background: transparent"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path><path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"></path></svg><span style="flex: 1">Copiloto</span></a>
+      <a href="BuscaLeads.dc.html" class="k-nav" style="min-height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; text-decoration: none; color: #C9C3B8; background: transparent"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg><span style="flex: 1">Busca de leads</span></a>
+      <a href="Main.dc.html" class="k-nav" style="min-height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; text-decoration: none; color: #C9C3B8; background: transparent"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13"></path><path d="M22 2l-7 20-4-9-9-4z"></path></svg><span style="flex: 1">Campanhas</span></a>
+      <a href="Agentes.dc.html" class="k-nav" style="min-height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; text-decoration: none; color: #C9C3B8; background: transparent"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l9 5v10l-9 5-9-5V7z"></path><circle cx="12" cy="12" r="2.5"></circle></svg><span style="flex: 1">Agentes</span></a>
+      <a href="CRM.dc.html" class="k-nav" style="min-height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; text-decoration: none; color: #C9C3B8; background: transparent"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"></path><circle cx="10" cy="7" r="4"></circle><path d="M21 21v-2a4 4 0 0 0-3-3.9"></path><path d="M16 3.1a4 4 0 0 1 0 7.8"></path></svg><span style="flex: 1">CRM</span></a>
+      <a href="ContasEmail.dc.html" class="k-nav" style="min-height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; text-decoration: none; color: #C9C3B8; background: transparent"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 7l9 6 9-6"></path></svg><span style="flex: 1">Contas de e-mail</span></a>
+      <a href="Unibox.dc.html" class="k-nav" style="min-height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; text-decoration: none; color: #C9C3B8; background: transparent"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-6l-2 3h-4l-2-3H2"></path><path d="M5.5 5h13L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6z"></path></svg><span style="flex: 1">Caixa unificada</span></a>
+      <a href="Relatorios.dc.html" class="k-nav k-on" style="min-height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; text-decoration: none; color: #FFFFFF; background: #26221C"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="stroke: {{accent}}"><path d="M4 20V10"></path><path d="M10 20V4"></path><path d="M16 20v-7"></path><path d="M22 20H2"></path></svg><span style="flex: 1">Relatórios</span><span style="width: 4px; height: 4px; border-radius: 999px; background: {{accent}}"></span></a>
+    </div>
+    <div class="k-bottom" style="margin-top: auto; display: flex; flex-direction: column; gap: 12px">
+      <div style="border: 1px solid {{accent}}; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+        <span style="font-size: 13px; font-weight: 600; color: #F4EFE6">Teste grátis · 7 dias restantes</span>
+        <button type="button" style="min-height: 40px; border: 0; border-radius: 10px; background: {{accent}}; color: #1A1712; font: 600 14px Inter, sans-serif; cursor: pointer">Ver planos</button>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 0 4px">
+        <span style="width: 34px; height: 34px; border-radius: 999px; background: {{accent}}; color: #1A1712; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600">JS</span>
+        <div style="display: flex; flex-direction: column; line-height: 1.3"><span style="font-size: 14px; font-weight: 500">Juan</span><a href="Main.dc.html" style="display: flex; align-items: center; gap: 4px; font-size: 12px; color: #C9C3B8; text-decoration: none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"></path></svg>Configurações</a></div>
+      </div>
+    </div>
+  </nav>
+  <main style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+    <header style="min-height: 64px; padding: 8px 32px; border-bottom: 1px solid #EAE3D6; background: #FBF8F2; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px">
+      <h1 style="margin: 0; font-size: 22px; font-weight: 700">Relatórios</h1>
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px">
+        <div style="position: relative; display: flex; align-items: center">
+          <label for="gsearch" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Buscar</label>
+          <span style="position: absolute; left: 12px; display: flex; color: #6A645A"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg></span>
+          <input id="gsearch" type="search" placeholder="Buscar" style="height: 40px; width: 200px; box-sizing: border-box; padding: 0 12px 0 36px; border: 1px solid #D9D0BF; border-radius: 10px; background: #FFFFFF; font: 14px Inter, sans-serif; color: #1A1712">
+        </div>
+        <a href="Copiloto.dc.html" style="min-height: 40px; padding: 0 14px; display: flex; align-items: center; gap: 8px; border: 1px solid #D9D0BF; border-radius: 10px; background: #FFFFFF; font-size: 14px; font-weight: 500; text-decoration: none; color: #1A1712"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path><path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"></path></svg>Copiloto</a>
+        <button type="button" aria-label="Notificações" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border: 1px solid #D9D0BF; border-radius: 10px; background: #FFFFFF; color: #1A1712; cursor: pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"></path></svg></button>
+      </div>
+    </header>
+    <div style="padding: 28px 32px 48px; max-width: 1320px; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px">
+      <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px">
+        <div role="tablist" aria-label="Seções de relatórios" style="display: flex; flex-wrap: wrap; gap: 4px">
+          <sc-for list="{{tabs}}" as="t" hint-placeholder-count="6">
+            <button type="button" role="tab" aria-selected="{{t.sel}}" onClick="{{t.pick}}" style="min-height: 40px; padding: 0 14px; border: 0; border-bottom: 2px solid {{t.line}}; background: transparent; font: 600 14px Inter, sans-serif; color: {{t.color}}; cursor: pointer">{{t.label}}</button>
+          </sc-for>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+          <label for="period" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Período</label>
+          <select id="period" style="height: 40px; padding: 0 12px; border: 1px solid #D9D0BF; border-radius: 10px; background: #FFFFFF; font: 500 14px Inter, sans-serif; color: #1A1712">
+            <option>Último mês</option><option>Últimos 7 dias</option><option>Últimos 3 meses</option><option>Este ano</option>
+          </select>
+          <button type="button" style="min-height: 40px; padding: 0 14px; display: flex; align-items: center; gap: 8px; border: 1px solid #D9D0BF; border-radius: 10px; background: #FFFFFF; font: 500 14px Inter, sans-serif; color: #1A1712; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"></path></svg>Compartilhar analytics</button>
+          <button type="button" style="min-height: 40px; padding: 0 14px; display: flex; align-items: center; gap: 8px; border: 1px solid #D9D0BF; border-radius: 10px; background: #FFFFFF; font: 500 14px Inter, sans-serif; color: #1A1712; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"></path></svg>Configurações</button>
+        </div>
+      </div>
+      <p style="margin: 0; font-size: 14px; color: #57524A">Exibindo: <strong style="color: #1A1712">{{activeTab}}</strong> · Período: último mês</p>
+      <sc-for list="{{sections}}" as="s" hint-placeholder-count="3">
+        <section style="background: #FFFFFF; border: 1px solid #E3DACA; border-radius: 16px; box-shadow: 0 1px 2px rgba(26,23,18,0.05); padding: 20px; display: flex; flex-direction: column; gap: 16px">
+          <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px">
+            <h2 style="margin: 0; font-size: 18px; font-weight: 700">{{s.title}}</h2>
+            <a href="{{s.href}}" style="min-height: 40px; display: flex; align-items: center; font-size: 14px; font-weight: 600; color: #7A4E00; text-decoration: none">{{s.link}} &rarr;</a>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px">
+            <sc-for list="{{s.tiles}}" as="m" hint-placeholder-count="8">
+              <div style="background: #FCFAF6; border: 1px solid #EFE8DC; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px">
+                <span style="font-size: 13px; color: #6A645A">{{m.label}}</span>
+                <span style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 28px; font-weight: 700; color: #1A1712">{{m.value}}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="position: relative; height: 220px; border: 1px solid #EFE8DC; border-radius: 12px; background: #FFFFFF; overflow: hidden">
+            <div aria-hidden="true" style="position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between; padding: 24px 16px">
+              <div style="height: 1px; background: #F1EBE0"></div><div style="height: 1px; background: #F1EBE0"></div><div style="height: 1px; background: #F1EBE0"></div><div style="height: 1px; background: #F1EBE0"></div><div style="height: 1px; background: #F1EBE0"></div>
+            </div>
+            <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; padding: 16px">
+              <span style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 16px; font-weight: 600; background: #FFFFFF; padding: 0 8px">Sem atividade neste período</span>
+              <span style="font-size: 14px; color: #57524A; background: #FFFFFF; padding: 0 8px">Amplie o período ou volte quando essas métricas registrarem atividade.</span>
+            </div>
+          </div>
+        </section>
+      </sc-for>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#F5A400","options":["#F5A400","#FFB81C","#E8950C"],"section":"Tema"},"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  set(p) {
+    if (typeof this.setState === 'function') { this.setState(p); }
+    else { this.state = Object.assign({}, this.state || {}, p); if (typeof this.forceUpdate === 'function') this.forceUpdate(); }
+  }
+  renderVals() {
+    const accent = this.props.accent ?? '#F5A400';
+    const soft = /^#[0-9a-fA-F]{6}$/.test(accent) ? accent + '29' : 'rgba(245,164,0,0.16)';
+    const tab = (this.state && this.state.tab) || 'Visão geral';
+    const names = ['Visão geral', 'Prospecção', 'Vendas', 'Agentes de IA', 'Automação', 'Workspaces'];
+    const sections = [{"title": "Prospecção", "link": "Ver prospecção", "href": "Main.dc.html", "tiles": [{"label": "Total enviado", "value": "0"}, {"label": "Sequências iniciadas", "value": "0"}, {"label": "Taxa de resposta", "value": "0% | 0"}, {"label": "Taxa de abertura", "value": "0% | 0"}, {"label": "Taxa de cliques", "value": "0% | 0"}, {"label": "Respostas positivas", "value": "0% | 0"}, {"label": "Oportunidades", "value": "0 | R$ 0"}, {"label": "Conversões", "value": "0 | R$ 0"}]}, {"title": "Agentes de IA", "link": "Ver agentes de IA", "href": "Agentes.dc.html", "tiles": [{"label": "Taxa de envolvimento", "value": "0%"}, {"label": "Taxa de resolução", "value": "0%"}, {"label": "Ações totais", "value": "0"}, {"label": "Respostas enviadas", "value": "0"}, {"label": "Follow-ups", "value": "0"}, {"label": "Intervenção humana", "value": "0"}, {"label": "Tempo economizado", "value": "0 s"}, {"label": "Confiança média", "value": "0%"}, {"label": "Leads encontrados", "value": "0"}, {"label": "E-mails enviados", "value": "0"}, {"label": "Respostas do agente de vendas", "value": "0"}, {"label": "Oportunidades", "value": "0"}]}, {"title": "Automação", "link": "Ver automação", "href": "Agentes.dc.html", "tiles": [{"label": "Tarefas automatizadas", "value": "0"}, {"label": "Taxa de sucesso", "value": "0% | 0"}]}];
+    return {
+      accent: accent, accentSoft: soft, brace: '{{', braceEnd: '}}',
+      activeTab: tab,
+      tabs: names.map(n => ({
+        label: n, sel: tab === n ? 'true' : 'false', color: tab === n ? '#1A1712' : '#57524A',
+        line: tab === n ? accent : 'transparent', pick: () => this.set({ tab: n })
+      })),
+      sections: sections
+    };
+  }
+}
+</script>
+</body>
+</html>

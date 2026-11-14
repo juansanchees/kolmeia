@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Kolmeia — Contas de e-mail</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FBF8F2}
+a{color:#1A1712}a:hover{color:#7A4E00}
+h1,h2,h3{font-family:'Space Grotesk',Inter,system-ui,sans-serif}
+.k-nav:hover{background:#26221C;color:#FFFFFF}
+.k-nav{text-decoration:none}
+.k-btn:hover{filter:brightness(0.97)}
+.k-row:hover{background:#FCFAF6}
+.k-vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+@media (max-width: 860px){ .k-side{max-width:none !important; flex-basis:100% !important} .k-side .k-navlist{flex-direction:row !important; flex-wrap:wrap} .k-side .k-bottom{display:none !important} }
+</style>
+</helmet>
+<div style="font-family: Inter, system-ui, sans-serif; color: #1A1712; background: #FBF8F2; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch">
+
+  <nav class="k-side" aria-label="Principal" style="flex: 1 1 232px; max-width: 232px; background: #1A1712; color: #F4EFE6; padding: 20px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px">
+    <a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; padding: 0 8px; min-height: 44px; text-decoration: none; color: #F4EFE6">
+      <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2 L28 9 L28 23 L16 30 L4 23 L4 9 Z" fill="{{accent}}"></path><path d="M16 10 L21.2 13 L21.2 19 L16 22 L10.8 19 L10.8 13 Z" fill="#1A1712"></path></svg>
+      <span style="font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 20px">Kolmeia</span>
+    </a>
+    <div style="margin: 8px 0 12px; background: #26221C; border: 1px solid #3A352C; border-radius: 10px; min-height: 40px; padding: 0 12px; display: flex; align-items: center; justify-content: space-between; font-size: 14px; font-weight: 500; color: #F4EFE6">
+      <span>Conecta Growth</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C9C3B8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+    </div>
+    <div class="k-navlist" style="display: flex; flex-direction: column; gap: 4px">
+      <a class="k-nav" href="Copiloto.dc.html" style="min-height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; color: #C9C3B8">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path><path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"></path></svg>
+        Copiloto
+      </a>
+      <a class="k-nav" href="BuscaLeads.dc.html" style="min-height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; color: #C9C3B8">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+        Busca de leads
+      </a>
+      <a class="k-nav" href="Main.dc.html" style="min-height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; color: #C9C3B8">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3L10 14"></path><path d="M21 3l-7 18-4-7-7-4z"></path></svg>
+        Campanhas
+      </a>
+      <a class="k-nav" href="Agentes.dc.html" style="min-height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; color: #C9C3B8">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7.5 4.3v8.7L12 20.3 4.5 16V7.3z"></path><circle cx="12" cy="11.6" r="2.2"></circle></svg>
+        Agentes
+      </a>
+      <a class="k-nav" href="CRM.dc.html" style="min-height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; color: #C9C3B8">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"></path><path d="M16 4.6a3.5 3.5 0 010 6.8"></path><path d="M18 14.3c2 .8 3.5 2.6 3.5 5.7"></path></svg>
+        CRM
+      </a>
+      <a class="k-nav" href="ContasEmail.dc.html" aria-current="page" style="min-height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; background: #26221C; color: #FFFFFF">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{accent}}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 7l9 6 9-6"></path></svg>
+        Contas de e-mail
+        <span style="margin-left: auto; width: 4px; height: 4px; border-radius: 999px; background: {{accent}}"></span>
+      </a>
+      <a class="k-nav" href="Unibox.dc.html" style="min-height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; color: #C9C3B8">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 13l3-8h12l3 8"></path><path d="M3 13v6h18v-6h-5l-1 2h-6l-1-2z"></path></svg>
+        Caixa unificada
+      </a>
+      <a class="k-nav" href="Relatorios.dc.html" style="min-height: 40px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; color: #C9C3B8">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10"></path><path d="M10 20V4"></path><path d="M16 20v-7"></path><path d="M22 20H2"></path></svg>
+        Relatórios
+      </a>
+    </div>
+    <div class="k-bottom" style="margin-top: auto; display: flex; flex-direction: column; gap: 12px">
+      <div style="border: 1px solid {{accent}}; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px">
+        <span style="font-size: 13px; font-weight: 600; color: #F4EFE6">Teste grátis · 7 dias restantes</span>
+        <button type="button" class="k-btn" style="min-height: 40px; border: 0; border-radius: 10px; background: {{accent}}; color: #1A1712; font: 600 14px Inter, sans-serif; cursor: pointer">Ver planos</button>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 4px 4px">
+        <div style="width: 36px; height: 36px; border-radius: 999px; background: {{accent}}; color: #1A1712; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px">JS</div>
+        <div style="display: flex; flex-direction: column; line-height: 1.3">
+          <span style="font-size: 14px; font-weight: 600; color: #F4EFE6">Juan</span>
+          <a href="#" style="font-size: 12px; color: #C9C3B8; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; min-height: 24px">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 01-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 01-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 01-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 010-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 012.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 014 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 012.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 010 4h-.1a1.7 1.7 0 00-1.5 1z"></path></svg>
+            Configurações
+          </a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <main style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+    <header style="min-height: 64px; padding: 8px 32px; border-bottom: 1px solid #EAE3D6; background: #FBF8F2; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px">
+      <h1 style="margin: 0; font-size: 22px; font-weight: 700">Contas de e-mail</h1>
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px">
+        <div style="position: relative">
+          <label for="busca-global" class="k-vh">Buscar</label>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6A645A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position: absolute; left: 12px; top: 12px"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+          <input id="busca-global" type="search" placeholder="Buscar" style="min-height: 40px; box-sizing: border-box; width: 220px; padding: 0 12px 0 34px; border: 1px solid #D9D0BF; border-radius: 10px; background: #FFFFFF; font: 400 14px Inter, sans-serif; color: #1A1712">
+        </div>
+        <button type="button" class="k-btn" style="min-height: 40px; padding: 0 14px; border: 1px solid #D9D0BF; border-radius: 10px; background: #FFFFFF; color: #1A1712; font: 500 14px Inter, sans-serif; display: inline-flex; align-items: center; gap: 8px; cursor: pointer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7A4E00" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"></path></svg>
+          Copiloto
+        </button>
+        <button type="button" aria-label="Notificações" class="k-btn" style="width: 40px; height: 40px; border: 1px solid #D9D0BF; border-radius: 10px; background: #FFFFFF; display: inline-flex; align-items: center; justify-content: center; cursor: pointer">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1A1712" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0112 0c0 7 3 8 3 8H3s3-1 3-8"></path><path d="M10.3 20a1.9 1.9 0 003.4 0"></path></svg>
+        </button>
+      </div>
+    </header>
+
+    <div style="padding: 28px 32px 48px; max-width: 1320px; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px">
+
+      <div role="tablist" aria-label="Seções de contas de e-mail" style="display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid #E3DACA">
+        <sc-for list="{{tabs}}" as="t" hint-placeholder-count="2">
+          <button type="button" role="tab" aria-selected="{{t.selected}}" onClick="{{t.onPick}}" style="{{t.style}}">{{t.label}}</button>
+        </sc-for>
+      </div>
+
+      <sc-if value="{{isContas}}" hint-placeholder-val="{{ true }}">
+        <div style="display: flex; flex-direction: column; gap: 24px">
+
+          <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px">
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px">
+              <div style="position: relative">
+                <label for="busca-contas" class="k-vh">Buscar contas</label>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6A645A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position: absolute; left: 12px; top: 12px"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+                <input id="busca-contas" type="search" placeholder="Buscar por e-mail" style="min-height: 40px; box-sizing: border-box; width: 240px; padding: 0 12px 0 34px; border: 1px solid #D9D0BF; border-radius: 10px; background: #FFFFFF; font: 400 14px Inter, sans-serif; color: #1A1712">
+              </div>
+              <div>
+                <label for="f-tipo" class="k-vh">Tipo</label>
+                <select id="f-tipo" style="min-height: 40px; padding: 0 12px; border: 1px solid #D9D0BF; border-radius: 10px; background: #FFFFFF; font: 500 14px Inter, sans-serif; color: #1A1712">
+                  <option>Tipo</option>
+                  <option>Google</option>
+                  <option>Outlook</option>
+                  <option>SMTP</option>
+                </select>
+              </div>
+              <div>
+                <label for="f-status" class="k-vh">Status</label>
+                <select id="f-status" style="min-height: 40px; padding: 0 12px; border: 1px solid #D9D0BF; border-radius: 10px; background: #FFFFFF; font: 500 14px Inter, sans-serif; color: #1A1712">
+                  <option>Status</option>
+                  <option>Ativa</option>
+                  <option>Aquecendo</option>
+                  <option>Pausada</option>
+                </select>
+              </div>
+              <div>
+                <label for="f-tags" class="k-vh">Tags</label>
+                <select id="f-tags" style="min-height: 40px; padding: 0 12px; border: 1px solid #D9D0BF; border-radius: 10px; background: #FFFFFF; font: 500 14px Inter, sans-serif; color: #1A1712">
+                  <option>Tags</option>
+                  <option>Sem tags</option>
+                </select>
+              </div>
+            </div>
+            <button type="button" class="k-btn" style="min-height: 40px; padding: 0 18px; border: 0; border-radius: 10px; background: {{accent}}; color: #1A1712; font: 600 14px Inter, sans-serif; display: inline-flex; align-items: center; gap: 8px; cursor: pointer">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1A1712" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+              Adicionar ou comprar contas
+            </button>
+          </div>
+
+          <div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start">
+
+            <section aria-label="Lista de contas" style="flex: 3 1 560px; min-width: 0; background: #FFFFFF; border: 1px solid #E3DACA; border-radius: 16px; box-shadow: 0 1px 2px rgba(26,23,18,0.05); overflow: hidden">
+              <div style="overflow-x: auto">
+                <table style="width: 100%; min-width: 860px; border-collapse: collapse; font-size: 14px">
+                  <thead>
+                    <tr style="background: #F8F5EF; text-align: left">
+                      <th style="padding: 12px 16px; width: 44px; border-bottom: 1px solid #EFE8DC">
+                        <input type="checkbox" aria-label="Selecionar todas as contas" style="width: 18px; height: 18px; accent-color: {{accent}}">
+                      </th>
+                      <th style="padding: 12px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: #6A645A; border-bottom: 1px solid #EFE8DC">E-MAIL</th>
+                      <th style="padding: 12px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: #6A645A; border-bottom: 1px solid #EFE8DC">TAGS</th>
+                      <th style="padding: 12px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: #6A645A; border-bottom: 1px solid #EFE8DC">TIPO</th>
+                      <th style="padding: 12px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: #6A645A; border-bottom: 1px solid #EFE8DC">STATUS</th>
+                      <th style="padding: 12px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: #6A645A; border-bottom: 1px solid #EFE8DC">ENVIADOS HOJE</th>
+                      <th style="padding: 12px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: #6A645A; border-bottom: 1px solid #EFE8DC">SAÚDE</th>
+                      <th style="padding: 12px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: #6A645A; border-bottom: 1px solid #EFE8DC">AQUECIMENTO</th>
+                      <th style="padding: 12px 12px; border-bottom: 1px solid #EFE8DC"><span class="k-vh">Ações</span></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <sc-for list="{{rows}}" as="r" hint-placeholder-count="3">
+                      <tr class="k-row">
+                        <td style="padding: 14px 16px; border-bottom: 1px solid #F1EBE0">
+                          <input type="checkbox" aria-label="{{r.selectLabel}}" style="width: 18px; height: 18px; accent-color: {{accent}}">
+                        </td>
+                        <td style="padding: 14px 12px; border-bottom: 1px solid #F1EBE0; font-weight: 500">{{r.email}}</td>
+                        <td style="padding: 14px 12px; border-bottom: 1px solid #F1EBE0; color: #57524A">{{r.tags}}</td>
+                        <td style="padding: 14px 12px; border-bottom: 1px solid #F1EBE0">{{r.tipo}}</td>
+                        <td style="padding: 14px 12px; border-bottom: 1px solid #F1EBE0">
+                          <span style="{{r.pillStyle}}">{{r.status}}</span>
+                        </td>
+                        <td style="padding: 14px 12px; border-bottom: 1px solid #F1EBE0; font-variant-numeric: tabular-nums">{{r.sent}}</td>
+                        <td style="padding: 14px 12px; border-bottom: 1px solid #F1EBE0">
+                          <div style="display: flex; align-items: center; gap: 10px">
+                            <div style="width: 56px; height: 6px; border-radius: 999px; background: #F1EBE0; overflow: hidden" role="img" aria-label="{{r.healthLabel}}">
+                              <div style="{{r.meterStyle}}"></div>
+                            </div>
+                            <span style="font-weight: 600; font-variant-numeric: tabular-nums">{{r.health}}</span>
+                          </div>
+                        </td>
+                        <td style="padding: 14px 12px; border-bottom: 1px solid #F1EBE0">
+                          <button type="button" role="switch" aria-checked="{{r.warmChecked}}" aria-label="{{r.warmLabel}}" onClick="{{r.onWarm}}" style="{{r.trackStyle}}">
+                            <span style="{{r.knobStyle}}"></span>
+                          </button>
+                        </td>
+                        <td style="padding: 14px 12px; border-bottom: 1px solid #F1EBE0">
+                          <button type="button" aria-label="{{r.moreLabel}}" class="k-btn" style="width: 40px; height: 40px; border: 0; border-radius: 10px; background: transparent; display: inline-flex; align-items: center; justify-content: center; cursor: pointer">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#57524A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
+                          </button>
+                        </td>
+                      </tr>
+                    </sc-for>
+                  </tbody>
+                </table>
+              </div>
+              <div style="padding: 12px 20px; font-size: 13px; color: #57524A; background: #FCFAF6; border-top: 1px solid #EFE8DC">Mostrando 3 contas</div>
+            </section>
+
+            <aside aria-labelledby="dicas-titulo" style="flex: 1 1 260px; min-width: 0; background: #FFFFFF; border: 1px solid #E3DACA; border-radius: 16px; box-shadow: 0 1px 2px rgba(26,23,18,0.05); padding: 20px; display: flex; flex-direction: column; gap: 14px; box-sizing: border-box">
+              <div style="display: flex; align-items: center; gap: 10px">
+                <div style="width: 36px; height: 36px; border-radius: 10px; background: {{accentSoft}}; display: flex; align-items: center; justify-content: center">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5C3A00" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7.5 4.3v8.7L12 20.3 4.5 16V7.3z"></path><path d="M9 12l2 2 4-4"></path></svg>
+                </div>
+                <h2 id="dicas-titulo" style="margin: 0; font-size: 17px; font-weight: 600">Dicas de entregabilidade</h2>
+              </div>
+              <ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 12px">
+                <li style="display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.5; color: #1A1712">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1F5A35" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none; margin-top: 2px"><path d="M5 12l5 5 9-10"></path></svg>
+                  Use até 30 envios/dia por caixa
+                </li>
+                <li style="display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.5; color: #1A1712">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1F5A35" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none; margin-top: 2px"><path d="M5 12l5 5 9-10"></path></svg>
+                  Mantenha o aquecimento ligado
+                </li>
+                <li style="display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.5; color: #1A1712">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1F5A35" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none; margin-top: 2px"><path d="M5 12l5 5 9-10"></path></svg>
+                  Configure SPF, DKIM e DMARC
+                </li>
+              </ul>
+            </aside>
+          </div>
+
+          <section aria-labelledby="conectar-titulo" style="display: flex; flex-direction: column; gap: 14px">
+            <h2 id="conectar-titulo" style="margin: 0; font-size: 20px; font-weight: 600">Adicione mais caixas de envio</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px">
+
+              <article style="background: #FFFFFF; border: 1px solid #E3DACA; border-radius: 16px; box-shadow: 0 1px 2px rgba(26,23,18,0.05); padding: 20px; display: flex; flex-direction: column; gap: 12px">
+                <div style="width: 44px; height: 44px; border-radius: 12px; background: {{accentSoft}}; display: flex; align-items: center; justify-content: center">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5C3A00" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 12.2c0-.6-.1-1.2-.2-1.7H12v3.3h4.8a4.1 4.1 0 01-1.8 2.7v2.2h2.9c1.7-1.6 2.6-3.9 2.6-6.5z"></path><path d="M12 21c2.4 0 4.5-.8 5.9-2.2"></path><path d="M6.1 14.3a5.5 5.5 0 010-3.6"></path><path d="M8.4 8.3A5.4 5.4 0 0112 6.7c1.3 0 2.5.5 3.4 1.3"></path></svg>
+                </div>
+                <h3 style="margin: 0; font-size: 17px; font-weight: 600">Conectar Google</h3>
+                <p style="margin: 0; font-size: 14px; color: #57524A; line-height: 1.5; flex: 1">Conecte contas do Gmail ou Google Workspace em poucos cliques.</p>
+                <button type="button" class="k-btn" style="min-height: 40px; border: 1px solid #D9D0BF; border-radius: 10px; background: #FFFFFF; color: #1A1712; font: 600 14px Inter, sans-serif; cursor: pointer">Conectar Google</button>
+              </article>
+
+              <article style="background: #FFFFFF; border: 1px solid #E3DACA; border-radius: 16px; box-shadow: 0 1px 2px rgba(26,23,18,0.05); padding: 20px; display: flex; flex-direction: column; gap: 12px">
+                <div style="width: 44px; height: 44px; border-radius: 12px; background: {{accentSoft}}; display: flex; align-items: center; justify-content: center">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5C3A00" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1"></rect><rect x="13" y="4" width="7" height="7" rx="1"></rect><rect x="4" y="13" width="7" height="7" rx="1"></rect><rect x="13" y="13" width="7" height="7" rx="1"></rect></svg>
+                </div>
+                <h3 style="margin: 0; font-size: 17px; font-weight: 600">Conectar Microsoft</h3>
+                <p style="margin: 0; font-size: 14px; color: #57524A; line-height: 1.5; flex: 1">Conecte contas do Outlook ou Microsoft 365.</p>
+                <button type="button" class="k-btn" style="min-height: 40px; border: 1px solid #D9D0BF; border-radius: 10px; background: #FFFFFF; color: #1A1712; font: 600 14px Inter, sans-serif; cursor: pointer">Conectar Microsoft</button>
+              </article>
+
+              <article style="background: #FFFFFF; border: 1px solid #E3DACA; border-radius: 16px; box-shadow: 0 1px 2px rgba(26,23,18,0.05); padding: 20px; display: flex; flex-direction: column; gap: 12px">
+                <div style="width: 44px; height: 44px; border-radius: 12px; background: {{accentSoft}}; display: flex; align-items: center; justify-content: center">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5C3A00" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3c2.6 2.6 3.9 5.6 3.9 9s-1.3 6.4-3.9 9c-2.6-2.6-3.9-5.6-3.9-9S9.4 5.6 12 3z"></path></svg>
+                </div>
+                <h3 style="margin: 0; font-size: 17px; font-weight: 600">Comprar domínios prontos</h3>
+                <p style="margin: 0; font-size: 14px; color: #57524A; line-height: 1.5; flex: 1">A Kolmeia configura DNS para você: SPF, DKIM e DMARC já ativos.</p>
+                <button type="button" class="k-btn" style="min-height: 40px; border: 0; border-radius: 10px; background: {{accent}}; color: #1A1712; font: 600 14px Inter, sans-serif; cursor: pointer">Comprar domínios</button>
+              </article>
+
+            </div>
+          </section>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{isTestes}}" hint-placeholder-val="{{ false }}">
+        <section style="background: #FFFFFF; border: 1px solid #E3DACA; border-radius: 16px; box-shadow: 0 1px 2px rgba(26,23,18,0.05); padding: 56px 24px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px">
+          <svg width="64" height="64" viewBox="0 0 56 56" aria-hidden="true"><path d="M28 4 L48 15.5 L48 40.5 L28 52 L8 40.5 L8 15.5 Z" fill="{{accentSoft}}" stroke="{{accent}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path><path d="M19 28.5l6 6 12-12" fill="none" stroke="#5C3A00" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          <h2 style="margin: 0; font-size: 20px; font-weight: 600">Nenhum teste de entregabilidade ainda</h2>
+          <p style="margin: 0; font-size: 14px; color: #57524A; max-width: 400px; line-height: 1.5">Rode um teste para ver se seus e-mails chegam na caixa de entrada ou no spam.</p>
+          <button type="button" class="k-btn" style="margin-top: 4px; min-height: 40px; padding: 0 20px; border: 0; border-radius: 10px; background: {{accent}}; color: #1A1712; font: 600 14px Inter, sans-serif; cursor: pointer">Criar teste</button>
+        </section>
+      </sc-if>
+
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#F5A400","options":["#F5A400","#FFB81C","#E8950C"],"section":"Tema"},"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#F5A400';
+    const soft = /^#[0-9a-fA-F]{6}$/.test(accent) ? accent + '29' : 'rgba(245,164,0,0.16)';
+    const st = this.state || {};
+    const tab = st.tab || 'contas';
+    const warm = st.warm || { a: true, b: true, c: false };
+
+    const tabDefs = [{ id: 'contas', label: 'Contas' }, { id: 'testes', label: 'Testes de entregabilidade' }];
+    const tabs = tabDefs.map((d) => {
+      const on = d.id === tab;
+      return {
+        label: d.label,
+        selected: on ? 'true' : 'false',
+        style: 'min-height: 44px; padding: 0 16px; margin-bottom: -1px; background: transparent; border: 0; cursor: pointer; font: 500 14px Inter, sans-serif; ' +
+          (on ? 'color: #1A1712; border-bottom: 2px solid ' + accent + ';' : 'color: #57524A; border-bottom: 2px solid transparent;'),
+        onPick: () => this.setState({ tab: d.id })
+      };
+    });
+
+    const pill = 'display: inline-flex; align-items: center; min-height: 26px; padding: 0 10px; border-radius: 999px; font-size: 13px; font-weight: 600; ';
+    const pills = {
+      ok: pill + 'background: #E6F2EA; color: #1F5A35;',
+      info: pill + 'background: #E8EEF8; color: #23426E;',
+      pause: pill + 'background: #F4EFE6; color: #57524A;'
+    };
+
+    const defs = [
+      { key: 'a', email: 'juan@kolmeia.example', tags: '–', tipo: 'Google', status: 'Ativa', pill: 'ok', sent: '0/30', health: 100, meter: '#1F5A35' },
+      { key: 'b', email: 'contato@kolmeia.ai', tags: '–', tipo: 'Outlook', status: 'Aquecendo', pill: 'info', sent: '4/20', health: 92, meter: accent },
+      { key: 'c', email: 'vendas@conectagrowth.com.br', tags: '–', tipo: 'SMTP', status: 'Pausada', pill: 'pause', sent: '0/30', health: 87, meter: accent }
+    ];
+    const rows = defs.map((d) => {
+      const on = !!warm[d.key];
+      return {
+        email: d.email, tags: d.tags, tipo: d.tipo, status: d.status, sent: d.sent,
+        health: d.health + '%',
+        healthLabel: 'Saúde ' + d.health + '%',
+        selectLabel: 'Selecionar ' + d.email,
+        moreLabel: 'Mais ações para ' + d.email,
+        pillStyle: pills[d.pill],
+        meterStyle: 'height: 100%; width: ' + d.health + '%; background: ' + d.meter + '; border-radius: 999px',
+        warmChecked: on ? 'true' : 'false',
+        warmLabel: 'Aquecimento de ' + d.email,
+        trackStyle: 'position: relative; width: 44px; height: 24px; padding: 0; border: 0; border-radius: 999px; cursor: pointer; background: ' + (on ? accent : '#D9D0BF'),
+        knobStyle: 'position: absolute; top: 3px; left: ' + (on ? '23px' : '3px') + '; width: 18px; height: 18px; border-radius: 999px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(26,23,18,0.25)',
+        onWarm: () => {
+          const next = Object.assign({}, warm);
+          next[d.key] = !on;
+          this.setState({ warm: next });
+        }
+      };
+    });
+
+    return {
+      accent: accent, accentSoft: soft, brace: '{{', braceEnd: '}}',
+      tabs: tabs, rows: rows,
+      isContas: tab === 'contas', isTestes: tab === 'testes'
+    };
+  }
+}
+</script>
+</body>
+</html>

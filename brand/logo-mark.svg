@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="256" height="256" role="img" aria-labelledby="t">
+  <title id="t">Kolmeia</title>
+  <!-- Célula hexagonal em tinta com o K vazado; a célula âmbar no encontro das hastes = a mensagem que passa entre as caixas -->
+  <path fill="#15171C" fill-rule="evenodd" d="M32 4 56 18v28L32 60 8 46V18Z M20 17h7v11l11.5-11H48L33.5 32 48 47h-9.5L27 36v11h-7Z"/>
+  <path fill="#E9A21B" d="M30.5 28 34 30v4l-3.5 2-3.5-2v-4Z"/>
+</svg>
