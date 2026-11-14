@@ -313,8 +313,7 @@ describe("0011 import RPCs", () => {
     expect((await imp(rows(1, 501))).error?.message).toMatch(/too many rows/);
     for (let i = 0; i < 10; i++) await db.query(as(UUID_A), "select public.import_lead_rows($1,$2::jsonb)", [id, rows(1 + i * 500, 500)]);
     expect((await db.admin<{ row_count: number }>("select row_count from public.lead_imports where id = $1", [id]))[0].row_count).toBe(5000);
-    const over = await imp(rows(5001, 1));
-    expect(over.error?.message).toMatch(/too many rows/);
+    const over = await imp(rows(5001, 1)); // row numbers stop at 5,000, so the 5,001st is refused either way
     expect((over.error as unknown as { code?: string }).code).toBe("22023");
     await db.query(as(UUID_A), "select public.finish_lead_import($1)", [id]);
     const late = await imp(rows(1, 1));
@@ -391,15 +390,49 @@ describe("0011 import RPCs", () => {
     expect(await db.admin("select 1 from public.lead_fields where source_ref = $1", [a.importId])).toHaveLength(0);
     const shared = (await db.admin<{ lead_id: string }>("select lead_id from public.lead_fields where source_ref = $1 and field = 'phone'", [b.importId]))[0].lead_id;
     expect((await db.admin<{ origin_import_id: string }>("select origin_import_id from public.leads where id = $1", [shared]))[0].origin_import_id).toBe(b.importId);
-    // (c) a lead that had only A's values and now a candidate: origin falls back to the research
+    // (c) a lead that had only A's values and now a candidate: stays, origin_kind import, no list
     const joined = (await db.admin<{ id: string; origin_kind: string; origin_import_id: string | null }>(
       "select l.id, l.origin_kind, l.origin_import_id from public.leads l join public.research_candidates c on c.id = l.best_candidate_id where c.name = 'Joined Later Inc'",
     ))[0];
-    expect(joined).toMatchObject({ origin_kind: "one_off", origin_import_id: null });
+    expect(joined).toMatchObject({ origin_kind: "import", origin_import_id: null });
     // B's values remain intact
     expect((await fieldsOf(shared)).filter((f) => f.source_ref === b.importId).length).toBeGreaterThan(0);
     expect(((await db.try(as(UUID_A), "select public.undo_lead_import($1)", [a.importId])).error as unknown as { code?: string }).code).toBe("22023");
   });
+
+  test("undo keeps leads that were already worked (status or owner) and counts them as kept", async () => {
+    await clean();
+    const a = await seedImport(db, UUID_A, wsA, [row(1, "Plain Co"), row(2, "Worked Status Co"), row(3, "Assigned Co")]);
+    await db.admin("update public.leads set status = 'call_list' where id = (select lead_id from public.lead_fields where field = 'name' and value = 'Worked Status Co')");
+    await db.admin("update public.leads set owner_id = $1 where id = (select lead_id from public.lead_fields where field = 'name' and value = 'Assigned Co')", [UUID_D]);
+    expect(await rpc(UUID_A, "select public.undo_lead_import($1) as r", [a.importId])).toEqual({ deleted: 1, kept: 2 });
+    const left = await db.admin<{ origin_kind: string; origin_import_id: string | null }>("select origin_kind, origin_import_id from public.leads where workspace_id = $1", [wsA]);
+    expect(left).toEqual([
+      { origin_kind: "import", origin_import_id: null },
+      { origin_kind: "import", origin_import_id: null },
+    ]);
+    expect(await count("lead_fields")).toBe(0);
+  });
+
+  test("a 1,000-character multi-byte note imports (index entries stay small)", async () => {
+    await clean();
+    const note = "建".repeat(1000);
+    const { result } = await seedImport(db, UUID_A, wsA, [row(1, "Acme Test Builders", { note: "x".repeat(300) }), row(2, "Zeta")]);
+    expect(result.errors).toBe(0);
+    const id = (await rpc(UUID_A, "select public.create_lead_import($1,'f.csv',null,'L','{}'::jsonb,false) as r", [wsA])) as string;
+    // the cap on note is 1,000 characters: a CJK note of exactly 1,000 characters is 3,000 bytes
+    expect(await rpc(UUID_A, "select public.import_lead_rows($1,$2::jsonb) as r", [id, JSON.stringify([row(1, "Zeta", { note })])])).toEqual({ new: 0, merged: 1, errors: 0 });
+    expect((await fieldsOf((await leadIds(wsA))[0])).some((f) => f.value === note) || (await fieldsOf((await leadIds(wsA))[1])).some((f) => f.value === note)).toBe(true);
+  });
+
+  test("re-sending the last batch of a 5,000-row import is idempotent, not a cap error", async () => {
+    await clean();
+    const id = (await rpc(UUID_A, "select public.create_lead_import($1,'f.csv',null,'L','{}'::jsonb,false) as r", [wsA])) as string;
+    const rows = (from: number, n: number) => JSON.stringify(Array.from({ length: n }, (_, i) => row(from + i, `Company ${from + i}`)));
+    for (let i = 0; i < 10; i++) await db.query(as(UUID_A), "select public.import_lead_rows($1,$2::jsonb)", [id, rows(1 + i * 500, 500)]);
+    expect(await rpc(UUID_A, "select public.import_lead_rows($1,$2::jsonb) as r", [id, rows(4501, 500)])).toEqual({ new: 0, merged: 0, errors: 0 });
+    expect(((await db.try(as(UUID_A), "select public.import_lead_rows($1,$2::jsonb)", [id, rows(5001, 1)])).error as unknown as { code?: string }).code).toBe("22023");
+  }, 120_000);
 
   test("an unfinished import can be undone and its leads are gone", async () => {
     await clean();

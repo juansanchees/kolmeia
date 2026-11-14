@@ -85,7 +85,7 @@ create index if not exists lead_fields_lead_idx on public.lead_fields (lead_id);
 -- K-2: every distinct value is its own row; the same value from another list (another source_ref) is another row; the same value twice from one source is one row.
 drop index if exists public.lead_fields_distinct;
 create unique index if not exists lead_fields_distinct
-  on public.lead_fields (lead_id, field, lower(btrim(value)), source, coalesce(source_ref, ''));
+  on public.lead_fields (lead_id, field, md5(lower(btrim(value))), source, coalesce(source_ref, ''));
 
 -- The key of a value: SQL company keys for website/phone, lower-cased e-mail. A name keeps the key its writer
 -- computed (TS nameKey, as research candidates do); every other field has none.
@@ -367,6 +367,7 @@ declare
   v_imp public.lead_imports;
   v_ws uuid;
   v_n int;
+  v_fresh int := 0;
   v_row jsonb;
   v_no int;
   v_k text;
@@ -390,7 +391,7 @@ begin
     raise exception 'invalid rows' using errcode = '22023';
   end if;
   v_n := jsonb_array_length(p_rows);
-  if v_n > 500 or v_imp.row_count + v_n > 5000 then
+  if v_n > 500 then
     raise exception 'too many rows' using errcode = '22023';
   end if;
 
@@ -407,6 +408,11 @@ begin
     -- a batch sent twice (retry after a lost answer) is not counted twice
     if exists (select 1 from public.lead_import_rows r where r.import_id = p_import and r.row_number = v_no) then
       continue;
+    end if;
+    -- the 5,000-row cap counts only rows not stored yet, so a re-sent last batch stays idempotent
+    v_fresh := v_fresh + 1;
+    if v_imp.row_count + v_fresh > 5000 then
+      raise exception 'too many rows' using errcode = '22023';
     end if;
 
     if v_row ? 'error' then
@@ -521,7 +527,6 @@ declare
   v_other uuid;
   v_deleted int := 0;
   v_kept int := 0;
-  v_cand record;
 begin
   v_imp := public.lead_import_guard(p_import, array['importing', 'done'], true);
   v_ws := v_imp.workspace_id;
@@ -537,7 +542,8 @@ begin
   loop
     if v_lead.origin_import_id is not distinct from p_import
        and not exists (select 1 from public.research_candidates c where c.lead_id = v_lead.id)
-       and not exists (select 1 from public.lead_fields f where f.lead_id = v_lead.id and not (f.source = 'import' and f.source_ref = p_import::text)) then
+       and not exists (select 1 from public.lead_fields f where f.lead_id = v_lead.id and not (f.source = 'import' and f.source_ref = p_import::text))
+       and not exists (select 1 from public.leads w where w.id = v_lead.id and (w.status <> 'new' or w.owner_id is not null)) then
       delete from public.leads where id = v_lead.id and workspace_id = v_ws;
       v_deleted := v_deleted + 1;
     else
@@ -549,24 +555,8 @@ begin
          where f.lead_id = v_lead.id and f.source = 'import' and f.source_ref <> p_import::text and i.status <> 'undone'
          order by i.created_at, i.id
          limit 1;
-        if v_other is not null then
-          update public.leads set origin_import_id = v_other, updated_at = now() where id = v_lead.id;
-        else
-          -- no other list: the lead now comes from its research
-          select c.run_id, r.agent_id into v_cand
-            from public.research_candidates c
-            join public.research_runs r on r.id = c.run_id
-           where c.lead_id = v_lead.id
-           order by c.created_at, c.id
-           limit 1;
-          update public.leads
-             set origin_import_id = null,
-                 origin_kind = case when v_cand.agent_id is null then 'one_off' else 'agent' end,
-                 origin_agent_id = v_cand.agent_id,
-                 origin_run_id = v_cand.run_id,
-                 updated_at = now()
-           where id = v_lead.id;
-        end if;
+        -- the oldest other list takes over; with none, origin_kind stays 'import' and the list id goes null
+        update public.leads set origin_import_id = v_other, updated_at = now() where id = v_lead.id;
       end if;
     end if;
   end loop;
