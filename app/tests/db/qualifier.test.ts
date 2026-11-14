@@ -156,7 +156,7 @@ describe("0014 level, Qualificador and queue", () => {
     await db.admin("update public.lead_fields set status = 'refuted' where lead_id = $1 and field = 'phone'", [lead]);
     expect(await levelOf(lead)).toBe(0);
     const n = await db.admin<{ level_note: { from: number; to: number; field: string } }>("select level_note from public.leads where id = $1", [lead]);
-    expect(n[0].level_note).toEqual({ from: 1, to: 0, field: "phone" });
+    expect(n[0].level_note).toMatchObject({ from: 1, to: 0, field: "phone" });
 
     expect((await db.try(as(UUID_D), "select public.ack_level_note($1)", [lead])).error).toMatchObject({ code: "42501" });
     expect((await db.try(as(UUID_B), "select public.ack_level_note($1)", [lead])).error).toMatchObject({ code: "42501" }); // another workspace
@@ -312,13 +312,23 @@ describe("0014 level, Qualificador and queue", () => {
     expect(await levelOf(lead)).toBe(4);
     await db.admin("update public.research_checks set result = 'no' where candidate_id = $1 and kind = 'has_work'", [cand]);
     expect(await levelOf(lead)).toBe(1);
-    expect((await db.admin<{ level_note: unknown }>("select level_note from public.leads where id = $1", [lead]))[0].level_note).toEqual({ from: 4, to: 1, field: "has_work" });
+    expect((await db.admin<{ level_note: unknown }>("select level_note from public.leads where id = $1", [lead]))[0].level_note).toMatchObject({ from: 4, to: 1, field: "has_work" });
     // back to ok (evidence rewritten): the level returns and the note goes away
     await db.pg.transaction(async (tx) => {
       const k = await tx.query<{ id: string }>("select id from public.research_checks where candidate_id = $1 and kind = 'has_work'", [cand]);
       await tx.query("delete from public.research_evidence where check_id = $1", [k.rows[0].id]);
       await tx.query("update public.research_checks set result = 'ok' where id = $1", [k.rows[0].id]);
       await tx.query("insert into public.research_evidence (workspace_id, check_id, url, title, excerpt) values ($1,$2,'https://example.com/p2','P','proof')", [wsA, k.rows[0].id]);
+    });
+    expect(await levelOf(lead)).toBe(4);
+    // the fall happened in an earlier transaction and nobody acknowledged it: it stays (m-4)
+    expect((await db.admin<{ level_note: unknown }>("select level_note from public.leads where id = $1", [lead]))[0].level_note).not.toBeNull();
+    await db.admin("update public.leads set level_note = null where id = $1", [lead]);
+    // evidence rewritten inside ONE transaction: the level dips and returns, and no note is left
+    await db.pg.transaction(async (tx) => {
+      const k = await tx.query<{ id: string }>("select id from public.research_checks where candidate_id = $1 and kind = 'has_work'", [cand]);
+      await tx.query("delete from public.research_evidence where check_id = $1", [k.rows[0].id]);
+      await tx.query("insert into public.research_evidence (workspace_id, check_id, url, title, excerpt) values ($1,$2,'https://example.com/p3','P','proof')", [wsA, k.rows[0].id]);
     });
     expect(await levelOf(lead)).toBe(4);
     expect((await db.admin<{ level_note: unknown }>("select level_note from public.leads where id = $1", [lead]))[0].level_note).toBeNull();
@@ -377,5 +387,50 @@ describe("0014 level, Qualificador and queue", () => {
     await db.admin("delete from public.lead_fields where lead_id = $1", [l2]);
     expect(await levelOf(l2)).toBe(0);
     expect((await db.admin<{ level_note: unknown }>("select level_note from public.leads where id = $1", [l2]))[0].level_note).toBeNull();
+  });
+  test("I-A the level follows a candidate that is deleted or moved to another lead", async () => {
+    await clean();
+    const run = await newRun();
+    const mk = async (lead: string | null) => {
+      const c = (await db.admin<{ id: string }>("insert into public.research_candidates (workspace_id, run_id, name, name_key, temperature) values ($1,$2,'Hot Co',$3,'hot') returning id", [wsA, run, `hot-${Math.random()}`]))[0].id;
+      await okCheck(run, c, "has_work");
+      if (lead) await db.admin("update public.research_candidates set lead_id = $1, verified_at = now() where id = $2", [lead, c]);
+      return c;
+    };
+    const fresh = async (l: string) => Number((await db.admin<{ v: number }>("select public.lead_level($1) v", [l]))[0].v);
+    const a = await importLead();
+    await field(a, "phone", "5085550120");
+    const c1 = await mk(a);
+    expect(await levelOf(a)).toBe(4);
+    await db.admin("delete from public.research_candidates where id = $1", [c1]);
+    expect(await levelOf(a)).toBe(await fresh(a));
+    expect(await levelOf(a)).toBe(1);
+    // re-link: the old lead falls, the new one rises
+    const b = await importLead();
+    await field(b, "phone", "5085550121");
+    const c2 = await mk(a);
+    expect(await levelOf(a)).toBe(4);
+    await db.admin("update public.research_candidates set lead_id = $1 where id = $2", [b, c2]);
+    expect(await levelOf(a)).toBe(await fresh(a));
+    expect(await levelOf(b)).toBe(await fresh(b));
+    expect(await levelOf(b)).toBe(4);
+  });
+
+  test("m-4 a note heals only inside its own transaction; m-2 refuted candidates are not merged", async () => {
+    await clean();
+    const lead = await importLead();
+    await field(lead, "phone", "5085550130");
+    await db.admin("update public.lead_fields set status = 'refuted' where lead_id = $1", [lead]);
+    expect((await db.admin<{ level_note: unknown }>("select level_note from public.leads where id = $1", [lead]))[0].level_note).toMatchObject({ from: 1, to: 0 });
+    await field(lead, "email", "late@acme.example", "unverified", "import", "imp-2"); // the level rises again, the note stays
+    expect(await levelOf(lead)).toBe(1);
+    expect((await db.admin<{ level_note: unknown }>("select level_note from public.leads where id = $1", [lead]))[0].level_note).not.toBeNull();
+  });
+
+  test("m-6 pausing by hand during a daily-cap pause makes it the user's pause", async () => {
+    await db.admin("update public.qualifiers set status = 'paused', paused_reason = 'daily_cap', paused_until = now() - interval '1 minute' where workspace_id = $1", [wsA]);
+    await db.query(as(UUID_A), "update public.qualifiers set status = 'paused' where workspace_id = $1", [wsA]);
+    expect((await db.admin<{ paused_reason: string; paused_until: string | null }>("select paused_reason, paused_until from public.qualifiers where workspace_id = $1", [wsA]))[0]).toEqual({ paused_reason: "user", paused_until: null });
+    await db.admin("update public.qualifiers set status = 'on', paused_reason = null where workspace_id = $1", [wsA]);
   });
 });

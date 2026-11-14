@@ -101,6 +101,34 @@ create trigger delete_candidate_fields
   for each row
   execute function public.delete_candidate_fields();
 
+-- The level must follow a candidate that goes away or moves to another lead (the BEFORE DELETE trigger above runs before
+-- the row is gone, so it cannot see the final state).
+create or replace function public.level_after_candidate_move()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if old.lead_id is not null then
+    perform public.refresh_lead_level(old.lead_id, 'candidate');
+  end if;
+  if tg_op = 'UPDATE' and new.lead_id is not null then
+    perform public.refresh_lead_level(new.lead_id, null);
+  end if;
+  return null;
+end;
+$$;
+drop trigger if exists level_after_candidate_delete on public.research_candidates;
+create trigger level_after_candidate_delete
+  after delete on public.research_candidates
+  for each row execute function public.level_after_candidate_move();
+drop trigger if exists level_after_candidate_relink on public.research_candidates;
+create trigger level_after_candidate_relink
+  after update of lead_id on public.research_candidates
+  for each row when (old.lead_id is distinct from new.lead_id)
+  execute function public.level_after_candidate_move();
+
 -- ================================================================ Q2 level
 create or replace function public.lead_level(p_lead uuid)
 returns smallint
@@ -148,12 +176,15 @@ begin
      set level = v_new,
          level_note = case
            when p_field is not null and v_new < l.level
-             then jsonb_build_object('from', l.level, 'to', v_new, 'field', p_field)
-           -- the level came back to what the note said it fell from (a check rewritten in one call): nothing to tell
-           when l.level_note is not null and v_new >= (l.level_note->>'from')::smallint then null
+             then jsonb_build_object('from', l.level, 'to', v_new, 'field', p_field, 'tx', txid_current())
+           -- the level came back to what the note said it fell from inside the SAME transaction (a check rewritten in
+           -- one call): nothing to tell. A later rise never clears a note nobody acknowledged.
+           when l.level_note is not null and v_new >= (l.level_note->>'from')::smallint
+                and (l.level_note->>'tx')::bigint = txid_current() then null
            else l.level_note
          end
-   where l.id = p_lead and (l.level is distinct from v_new or (l.level_note is not null and v_new >= (l.level_note->>'from')::smallint));
+   where l.id = p_lead and (l.level is distinct from v_new
+         or (l.level_note is not null and v_new >= (l.level_note->>'from')::smallint and (l.level_note->>'tx')::bigint = txid_current()));
 end;
 $$;
 
@@ -408,6 +439,27 @@ begin
 end;
 $$;
 
+-- Pausing by hand while the daily-cap pause is active makes it the user's pause: it must not resume at midnight.
+-- (BEFORE UPDATE OF status: fires when the client's UPDATE names status.)
+create or replace function public.qualifier_user_pause()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if public.is_client_role() and old.status = 'paused' and new.status = 'paused' and old.paused_reason = 'daily_cap' then
+    new.paused_reason := 'user';
+    new.paused_until := null;
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists qualifier_user_pause on public.qualifiers;
+create trigger qualifier_user_pause
+  before update of status on public.qualifiers
+  for each row execute function public.qualifier_user_pause();
+revoke all on function public.qualifier_user_pause() from public, anon, authenticated;
+
 drop trigger if exists guard_qualifier on public.qualifiers;
 create trigger guard_qualifier
   before update on public.qualifiers
@@ -615,6 +667,8 @@ end;
 $$;
 
 -- ================================================================ privileges and RLS
+-- Session functions (granted to authenticated, the exception to the anon-only tick path of part 2): ack_level_note,
+-- qualifier_workspace_cap, qualifier_day_start_at, qualifier_day_start, qualifier_status (and request_qualification below).
 revoke all on function public.copy_candidate_fields(uuid) from public, anon, authenticated;
 revoke all on function public.copy_candidate_fields_trg() from public, anon, authenticated;
 revoke all on function public.delete_candidate_fields() from public, anon, authenticated;
@@ -924,7 +978,7 @@ begin
     raise exception 'not allowed' using errcode = '42501';
   end if;
   v_ws := public.qualifier_assert(p_tick, p_lead, true);
-  for v_c in select c.id from public.research_candidates c where c.lead_id = p_lead and c.verified_at is not null loop
+  for v_c in select c.id from public.research_candidates c where c.lead_id = p_lead and c.verified_at is not null and c.second_pass is distinct from 'refuted' loop
     v_n := v_n + public.copy_candidate_fields(v_c);
   end loop;
   with keys as (
@@ -932,7 +986,7 @@ begin
      where f.lead_id = p_lead and f.status <> 'refuted' and f.key is not null and f.field in ('name', 'website', 'phone')
   ), cand as (
     select c.* from public.research_candidates c
-     where c.workspace_id = v_ws and c.lead_id is null
+     where c.workspace_id = v_ws and c.lead_id is null and c.second_pass is distinct from 'refuted'
        and (exists (select 1 from keys k where k.field = 'name' and k.key = c.name_key)
          or exists (select 1 from keys k where k.field = 'website' and k.key = public.company_domain_key(c.website))
          or exists (select 1 from keys k where k.field = 'phone' and k.key = public.company_phone_key(c.phone)))
@@ -969,6 +1023,7 @@ declare
   v_n integer := 0;
   v_i integer;
   v_value text;
+  v_seen timestamptz;
 begin
   if not public.scheduler_authorized() then
     raise exception 'not allowed' using errcode = '42501';
@@ -1001,9 +1056,14 @@ begin
        or char_length(coalesce(r->>'excerpt', '')) > 300 or char_length(coalesce(r->>'source_ref', '')) > 2000 then
       raise exception 'value, excerpt or source_ref out of range' using errcode = '22023';
     end if;
+    begin
+      v_seen := least(coalesce((r->>'seen_at')::timestamptz, now()), now());
+    exception when others then
+      raise exception 'seen_at is not a timestamp' using errcode = '22023';
+    end;
     insert into public.lead_fields (workspace_id, lead_id, field, value, key, source, source_ref, status, excerpt, seen_at)
     values (v_ws, p_lead, r->>'field', v_value, nullif(r->>'key', ''), r->>'source', nullif(r->>'source_ref', ''),
-            coalesce(r->>'status', 'unverified'), nullif(r->>'excerpt', ''), coalesce((r->>'seen_at')::timestamptz, now()))
+            coalesce(r->>'status', 'unverified'), nullif(r->>'excerpt', ''), v_seen)
     on conflict do nothing;
     get diagnostics v_i = row_count;
     v_n := v_n + v_i;
@@ -1058,9 +1118,14 @@ begin
   end if;
   insert into public.qualifier_step_log (workspace_id, lead_id, step, outcome) values (v_ws, p_lead, p_step, p_outcome);
   -- imported values that arrived while the lead was claimed (the re-queue trigger only sees finished leads): do not close
-  if p_next = 'done' and exists (
-       select 1 from public.lead_fields f, public.qualifier_queue z
-        where z.lead_id = p_lead and f.lead_id = p_lead and f.source in ('import', 'apify_maps', 'apollo') and f.created_at > z.claimed_at) then
+  -- Also a manual request that came in while it was claimed (request_qualification wrote manual_at after the claim): it
+  -- keeps manual_at and deep_requested. A dead lead stays dead.
+  if p_next = 'done' and p_done_reason <> 'dead' and exists (
+       select 1 from public.qualifier_queue z
+        where z.lead_id = p_lead and z.claimed_at is not null
+          and (z.manual_at >= z.claimed_at
+               or exists (select 1 from public.lead_fields f
+                           where f.lead_id = p_lead and f.source in ('import', 'apify_maps', 'apollo') and f.created_at >= z.claimed_at))) then
     update public.qualifier_queue q
        set notes = q.notes || jsonb_build_object(p_step, p_outcome), last_step_at = now(), fail_streak = 0, fail_step = null,
            next_step = 'p1', done_reason = null, enqueued_at = now(), locked_by = null, locked_until = null, claimed_at = null

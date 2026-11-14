@@ -404,4 +404,41 @@ describe("0014 qualifier path", () => {
     const many = `{${Array.from({ length: 501 }, () => ZERO).join(",")}}`;
     expect(code((await db.try(as(a.owner), "select public.request_qualification($1,$2::uuid[])", [a.ws, many])).error)).toBe("22023");
   });
+
+  test("I-B a request that arrives while the lead is claimed survives; m-1 a dead lead is not revived; m-2 refuted candidates are skipped; m-3 bad seen_at is 22023", async () => {
+    const s = await seedQualifierLead(db, { fields: [{ field: "name", value: "Acme Builders" }] });
+    const tick = await beginQualifierTick(db);
+    expect((await claim(tick))!.lead_id).toBe(s.lead);
+    await db.query(as(s.owner), "select public.request_qualification($1,$2::uuid[])", [s.ws, `{${s.lead}}`]);
+    // a plain step in between does not clobber the request
+    await rpc("select public.qualifier_step_done($1,$2,'p1','ok','p2',null)", [tick, s.lead]);
+    expect((await db.admin<{ m: boolean; d: boolean }>("select manual_at is not null m, deep_requested d from public.qualifier_queue where lead_id = $1", [s.lead]))[0]).toEqual({ m: true, d: true });
+    await rpc("select public.qualifier_step_done($1,$2,'p5','ok','done','complete')", [tick, s.lead]);
+    expect((await db.admin("select next_step, done_reason, manual_at is not null as m, deep_requested as d from public.qualifier_queue where lead_id = $1", [s.lead]))[0]).toEqual({ next_step: "p1", done_reason: null, m: true, d: true });
+    // claimed again: the request is older than this claim, so finishing closes the lead and clears it
+    await db.admin("update public.qualifier_queue set locked_until = null where lead_id = $1", [s.lead]);
+    expect((await claim(tick))!.manual).toBe(true);
+    await rpc("select public.qualifier_step_done($1,$2,'p5','ok','done','complete')", [tick, s.lead]);
+    expect((await db.admin("select next_step, manual_at is not null as m, deep_requested as d from public.qualifier_queue where lead_id = $1", [s.lead]))[0]).toEqual({ next_step: "done", m: false, d: false });
+
+    // m-1
+    const d = await seedQualifierLead(db, { fields: [{ field: "phone", value: "5085550140" }] });
+    await db.admin("update public.qualifier_queue set locked_by = $1, locked_until = now() + interval '3 minutes', claimed_at = now() - interval '1 minute' where lead_id = $2", [tick, d.lead]);
+    await db.admin("insert into public.lead_fields (workspace_id, lead_id, field, value, source, source_ref) values ($1,$2,'email','a@b.example','import','x2')", [d.ws, d.lead]);
+    await rpc("select public.qualifier_step_done($1,$2,'p2','site_down','done','dead')", [tick, d.lead]);
+    expect((await db.admin("select next_step, done_reason from public.qualifier_queue where lead_id = $1", [d.lead]))[0]).toEqual({ next_step: "done", done_reason: "dead" });
+
+    // m-2 / m-3
+    const m = await seedQualifierLead(db, { fields: [{ field: "name", value: "Zed Homes" }] });
+    await db.admin("update public.lead_fields set key = 'zed homes' where lead_id = $1", [m.lead]);
+    const run = (await db.admin<{ id: string }>("insert into public.research_runs (workspace_id, title, request_text, region_text, rigor, created_by) values ($1,'t','p','x','careful',$2) returning id", [m.ws, m.owner]))[0].id;
+    await db.admin("insert into public.research_candidates (workspace_id, run_id, name, name_key, phone, second_pass) values ($1,$2,'Zed Homes','zed homes','(508) 555-0150','refuted')", [m.ws, run]);
+    await hold(tick, m.lead);
+    expect((await rpc<{ n: number }>("select public.qualifier_merge($1,$2) as n", [tick, m.lead]))[0].n).toBe(0);
+    const add = (seen: string) => db.try(qclock, "select public.qualifier_add_fields($1,$2,$3::jsonb)", [tick, m.lead, JSON.stringify([{ field: "phone", value: "5085550151", source: "site", seen_at: seen }])]);
+    expect(code((await add("nope")).error)).toBe("22023");
+    expect((await add("2999-01-01T00:00:00Z")).error).toBeUndefined();
+    await rpc("select public.qualifier_add_fields($1,$2,$3::jsonb)", [tick, m.lead, JSON.stringify([{ field: "phone", value: "5085550152", source: "site", seen_at: "2999-01-01T00:00:00Z" }])]);
+    expect((await db.admin<{ ok: boolean }>("select seen_at <= now() as ok from public.lead_fields where lead_id = $1 and value = '5085550152'", [m.lead]))[0].ok).toBe(true);
+  });
 });
