@@ -142,6 +142,19 @@ describe("runSourceTick", () => {
     expect(f.of("failed")[0].args).toEqual(["R1", "timed_out", 0.12]);
   });
 
+  test("import inputs are clamped before the call (rows <= max+20, cost <= 1000)", async () => {
+    const f = fakeStore({ poll: [{ ...polling(), max_results: 1 }] });
+    const items = Array.from({ length: 30 }, (_, i) => ({ title: `Firm ${i} Builders`, countryCode: "US" }));
+    const http = fakeHttp({
+      [`GET ${A}/actor-runs/AR1`]: { status: 200, json: { data: { status: "SUCCEEDED", usageTotalUsd: 5000 } } },
+      [`GET ${A}/datasets/DS1/items`]: { status: 200, json: items },
+    });
+    await runSourceTick({ store: f.store, http, now: () => NOW });
+    const a = f.of("import")[0].args as [string, unknown[], number, number, number];
+    expect(a[1]).toHaveLength(21);
+    expect(a.slice(2)).toEqual([30, 9, 1000]);
+  });
+
   test("a 404 when polling marks the run failed not_found", async () => {
     const f = fakeStore({ poll: [polling()] });
     const http = fakeHttp({ [`GET ${A}/actor-runs/AR1`]: { status: 404, json: { error: {} } } });
@@ -173,7 +186,7 @@ describe("runSourceTick", () => {
     ]);
     const r = await runSourceTick({ store: f.store, http, now: () => NOW });
     expect(r).toMatchObject({ outcome: "ok", started: 1, imported: 1, failed: 0 });
-    expect(f.of("started")[0].args).toEqual(["R2", "apollo", "apollo"]);
+    expect(f.of("started")[0].args).toEqual(["R2", "apollo", ""]);
     const imp = f.of("import")[0].args as [string, { name: string }[], number, number, number];
     expect(imp[1].map((x) => x.name)).toEqual(["Alpha Builders"]);
     expect(imp.slice(2)).toEqual([3, 2, 0]);

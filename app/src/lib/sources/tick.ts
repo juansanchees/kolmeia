@@ -35,6 +35,9 @@ function isTransient(e: unknown): boolean {
   return false;
 }
 
+const ID_OK = /^[A-Za-z0-9]{1,100}$/;
+const clampUsd = (n: number | null): number | null => (n === null ? null : Math.min(1000, Math.max(0, Number.isFinite(n) ? n : 0)));
+
 const isAlreadyHandled = (e: unknown) => (e as { code?: string } | null)?.code === "22023";
 const strs = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 
@@ -52,7 +55,7 @@ export async function runSourceTick(opts: { store: SourceTickStore; http?: HttpJ
 
   const fail = async (run: SourceRunRow, code: string, cost: number | null) => {
     try {
-      await store.markFailed(tick, run.id, code, cost);
+      await store.markFailed(tick, run.id, code, clampUsd(cost));
       counts.failed++;
     } catch (e) {
       if (!isAlreadyHandled(e)) throw e;
@@ -62,7 +65,10 @@ export async function runSourceTick(opts: { store: SourceTickStore; http?: HttpJ
   /** Imports; a 22023 means somebody already did (or the state moved): handled, not an error. */
   const importRun = async (run: SourceRunRow, rows: ImportRowIn[], found: number, cost: number | null) => {
     try {
-      await store.importRows(tick, run.id, rows, found, found - rows.length, cost);
+      // validate our own inputs first: the database refuses out-of-range values with 22023, which must not pass for "already imported"
+      const kept = rows.slice(0, run.max_results + 20);
+      const f = Math.min(10_000, found);
+      await store.importRows(tick, run.id, kept, f, Math.max(0, f - kept.length), clampUsd(cost));
       counts.imported++;
     } catch (e) {
       if (!isAlreadyHandled(e)) throw e;
@@ -76,11 +82,20 @@ export async function runSourceTick(opts: { store: SourceTickStore; http?: HttpJ
       if (run.kind === "maps") {
         const q = run.query;
         const r = await apifyClient(key, http).start(MAPS_ACTOR, mapsInput({ terms: strs(q.terms), location: String(q.location ?? ""), max: run.max_results }), run.reserve_usd);
+        if (!ID_OK.test(r.runId) || !ID_OK.test(r.datasetId)) {
+          try {
+            await apifyClient(key, http).abort(r.runId);
+          } catch {
+            // best effort
+          }
+          await fail(run, "bad_response", 0);
+          return;
+        }
         await store.markStarted(tick, run.id, r.runId, r.datasetId);
         counts.started++;
       } else if (run.kind === "apollo") {
         // Apollo answers right away: mark it running, look up the pages, import in this same tick.
-        await store.markStarted(tick, run.id, "apollo", "apollo");
+        await store.markStarted(tick, run.id, "apollo", "");
         counts.started++;
         const client = apolloClient(key, http);
         const pages = Math.min(4, Math.max(1, Number(run.query.pages) || 1));
