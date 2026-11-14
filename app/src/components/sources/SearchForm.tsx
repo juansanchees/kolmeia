@@ -23,6 +23,12 @@ const area = `${input} min-h-24`;
 export function SearchForm({ kind }: { kind: "maps" | "apollo" }) {
   const [state, action, pending] = useActionState(kind === "maps" ? enqueueMaps : enqueueApollo, null);
   const [max, setMax] = useState("50");
+  const [terms, setTerms] = useState("");
+  const [location, setLocation] = useState("");
+  const [locations, setLocations] = useState("");
+  const [naics, setNaics] = useState("");
+  const [pages, setPages] = useState("1");
+  const [label, setLabel] = useState("");
   const n = Number(max);
   const estimate = kind === "maps" ? (Number.isInteger(n) && n >= 1 && n <= 200 ? estimateLabel("maps", n) : null) : estimateLabel("apollo", 25);
   return (
@@ -34,30 +40,30 @@ export function SearchForm({ kind }: { kind: "maps" | "apollo" }) {
         {kind === "maps" ? (
           <>
             <Field label={Q.termsLabel} htmlFor="maps-terms" hint={Q.termsHint}>
-              <textarea id="maps-terms" name="terms" className={area} aria-describedby="maps-terms-hint" />
+              <textarea id="maps-terms" name="terms" value={terms} onChange={(e) => setTerms(e.target.value)} className={area} aria-describedby="maps-terms-hint" />
             </Field>
             <Field label={Q.locationLabel} htmlFor="maps-location" hint={Q.locationHint}>
-              <input id="maps-location" name="location" className={input} maxLength={120} aria-describedby="maps-location-hint" />
+              <input id="maps-location" name="location" value={location} onChange={(e) => setLocation(e.target.value)} className={input} maxLength={120} aria-describedby="maps-location-hint" />
             </Field>
-            <Field label={Q.maxLabel} htmlFor="maps-max">
+            <Field label={Q.maxLabel} htmlFor="maps-max" error={max.trim() === "" && state !== null && "error" in state && state.error === "invalid" ? Q.maxRequired : undefined}>
               <input id="maps-max" name="max" type="number" inputMode="numeric" min={1} max={200} step={1} value={max} onChange={(e) => setMax(e.target.value)} className={`${input} w-28`} />
             </Field>
           </>
         ) : (
           <>
             <Field label={Q.locationsLabel} htmlFor="apollo-locations" hint={Q.locationHint}>
-              <textarea id="apollo-locations" name="locations" className={area} aria-describedby="apollo-locations-hint" />
+              <textarea id="apollo-locations" name="locations" value={locations} onChange={(e) => setLocations(e.target.value)} className={area} aria-describedby="apollo-locations-hint" />
             </Field>
             <Field label={Q.naicsLabel} htmlFor="apollo-naics" hint={Q.naicsHint}>
-              <textarea id="apollo-naics" name="naics" className={area} inputMode="numeric" aria-describedby="apollo-naics-hint" />
+              <textarea id="apollo-naics" name="naics" value={naics} onChange={(e) => setNaics(e.target.value)} className={area} inputMode="numeric" aria-describedby="apollo-naics-hint" />
             </Field>
             <Field label={Q.pagesLabel} htmlFor="apollo-pages">
-              <input id="apollo-pages" name="pages" type="number" inputMode="numeric" min={1} max={4} step={1} defaultValue={1} className={`${input} w-28`} />
+              <input id="apollo-pages" name="pages" type="number" inputMode="numeric" min={1} max={4} step={1} value={pages} onChange={(e) => setPages(e.target.value)} className={`${input} w-28`} />
             </Field>
           </>
         )}
         <Field label={Q.labelLabel} htmlFor={`${kind}-label`}>
-          <input id={`${kind}-label`} name="label" className={input} maxLength={60} />
+          <input id={`${kind}-label`} name="label" value={label} onChange={(e) => setLabel(e.target.value)} className={input} maxLength={60} />
         </Field>
         {estimate && <p className="font-mono text-xs text-muted">{kind === "maps" ? `${Q.costPrefix} ${estimate}` : estimate}</p>}
         <Result r={state} />

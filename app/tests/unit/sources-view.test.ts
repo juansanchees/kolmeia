@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { estimateLabel, parseAgentSources, parseApolloForm, parseMapsForm, runStatusLabel, runTitle, todayLine } from "@/lib/sources/view";
+import { DEFAULT_AGENT_SOURCES, estimateLabel, parseAgentSources, parseApolloForm, parseMapsForm, runStatusLabel, runTitle, todayLine } from "@/lib/sources/view";
 import { enqueueApolloCore, enqueueMapsCore, saveAgentSourcesCore, type SearchRpc } from "@/lib/sources/search";
 
 const WS = "11111111-1111-4111-8111-111111111111";
@@ -26,6 +26,12 @@ describe("F3d view", () => {
     expect(runStatusLabel({ status: "failed", error: "not_found" })).toBe("falhou · execução sumiu");
     expect(runStatusLabel({ status: "refused", error: "source_cap" })).toBe("recusada · teto do dia");
     expect(runStatusLabel({ status: "refused", error: "disconnected" })).toBe("recusada · chave desconectada");
+    for (const code of ["refused", "import_refused", "start_refused", "start_unrecorded", "timeout", "network", "bad_json", "key_unreadable", "unsupported", "bad_state"]) {
+      const label = runStatusLabel({ status: "failed", error: code });
+      expect(label, code).toMatch(/^falhou · .+/);
+      expect(label, code).not.toBe("falhou · erro");
+    }
+    expect(runStatusLabel({ status: "refused", error: "refused" })).toBe("recusada · chave recusada");
     expect(runStatusLabel({ status: "failed", error: "http_503" })).toBe("falhou · erro do serviço");
     expect(runStatusLabel({ status: "failed", error: null })).toBe("falhou");
     expect(runStatusLabel({ status: "failed", error: "weird <x>" })).toBe("falhou · erro");
@@ -60,6 +66,13 @@ describe("F3d view", () => {
     expect(parseApolloForm(a)).toEqual({ ok: true, value: { query: { locations: ["MA"], naics: ["2362", "23"], pages: 2 }, max: 50 } });
     expect(parseApolloForm({ ...a, naics: "23a" }).ok).toBe(false);
     expect(parseApolloForm({ ...a, naics: "2" }).ok).toBe(false);
+    expect(parseApolloForm({ ...a, naics: "236220" }).ok).toBe(true);
+    expect(parseApolloForm({ ...a, naics: "2362201" }).ok).toBe(false);
+    // Apollo needs a place or a NAICS code
+    expect(parseApolloForm({ locations: "", naics: "236220", pages: "1" }).ok).toBe(true);
+    expect(parseApolloForm({ locations: "MA", naics: "", pages: "1" }).ok).toBe(true);
+    expect(parseMapsForm({ ...ok, max: "" }).ok).toBe(false);
+    expect(parseMapsForm({ ...ok, max: undefined }).ok).toBe(false);
     expect(parseApolloForm({ ...a, naics: "1\n2\n3\n4\n5\n6" }).ok).toBe(false);
     expect(parseApolloForm({ ...a, pages: "5" }).ok).toBe(false);
     expect(parseApolloForm({ ...a, pages: "0" }).ok).toBe(false);
@@ -75,6 +88,9 @@ describe("F3d view", () => {
     expect(on).toMatchObject({ ok: true, value: { maps_on: true, maps_terms: ["a", "b"], maps_location: "Boston, MA", maps_max: 50, apollo_on: false } });
     expect(parseAgentSources({ ...base, apolloNaics: "23a" }).ok).toBe(false);
     expect(parseAgentSources({ ...base, agent: "nope" }).ok).toBe(false);
+    expect(parseAgentSources({ ...base, mapsMax: "" }).ok).toBe(false);
+    expect(parseAgentSources({ ...base, maps: false, mapsMax: "" }).ok).toBe(true);
+    expect(DEFAULT_AGENT_SOURCES.maps_max).toBe(50);
     // a provider that is not connected is left out of the payload (its saved settings stay)
     const only = parseAgentSources({ ...base, apollo: false, mapsOn: true, mapsTerms: "a", mapsLocation: "Boston, MA" });
     expect(only.ok && Object.keys(only.value).sort()).toEqual(["agent", "maps_location", "maps_max", "maps_on", "maps_terms"]);

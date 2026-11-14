@@ -64,7 +64,7 @@ const intText = (min: number, max: number) =>
 const label = z.string().trim().max(60).optional();
 const terms = z.array(z.string().min(1).max(80)).min(1).max(5);
 const place = z.string().trim().min(1).max(120);
-const naics = z.array(z.string().regex(/^[0-9]{2,5}$/)).max(5);
+const naics = z.array(z.string().regex(/^[0-9]{2,6}$/)).max(5);
 const places = z.array(z.string().min(1).max(120)).max(5);
 const text = (v: unknown) => (typeof v === "string" ? v : "");
 
@@ -74,7 +74,7 @@ export type ApolloQuery = { locations: string[]; naics: string[]; pages: number;
 export type Enqueue<Q> = { query: Q; max: number };
 
 export function parseMapsForm(i: { terms?: unknown; location?: unknown; max?: unknown; label?: unknown }): Parsed<Enqueue<MapsQuery>> {
-  const r = mapsForm.safeParse({ terms: splitList(i.terms), location: text(i.location), max: text(i.max) || "50", label: text(i.label) || undefined });
+  const r = mapsForm.safeParse({ terms: splitList(i.terms), location: text(i.location), max: text(i.max), label: text(i.label) || undefined });
   if (!r.success) return { ok: false };
   const query: MapsQuery = { terms: r.data.terms, location: r.data.location };
   if (r.data.label) query.label = r.data.label;
@@ -93,6 +93,28 @@ export function parseApolloForm(i: { locations?: unknown; naics?: unknown; pages
   if (r.data.label) query.label = r.data.label;
   return { ok: true, value: { query, max: r.data.pages * 25 } };
 }
+
+export type AgentSourcesView = {
+  maps_on: boolean;
+  maps_terms: string[];
+  maps_location: string;
+  maps_max: number;
+  apollo_on: boolean;
+  apollo_locations: string[];
+  apollo_naics: string[];
+  apollo_pages: number;
+};
+
+export const DEFAULT_AGENT_SOURCES: AgentSourcesView = {
+  maps_on: false,
+  maps_terms: [],
+  maps_location: "",
+  maps_max: 50,
+  apollo_on: false,
+  apollo_locations: [],
+  apollo_naics: [],
+  apollo_pages: 1,
+};
 
 export type AgentSourcesInput = {
   agent?: unknown;
@@ -138,7 +160,7 @@ export function parseAgentSources(i: AgentSourcesInput): Parsed<AgentSourcesPayl
     mapsOn: i.mapsOn === true,
     mapsTerms: splitList(i.mapsTerms),
     mapsLocation: text(i.mapsLocation),
-    mapsMax: text(i.mapsMax) || "50",
+    mapsMax: text(i.mapsMax) || (i.maps === false ? "50" : ""),
     apolloOn: i.apolloOn === true,
     apolloLocations: splitList(i.apolloLocations),
     apolloNaics: splitList(i.apolloNaics),
