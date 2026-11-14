@@ -51,7 +51,12 @@ async function ready(opts: { schedule?: "once" | "weekly" | "daily"; rigor?: "qu
 }
 const claim = async (tick: string, run: string) => (await rpc<{ ok: boolean }>("select public.hunter_claim_step($1,$2,120) as ok", [tick, run]))[0].ok;
 const finish = (tick: string) => rpc("select public.hunter_finish_tick($1,'{}'::jsonb,null)", [tick]);
-const reserve = (tick: string, run: string, usd = 0.2) =>
+const reserve = async (tick: string, run: string, usd = 0.2) => {
+  // only a running run reserves (the engine moves ready -> running before any AI call)
+  await db.admin("update public.research_runs set status = 'running' where id = $1 and status = 'ready'", [run]);
+  return reserveRaw(tick, run, usd);
+};
+const reserveRaw = (tick: string, run: string, usd = 0.2) =>
   tryRpc("select public.hunter_reserve_ai_call($1,$2,'research_verify','claude-sonnet-5-5','v1',$3,10,25) as id", [tick, run, usd]);
 
 beforeAll(async () => {
@@ -307,6 +312,44 @@ describe("0010 hunter path", () => {
     expect((await reserve(a.tick, runC)).error).toBeUndefined();
     await db.admin("update public.workspace_members set role = 'closer' where workspace_id = $1 and user_id = $2", [a.ws, sdr]);
     expect((await reserve(a.tick, runC)).error?.message).toContain("ai_cap:no_access");
+  });
+
+  test("a step in flight after a client pause cannot reserve; settle still records the cost after archive or delete", async () => {
+    const a = await ready();
+    expect(await claim(a.tick, a.run)).toBe(true);
+    // ready: nothing reserves yet
+    expect(code((await reserveRaw(a.tick, a.run)).error)).toBe("55000");
+    const ok = (await reserve(a.tick, a.run)).rows![0].id;
+    // the owner pauses mid-step: the in-flight step finishes, but nothing new is reserved
+    await db.query(as(a.userId), "update public.agents set status = 'paused' where id = $1", [a.agent]);
+    await db.admin("update public.research_runs set status = 'paused' where id = $1", [a.run]);
+    expect(code((await reserveRaw(a.tick, a.run)).error)).toBe("55000");
+    expect(Number((await db.admin<{ n: string }>("select count(*) as n from public.ai_calls where run_id = $1", [a.run]))[0].n)).toBe(1);
+    // the agent is archived mid-step (and its run cancelled by the trigger): the call in flight is still settled
+    await db.admin("update public.agents set archived_at = now() where id = $1", [a.agent]);
+    const settle = (id: string) => tryRpc("select public.hunter_settle_ai_call($1,$2,$3,'ok',10,10,0,0,1,0,0.15,null,5)", [a.tick, a.run, id]);
+    expect((await settle(ok)).error).toBeUndefined();
+    const [row] = await db.admin<{ status: string; cost_usd: string; user_id: string }>("select status, cost_usd, user_id from public.ai_calls where id = $1", [ok]);
+    expect(row.status).toBe("ok");
+    expect(Number(row.cost_usd)).toBeCloseTo(0.15);
+    expect(row.user_id).toBe(a.userId);
+    // deleted agent (run keeps living with agent_id null, cancelled by the trigger)
+    await finish(a.tick);
+    const b = await ready();
+    expect(await claim(b.tick, b.run)).toBe(true);
+    const okB = (await reserve(b.tick, b.run)).rows![0].id;
+    await db.admin("delete from public.agents where id = $1", [b.agent]);
+    const [after] = await db.admin<{ status: string; agent_id: string | null }>("select status, agent_id from public.research_runs where id = $1", [b.run]);
+    expect(after).toEqual({ status: "cancelled", agent_id: null });
+    expect((await tryRpc("select public.hunter_settle_ai_call($1,$2,$3,'ok',1,1,0,0,0,0,0.1,null,5)", [b.tick, b.run, okB])).error).toBeUndefined();
+    expect((await db.admin<{ status: string }>("select status from public.ai_calls where id = $1", [okB]))[0].status).toBe("ok");
+    // a one-off run (no agent, not cancelled) is out of reach of the hunter path; a settled row is not settled twice
+    expect(code((await tryRpc("select public.hunter_settle_ai_call($1,$2,$3,'ok',1,1,0,0,0,0,0.1,null,5)", [b.tick, b.run, okB])).error)).toBe("42501");
+  });
+
+  test("clients have no INSERT policy on ai_calls", async () => {
+    const r = await db.admin<{ n: string }>("select count(*) as n from pg_policies where tablename = 'ai_calls' and cmd = 'INSERT'");
+    expect(Number(r[0].n)).toBe(0);
   });
 
   test("patches accept only the engine's fields", async () => {

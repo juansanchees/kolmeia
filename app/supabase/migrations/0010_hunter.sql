@@ -542,13 +542,8 @@ $$;
 drop policy if exists ai_calls_select on public.ai_calls;
 create policy ai_calls_select on public.ai_calls
   for select to authenticated using (public.is_workspace_sender(workspace_id));
+-- Clients have no INSERT policy on ai_calls at all (0004): rows come only from reserve_ai_call_core.
 drop policy if exists ai_calls_insert on public.ai_calls;
-create policy ai_calls_insert on public.ai_calls
-  for insert to authenticated
-  with check (
-    public.is_workspace_sender(workspace_id)
-    and (run_id is null or public.run_in_workspace(run_id, workspace_id))
-  );
 
 -- ---------------------------------------------------------------- internal helpers (no grants)
 -- Rejects a patch that is not an object or has a key outside the allowed list (22023).
@@ -1214,6 +1209,11 @@ begin
     raise exception 'not allowed' using errcode = '42501';
   end if;
   v_ws := public.hunter_assert(p_tick, p_run, true);
+  -- Only a running run reserves: a step still in flight after a client pause must not reserve past the run's caps
+  -- (the core applies the run caps only while the run is running).
+  if not exists (select 1 from public.research_runs r where r.id = p_run and r.status = 'running') then
+    raise exception 'run is not running' using errcode = '55000';
+  end if;
   select a.created_by into v_uid
     from public.research_runs r join public.agents a on a.id = r.agent_id
    where r.id = p_run;
@@ -1226,7 +1226,10 @@ begin
 end;
 $$;
 
--- Settling needs no live run (a call in flight when the run was cancelled still records its cost) but the row must be this run's.
+-- Settling needs no live run and no live agent: a call in flight when the run was cancelled, or its agent archived or
+-- deleted, still records its cost. The ledger row must be this run's pending row and the run must be an agent run:
+-- its agent is a hunter of the workspace (archived or not), or the agent was deleted (agent_id null and the delete
+-- trigger cancelled the run). The person charged is the one stored on the row at reserve time.
 create or replace function public.hunter_settle_ai_call(
   p_tick uuid,
   p_run uuid,
@@ -1253,11 +1256,16 @@ begin
   if not public.scheduler_authorized() then
     raise exception 'not allowed' using errcode = '42501';
   end if;
-  perform public.hunter_assert(p_tick, p_run, false);
-  select a.created_by into v_uid
-    from public.research_runs r join public.agents a on a.id = r.agent_id
-   where r.id = p_run;
-  if v_uid is null or not exists (select 1 from public.ai_calls c where c.id = p_id and c.run_id = p_run) then
+  if not exists (select 1 from public.hunter_ticks t where t.id = p_tick and t.finished_at is null and t.lease_until > now()) then
+    raise exception 'tick is not open' using errcode = '55000';
+  end if;
+  select c.user_id into v_uid
+    from public.ai_calls c
+    join public.research_runs r on r.id = c.run_id
+    left join public.agents a on a.id = r.agent_id
+   where c.id = p_id and c.run_id = p_run and c.status = 'pending' and c.workspace_id = r.workspace_id
+     and ((a.type = 'hunter' and a.workspace_id = r.workspace_id) or (r.agent_id is null and r.status = 'cancelled'));
+  if v_uid is null then
     raise exception 'ai call is not a pending call of this run' using errcode = '42501';
   end if;
   perform public.settle_ai_call_core(v_uid, p_id, p_status, p_input_tokens, p_output_tokens, p_cache_read_tokens,

@@ -16,6 +16,7 @@ import type {
   SourceInsert,
   SourceRow,
 } from "./rows";
+import type { Dedupable } from "./dedupe";
 import type { Rigor } from "./types";
 
 export type CheckWithEvidence = CheckRow & { evidence: Pick<EvidenceRow, "url" | "title" | "excerpt" | "seen_at">[] };
@@ -51,4 +52,6 @@ export interface ResearchStore extends AiLedger {
   /** G10: idempotent (a job already stored for the run is skipped). */
   insertJobs(runId: string, rows: JobInsert[]): Promise<void>;
   listJobs(runId: string): Promise<JobRow[]>;
+  /** F3b: the best candidate of every lead of the workspace (newest first, at most 2000), except the leads this run created. */
+  knownCompanies(runId: string, workspaceId: string): Promise<Dedupable[]>;
 }

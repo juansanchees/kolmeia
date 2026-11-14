@@ -1,6 +1,7 @@
 import { aiCapErrorFrom } from "@/lib/ai/errors";
 import type { AiCallRecord, AiReservation } from "@/lib/ai/gateway";
 import { DEFAULT_DAILY_CAP_USD } from "@/lib/ai/gateway";
+import type { Dedupable } from "@/lib/research/dedupe";
 import type { ProfileInput } from "@/lib/ai/prompts/shared";
 import {
   CANDIDATE_COLUMNS,
@@ -170,6 +171,14 @@ export class SqlResearchStore implements ResearchStore {
   async listJobs(runId: string): Promise<JobRow[]> {
     const rows = await this.q(`select ${JOB_COLUMNS} from public.research_jobs where run_id = $1 order by created_at, id`, [runId]);
     return rows.map(normalizeJob);
+  }
+
+  async knownCompanies(runId: string, workspaceId: string): Promise<Dedupable[]> {
+    return this.q<Dedupable>(
+      `select c.name, c.website, c.phone from public.leads l join public.research_candidates c on c.id = l.best_candidate_id
+        where l.workspace_id = $1 and l.origin_run_id is distinct from $2 order by l.last_seen_at desc, l.id limit 2000`,
+      [workspaceId, runId],
+    );
   }
 
   async reserve(r: AiReservation): Promise<string> {

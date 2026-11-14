@@ -47,10 +47,12 @@ export type RunRow = {
   created_at: string;
   /** F2: the Caçador this run is the setup chat of; null for a one-off search. */
   setup_agent_id?: string | null;
+  /** F3b: the Caçador this run belongs to (an agent run, driven by the background tick); null for a one-off search. */
+  agent_id?: string | null;
 };
 
 export const RUN_COLUMNS =
-  "id, workspace_id, title, request_text, region_text, rigor, status, questions, answers, adjustments, plan, max_candidates, max_cost_usd, max_minutes, spent_cost_usd, progress, is_partial, partial_reason, limits_notes, error, approved_at, started_at, finished_at, created_at, setup_agent_id";
+  "id, workspace_id, title, request_text, region_text, rigor, status, questions, answers, adjustments, plan, max_candidates, max_cost_usd, max_minutes, spent_cost_usd, progress, is_partial, partial_reason, limits_notes, error, approved_at, started_at, finished_at, created_at, setup_agent_id, agent_id";
 
 /** Fields the engine (or a user action) may change on a run. */
 export type RunPatch = Partial<

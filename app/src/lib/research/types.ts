@@ -110,7 +110,7 @@ export type Progress = {
   collectRounds?: number;
   counts?: StageCounts;
   seen?: SeenItem[];
-  pauseReason?: "user" | "daily_cap" | "user_cap" | "global_cap";
+  pauseReason?: "user" | "daily_cap" | "user_cap" | "global_cap" | "no_access";
   lastError?: string;
   /** G9: names unified as duplicates ("Acme Builders (= Acme Builders, Inc.)"), shown in the run's notes. */
   merged?: string[];
@@ -126,6 +126,8 @@ export type Progress = {
   collectStop?: "empty" | "cost";
   /** Calls whose web budget was shrunk to fit the run's remaining cost cap (shown in the limits). */
   trimmedCalls?: number;
+  /** F3b: companies the collection found that were already in LEADS and were skipped (agent runs only). */
+  alreadyKnown?: number;
 };
 
 export type LimitNote = {

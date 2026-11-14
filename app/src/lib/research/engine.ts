@@ -57,6 +57,8 @@ const QUERIES_KEEP = 40;
 const MAX_ERROR_STREAK = 3;
 const SEEN_KEEP = 12;
 const MERGED_KEEP = 30;
+/** Known lead names an agent run tells the collect prompt to avoid (the dedupe against LEADS is the real filter). */
+export const KNOWN_NAMES_MAX = 150;
 
 /** Does this run have work the page should ask the server to do? */
 export function needsAdvance(run: Pick<RunRow, "status" | "questions" | "plan">): boolean {
@@ -331,6 +333,8 @@ async function collectStage(deps: EngineDeps, run: RunRow) {
     return;
   }
   const profile = await deps.store.getProfile(run.workspace_id);
+  // C4: a scheduled agent only brings companies that are not in LEADS yet. A one-off search keeps everything.
+  const known = run.agent_id ? await deps.store.knownCompanies(run.id, run.workspace_id) : [];
   let result: Awaited<ReturnType<typeof collectCandidates>>;
   try {
     result = await collectCandidates(aiContext(deps, run, true, verifyRoom(run)), {
@@ -339,7 +343,7 @@ async function collectStage(deps: EngineDeps, run: RunRow) {
       region: run.region_text,
       plan: run.plan ?? { summary: "", places: [], sourceTypes: [], warnings: [] },
       sources: sources.map((s) => ({ title: s.title, url: s.url, status: s.status, note: s.note })),
-      knownNames: existing.map((c) => c.name),
+      knownNames: [...existing.map((c) => c.name), ...known.slice(0, KNOWN_NAMES_MAX).map((c) => c.name)],
       want: Math.min(COLLECT_PER_ROUND, remaining),
       round: rounds + 1,
       queriesTried: run.progress.queries ?? [],
@@ -354,7 +358,9 @@ async function collectStage(deps: EngineDeps, run: RunRow) {
   }
   const { data, droppedUrls, web } = result;
 
-  const { fresh, mergedInto } = dedupe(existing, data.candidates);
+  const { fresh: freshInRun, mergedInto } = dedupe(existing, data.candidates);
+  const { fresh } = known.length ? dedupe(known, freshInRun) : { fresh: freshInRun };
+  const alreadyKnown = freshInRun.length - fresh.length;
   const take = fresh.slice(0, remaining);
   // ON CONFLICT (run_id, name_key) DO NOTHING: a retried step does not create the same company twice.
   const inserted = await deps.store.insertCandidates(
@@ -403,6 +409,7 @@ async function collectStage(deps: EngineDeps, run: RunRow) {
     errorStreak: 0,
     seen: [...seen, ...(run.progress.seen ?? [])].slice(0, SEEN_KEEP),
     merged,
+    ...(alreadyKnown > 0 ? { alreadyKnown: (run.progress.alreadyKnown ?? 0) + alreadyKnown } : {}),
     droppedUrls: dropped(run, droppedUrls),
     queries: [...(run.progress.queries ?? []), ...(web?.queries ?? [])].slice(-QUERIES_KEEP),
     budgetHits: budgetHits(run, "collect", web),
@@ -649,6 +656,9 @@ export function limitsFromProgress(p: Progress, rigor: Rigor = "careful"): Limit
   }
   if (p.trimmedCalls) {
     notes.push({ kind: "budget", text: `Em ${p.trimmedCalls} chamada(s) a IA recebeu menos buscas que o normal, para caber no que restava do teto de custo da pesquisa.` });
+  }
+  if (p.alreadyKnown) {
+    notes.push({ kind: "merged", text: `${p.alreadyKnown} empresa(s) já estavam em LEADS e foram puladas: este agente só traz empresas novas.` });
   }
   if (p.collectStop === "empty") {
     notes.push({ kind: "estimate", text: `Juntar empresas: ${MAX_EMPTY_ROUNDS} rodadas seguidas, com buscas diferentes, não acharam empresa nova; a coleta parou.` });

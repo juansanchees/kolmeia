@@ -23,7 +23,11 @@ import {
   type SourceInsert,
   type SourceRow,
 } from "./rows";
+import type { Dedupable } from "./dedupe";
 import type { CheckWithEvidence, NewRun, ResearchStore } from "./store";
+
+/** Same limit as hunter_known_companies. */
+const KNOWN_LEADS_MAX = 2000;
 
 /** Production store: every call runs with the logged-in user's session (cookie client), so RLS applies (R14). */
 export class SupabaseResearchStore implements ResearchStore {
@@ -169,6 +173,28 @@ export class SupabaseResearchStore implements ResearchStore {
     const { data, error } = await this.db.from("research_jobs").select(JOB_COLUMNS).eq("run_id", runId).order("created_at", { ascending: true });
     if (error) this.fail("listJobs", error);
     return (data ?? []).map((r) => normalizeJob(r as Record<string, unknown>));
+  }
+
+  async knownCompanies(runId: string, workspaceId: string): Promise<Dedupable[]> {
+    const { data: leads, error } = await this.db
+      .from("leads")
+      .select("id, best_candidate_id, origin_run_id, last_seen_at")
+      .eq("workspace_id", workspaceId)
+      .not("best_candidate_id", "is", null)
+      .or(`origin_run_id.is.null,origin_run_id.neq.${runId}`)
+      .order("last_seen_at", { ascending: false })
+      .order("id", { ascending: true })
+      .limit(KNOWN_LEADS_MAX);
+    if (error) this.fail("knownCompanies", error);
+    const ids = (leads ?? []).map((l) => l.best_candidate_id as string);
+    if (!ids.length) return [];
+    const { data: cands, error: e2 } = await this.db.from("research_candidates").select("id, name, website, phone").in("id", ids);
+    if (e2) this.fail("knownCompanies", e2);
+    const byId = new Map((cands ?? []).map((c) => [c.id as string, c as Dedupable]));
+    return ids.flatMap((id) => {
+      const c = byId.get(id);
+      return c ? [{ name: c.name, website: c.website ?? null, phone: c.phone ?? null }] : [];
+    });
   }
 
   // ---------------------------------------------------------------- AiLedger
