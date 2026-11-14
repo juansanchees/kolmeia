@@ -3,8 +3,8 @@
 import type { Schedule } from "@/lib/agents/types";
 import { domainKey, nameKey, phoneKey, type Dedupable } from "@/lib/research/dedupe";
 
-/** RFC 4180: quotes, `,` separator, CRLF or LF; a leading BOM is dropped. */
-export function parseCsv(text: string): string[][] {
+/** RFC 4180: quotes, `,` separator (or `sep`, e.g. `;` for Excel in pt-BR), CRLF or LF; a leading BOM is dropped. */
+export function parseCsv(text: string, sep: "," | ";" = ","): string[][] {
   const s = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
   const rows: string[][] = [];
   let row: string[] = [];
@@ -25,7 +25,7 @@ export function parseCsv(text: string): string[][] {
     if (ch === '"') {
       quoted = true;
       any = true;
-    } else if (ch === ",") {
+    } else if (ch === sep) {
       row.push(cell);
       cell = "";
       any = true;
