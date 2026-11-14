@@ -25,6 +25,11 @@ export function mailboxAad(workspaceId: string, email: string): string {
   return `mailbox:${workspaceId}:${email.trim().toLowerCase()}`;
 }
 
+/** AAD for a connected-source key (Apify, Apollo): bound to the workspace and the provider. */
+export function sourceAad(workspaceId: string, provider: string): string {
+  return `source:${workspaceId}:${provider}`;
+}
+
 export function keyId(key: Buffer): string {
   return createHash("sha256").update(key).digest("hex").slice(0, 8);
 }

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { CAMPAIGN_TABS, LEADS_TABS, MAIN_AREAS, SETTINGS_HREF, SETTINGS_TABS, activeHref, areasFor } from "@/lib/nav";
+import { CAMPAIGN_TABS, LEADS_TABS, MAIN_AREAS, SETTINGS_HREF, SETTINGS_TABS, activeHref, areasFor, settingsTabsFor } from "@/lib/nav";
 import { isSender } from "@/lib/roles";
 
 const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
@@ -32,6 +32,7 @@ describe("F1 nav", () => {
       ["Sua empresa", "/configuracoes/empresa"],
       ["Caixas de e-mail", "/configuracoes/caixas"],
       ["Bloqueados", "/configuracoes/bloqueados"],
+      ["Fontes conectadas", "/configuracoes/fontes"],
     ]);
   });
   test("the LEADS tabs are Todos and Com a closer", () => {
@@ -69,6 +70,20 @@ describe("F1 shell", () => {
   test("no screen says pearchat", () => {
     const hits = walk(join(process.cwd(), "src")).filter((f) => /pearchat/i.test(readFileSync(f, "utf8")));
     expect(hits).toEqual([]);
+  });
+});
+
+describe("F3d fontes conectadas nav", () => {
+  test("the settings nav lists Fontes conectadas for owner and sdr, not closer", () => {
+    for (const role of ["owner", "sdr"] as const) expect(settingsTabsFor(role).map((i) => i.href)).toContain("/configuracoes/fontes");
+    expect(settingsTabsFor("closer").map((i) => i.href)).not.toContain("/configuracoes/fontes");
+    expect(read("src/app/(app)/configuracoes/layout.tsx")).toContain("settingsTabsFor(");
+  });
+  test("the page is not found for a closer and read-only for the sdr", () => {
+    const page = read("src/app/(app)/configuracoes/fontes/page.tsx");
+    expect(page).toContain("isSender(workspace.role)");
+    expect(page).toContain("notFound()");
+    expect(page).toContain('isOwner={workspace.role === "owner"}');
   });
 });
 

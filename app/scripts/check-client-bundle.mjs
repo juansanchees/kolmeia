@@ -10,7 +10,7 @@ if (!existsSync(dir)) {
   process.exit(1);
 }
 const walk = (d) => readdirSync(d).flatMap((f) => (statSync(path.join(d, f)).isDirectory() ? walk(path.join(d, f)) : [path.join(d, f)]));
-const forbidden = [/ANTHROPIC_API_KEY/, /sk-ant-[a-z0-9]/i, /api\.anthropic\.com/, /@anthropic-ai\/sdk/, /SERVICE_ROLE/i, /sb_secret_/, /MAILBOX_ENC_KEY/, /secret_ciphertext/, /smtp\.gmail\.com/, /imap\.gmail\.com/];
+const forbidden = [/ANTHROPIC_API_KEY/, /sk-ant-[a-z0-9]/i, /api\.anthropic\.com/, /@anthropic-ai\/sdk/, /SERVICE_ROLE/i, /sb_secret_/, /MAILBOX_ENC_KEY/, /secret_ciphertext/, /smtp\.gmail\.com/, /imap\.gmail\.com/, /api\.apify\.com/, /api\.apollo\.io/];
 const bad = [];
 let scanned = 0;
 for (const file of walk(dir)) {

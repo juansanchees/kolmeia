@@ -302,3 +302,24 @@ describe("E1 scheduler: anon key and scheduler_* functions only, no logging, no 
     expect(readdirSync(path.join(root, "supabase/migrations")).some((f) => f.includes("cron"))).toBe(false);
   });
 });
+
+describe("F3d sources: keys stay on the server", () => {
+  test("connections.ts is server-only, and no client component imports it, the clients, crypto or the RPC secret", () => {
+    expect(readFileSync(path.join(root, "src/lib/sources/connections.ts"), "utf8")).toMatch(/^import "server-only";/m);
+    for (const file of walk(path.join(root, "src"))) {
+      const text = readFileSync(file, "utf8");
+      if (!/^["']use client["'];?/m.test(text)) continue;
+      expect(text.replace(/^import type .*$/gm, ""), file).not.toMatch(/@\/lib\/sources\/(connections|apify|apollo|http|maps)["']/);
+    }
+  });
+  test("the screen never reads a stored key: no source_secret call, no secret_ciphertext, no .from() on connections", () => {
+    for (const file of walk(path.join(root, "src/app/(app)/configuracoes/fontes")).concat(walk(path.join(root, "src/components/sources")), [path.join(root, "src/lib/sources/connections.ts")])) {
+      expect(readFileSync(file, "utf8"), file).not.toMatch(/source_secret|secret_ciphertext|\.from\(|console\./);
+    }
+  });
+  test("the client bundle check forbids api.apify.com and api.apollo.io", () => {
+    const script = readFileSync(path.join(root, "scripts/check-client-bundle.mjs"), "utf8");
+    expect(script).toContain("api\\.apify\\.com");
+    expect(script).toContain("api\\.apollo\\.io");
+  });
+});
