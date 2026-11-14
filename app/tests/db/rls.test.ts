@@ -110,6 +110,9 @@ describe("proof that RLS is really enforced in PGlite", () => {
         "hunter_begin_tick", "hunter_candidates", "hunter_checks", "hunter_claim_step", "hunter_due_work", "hunter_finish_tick",
         "hunter_get_run", "hunter_jobs", "hunter_known_companies", "hunter_pause_agent", "hunter_profile", "hunter_release_step",
         "hunter_reserve_ai_call", "hunter_settle_ai_call", "hunter_sources", "hunter_update_candidate", "hunter_update_run",
+        // 0013 (connected sources: keys only through owner RPCs, searches only through enqueue_source_run; the import core has no grant)
+        "import_rows_core", "list_source_connections", "set_source_connection", "set_source_cap", "delete_source_connection",
+        "source_secret", "set_agent_source_settings", "enqueue_source_run",
       ].sort(),
     );
     for (const r of rows) expect(r.proconfig).toContain("search_path=\"\"");
