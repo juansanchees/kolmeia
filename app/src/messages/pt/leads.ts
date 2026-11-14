@@ -26,8 +26,4 @@ export const leads = {
   seenIn: "Vista em {n} busca(s)",
   firstSeen: "Primeira vez: {date}",
   proofTitle: "Provas",
-  // Kept until Task 4 replaces the placeholder page that still reads them.
-  soon: "Em breve: todos os leads numa lista só, sem empresa repetida. Por enquanto, abra o resultado de cada pesquisa:",
-  none: "Nenhuma pesquisa pronta ainda.",
-  start: "Fazer uma pesquisa",
 } as const;

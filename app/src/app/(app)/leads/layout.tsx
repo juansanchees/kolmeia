@@ -4,7 +4,7 @@ import { SubNav } from "@/components/SubNav";
 import { Notice } from "@/components/email/bits";
 import { t } from "@/messages/pt";
 
-// LEADS: every company the searches found (unified list comes in F3) and the ones handed to the closer.
+// LEADS: every company the searches found, once each, and the ones handed to the closer.
 export default async function LeadsLayout({ children }: { children: React.ReactNode }) {
   const workspace = await getCurrentWorkspace();
   return (

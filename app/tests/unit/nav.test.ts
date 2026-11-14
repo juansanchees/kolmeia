@@ -80,7 +80,7 @@ describe("F2 roles", () => {
     expect([isSender("owner"), isSender("sdr"), isSender("closer")]).toEqual([true, true, false]);
   });
   test("J2 AGENTES and CAMPANHAS send the closer to LEADS", () => {
-    const SENDER_ONLY = ["src/app/(app)/campanhas/layout.tsx", "src/app/(app)/agentes/page.tsx", "src/app/(app)/agentes/novo/page.tsx", "src/app/(app)/agentes/[id]/page.tsx"];
+    const SENDER_ONLY = ["src/app/(app)/campanhas/layout.tsx", "src/app/(app)/agentes/page.tsx", "src/app/(app)/agentes/novo/page.tsx", "src/app/(app)/agentes/[id]/page.tsx", "src/app/(app)/agentes/pesquisa/layout.tsx"];
     for (const f of SENDER_ONLY) expect(read(f), f).toContain("requireSender()");
     expect(read("src/lib/workspace.ts")).toContain('redirect("/leads")');
   });
@@ -122,5 +122,36 @@ describe("F2 setup chat", () => {
       const end = actions.indexOf("\nexport async function", start + 1);
       expect(actions.slice(start, end), fn).toContain('revalidatePath("/agentes", "layout")');
     }
+  });
+});
+
+describe("F3a LEADS", () => {
+  test("LEADS lists leads, not searches", () => {
+    const page = read("src/app/(app)/leads/page.tsx");
+    expect(page).toContain("listLeads(");
+    expect(page).not.toContain("research_runs");
+    const detail = read("src/app/(app)/leads/[id]/page.tsx");
+    expect(detail).toContain("getLead(");
+    expect(detail).toContain("[0-9a-f-]{36}");
+    expect(detail).toContain("notFound()");
+  });
+  test("the closer is not sent to agent screens from LEADS", () => {
+    const table = read("src/components/leads/LeadsTable.tsx");
+    expect(table).toMatch(/canCreate\s*&&[\s\S]*\/agentes\/novo|canCreate\s*\?[\s\S]*\/agentes\/novo/);
+    expect(table.match(/\/agentes\/novo/g)?.length).toBe(1);
+    expect(read("src/app/(app)/leads/page.tsx")).toContain("canCreate={isSender(");
+    expect(read("src/app/(app)/agentes/pesquisa/layout.tsx")).toContain("requireSender()");
+  });
+  test("the proof list is shared and marks stale proof", () => {
+    const proof = read("src/components/research/proof.tsx");
+    expect(proof).toContain("export function ProofList");
+    expect(proof).toContain("isStaleProof(");
+    const results = read("src/components/research/Results.tsx");
+    expect(results).toContain('from "./proof"');
+    expect(results).not.toContain("function ProofList");
+  });
+  test("the old LEADS placeholder is gone", () => {
+    const hits = walk(join(process.cwd(), "src")).filter((f) => /t\.leads\.(soon|none|start)\b/.test(readFileSync(f, "utf8")));
+    expect(hits).toEqual([]);
   });
 });

@@ -1,9 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentWorkspace } from "@/lib/workspace";
+import { getCurrentWorkspace, requireSender } from "@/lib/workspace";
 import { RunList, type RunListItem } from "@/components/research/RunList";
 import { t } from "@/messages/pt";
 
+// Research screens are for the owner and the SDR: a closer (or no workspace) is sent to LEADS before anything loads.
 export default async function ResearchLayout({ children }: { children: React.ReactNode }) {
+  await requireSender();
   const supabase = await createClient();
   const workspace = await getCurrentWorkspace();
   let runs: RunListItem[] = [];

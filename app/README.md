@@ -83,6 +83,13 @@ Valem para os e-mails da sequência, no clique e no relógio, em ensaio e em env
 - Esses valores ainda não se editam pela tela. A página da campanha mostra a regra em uma linha.
 - **Antes de publicar** esta versão do app, aplicar `0006_gates.sql`: a página da campanha lê as colunas novas.
 
+## Leads (F3a)
+- **LEADS** = todas as empresas que as pesquisas acharam, **sem repetir** (uma linha por empresa, por espaço). Mesma empresa escrita diferente (nome, site, telefone) vira um lead só.
+- As pesquisas antigas já viraram leads, com origem **"Pesquisa avulsa"**. Lead de agente mostra o nome do agente.
+- **"prova velha"**: prova (ou "achada em") vista há mais de 90 dias. Só um aviso; reconferir ainda é manual.
+- A **closer** só vê leads passados para ela (isso chega na F5); até lá a tela dela fica vazia. Ela não abre telas de pesquisa (`/agentes/pesquisa/...` volta para LEADS).
+- **Antes de publicar** esta versão do app, aplicar `0009_leads.sql` (depende de 0001-0008).
+
 ## Pendências
 - O painel de uso das caixas (`mailbox_usage`) ainda conta as últimas 24 horas e pode divergir do portão de limite do dia até ser atualizado.
 
