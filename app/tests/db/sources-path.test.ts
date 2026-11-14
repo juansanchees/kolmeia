@@ -189,7 +189,7 @@ describe("0013 source tick path", () => {
     expect(w.start).toHaveLength(3);
     expect(w.start[0].id).toBe(ids[0]);
     for (let i = 0; i < 12; i++) {
-      const id = await enqueue(owner, ws, "apollo", { pages: 1 }, 25);
+      const id = await enqueue(owner, ws, "apollo", { locations: ["Massachusetts, US"], pages: 1 }, 25);
       await rpc("select public.source_mark_started($1,$2,$3,'ds')", [t, id, `ext${i}`]);
       await db.admin("update public.source_runs set started_at = now() - (interval '1 minute' * $2::int) where id = $1", [id, 100 - i]);
     }
@@ -261,7 +261,7 @@ describe("0013 source tick path", () => {
   test("mark_started validates ids (maps), import bounds rows, found, dropped and cost", async () => {
     const { ws, owner } = await seedSources(db);
     const m = await enqueue(owner, ws, "maps", MAPS_QUERY, 5);
-    const a = await enqueue(owner, ws, "apollo", { pages: 1 }, 25);
+    const a = await enqueue(owner, ws, "apollo", { locations: ["Massachusetts, US"], pages: 1 }, 25);
     const t = await tick();
     for (const [ext, ds] of [["bad id", "ds"], ["ok", "d/s"], [null, "ds"], ["ok", null], ["x".repeat(101), "ds"]])
       expect(code((await db.try(clock, "select public.source_mark_started($1,$2,$3,$4)", [t, m, ext, ds])).error), String(ext)).toBe("22023");

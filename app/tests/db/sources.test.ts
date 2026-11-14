@@ -125,6 +125,11 @@ describe("0013 enqueue and the daily cap", () => {
     expect(code((await enqueue(owner, ws, "maps", MAPS_QUERY, 0)).error)).toBe("22023");
     expect(code((await enqueue(owner, ws, "apollo", { naics: ["abc"] }, 25)).error)).toBe("22023");
     expect(code((await enqueue(owner, ws, "apollo", { pages: 5 }, 25)).error)).toBe("22023");
+    expect(code((await enqueue(owner, ws, "apollo", { naics: ["2362201"] }, 25)).error)).toBe("22023");
+    expect((await enqueue(owner, ws, "apollo", { naics: ["236220"] }, 25)).error).toBeUndefined();
+    // Apollo needs at least one filter
+    expect(code((await enqueue(owner, ws, "apollo", { pages: 1 }, 25)).error)).toBe("22023");
+    expect(code((await enqueue(owner, ws, "apollo", { locations: [], naics: [] }, 25)).error)).toBe("22023");
     const ok = await enqueue(owner, ws, "maps", MAPS_QUERY, 200);
     expect(ok.error).toBeUndefined();
     const run = await db.try<Record<string, unknown>>(as(owner), "select public.enqueue_source_run($1,'maps',$2::jsonb,200) as id", [ws, JSON.stringify(MAPS_QUERY)]);
@@ -284,11 +289,29 @@ describe("0013 visibility", () => {
     expect(code((await set(owner, { apollo_naics: ["x1"] })).error)).toBe("23514");
     expect(code((await set(owner, { maps_terms: ["a", "b", "c", "d", "e", "f"] })).error)).toBe("23514");
     expect(code((await set(owner, { maps_terms: ["x".repeat(81)] })).error)).toBe("23514");
+    expect(code((await set(owner, { apollo_naics: ["2362201"] })).error)).toBe("23514");
+    expect((await set(owner, { apollo_naics: ["236220"] })).error).toBeUndefined();
+    expect((await set(owner, { apollo_naics: [] })).error).toBeUndefined();
+    expect(code((await set(owner, { apollo_on: true })).error)).toBe("23514"); // Apollo on without any filter
+    expect((await set(owner, { apollo_on: true, apollo_locations: ["Massachusetts, US"] })).error).toBeUndefined();
+    expect((await set(owner, { apollo_on: false })).error).toBeUndefined();
     expect((await set(owner, { maps_on: true, maps_terms: ["hvac contractor"], maps_location: "Boston, MA" })).error).toBeUndefined();
     // a partial update keeps the rest
     await db.query(as(owner), "select public.set_agent_source_settings($1,$2::jsonb)", [agent, JSON.stringify({ maps_on: true, maps_terms: ["hvac contractor"], maps_location: "Boston, MA" })]);
     await db.query(as(owner), "select public.set_agent_source_settings($1,$2::jsonb)", [agent, JSON.stringify({ maps_max: 80 })]);
     const s = (await db.query<{ maps_on: boolean; maps_terms: string[]; maps_max: number; workspace_id: string }>(as(owner), "select * from public.agent_source_settings where agent_id = $1", [agent]))[0];
     expect([s.maps_on, s.maps_terms, s.maps_max, s.workspace_id]).toEqual([true, ["hvac contractor"], 80, ws]);
+  });
+
+  test("only a hunter that is not archived can be configured", async () => {
+    const { ws, owner } = await seedSources(db);
+    const mk = async (type: string) => (await db.query<{ id: string }>(as(owner), "insert into public.agents (workspace_id, type, name, schedule, config) values ($1,$2,'A','weekly','{}'::jsonb) returning id", [ws, type]))[0].id;
+    const set = (a: string) => db.try(as(owner), "select public.set_agent_source_settings($1,$2::jsonb)", [a, JSON.stringify({ maps_max: 80 })]);
+    expect(code((await set(await mk("email"))).error)).toBe("22023");
+    expect(code((await set(await mk("call"))).error)).toBe("22023");
+    const hunter = await mk("hunter");
+    expect((await set(hunter)).error).toBeUndefined();
+    await db.admin("update public.agents set archived_at = now() where id = $1", [hunter]);
+    expect(code((await set(hunter)).error)).toBe("22023");
   });
 });

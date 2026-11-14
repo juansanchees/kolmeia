@@ -58,12 +58,20 @@ create table if not exists public.agent_source_settings (
   maps_max integer not null default 50 constraint agent_source_settings_max check (maps_max between 1 and 200),
   apollo_on boolean not null default false,
   apollo_locations text[] not null default '{}' constraint agent_source_settings_locations check (public.source_array_ok(apollo_locations, 5, 120, '[^[:space:]]')),
-  apollo_naics text[] not null default '{}' constraint agent_source_settings_naics check (public.source_array_ok(apollo_naics, 5, 5, '^[0-9]{2,5}$')),
+  apollo_naics text[] not null default '{}' constraint agent_source_settings_naics check (public.source_array_ok(apollo_naics, 5, 6, '^[0-9]{2,6}$')),
   apollo_pages integer not null default 1 constraint agent_source_settings_pages check (apollo_pages between 1 and 4),
   updated_at timestamptz not null default now(),
   constraint agent_source_settings_maps_ready check (not maps_on or (maps_terms is not null and maps_location is not null))
 );
 create index if not exists agent_source_settings_ws_idx on public.agent_source_settings (workspace_id);
+
+-- re-runnable on a database that already has the table: (re)add the constraints by name
+alter table public.agent_source_settings drop constraint if exists agent_source_settings_naics;
+alter table public.agent_source_settings add constraint agent_source_settings_naics
+  check (public.source_array_ok(apollo_naics, 5, 6, '^[0-9]{2,6}$'));
+alter table public.agent_source_settings drop constraint if exists agent_source_settings_apollo_filter;
+alter table public.agent_source_settings add constraint agent_source_settings_apollo_filter
+  check (not apollo_on or coalesce(cardinality(apollo_locations), 0) + coalesce(cardinality(apollo_naics), 0) > 0);
 
 -- ---------------------------------------------------------------- the ledger
 create table if not exists public.source_runs (
@@ -283,6 +291,9 @@ begin
   if v_ws is null or auth.uid() is null or not public.is_workspace_sender(v_ws) then
     raise exception 'not allowed' using errcode = '42501';
   end if;
+  if not exists (select 1 from public.agents a where a.id = p_agent and a.type = 'hunter' and a.archived_at is null) then
+    raise exception 'invalid agent' using errcode = '22023';
+  end if;
   if p is null or jsonb_typeof(p) <> 'object' then
     raise exception 'invalid settings' using errcode = '22023';
   end if;
@@ -398,9 +409,13 @@ begin
        or (p_query ? 'locations' and (jsonb_typeof(p_query -> 'locations') <> 'array' or jsonb_array_length(p_query -> 'locations') > 5
            or exists (select 1 from jsonb_array_elements(p_query -> 'locations') e where jsonb_typeof(e) <> 'string' or char_length(btrim(e #>> '{}')) not between 1 and 120)))
        or (p_query ? 'naics' and (jsonb_typeof(p_query -> 'naics') <> 'array' or jsonb_array_length(p_query -> 'naics') > 5
-           or exists (select 1 from jsonb_array_elements(p_query -> 'naics') e where jsonb_typeof(e) <> 'string' or (e #>> '{}') !~ '^[0-9]{2,5}$')))
+           or exists (select 1 from jsonb_array_elements(p_query -> 'naics') e where jsonb_typeof(e) <> 'string' or (e #>> '{}') !~ '^[0-9]{2,6}$')))
        or (p_query ? 'pages' and (jsonb_typeof(p_query -> 'pages') <> 'number' or (p_query ->> 'pages') !~ '^[1-4]$'))
        or (p_query ? 'label' and (jsonb_typeof(p_query -> 'label') <> 'string' or char_length(p_query ->> 'label') > 60)) then
+      raise exception 'invalid query' using errcode = '22023';
+    end if;
+    -- Apollo needs at least one filter
+    if coalesce(jsonb_array_length(p_query -> 'locations'), 0) + coalesce(jsonb_array_length(p_query -> 'naics'), 0) = 0 then
       raise exception 'invalid query' using errcode = '22023';
     end if;
   end if;
