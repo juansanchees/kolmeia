@@ -103,6 +103,11 @@ describe("proof that RLS is really enforced in PGlite", () => {
         "archive_agent_runs", "backfill_leads", "link_candidate_lead", "link_lead", "unlink_candidate_lead",
         // 0009 J2 (the closer sees research proof only through her assigned leads)
         "candidate_visible_to_assignee", "check_visible_to_assignee",
+        // 0010 (hunter path: token-gated, anon-only entry points; hunter_assert / *_core / hunter_check_keys are NOT definer)
+        "cancel_agent_runs_on_delete", "hunter_add_candidates", "hunter_add_check", "hunter_add_jobs", "hunter_add_sources",
+        "hunter_begin_tick", "hunter_candidates", "hunter_checks", "hunter_claim_step", "hunter_due_work", "hunter_finish_tick",
+        "hunter_get_run", "hunter_jobs", "hunter_known_companies", "hunter_pause_agent", "hunter_profile", "hunter_release_step",
+        "hunter_reserve_ai_call", "hunter_settle_ai_call", "hunter_sources", "hunter_update_candidate", "hunter_update_run",
       ].sort(),
     );
     for (const r of rows) expect(r.proconfig).toContain("search_path=\"\"");
