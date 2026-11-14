@@ -115,6 +115,11 @@ describe("proof that RLS is really enforced in PGlite", () => {
         "source_secret", "set_agent_source_settings", "enqueue_source_run",
         // 0013 (source tick path: token-gated, anon-only; source_assert_tick is NOT definer)
         "source_begin_tick", "source_finish_tick", "source_enqueue_agent_runs", "source_next_work", "source_mark_started", "source_mark_failed", "source_import",
+        // 0014 (Qualificador: values copied from candidates, lead level, settings row per workspace, queue, cost per lead)
+        "copy_candidate_fields", "copy_candidate_fields_trg", "delete_candidate_fields", "lead_level", "refresh_lead_level",
+        "level_from_lead_fields", "level_from_check", "level_from_evidence", "level_from_candidate", "ack_level_note",
+        "create_workspace_qualifier", "qualifier_workspace_cap", "enqueue_lead_for_qualifier", "requeue_lead_on_import",
+        "add_ai_cost_to_lead", "qualifier_spent_today", "qualifier_status",
       ].sort(),
     );
     for (const r of rows) expect(r.proconfig).toContain("search_path=\"\"");

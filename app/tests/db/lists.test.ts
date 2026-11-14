@@ -230,7 +230,8 @@ describe("0011 import RPCs", () => {
     expect(leads.filter((l) => l.origin_kind === "import" && l.origin_import_id === importId && l.best_candidate_id === null)).toHaveLength(2);
     expect(await db.admin("select * from public.research_candidates where id = $1", [cand])).toEqual(before);
     const bay = (await db.admin<{ id: string }>("select id from public.leads where best_candidate_id = $1", [cand]))[0].id;
-    expect((await fieldsOf(bay)).map((f) => f.field)).toEqual(["name", "website"]);
+    // the import's name and website, plus the candidate's own (0014 copies a verified candidate's values onto its lead)
+    expect((await fieldsOf(bay)).map((f) => f.field)).toEqual(["name", "name", "website", "website"]);
     const imp = (await db.admin<Record<string, unknown>>("select status, row_count, new_count, merged_count, error_count, finished_at from public.lead_imports where id = $1", [importId]))[0];
     expect(imp).toMatchObject({ status: "done", row_count: 3, new_count: 2, merged_count: 1, error_count: 0 });
     expect(imp.finished_at).not.toBeNull();
