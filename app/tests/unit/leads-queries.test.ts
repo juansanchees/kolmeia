@@ -19,7 +19,7 @@ describe("F3a leads reads", () => {
   it("listLeads: chunks the id lookups and skips a lead whose best candidate is not returned", async () => {
     const leads = Array.from({ length: 250 }, (_, i) => ({
       id: `l${i}`, workspace_id: "w", best_candidate_id: `c${i}`, status: "new", origin_kind: "one_off", origin_agent_id: null,
-      origin_run_id: null, origin_import_id: null, owner_id: null, first_seen_at: "2026-11-01T00:00:00Z", last_seen_at: "2026-11-01T00:00:00Z",
+      origin_run_id: null, origin_import_id: null, owner_id: null, first_seen_at: "2026-11-01T00:00:00Z", last_seen_at: "2026-11-01T00:00:00Z", level: 0, level_note: null,
     }));
     const calls: Record<string, number> = {};
     const db = {
@@ -52,7 +52,7 @@ describe("F3a leads reads", () => {
   it("listLeads reads leads without a best candidate with their display fields, in pages of 1000", async () => {
     const mk = (i: number) => ({
       id: `l${i}`, workspace_id: "w", best_candidate_id: null, status: "new", origin_kind: "import", origin_agent_id: null,
-      origin_run_id: null, origin_import_id: i % 2 ? "imp1" : null, owner_id: null, first_seen_at: "2026-11-01T00:00:00Z", last_seen_at: "2026-11-01T00:00:00Z",
+      origin_run_id: null, origin_import_id: i % 2 ? "imp1" : null, owner_id: null, first_seen_at: "2026-11-01T00:00:00Z", last_seen_at: "2026-11-01T00:00:00Z", level: 0, level_note: null,
     });
     const all = Array.from({ length: 1200 }, (_, i) => mk(i));
     const ranges: [number, number][] = [];

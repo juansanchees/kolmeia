@@ -8,6 +8,7 @@ import { TEMPERATURES } from "@/lib/research/types";
 import { TABS } from "@/lib/research/sheet";
 import { DEFAULT_LEAD_FILTERS, filterLeads, leadInTab, leadsCsv, originLabel, type LeadFilters, type LeadTab } from "@/lib/leads/view";
 import { LEAD_STATUSES, type LeadListItem } from "@/lib/leads/types";
+import { LevelBadge } from "@/components/qualifier/LevelBadge";
 import { fill, t } from "@/messages/pt";
 
 const F = t.leads.filters;
@@ -88,6 +89,12 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
             <option key={x} value={x}>{t.leads.statuses[x]}</option>
           ))}
         </select>
+        <select aria-label={t.qualifier.levelLabel} value={f.minLevel} onChange={(e) => set({ minLevel: Number(e.target.value) as LeadFilters["minLevel"] })} className={`${selectCls} flex-[1_1_140px]`}>
+          <option value={0}>{t.qualifier.filterLevelAny}</option>
+          {[1, 2, 3, 4].map((n) => (
+            <option key={n} value={n}>{fill(t.qualifier.filterLevel, { n })}</option>
+          ))}
+        </select>
       </div>
 
       <div role="group" aria-label={t.research.list.tabsLabel} className="flex flex-wrap gap-2">
@@ -120,11 +127,15 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
         <ul className="m-0 flex list-none flex-col border border-line bg-surface p-0">
           {filtered.map((i) => (
             <li key={i.lead.id} className="border-b border-line last:border-b-0">
-              <Link href={`/leads/${i.lead.id}`} className="flex min-w-0 flex-col gap-1 px-3.5 py-3 text-ink no-underline hover:bg-ground md:grid md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,1.2fr)] md:items-center md:gap-3">
+              <Link href={`/leads/${i.lead.id}`} className="flex min-w-0 flex-col gap-1 px-3.5 py-3 text-ink no-underline hover:bg-ground md:grid md:grid-cols-[minmax(0,2fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,1.2fr)] md:items-center md:gap-3">
                 <span className="min-w-0">
                   <span className="sr-only">{t.leads.columns.company}: </span>
                   <span className="block truncate text-sm font-semibold">{i.display.name}</span>
                   {i.display.city && <span className="block truncate text-[13px] text-muted">{i.display.city}</span>}
+                </span>
+                <span className="text-[13px]">
+                  <span className="sr-only">{t.leads.columns.level}: </span>
+                  <LevelBadge level={i.lead.level} />
                 </span>
                 <span className="text-[13px]">
                   <span className="sr-only">{t.leads.columns.temperature}: </span>

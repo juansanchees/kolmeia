@@ -7,6 +7,9 @@ import { count, date, host, money, UNKNOWN } from "@/components/research/format"
 import { Hook, ProofList } from "@/components/research/proof";
 import { Pill } from "@/components/research/controls";
 import { Notice } from "@/components/email/bits";
+import { LevelBadge } from "@/components/qualifier/LevelBadge";
+import { LevelNote } from "@/components/qualifier/LevelNote";
+import { levelReason, nextStepLabel } from "@/lib/qualifier/view";
 import { FieldList } from "@/components/leads/FieldList";
 import { fill, t } from "@/messages/pt";
 
@@ -21,10 +24,12 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   if (!supabase) notFound();
   const detail = await getLead(supabase, id);
   if (!detail) notFound();
-  const { lead, candidates, checks, agentName, fields, importNames } = detail;
+  const { lead, candidates, checks, agentName, fields, importNames, queue } = detail;
   const best = candidates.find((c) => c.id === lead.best_candidate_id) ?? candidates[0] ?? null;
   const display = displayOf(best, fields);
   const importName = lead.origin_import_id ? (importNames[lead.origin_import_id] ?? null) : null;
+  // "Listas:" = the import lists the values cite plus the agent that found the lead (spec 5.2).
+  const listNames = [...new Set([...fields.flatMap((f) => (f.source === "import" && f.source_ref && importNames[f.source_ref] ? [importNames[f.source_ref]] : [])), ...(agentName ? [agentName] : [])])];
   const now = new Date();
   const stale = candidates.some(
     (c) => isStaleProof(c.found_at_seen_at, now) || checks.some((k) => k.candidate_id === c.id && k.evidence.some((e) => isStaleProof(e.seen_at, now))),
@@ -39,7 +44,8 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
       <section className="flex flex-col gap-3.5 border border-line bg-surface p-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-[22px]">{display.name}</h2>
-          <span className="flex flex-wrap gap-1.5">
+          <span className="flex flex-wrap items-center gap-1.5">
+            <LevelBadge level={lead.level} />
             {best?.temperature && <Pill tone={best.temperature}>{LB.temperature[best.temperature]}</Pill>}
             {best?.second_pass === "refuted" && <Pill tone="no">{L.refuted}</Pill>}
             {!best && <Pill tone="no">{t.leads.unproven}</Pill>}
@@ -55,6 +61,16 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
             .filter(Boolean)
             .join(" · ")}
         </p>
+        <p className="text-[13px] text-muted">
+          <span className="font-semibold text-ink">{t.qualifier.levelLabel} {lead.level}</span> · {levelReason(fields, lead.level)}
+          {queue && <> · {nextStepLabel(queue.next_step, queue.done_reason)}</>}
+        </p>
+        {listNames.length > 0 && (
+          <p className="text-[13px] text-muted">
+            <span className="font-semibold text-ink">{t.qualifier.lists}</span> {listNames.join(", ")}
+          </p>
+        )}
+        {lead.level_note && <LevelNote leadId={lead.id} note={lead.level_note} />}
 
         {best && (
           <>

@@ -28,6 +28,7 @@ export function FieldList({ fields, importNames }: { fields: LeadFieldRow[]; imp
               )}{" "}
               · {date(f.seen_at)}
             </span>
+            {f.status === "confirmed" && <span className="font-mono text-xs text-ok" title={L.confirmed}>✓ {L.confirmed}</span>}
             {f.status === "unverified" && <span className="font-mono text-xs text-muted">⚠ {L.unproven}</span>}
           </li>
         );

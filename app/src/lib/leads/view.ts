@@ -30,9 +30,10 @@ export type LeadFilters = {
   agent: "all" | "one_off" | string;
   status: LeadStatus | "all";
   tab: LeadTab;
+  minLevel: 0 | 1 | 2 | 3 | 4;
 };
 
-export const DEFAULT_LEAD_FILTERS: LeadFilters = { q: "", temperature: "all", agent: "all", status: "all", tab: "all" };
+export const DEFAULT_LEAD_FILTERS: LeadFilters = { q: "", temperature: "all", agent: "all", status: "all", tab: "all", minLevel: 0 };
 
 function fold(s: string): string {
   return s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
@@ -70,6 +71,7 @@ export function filterLeads(items: LeadListItem[], f: LeadFilters): LeadListItem
       if (!leadInTab({ best }, f.tab)) return false;
       if (f.temperature !== "all" && (!best || best.temperature !== f.temperature)) return false;
       if (f.status !== "all" && lead.status !== f.status) return false;
+      if (f.minLevel > 0 && lead.level < f.minLevel) return false;
       if (f.agent === "one_off" ? lead.origin_kind !== "one_off" : f.agent !== "all" && lead.origin_agent_id !== f.agent) return false;
       if (q) {
         const phone = (display.phone ?? "").replace(/\D/g, "");

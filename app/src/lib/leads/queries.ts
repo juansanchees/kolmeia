@@ -190,5 +190,8 @@ export async function getLead(db: SupabaseClient, id: string): Promise<LeadDetai
   for (const r of await inChunks<Record<string, unknown>>(importIds, (c) => db.from("lead_imports").select("id, list_name").in("id", c) as never, "getLead imports")) {
     importNames[r.id as string] = r.list_name as string;
   }
-  return { lead, agentName, candidates, checks, fields, importNames };
+  // The queue row is the sender's (RLS): a closer reads none, so the page simply shows no next-step line.
+  const { data: q } = await db.from("qualifier_queue").select("next_step, done_reason, notes").eq("lead_id", id).maybeSingle();
+  const queue = q ? { next_step: String(q.next_step), done_reason: (q.done_reason as string | null) ?? null, notes: (q.notes as Record<string, string> | null) ?? {} } : null;
+  return { lead, agentName, candidates, checks, fields, importNames, queue };
 }

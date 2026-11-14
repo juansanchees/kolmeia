@@ -226,3 +226,28 @@ describe("F3c-1 upload screen", () => {
     expect(w).not.toMatch(/setError\(e instanceof Error \? e\.message/);
   });
 });
+
+describe("F3c-2 qualifier screens", () => {
+  test("the lead page shows the level drop until ok", () => {
+    expect(read("src/app/(app)/leads/[id]/page.tsx")).toContain("LevelNote");
+    const note = read("src/components/qualifier/LevelNote.tsx");
+    expect(note).toContain("ackLevelNoteAction");
+    expect(note).toContain("levelDrop");
+  });
+  test("the Qualificador card is on AGENTES with Pausar and Ver gastos", () => {
+    expect(read("src/app/(app)/agentes/page.tsx")).toContain("QualifierCard");
+    const card = read("src/components/qualifier/QualifierCard.tsx");
+    expect(card).toContain("seeSpend");
+    expect(card).toContain("placesOff");
+    expect(card).toContain("Q.pause");
+  });
+  test("the Qualificador settings are written only by a sender, on the server", () => {
+    const a = read("src/app/(app)/agentes/qualifier-actions.ts");
+    expect(a).toContain('"use server"');
+    expect(a).toContain("requireSender");
+    expect(a).toContain("strict()");
+  });
+  test("no copy names the forbidden site", () => {
+    expect(read("src/messages/pt/qualifier.ts").toLowerCase()).not.toContain("linked" + "in");
+  });
+});

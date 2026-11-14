@@ -17,12 +17,12 @@ function cand(o: Partial<CandidateRow> = {}): CandidateRow {
 }
 
 let n = 0;
-function item(best: Partial<CandidateRow>, o: { status?: LeadStatus; agent?: string | null; agentName?: string | null; proofOk?: number } = {}): LeadListItem {
+function item(best: Partial<CandidateRow>, o: { status?: LeadStatus; agent?: string | null; agentName?: string | null; proofOk?: number; level?: number } = {}): LeadListItem {
   n += 1;
   const lead: LeadRow = {
     id: `l${n}`, workspace_id: "w", best_candidate_id: `c${n}`, status: o.status ?? "new",
     origin_kind: o.agent ? "agent" : "one_off", origin_agent_id: o.agent ?? null, origin_run_id: "r1", origin_import_id: null, owner_id: null,
-    first_seen_at: "2026-11-01T00:00:00Z", last_seen_at: "2026-11-01T00:00:00Z",
+    first_seen_at: "2026-11-01T00:00:00Z", last_seen_at: "2026-11-01T00:00:00Z", level: o.level ?? 0, level_note: null,
   };
   const b = cand({ id: `c${n}`, ...best });
   return { lead, best: b, display: displayOf(b, []), agentName: o.agentName ?? null, importName: null, proofOk: o.proofOk ?? 0 };
@@ -36,7 +36,7 @@ function importOnly(fields: LeadFieldRow[], o: { importName?: string | null } = 
   n += 1;
   const lead: LeadRow = {
     id: `l${n}`, workspace_id: "w", best_candidate_id: null, status: "new", origin_kind: "import", origin_agent_id: null, origin_run_id: null,
-    origin_import_id: "imp1", owner_id: null, first_seen_at: "2026-11-01T00:00:00Z", last_seen_at: "2026-11-01T00:00:00Z",
+    origin_import_id: "imp1", owner_id: null, first_seen_at: "2026-11-01T00:00:00Z", last_seen_at: "2026-11-01T00:00:00Z", level: 0, level_note: null,
   };
   return { lead, best: null, display: displayOf(null, fields), agentName: null, importName: o.importName === undefined ? "Lista Teste" : o.importName, proofOk: 0 };
 }
@@ -162,5 +162,12 @@ describe("F3a leads", () => {
     expect(rows[1]).toContain("508-555-0142");
     expect(rows[1].endsWith("novo,Importado · Lista Teste")).toBe(true);
     expect(rows[2].endsWith("novo,Pesquisa avulsa")).toBe(true);
+  });
+
+  it("filterLeads keeps leads at or above the chosen level", () => {
+    const items = [item({}, { level: 0 }), item({}, { level: 2 }), item({}, { level: 4 })];
+    expect(filterLeads(items, DEFAULT_LEAD_FILTERS)).toHaveLength(3);
+    expect(filterLeads(items, { ...DEFAULT_LEAD_FILTERS, minLevel: 2 }).map((i) => i.lead.level).sort()).toEqual([2, 4]);
+    expect(filterLeads(items, { ...DEFAULT_LEAD_FILTERS, minLevel: 4 })).toHaveLength(1);
   });
 });

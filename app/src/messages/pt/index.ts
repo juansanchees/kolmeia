@@ -7,10 +7,11 @@ import { common } from "./common";
 import { email } from "./email";
 import { imports } from "./imports";
 import { leads } from "./leads";
+import { qualifier } from "./qualifier";
 import { research } from "./research";
 import { sources } from "./sources";
 
-export const pt = { ...common, ...areas, leads, agents, ai, research, email, imports, sources } as const;
+export const pt = { ...common, ...areas, leads, agents, ai, research, email, imports, sources, qualifier } as const;
 
 export type Messages = typeof pt;
 export const t = pt;

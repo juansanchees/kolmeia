@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { SupabaseAgentStore } from "@/lib/agents/store";
 import type { AgentRow } from "@/lib/agents/types";
 import { AgentList } from "@/components/agents/AgentList";
+import { QualifierCard } from "@/components/qualifier/QualifierCard";
+import type { QualifierStatus } from "@/lib/qualifier/view";
 import { NewResearchForm } from "@/components/research/NewResearchForm";
 import { RunList, type RunListItem } from "@/components/research/RunList";
 import { t } from "@/messages/pt";
@@ -15,7 +17,10 @@ export default async function AgentsPage() {
   const supabase = await createClient();
   let agents: AgentRow[] = [];
   let runs: RunListItem[] = [];
+  let qualifier: QualifierStatus | null = null;
   if (supabase) {
+    const { data: q } = await supabase.rpc("qualifier_status", { p_ws: workspace.id });
+    qualifier = (q as QualifierStatus | null) ?? null;
     agents = await new SupabaseAgentStore(supabase).listAgents(workspace.id);
     const { data } = await supabase
       .from("research_runs")
@@ -28,6 +33,8 @@ export default async function AgentsPage() {
   }
   return (
     <div className="flex flex-col gap-8">
+      {/* Places (Task 6) is off until its key check lands */}
+      {qualifier && <QualifierCard status={qualifier} placesOn={false} />}
       <section aria-labelledby="mine" className="flex flex-col gap-3">
         <h2 id="mine" className="text-2xl">
           {t.agents.mine}
