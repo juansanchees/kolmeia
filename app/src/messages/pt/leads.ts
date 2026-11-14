@@ -26,4 +26,14 @@ export const leads = {
   seenIn: "Vista em {n} busca(s)",
   firstSeen: "Primeira vez: {date}",
   proofTitle: "Provas",
+  imported: "Importado · {list}",
+  importedNoList: "Importado",
+  unproven: "sem prova",
+  noName: "(sem nome)",
+  sources: { import: "importado", site: "site", places: "Places", ai: "IA", research: "pesquisa" },
+  fieldsTitle: "De onde veio",
+  fieldLabels: {
+    name: "Empresa", website: "Site", phone: "Telefone", email: "E-mail", address: "Endereço", city: "Cidade", state: "Estado", zip: "ZIP",
+    contact_name: "Contato", contact_title: "Cargo", note: "Nota", company_type: "Tipo", active_project: "Obra ativa", place_id: "Google Places",
+  },
 } as const;

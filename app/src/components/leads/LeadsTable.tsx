@@ -5,8 +5,8 @@ import { useMemo, useState } from "react";
 import { DarkChoice } from "@/components/research/controls";
 import { UNKNOWN } from "@/components/research/format";
 import { TEMPERATURES } from "@/lib/research/types";
-import { inTab, TABS } from "@/lib/research/sheet";
-import { DEFAULT_LEAD_FILTERS, filterLeads, leadsCsv, originLabel, type LeadFilters, type LeadTab } from "@/lib/leads/view";
+import { TABS } from "@/lib/research/sheet";
+import { DEFAULT_LEAD_FILTERS, filterLeads, leadInTab, leadsCsv, originLabel, type LeadFilters, type LeadTab } from "@/lib/leads/view";
 import { LEAD_STATUSES, type LeadListItem } from "@/lib/leads/types";
 import { fill, t } from "@/messages/pt";
 
@@ -84,7 +84,7 @@ export function LeadsTable({ items, canCreate }: { items: LeadListItem[]; canCre
       <div role="group" aria-label={t.research.list.tabsLabel} className="flex flex-wrap gap-2">
         {LEAD_TABS.map((x) => (
           <DarkChoice key={x} pressed={f.tab === x} onClick={() => set({ tab: x })}>
-            {t.research.list.tabs[x]} · {items.filter((i) => inTab(i.best, x)).length}
+            {t.research.list.tabs[x]} · {items.filter((i) => leadInTab(i, x)).length}
           </DarkChoice>
         ))}
       </div>
@@ -105,16 +105,16 @@ export function LeadsTable({ items, canCreate }: { items: LeadListItem[]; canCre
               <Link href={`/leads/${i.lead.id}`} className="flex min-w-0 flex-col gap-1 px-3.5 py-3 text-ink no-underline hover:bg-ground md:grid md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,1.2fr)] md:items-center md:gap-3">
                 <span className="min-w-0">
                   <span className="sr-only">{t.leads.columns.company}: </span>
-                  <span className="block truncate text-sm font-semibold">{i.best.name}</span>
-                  {i.best.city && <span className="block truncate text-[13px] text-muted">{i.best.city}</span>}
+                  <span className="block truncate text-sm font-semibold">{i.display.name}</span>
+                  {i.display.city && <span className="block truncate text-[13px] text-muted">{i.display.city}</span>}
                 </span>
                 <span className="text-[13px]">
                   <span className="sr-only">{t.leads.columns.temperature}: </span>
-                  {i.best.temperature ? LB.temperature[i.best.temperature] : UNKNOWN}
+                  {i.best?.temperature ? LB.temperature[i.best.temperature] : UNKNOWN}
                 </span>
                 <span className="text-[13px]">
                   <span className="sr-only">{t.leads.columns.approach}: </span>
-                  {i.best.approach ? LB.approach[i.best.approach] : UNKNOWN}
+                  {i.best?.approach ? LB.approach[i.best.approach] : UNKNOWN}
                 </span>
                 <span className="text-[13px]">
                   <span className="sr-only">{t.leads.columns.status}: </span>
@@ -122,7 +122,7 @@ export function LeadsTable({ items, canCreate }: { items: LeadListItem[]; canCre
                 </span>
                 <span className="font-mono text-[13px]">
                   <span className="sr-only">{t.leads.columns.proof}: </span>
-                  {fill(t.leads.proofCount, { n: i.proofOk })}
+                  {i.best ? fill(t.leads.proofCount, { n: i.proofOk }) : t.leads.unproven}
                 </span>
                 <span className="truncate text-[13px] text-muted">
                   <span className="sr-only">{t.leads.columns.agent}: </span>

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CandidateRow } from "@/lib/research/rows";
-import { DEFAULT_LEAD_FILTERS, filterLeads, isStaleProof, leadsCsv, originLabel, proofCount } from "@/lib/leads/view";
-import type { LeadListItem, LeadRow, LeadStatus } from "@/lib/leads/types";
+import { DEFAULT_LEAD_FILTERS, displayOf, filterLeads, isStaleProof, leadsCsv, originLabel, proofCount } from "@/lib/leads/view";
+import type { LeadFieldRow, LeadListItem, LeadRow, LeadStatus } from "@/lib/leads/types";
 
 function cand(o: Partial<CandidateRow> = {}): CandidateRow {
   return {
@@ -21,10 +21,24 @@ function item(best: Partial<CandidateRow>, o: { status?: LeadStatus; agent?: str
   n += 1;
   const lead: LeadRow = {
     id: `l${n}`, workspace_id: "w", best_candidate_id: `c${n}`, status: o.status ?? "new",
-    origin_kind: o.agent ? "agent" : "one_off", origin_agent_id: o.agent ?? null, origin_run_id: "r1", owner_id: null,
+    origin_kind: o.agent ? "agent" : "one_off", origin_agent_id: o.agent ?? null, origin_run_id: "r1", origin_import_id: null, owner_id: null,
     first_seen_at: "2026-11-01T00:00:00Z", last_seen_at: "2026-11-01T00:00:00Z",
   };
-  return { lead, best: cand({ id: `c${n}`, ...best }), agentName: o.agentName ?? null, proofOk: o.proofOk ?? 0 };
+  const b = cand({ id: `c${n}`, ...best });
+  return { lead, best: b, display: displayOf(b, []), agentName: o.agentName ?? null, importName: null, proofOk: o.proofOk ?? 0 };
+}
+
+function field(f: Partial<LeadFieldRow> & Pick<LeadFieldRow, "field" | "value">): LeadFieldRow {
+  return { id: `f${f.field}${f.value}`, lead_id: "l", source: "import", source_ref: "imp1", status: "unverified", excerpt: null, seen_at: "2026-11-01T00:00:00Z", ...f };
+}
+
+function importOnly(fields: LeadFieldRow[], o: { importName?: string | null } = {}): LeadListItem {
+  n += 1;
+  const lead: LeadRow = {
+    id: `l${n}`, workspace_id: "w", best_candidate_id: null, status: "new", origin_kind: "import", origin_agent_id: null, origin_run_id: null,
+    origin_import_id: "imp1", owner_id: null, first_seen_at: "2026-11-01T00:00:00Z", last_seen_at: "2026-11-01T00:00:00Z",
+  };
+  return { lead, best: null, display: displayOf(null, fields), agentName: null, importName: o.importName === undefined ? "Lista Teste" : o.importName, proofOk: 0 };
 }
 
 describe("F3a leads", () => {
@@ -55,7 +69,7 @@ describe("F3a leads", () => {
       item({ name: "Oak Homes", city: "Falmouth" }),
       item({ name: "Sao Construction" }),
     ];
-    const f = (q: string) => filterLeads(items, { ...DEFAULT_LEAD_FILTERS, q }).map((i) => i.best.name);
+    const f = (q: string) => filterLeads(items, { ...DEFAULT_LEAD_FILTERS, q }).map((i) => i.display.name);
     expect(f("acme")).toEqual(["ACME Builders"]);
     expect(f("falmouth")).toEqual(["Oak Homes"]);
     expect(f("5085550199")).toEqual(["ACME Builders"]);
@@ -70,7 +84,7 @@ describe("F3a leads", () => {
       item({ name: "Warm Co", temperature: "warm", approach: "email" }, { agent: "a2" }),
       item({ name: "Refuted Co", temperature: "hot", approach: "call", second_pass: "refuted" }),
     ];
-    const names = (f: Partial<typeof DEFAULT_LEAD_FILTERS>) => filterLeads(items, { ...DEFAULT_LEAD_FILTERS, ...f }).map((i) => i.best.name);
+    const names = (f: Partial<typeof DEFAULT_LEAD_FILTERS>) => filterLeads(items, { ...DEFAULT_LEAD_FILTERS, ...f }).map((i) => i.display.name);
     expect(names({})[0]).toBe("Very Co");
     expect(names({ temperature: "hot" })).toEqual(expect.arrayContaining(["Hot Co", "Refuted Co"]));
     expect(names({ temperature: "hot" })).toHaveLength(2);
@@ -79,7 +93,7 @@ describe("F3a leads", () => {
     expect(names({ status: "replied" })).toEqual(["Hot Co"]);
     expect(names({ tab: "call" })).not.toContain("Refuted Co");
     expect(names({ tab: "all" })).toContain("Refuted Co");
-    const temps = filterLeads(items, DEFAULT_LEAD_FILTERS).map((i) => i.best.temperature);
+    const temps = filterLeads(items, DEFAULT_LEAD_FILTERS).map((i) => i.best?.temperature);
     expect(temps).toEqual(["very_hot", "hot", "hot", "warm", "cold"]);
   });
 
@@ -95,6 +109,58 @@ describe("F3a leads", () => {
     expect(rows).toHaveLength(3);
     expect(rows[0].endsWith("Status,Agente")).toBe(true);
     expect(rows[1].endsWith("novo,Cape")).toBe(true);
+    expect(rows[2].endsWith("novo,Pesquisa avulsa")).toBe(true);
+  });
+
+  it("displayOf prefers the best candidate and falls back to the oldest unrefuted field", () => {
+    const best = cand({ name: "Acme Builders", phone: "+1 508-555-0100", city: null });
+    const fields = [
+      field({ field: "city", value: "Worcester" }),
+      field({ field: "phone", value: "508-555-0111", seen_at: "2026-11-05T00:00:00Z" }),
+    ];
+    expect(displayOf(best, fields)).toEqual({ name: "Acme Builders", city: "Worcester", phone: "+1 508-555-0100", website: null, email: null });
+    const only = [
+      field({ field: "name", value: "Refuted Co", status: "refuted", seen_at: "2026-10-01T00:00:00Z" }),
+      field({ field: "name", value: "Newer Name", seen_at: "2026-11-05T00:00:00Z" }),
+      field({ field: "name", value: "Oldest Name", seen_at: "2026-11-02T00:00:00Z" }),
+      field({ field: "email", value: "hi@acme.example" }),
+    ];
+    expect(displayOf(null, only)).toMatchObject({ name: "Oldest Name", email: "hi@acme.example", phone: null });
+    expect(displayOf(null, []).name).toBe("(sem nome)");
+  });
+
+  it("filterLeads keeps import-only leads only in Todos and finds them by name, city and phone", () => {
+    const imp = importOnly([field({ field: "name", value: "Acme Test Builders" }), field({ field: "city", value: "Millbury" }), field({ field: "phone", value: "508-555-0142" })]);
+    const hot = item({ name: "Hot Co", temperature: "hot", approach: "call" });
+    const items = [imp, hot];
+    const names = (f: Partial<typeof DEFAULT_LEAD_FILTERS>) => filterLeads(items, { ...DEFAULT_LEAD_FILTERS, ...f }).map((i) => i.display.name);
+    expect(names({})).toEqual(["Hot Co", "Acme Test Builders"]); // after leads with a temperature
+    expect(names({ tab: "call" })).toEqual(["Hot Co"]);
+    expect(names({ tab: "new" })).toEqual([]);
+    expect(names({ temperature: "hot" })).toEqual(["Hot Co"]);
+    expect(names({ q: "acme test" })).toEqual(["Acme Test Builders"]);
+    expect(names({ q: "millbury" })).toEqual(["Acme Test Builders"]);
+    expect(names({ q: "5085550142" })).toEqual(["Acme Test Builders"]);
+  });
+
+  it("originLabel says Importado · list", () => {
+    expect(originLabel(importOnly([field({ field: "name", value: "A" })]))).toBe("Importado · Lista Teste");
+    expect(originLabel(importOnly([field({ field: "name", value: "A" })], { importName: null }))).toBe("Importado");
+  });
+
+  it("leadsCsv writes import-only leads and neutralises a formula from an import", () => {
+    const evil = importOnly([
+      field({ field: "name", value: '=HYPERLINK("http://x","y")' }),
+      field({ field: "note", value: "=1+1" }),
+      field({ field: "phone", value: "508-555-0142" }),
+    ]);
+    const csv = leadsCsv([evil, item({ name: "Oak" })]);
+    expect(csv).toContain(`"'=HYPERLINK(""http://x"",""y"")"`);
+    expect(csv).not.toContain("=1+1"); // a note is not exported
+    const rows = csv.replace(/^﻿/, "").trim().split("\r\n");
+    expect(rows).toHaveLength(3);
+    expect(rows[1]).toContain("508-555-0142");
+    expect(rows[1].endsWith("novo,Importado · Lista Teste")).toBe(true);
     expect(rows[2].endsWith("novo,Pesquisa avulsa")).toBe(true);
   });
 });

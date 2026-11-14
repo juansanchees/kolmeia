@@ -135,6 +135,12 @@ describe("F3a LEADS", () => {
     expect(detail).toContain("[0-9a-f-]{36}");
     expect(detail).toContain("notFound()");
   });
+  test("the lead page renders import-only leads with their sources", () => {
+    const detail = read("src/app/(app)/leads/[id]/page.tsx");
+    expect(detail).toContain("FieldList");
+    expect(detail).not.toContain("if (!best) notFound()");
+    expect(read("src/components/leads/FieldList.tsx")).toContain("sanitizeUrl(");
+  });
   test("the closer is not sent to agent screens from LEADS", () => {
     const table = read("src/components/leads/LeadsTable.tsx");
     expect(table).toMatch(/canCreate\s*&&[\s\S]*\/agentes\/novo|canCreate\s*\?[\s\S]*\/agentes\/novo/);

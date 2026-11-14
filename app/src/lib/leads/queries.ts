@@ -2,7 +2,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { CANDIDATE_COLUMNS, normalizeCandidate, type CandidateRow } from "@/lib/research/rows";
 import type { CheckWithEvidence } from "@/lib/research/store";
-import { LEAD_COLUMNS, type LeadDetail, type LeadListItem, type LeadRow } from "./types";
+import { displayOf } from "./view";
+import { LEAD_COLUMNS, LEAD_FIELD_COLUMNS, type LeadDetail, type LeadFieldRow, type LeadListItem, type LeadRow } from "./types";
 
 /**
  * Ids per `.in()` request. Two limits at once: the URL stays small (100 UUIDs is ~3.8 KB, 500 would be ~19 KB, over
@@ -29,6 +30,8 @@ export async function inChunks<T>(
   return out;
 }
 
+const DISPLAY_FIELDS = ["name", "website", "phone", "email", "city"];
+
 const CHECK_SELECT = "id, candidate_id, kind, pass, result, summary, created_at, research_evidence(url, title, excerpt, seen_at)";
 
 type RawCheck = Record<string, unknown> & { research_evidence: CheckWithEvidence["evidence"] | null };
@@ -40,27 +43,64 @@ function toChecks(rows: unknown[] | null): CheckWithEvidence[] {
   });
 }
 
+/** Leads read per list (K-6: an import holds at most 5,000 rows) and rows per PostgREST page (its cap is 1000). */
+export const LEADS_MAX = 5000;
+const PAGE = 1000;
+/**
+ * Leads per `.in("lead_id")` request for their fields: the URL stays small and, at the 14 field kinds an import can
+ * write (up to ~20 values per lead in practice), 50 leads stay well under the 1000-row response cap.
+ */
+export const FIELD_CHUNK = 50;
+
+async function inLeadChunks<T>(ids: string[], run: (chunk: string[]) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>, label: string): Promise<T[]> {
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += FIELD_CHUNK) chunks.push(ids.slice(i, i + FIELD_CHUNK));
+  const results = await Promise.all(chunks.map((c) => run(c)));
+  const out: T[] = [];
+  for (const r of results) {
+    if (r.error) throw new Error(`${label}: ${r.error.message}`);
+    out.push(...(r.data ?? []));
+  }
+  return out;
+}
+
 /** Leads of a workspace with their best candidate. Runs as the user, so RLS decides what the closer sees. */
 export async function listLeads(db: SupabaseClient, workspaceId: string): Promise<LeadListItem[]> {
-  const { data: leadRows, error } = await db
-    .from("leads")
-    .select(LEAD_COLUMNS)
-    .eq("workspace_id", workspaceId)
-    .not("best_candidate_id", "is", null)
-    .order("last_seen_at", { ascending: false })
-    .limit(500);
-  if (error) throw new Error(`listLeads: ${error.message}`);
-  const leads = (leadRows ?? []) as LeadRow[];
+  const leads: LeadRow[] = [];
+  for (let from = 0; from < LEADS_MAX; from += PAGE) {
+    const { data: page, error } = await db
+      .from("leads")
+      .select(LEAD_COLUMNS)
+      .eq("workspace_id", workspaceId)
+      .order("last_seen_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, Math.min(from + PAGE, LEADS_MAX) - 1);
+    if (error) throw new Error(`listLeads: ${error.message}`);
+    const rows = (page ?? []) as LeadRow[];
+    leads.push(...rows);
+    if (rows.length < PAGE) break;
+  }
   if (leads.length === 0) return [];
 
-  const bestIds = leads.map((l) => l.best_candidate_id as string);
+  const bestIds = leads.map((l) => l.best_candidate_id).filter((x): x is string => Boolean(x));
   const agentIds = [...new Set(leads.map((l) => l.origin_agent_id).filter((x): x is string => Boolean(x)))];
+  const importIds = [...new Set(leads.map((l) => l.origin_import_id).filter((x): x is string => Boolean(x)))];
+  const bareIds = leads.filter((l) => !l.best_candidate_id).map((l) => l.id);
 
-  const [candRows, agentRows, checkRows] = await Promise.all([
+  const [candRows, agentRows, checkRows, importRows, fieldRows] = await Promise.all([
     inChunks<Record<string, unknown>>(bestIds, (c) => db.from("research_candidates").select(CANDIDATE_COLUMNS).in("id", c) as never, "listLeads candidates"),
     inChunks<Record<string, unknown>>(agentIds, (c) => db.from("agents").select("id, name").in("id", c) as never, "listLeads agents"),
     inChunks<unknown>(bestIds, (c) => db.from("research_checks").select(CHECK_SELECT).in("candidate_id", c) as never, "listLeads checks"),
+    inChunks<Record<string, unknown>>(importIds, (c) => db.from("lead_imports").select("id, list_name").in("id", c) as never, "listLeads imports"),
+    inLeadChunks<LeadFieldRow>(
+      bareIds,
+      (c) => db.from("lead_fields").select(LEAD_FIELD_COLUMNS).in("lead_id", c).in("field", DISPLAY_FIELDS) as never,
+      "listLeads fields",
+    ),
   ]);
+  const importName = new Map(importRows.map((r) => [r.id as string, r.list_name as string]));
+  const fieldsBy = new Map<string, LeadFieldRow[]>();
+  for (const f of fieldRows) fieldsBy.set(f.lead_id, [...(fieldsBy.get(f.lead_id) ?? []), f]);
 
   const candById = new Map(candRows.map((r) => [r.id as string, normalizeCandidate(r)]));
   const agentName = new Map(agentRows.map((a) => [a.id as string, a.name as string]));
@@ -71,13 +111,18 @@ export async function listLeads(db: SupabaseClient, workspaceId: string): Promis
 
   const items: LeadListItem[] = [];
   for (const lead of leads) {
-    const best = candById.get(lead.best_candidate_id as string);
-    if (!best) continue; // not visible (or gone): skip rather than crash
+    let best: CandidateRow | null = null;
+    if (lead.best_candidate_id) {
+      best = candById.get(lead.best_candidate_id) ?? null;
+      if (!best) continue; // not visible (or gone): skip rather than crash
+    }
     items.push({
       lead,
       best,
+      display: displayOf(best, best ? [] : (fieldsBy.get(lead.id) ?? [])),
       agentName: lead.origin_agent_id ? (agentName.get(lead.origin_agent_id) ?? null) : null,
-      proofOk: proofBy.get(best.id) ?? 0,
+      importName: lead.origin_import_id ? (importName.get(lead.origin_import_id) ?? null) : null,
+      proofOk: best ? (proofBy.get(best.id) ?? 0) : 0,
     });
   }
   return items;
@@ -117,5 +162,20 @@ export async function getLead(db: SupabaseClient, id: string): Promise<LeadDetai
   );
   rawChecks.sort((a, b) => Date.parse(String(a.created_at)) - Date.parse(String(b.created_at)));
   const checks = toChecks(rawChecks);
-  return { lead, agentName, candidates, checks };
+
+  // All values of the lead, oldest first (a lead has a few dozen at most; the range keeps PostgREST's cap explicit).
+  const { data: fieldRows, error: fErr } = await db
+    .from("lead_fields")
+    .select(LEAD_FIELD_COLUMNS)
+    .eq("lead_id", id)
+    .order("seen_at", { ascending: true })
+    .range(0, 999);
+  if (fErr) throw new Error(`getLead fields: ${fErr.message}`);
+  const fields = (fieldRows ?? []) as LeadFieldRow[];
+  const importIds = [...new Set(fields.map((f) => (f.source === "import" ? f.source_ref : null)).concat(lead.origin_import_id).filter((x): x is string => Boolean(x)))];
+  const importNames: Record<string, string> = {};
+  for (const r of await inChunks<Record<string, unknown>>(importIds, (c) => db.from("lead_imports").select("id, list_name").in("id", c) as never, "getLead imports")) {
+    importNames[r.id as string] = r.list_name as string;
+  }
+  return { lead, agentName, candidates, checks, fields, importNames };
 }
