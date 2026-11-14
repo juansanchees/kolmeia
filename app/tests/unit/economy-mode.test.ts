@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { runTask, type AiCallRecord, type AiLedger, type AiReservation, type TaskDef } from "@/lib/ai/gateway";
+import { runTask, taskMeta, type AiCallRecord, type AiLedger, type AiReservation, type TaskDef } from "@/lib/ai/gateway";
 import { MODELS } from "@/lib/ai/models";
 import { PRICES, worstCaseUsd } from "@/lib/ai/pricing";
 import { fitWebToBudget, MODEL_BY_RIGOR, routeFor, WEB_LIMITS_BY_RIGOR, type ResearchStep } from "@/lib/ai/routing";
@@ -155,5 +155,35 @@ describe("gateway: shrinking happens only against the run cap, and the model is 
     const ctx = { workspaceId: "ws", runId: "r", ledger: new Ledger(), transport: fake, runBudget: { spentUsd: 1.9, maxUsd: 2 } };
     await expect(runTask(ctx, webDef, { q: "find" })).rejects.toMatchObject({ code: "run_cap" });
     expect(fake.calls).toHaveLength(0);
+  });
+});
+
+describe("collect keeps a phone only with the page that shows it (any model)", () => {
+  const cand = (phone: string, phone_source_url: string) => ({
+    name: "Acme Builders",
+    city: "Worcester",
+    state: "MA",
+    region: "",
+    website: "https://acme.example",
+    phone,
+    phone_source_url,
+    company_type: "builder" as const,
+    size_note: "",
+    entry_path: "directory" as const,
+    found_at: { url: "https://dir.example/list", title: "Dir", excerpt: "Acme" },
+  });
+  const run = (c: ReturnType<typeof cand>) => {
+    const meta = taskMeta({ seenUrls: ["https://dir.example/list", "https://acme.example/contact"] }, true);
+    const input = { want: 10 } as Parameters<typeof TASK_DEFS.collectDef.normalize>[1];
+    return TASK_DEFS.collectDef.normalize({ candidates: [c], sources_tried: [], jobs_without_builder: [], exhausted: false }, input, meta).candidates[0];
+  };
+
+  test("source returned by a web tool: phone and source kept", () => {
+    expect(run(cand("(508) 555-0101", "https://acme.example/contact"))).toMatchObject({ phone: "(508) 555-0101", phoneSourceUrl: "https://acme.example/contact" });
+  });
+
+  test("source not returned (invented) or missing: the phone is dropped, not kept without a source", () => {
+    expect(run(cand("(508) 555-0101", "https://invented.example/contact"))).toMatchObject({ phone: null, phoneSourceUrl: null });
+    expect(run(cand("(508) 555-0101", ""))).toMatchObject({ phone: null, phoneSourceUrl: null });
   });
 });

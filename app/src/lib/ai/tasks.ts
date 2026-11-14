@@ -285,7 +285,11 @@ const collectDef: TaskDef<collectP.CollectInput, CollectOut, CollectResult> = {
       const name = clip(c.name, 200);
       if (!name) continue;
       const foundUrl = seenUrl(c.found_at.url, meta);
-      const phone = cleanPhone(c.phone);
+      // A collected phone is kept only with the page that shows it (model-independent; collect may run on Haiku).
+      // Verify may still add a phone later, shown as unverified when it has no source.
+      const rawPhone = cleanPhone(c.phone);
+      const phoneSourceUrl = rawPhone ? seenUrl(c.phone_source_url, meta) : null;
+      const phone = phoneSourceUrl ? rawPhone : null;
       candidates.push({
         name,
         city: orNull(c.city, 100),
@@ -293,7 +297,7 @@ const collectDef: TaskDef<collectP.CollectInput, CollectOut, CollectResult> = {
         region: orNull(c.region, 100),
         website: sanitizeUrl(c.website),
         phone,
-        phoneSourceUrl: phone ? seenUrl(c.phone_source_url, meta) : null,
+        phoneSourceUrl,
         companyType: c.company_type,
         sizeNote: orNull(c.size_note, 300),
         // A company only counts as "entered through a signal" when the signal page itself was returned.

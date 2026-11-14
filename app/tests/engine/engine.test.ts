@@ -907,3 +907,22 @@ describe("modo econômico: a Rápida run with a US$ 1 cap really searches", () =
     expect(run.spent_cost_usd).toBeCloseTo(sum, 5);
   });
 });
+
+describe("modo econômico: a cap too low to search says so", () => {
+  test("discover cannot run even at its smallest: partial, with a plain 'raise the cap' reason", async () => {
+    const fake = new FakeTransport({
+      research_questions: () => ({ json: { ...questionsJson, questions: [] } }),
+      research_plan: () => ({ json: planJson }),
+    });
+    const deps: EngineDeps = { store, transport: fake, now: () => NOW };
+    const runId = await newRun("quick");
+    let run = await drive(deps, runId);
+    await approvePlan(store, run, { rigor: "quick", maxCandidates: 10, maxCostUsd: 0.2 });
+    run = await drive(deps, runId);
+    expect(run.status).toBe("done");
+    expect(run.is_partial).toBe(true);
+    expect(fake.callsFor("research_discover")).toHaveLength(0);
+    expect(run.partial_reason).toMatch(/baixo demais para buscar.*aumente o teto/);
+    expect(run.limits_notes[0]).toMatchObject({ kind: "partial" });
+  });
+});

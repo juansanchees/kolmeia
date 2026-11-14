@@ -605,6 +605,8 @@ async function refreshCounts(deps: EngineDeps, run: RunRow) {
   await deps.store.updateRun(run.id, { progress: { ...run.progress, counts: computeCounts(candidates, checks, sources.length) } });
 }
 
+const CAP_TOO_LOW = "O teto de custo ficou baixo demais para buscar (sobra pouco depois das perguntas e do plano); aumente o teto da pesquisa.";
+
 const PARTIAL_REASON = {
   cost: "O teto de custo da pesquisa foi atingido; a lista traz o que já tinha sido checado.",
   time: "O tempo máximo da pesquisa acabou; a lista traz o que já tinha sido checado.",
@@ -666,8 +668,11 @@ async function finalize(deps: EngineDeps, stale: RunRow, now: () => Date, partia
     deps.store.listSources(run.id),
   ]);
   const notes = limitsFromSources(sources);
+  // The cap ran out before any search (discover could not run even at its smallest): say so plainly.
+  const tooLow = partial === "cost" && (run.progress.stage ?? "discover_sources") === "discover_sources" && candidates.length === 0;
+  const reason = partial ? (tooLow ? CAP_TOO_LOW : PARTIAL_REASON[partial]) : null;
   if (partial) {
-    notes.unshift({ kind: "partial", text: PARTIAL_REASON[partial] });
+    notes.unshift({ kind: "partial", text: reason! });
     for (const c of candidates) {
       if (!c.verified_at) await deps.store.updateCandidate(c.id, { is_partial: true });
     }
@@ -684,7 +689,7 @@ async function finalize(deps: EngineDeps, stale: RunRow, now: () => Date, partia
   await deps.store.updateRun(run.id, {
     status: "done",
     is_partial: Boolean(partial),
-    partial_reason: partial ? PARTIAL_REASON[partial] : null,
+    partial_reason: reason,
     limits_notes: notes,
     progress: { ...run.progress, stage: "finalize", counts: computeCounts(candidates, checks, sources.length), errorStreak: 0 },
   });
