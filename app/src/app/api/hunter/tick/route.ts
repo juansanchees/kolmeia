@@ -2,6 +2,8 @@ import { hasAi } from "@/lib/ai/config";
 import { defaultTransport } from "@/lib/ai/gateway";
 import { runHunterTick } from "@/lib/hunter/tick";
 import { createHunterTickStore } from "@/lib/hunter/tick-store";
+import { createQualifierTickStore } from "@/lib/qualifier/store";
+import { QUALIFIER_TICK_BUDGET_MS, runQualifierTick } from "@/lib/qualifier/tick";
 import { createSourceTickStore } from "@/lib/sources/store";
 import { runSourceTick, SOURCE_TICK_BUDGET_MS } from "@/lib/sources/tick";
 
@@ -10,13 +12,28 @@ import { runSourceTick, SOURCE_TICK_BUDGET_MS } from "@/lib/sources/tick";
 // maxDuration 300 needs Fluid compute enabled on the Vercel project (without it the plan cap is lower); fallback in
 // supabase/manual/hunter_cron.sql.
 export const maxDuration = 300;
-/** The whole request (hunter + sources) stops starting new work 60 s before maxDuration. */
+/** The whole request (hunter + qualifier + sources) stops starting new work 60 s before maxDuration. */
 export const REQUEST_BUDGET_MS = 240_000;
 export const dynamic = "force-dynamic";
 
 const BEARER = /^Bearer ([0-9a-f]{64})$/;
 
+type Qualifier = { outcome: string; leads: number; steps: number; paused: number; failed: number };
 type Sources = { outcome: string; started: number; polled: number; imported: number; failed: number };
+
+/** The Qualificador tick: runs after the Caçador, always (without an AI key its AI steps say no_ai). Never throws except the 401. */
+async function qualifierTick(token: string, budgetMs: number): Promise<Qualifier> {
+  const none: Qualifier = { outcome: "error", leads: 0, steps: 0, paused: 0, failed: 0 };
+  try {
+    const store = createQualifierTickStore(token);
+    if (!store) return none;
+    const r = await runQualifierTick({ store, transport: hasAi() ? defaultTransport() : null, budgetMs });
+    return { outcome: r.outcome, leads: r.leads, steps: r.steps, paused: r.paused, failed: r.failed };
+  } catch (e) {
+    if (e instanceof Error && e.name === "HunterAuthError") throw e;
+    return none; // never echo internals (R10)
+  }
+}
 
 /** The connected-sources tick (F3d): runs after the Caçador, with or without an AI key. Never throws except the 401. */
 async function sourcesTick(token: string, budgetMs: number): Promise<Sources> {
@@ -59,9 +76,12 @@ export async function POST(request: Request) {
     hunter = { outcome: "error" }; // never echo internals (R10)
     hunterStatus = 500;
   }
+  const left = () => Math.max(0, requestStart + REQUEST_BUDGET_MS - Date.now());
   try {
-    const sources = await sourcesTick(token, Math.min(SOURCE_TICK_BUDGET_MS, Math.max(0, requestStart + REQUEST_BUDGET_MS - Date.now())));
-    return Response.json({ ...hunter, sources }, { status: hunterStatus });
+    const qualifier = await qualifierTick(token, Math.min(QUALIFIER_TICK_BUDGET_MS, left()));
+    // the sources budget is what is left after the qualifier finished
+    const sources = await sourcesTick(token, Math.min(SOURCE_TICK_BUDGET_MS, left()));
+    return Response.json({ ...hunter, qualifier, sources }, { status: hunterStatus });
   } catch {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }

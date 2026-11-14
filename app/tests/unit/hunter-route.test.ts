@@ -10,6 +10,10 @@ const createSourceTickStore = vi.fn();
 const runSourceTick = vi.fn();
 vi.mock("@/lib/sources/store", () => ({ createSourceTickStore: (...a: unknown[]) => createSourceTickStore(...a) }));
 vi.mock("@/lib/sources/tick", () => ({ SOURCE_TICK_BUDGET_MS: 30_000, runSourceTick: (...a: unknown[]) => runSourceTick(...a) }));
+const createQualifierTickStore = vi.fn();
+const runQualifierTick = vi.fn();
+vi.mock("@/lib/qualifier/store", () => ({ createQualifierTickStore: (...a: unknown[]) => createQualifierTickStore(...a) }));
+vi.mock("@/lib/qualifier/tick", () => ({ QUALIFIER_TICK_BUDGET_MS: 60_000, runQualifierTick: (...a: unknown[]) => runQualifierTick(...a) }));
 vi.mock("@/lib/ai/config", () => ({ hasAi: () => hasAi() }));
 vi.mock("@/lib/ai/gateway", () => ({ defaultTransport: () => ({ fake: true }) }));
 
@@ -22,10 +26,13 @@ beforeEach(() => {
   createHunterTickStore.mockReset();
   runHunterTick.mockReset();
   hasAi.mockReset().mockReturnValue(true);
+  createQualifierTickStore.mockReset().mockReturnValue({});
+  runQualifierTick.mockReset().mockResolvedValue({ tickId: "q", outcome: "ok", leads: 0, steps: 0, paused: 0, failed: 0 });
   createSourceTickStore.mockReset().mockReturnValue({});
   runSourceTick.mockReset().mockResolvedValue({ outcome: "ok", started: 0, polled: 0, imported: 0, failed: 0 });
 });
 const NO_SOURCES = { outcome: "ok", started: 0, polled: 0, imported: 0, failed: 0 };
+const NO_QUALIFIER = { outcome: "ok", leads: 0, steps: 0, paused: 0, failed: 0 };
 
 describe("POST /api/hunter/tick", () => {
   test.each([
@@ -46,13 +53,34 @@ describe("POST /api/hunter/tick", () => {
     expect(runHunterTick).not.toHaveBeenCalled();
   });
 
-  test("no AI key: 200 {outcome:'no_ai'}, no hunter store, and the sources still run", async () => {
+  test("without an AI key the Caçador says no_ai and the Qualificador still runs its free steps", async () => {
     hasAi.mockReturnValue(false);
     const res = await call(ok);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ outcome: "no_ai", sources: NO_SOURCES });
+    expect(await res.json()).toEqual({ outcome: "no_ai", qualifier: NO_QUALIFIER, sources: NO_SOURCES });
     expect(createHunterTickStore).not.toHaveBeenCalled();
+    expect(createQualifierTickStore).toHaveBeenCalledWith(TOKEN);
+    expect(runQualifierTick.mock.calls[0][0].transport).toBeNull();
     expect(createSourceTickStore).toHaveBeenCalledWith(TOKEN);
+  });
+
+  test("the Qualificador runs between the Caçador and the sources, with its own result; its failure does not hide the others", async () => {
+    createHunterTickStore.mockReturnValue({});
+    const order: string[] = [];
+    runHunterTick.mockImplementation(async () => (order.push("hunter"), { tickId: "t", outcome: "ok", runs: 1, steps: 1, paused: 0, failed: 0 }));
+    runQualifierTick.mockImplementation(async () => (order.push("qualifier"), { tickId: "q", outcome: "ok", leads: 3, steps: 9, paused: 1, failed: 0 }));
+    runSourceTick.mockImplementation(async () => (order.push("sources"), { outcome: "ok", started: 0, polled: 0, imported: 0, failed: 0 }));
+    const body = await (await call(ok)).json();
+    expect(order).toEqual(["hunter", "qualifier", "sources"]);
+    expect(body.qualifier).toEqual({ outcome: "ok", leads: 3, steps: 9, paused: 1, failed: 0 });
+    expect(runQualifierTick.mock.calls[0][0].transport).toEqual({ fake: true });
+    runQualifierTick.mockRejectedValue(new Error(`boom ${TOKEN}`));
+    const text = await (await call(ok)).text();
+    expect(text).not.toContain(TOKEN);
+    expect(JSON.parse(text).qualifier).toEqual({ outcome: "error", leads: 0, steps: 0, paused: 0, failed: 0 });
+    expect(JSON.parse(text).sources.outcome).toBe("ok");
+    runQualifierTick.mockRejectedValue(Object.assign(new Error("x"), { name: "HunterAuthError" }));
+    expect((await call(ok)).status).toBe(401);
   });
 
   test("the route runs the sources tick and reports it", async () => {
@@ -61,7 +89,7 @@ describe("POST /api/hunter/tick", () => {
     runSourceTick.mockResolvedValue({ outcome: "ok", started: 1, polled: 2, imported: 3, failed: 4 });
     const res = await call(ok);
     expect(createSourceTickStore).toHaveBeenCalledWith(TOKEN);
-    expect(await res.json()).toEqual({ outcome: "ok", runs: 0, steps: 0, paused: 0, failed: 0, sources: { outcome: "ok", started: 1, polled: 2, imported: 3, failed: 4 } });
+    expect(await res.json()).toEqual({ outcome: "ok", runs: 0, steps: 0, paused: 0, failed: 0, qualifier: NO_QUALIFIER, sources: { outcome: "ok", started: 1, polled: 2, imported: 3, failed: 4 } });
   });
 
   test("a sources failure is a bare error object and does not hide the hunter result; a refused token is 401", async () => {
@@ -82,7 +110,7 @@ describe("POST /api/hunter/tick", () => {
     runHunterTick.mockResolvedValue({ tickId: "t", outcome: "ok", runs: 2, steps: 5, paused: 1, failed: 0 });
     const res = await call(ok);
     expect(createHunterTickStore).toHaveBeenCalledWith(TOKEN);
-    expect(await res.json()).toEqual({ outcome: "ok", runs: 2, steps: 5, paused: 1, failed: 0, sources: NO_SOURCES });
+    expect(await res.json()).toEqual({ outcome: "ok", runs: 2, steps: 5, paused: 1, failed: 0, qualifier: NO_QUALIFIER, sources: NO_SOURCES });
   });
 
   test("a fast hunter leaves the sources their default budget; a slow one shrinks it; an exhausted one gives 0", async () => {
@@ -97,12 +125,29 @@ describe("POST /api/hunter/tick", () => {
       });
       await call(ok);
       expect(runSourceTick.mock.calls.at(-1)?.[0].budgetMs).toBe(30_000);
+      expect(runQualifierTick.mock.calls.at(-1)?.[0].budgetMs).toBe(60_000);
+      // the sources budget is computed after the qualifier finished
+      runQualifierTick.mockImplementation(async () => {
+        t += 200_000;
+        return { tickId: "q", outcome: "ok", leads: 0, steps: 0, paused: 0, failed: 0 };
+      });
+      await call(ok);
+      expect(runQualifierTick.mock.calls.at(-1)?.[0].budgetMs).toBe(60_000);
+      expect(runSourceTick.mock.calls.at(-1)?.[0].budgetMs).toBe(30_000);
+      runQualifierTick.mockImplementation(async () => {
+        t += 215_000;
+        return { tickId: "q", outcome: "ok", leads: 0, steps: 0, paused: 0, failed: 0 };
+      });
+      await call(ok);
+      expect(runSourceTick.mock.calls.at(-1)?.[0].budgetMs).toBe(15_000);
+      runQualifierTick.mockResolvedValue({ tickId: "q", outcome: "ok", leads: 0, steps: 0, paused: 0, failed: 0 });
       runHunterTick.mockImplementation(async () => {
         t += 225_000;
         return { tickId: "t", outcome: "ok", runs: 0, steps: 0, paused: 0, failed: 0 };
       });
       await call(ok);
       expect(runSourceTick.mock.calls.at(-1)?.[0].budgetMs).toBe(15_000);
+      expect(runQualifierTick.mock.calls.at(-1)?.[0].budgetMs).toBe(15_000);
       runHunterTick.mockImplementation(async () => {
         t += 290_000;
         return { tickId: "t", outcome: "ok", runs: 0, steps: 0, paused: 0, failed: 0 };
@@ -110,6 +155,7 @@ describe("POST /api/hunter/tick", () => {
       const res = await call(ok);
       expect(res.status).toBe(200);
       expect(runSourceTick.mock.calls.at(-1)?.[0].budgetMs).toBe(0);
+      expect(runQualifierTick.mock.calls.at(-1)?.[0].budgetMs).toBe(0);
     } finally {
       spy.mockRestore();
     }
@@ -124,7 +170,7 @@ describe("POST /api/hunter/tick", () => {
     const res = await call(ok);
     expect(res.status).toBe(500);
     const text = await res.text();
-    expect(JSON.parse(text)).toEqual({ outcome: "error", sources: NO_SOURCES });
+    expect(JSON.parse(text)).toEqual({ outcome: "error", qualifier: NO_QUALIFIER, sources: NO_SOURCES });
     expect(text).not.toContain(TOKEN);
     createHunterTickStore.mockReturnValue(null);
     expect((await call(ok)).status).toBe(500);
