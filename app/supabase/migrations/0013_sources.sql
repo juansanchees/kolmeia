@@ -92,6 +92,7 @@ create table if not exists public.source_runs (
   finished_at timestamptz,
   constraint source_runs_provider_kind check ((provider = 'apify' and kind in ('maps', 'contact')) or (provider = 'apollo' and kind = 'apollo'))
 );
+alter table public.source_runs add column if not exists start_claimed_at timestamptz;
 create index if not exists source_runs_ws_idx on public.source_runs (workspace_id, created_at desc);
 create index if not exists source_runs_open_idx on public.source_runs (status) where status in ('queued', 'running');
 create unique index if not exists source_runs_research_kind on public.source_runs (research_run_id, kind) where research_run_id is not null;
@@ -255,23 +256,8 @@ stable
 security definer
 set search_path = ''
 as $$ select null::text $$;
-create or replace function public.source_secret_for_tick(p_ws uuid, p_provider text)
-returns text
-language plpgsql
-stable
-security definer
-set search_path = ''
-as $$
-declare
-  v_ct text;
-begin
-  if not public.scheduler_authorized() then
-    raise exception 'not allowed' using errcode = '42501';
-  end if;
-  select c.secret_ciphertext into v_ct from public.source_connections c where c.workspace_id = p_ws and c.provider = p_provider;
-  return v_ct;
-end;
-$$;
+-- (the stand-alone source_secret_for_tick of an earlier draft is gone: source_next_work carries the ciphertext)
+drop function if exists public.source_secret_for_tick(uuid, text);
 
 -- ---------------------------------------------------------------- agent source settings
 create or replace function public.set_agent_source_settings(p_agent uuid, p jsonb)
@@ -692,7 +678,7 @@ $$;
 -- ---------------------------------------------------------------- token-gated tick path (source_*)
 -- Like 0010's hunter_*: SECURITY DEFINER, granted to anon only, every entry point first checks scheduler_authorized()
 -- (the clock's token header). The clock decrypts keys in memory; ciphertext leaves the database only through
--- source_next_work and source_secret_for_tick, both token-gated.
+-- source_next_work, token-gated.
 create table if not exists public.source_ticks (
   id uuid primary key default gen_random_uuid(),
   started_at timestamptz not null default now(),
@@ -865,13 +851,18 @@ declare
   v_n int := 0;
 begin
   perform public.source_assert_tick(p_tick);
+  -- a start claimed over 10 minutes ago never reported back (the tick died after Apify may have started it):
+  -- its fate is unknown, so it is failed and its reserve is charged; it is never started a second time
+  update public.source_runs
+     set status = 'failed', error = 'start_unknown', finished_at = now(), cost_usd = reserve_usd
+   where status = 'queued' and start_claimed_at is not null and start_claimed_at < now() - interval '10 minutes';
   for v in
-    select r.* from public.source_runs r where r.status = 'queued' order by r.created_at, r.id
+    select r.* from public.source_runs r where r.status = 'queued' and r.start_claimed_at is null order by r.created_at, r.id
   loop
     exit when v_n >= 3;
     perform pg_advisory_xact_lock(hashtext('source:' || v.workspace_id::text));
     -- re-read under the lock: a client may have changed it meanwhile
-    if not exists (select 1 from public.source_runs r where r.id = v.id and r.status = 'queued') then
+    if not exists (select 1 from public.source_runs r where r.id = v.id and r.status = 'queued' and r.start_claimed_at is null) then
       continue;
     end if;
     select c.secret_ciphertext, c.daily_cap_usd, c.daily_calls into v_ct, v_cap_usd, v_cap_calls
@@ -885,12 +876,12 @@ begin
     if v.provider = 'apify' then
       v_over := public.source_spent_today(v.workspace_id) - coalesce((
           select sum(x.reserve_usd) from public.source_runs x
-           where x.workspace_id = v.workspace_id and x.provider = 'apify' and x.status = 'queued' and (x.created_at, x.id) > (v.created_at, v.id)), 0)
+           where x.workspace_id = v.workspace_id and x.provider = 'apify' and x.status = 'queued' and x.created_at >= public.source_day_start() and (x.created_at, x.id) > (v.created_at, v.id)), 0)
         > coalesce(v_cap_usd, 2.00);
     else
       v_over := public.source_calls_today(v.workspace_id) - (
           select count(*) from public.source_runs x
-           where x.workspace_id = v.workspace_id and x.provider = 'apollo' and x.status = 'queued' and (x.created_at, x.id) > (v.created_at, v.id))
+           where x.workspace_id = v.workspace_id and x.provider = 'apollo' and x.status = 'queued' and x.created_at >= public.source_day_start() and (x.created_at, x.id) > (v.created_at, v.id))
         > coalesce(v_cap_calls, 20);
     end if;
     if v_over then
@@ -898,6 +889,7 @@ begin
       continue;
     end if;
     v_n := v_n + 1;
+    update public.source_runs set start_claimed_at = now() where id = v.id;
     v_start := v_start || jsonb_build_array(jsonb_build_object(
       'id', v.id, 'workspace_id', v.workspace_id, 'provider', v.provider, 'kind', v.kind, 'query', v.query,
       'max_results', v.max_results, 'reserve_usd', v.reserve_usd, 'external_run_id', v.external_run_id,
@@ -929,10 +921,18 @@ set search_path = ''
 as $$
 declare
   v_n int;
+  v_kind text;
 begin
   perform public.source_assert_tick(p_tick);
+  select r.kind into v_kind from public.source_runs r where r.id = p_run;
+  -- Maps (Apify) ids are alphanumeric; an Apollo search finishes in one tick and may have no external id or dataset
+  if (v_kind = 'maps' and (p_external_id is null or p_dataset is null or p_external_id !~ '^[A-Za-z0-9]{1,100}$' or p_dataset !~ '^[A-Za-z0-9]{1,100}$'))
+     or (v_kind is distinct from 'maps' and ((p_external_id is not null and p_external_id <> '' and p_external_id !~ '^[A-Za-z0-9]{1,100}$')
+                                          or (p_dataset is not null and p_dataset <> '' and p_dataset !~ '^[A-Za-z0-9]{1,100}$'))) then
+    raise exception 'invalid run id' using errcode = '22023';
+  end if;
   update public.source_runs r
-     set status = 'running', external_run_id = left(p_external_id, 100), dataset_id = left(p_dataset, 100), started_at = now()
+     set status = 'running', external_run_id = nullif(p_external_id, ''), dataset_id = nullif(p_dataset, ''), started_at = now()
    where r.id = p_run and r.status = 'queued';
   get diagnostics v_n = row_count;
   if v_n = 0 then
@@ -953,7 +953,7 @@ declare
   v_n int;
 begin
   perform public.source_assert_tick(p_tick);
-  if p_cost is not null and p_cost < 0 then
+  if p_cost is not null and (p_cost < 0 or p_cost > 1000) then
     raise exception 'invalid cost' using errcode = '22023';
   end if;
   update public.source_runs r
@@ -996,8 +996,9 @@ begin
   if v_run.kind not in ('maps', 'apollo') then
     raise exception 'invalid kind' using errcode = '22023';
   end if;
-  if p_rows is null or jsonb_typeof(p_rows) <> 'array' or jsonb_array_length(p_rows) > 5000
-     or p_found is null or p_dropped is null or p_found < 0 or p_dropped < 0 or (p_cost is not null and p_cost < 0) then
+  if p_rows is null or jsonb_typeof(p_rows) <> 'array' or jsonb_array_length(p_rows) > v_run.max_results + 20
+     or p_found is null or p_dropped is null or p_found not between 0 and 10000 or p_dropped not between 0 and 10000
+     or (p_cost is not null and (p_cost < 0 or p_cost > 1000)) then
     raise exception 'invalid rows' using errcode = '22023';
   end if;
   v_kind := case v_run.kind when 'maps' then 'apify_maps' else 'apollo' end;
@@ -1006,7 +1007,7 @@ begin
   insert into public.lead_imports (workspace_id, created_by, kind, file_name, list_name, status)
   values (v_run.workspace_id, v_run.requested_by, v_kind,
           case v_run.kind when 'maps' then 'Google Maps (Apify)' else 'Apollo' end,
-          left(case v_run.kind when 'maps' then 'Maps' else 'Apollo' end || ' · ' || v_label, 73) || ' · ' || v_day,
+          left(case v_run.kind when 'maps' then 'Maps' else 'Apollo' end || ' · ' || v_label, 72) || ' · ' || v_day,
           'importing')
   returning id into v_imp;
   v_total := jsonb_array_length(p_rows);
@@ -1039,7 +1040,6 @@ revoke all on function public.set_source_connection(uuid, text, text, text, nume
 revoke all on function public.set_source_cap(uuid, text, numeric) from public, anon;
 revoke all on function public.delete_source_connection(uuid, text) from public, anon;
 revoke all on function public.source_secret(uuid, text) from public, anon, authenticated;
-revoke all on function public.source_secret_for_tick(uuid, text) from public, authenticated;
 revoke all on function public.source_assert_tick(uuid) from public, anon, authenticated;
 revoke all on function public.source_begin_tick() from public, authenticated;
 revoke all on function public.source_finish_tick(uuid, jsonb, text) from public, authenticated;
@@ -1056,7 +1056,6 @@ grant execute on function public.list_source_connections(uuid) to authenticated;
 grant execute on function public.set_source_connection(uuid, text, text, text, numeric) to authenticated;
 grant execute on function public.set_source_cap(uuid, text, numeric) to authenticated;
 grant execute on function public.delete_source_connection(uuid, text) to authenticated;
-grant execute on function public.source_secret_for_tick(uuid, text) to anon;
 grant execute on function public.source_begin_tick() to anon;
 grant execute on function public.source_finish_tick(uuid, jsonb, text) to anon;
 grant execute on function public.source_enqueue_agent_runs(uuid) to anon;

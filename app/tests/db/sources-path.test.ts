@@ -151,6 +151,9 @@ describe("0013 source tick path", () => {
     expect(w.start[0].ciphertext).toBe(SOURCE_CIPHER);
     expect(w.start[0].label).toBe("GCs Worcester");
     expect(w.poll).toEqual([]);
+    // both were claimed by that call and are never handed out again
+    expect((await nextWork(t)).start).toHaveLength(0);
+    await db.admin("update public.source_runs set start_claimed_at = null where workspace_id = $1", [ws]);
     // the cap drops to the minimum while 2 x 0.50 are queued: the oldest still fits, the younger one is refused
     await db.admin("update public.source_runs set created_at = now() - interval '1 minute' where id = $1", [a]);
     await db.admin("update public.source_connections set daily_cap_usd = 0.50 where workspace_id = $1 and provider = 'apify'", [ws]);
@@ -158,6 +161,9 @@ describe("0013 source tick path", () => {
     expect(w.start.map((r) => r.id)).toEqual([a]);
     expect(await runRow(b)).toMatchObject({ status: "refused", error: "source_cap" });
     expect((await runRow(a)).status).toBe("queued");
+    await rpc("select public.source_mark_started($1,$2,'extA','dsA')", [t, a]); // a claimed queued run can be marked started
+    expect((await runRow(a)).status).toBe("running");
+    await db.admin("update public.source_runs set status = 'queued', start_claimed_at = null where id = $1", [a]);
     await db.admin("update public.source_runs set status = 'refused' where id = $1", [a]);
     // a disconnected workspace: queued -> refused 'disconnected', running -> failed 'disconnected'
     await db.admin("update public.source_connections set daily_cap_usd = 5 where workspace_id = $1 and provider = 'apify'", [ws]);
@@ -220,9 +226,69 @@ describe("0013 source tick path", () => {
     // a failed run is closed: it cannot fail or import again
     expect(code((await db.try(clock, "select public.source_mark_failed($1,$2,'x',0)", [t, id])).error)).toBe("22023");
     expect(code((await db.try(clock, "select public.source_import($1,$2,'[]'::jsonb,0,0,0)", [t, id])).error)).toBe("22023");
-    // a never-started run costs nothing; a started run with an unknown cost keeps its reserve
-    const q = await enqueue(owner, ws, "maps", MAPS_QUERY, 50).catch(() => null);
-    expect(q).toBeNull(); // 0.62 + 0.50 > 1.00
+    // an unknown cost: a never-started run costs 0, a started run keeps its reserve
+    await db.admin("update public.source_connections set daily_cap_usd = 20 where workspace_id = $1 and provider = 'apify'", [ws]);
+    const never = await enqueue(owner, ws);
+    const began = await enqueue(owner, ws);
+    await rpc("select public.source_mark_started($1,$2,'ext3','ds3')", [t, began]);
+    await rpc("select public.source_mark_failed($1,$2,'x',null)", [t, never]);
+    await rpc("select public.source_mark_failed($1,$2,'x',null)", [t, began]);
+    expect((await runRow(never)).cost_usd).toBe("0.00");
+    expect((await runRow(began)).cost_usd).toBe("0.50");
+    expect(code((await db.try(clock, "select public.source_mark_failed($1,$2,'x',-1)", [t, never])).error)).toBe("22023");
+    expect(code((await db.try(clock, "select public.source_mark_failed($1,$2,'x',1001)", [t, never])).error)).toBe("22023");
+    await endTick(t);
+  });
+
+  test("next_work claims start rows once; a claim older than 10 minutes fails as start_unknown with its reserve", async () => {
+    const { ws, owner } = await seedSources(db, { apifyCap: 5 });
+    const id = await enqueue(owner, ws);
+    const t1 = await tick();
+    const mine = async (t: string) => (await nextWork(t)).start.filter((r) => r.id === id).map((r) => r.id);
+    expect(await mine(t1)).toEqual([id]);
+    expect(await runRow(id)).toMatchObject({ status: "queued" });
+    // the tick dies; the next one must not start it again
+    await db.admin("update public.source_ticks set lease_until = now() - interval '1 second' where id = $1", [t1]);
+    const t2 = await tick();
+    expect(await mine(t2)).toEqual([]);
+    expect(await runRow(id)).toMatchObject({ status: "queued" });
+    await db.admin("update public.source_runs set start_claimed_at = now() - interval '11 minutes' where id = $1", [id]);
+    expect(await mine(t2)).toEqual([]);
+    expect(await runRow(id)).toMatchObject({ status: "failed", error: "start_unknown", cost_usd: "0.50" });
+    await endTick(t2);
+  });
+
+  test("mark_started validates ids (maps), import bounds rows, found, dropped and cost", async () => {
+    const { ws, owner } = await seedSources(db);
+    const m = await enqueue(owner, ws, "maps", MAPS_QUERY, 5);
+    const a = await enqueue(owner, ws, "apollo", { pages: 1 }, 25);
+    const t = await tick();
+    for (const [ext, ds] of [["bad id", "ds"], ["ok", "d/s"], [null, "ds"], ["ok", null], ["x".repeat(101), "ds"]])
+      expect(code((await db.try(clock, "select public.source_mark_started($1,$2,$3,$4)", [t, m, ext, ds])).error), String(ext)).toBe("22023");
+    await rpc("select public.source_mark_started($1,$2,'Abc123','Ds456')", [t, m]);
+    await rpc("select public.source_mark_started($1,$2,null,null)", [t, a]); // apollo: no external id needed
+    expect(code((await db.try(clock, "select public.source_mark_started($1,$2,'bad id','')", [t, a])).error)).toBe("22023");
+    const many = Array.from({ length: 26 }, (_, i) => row(i + 1, `Firm ${i}`, { website: `https://firm${i}.example` }));
+    const imp = (rows: unknown[], found: number, dropped: number, cost: number | null) =>
+      db.try(clock, "select public.source_import($1,$2,$3::jsonb,$4,$5,$6)", [t, m, JSON.stringify(rows), found, dropped, cost]);
+    expect(code((await imp(many, 26, 0, 0)).error)).toBe("22023"); // max 5 + 20
+    expect(code((await imp([], 10001, 0, 0)).error)).toBe("22023");
+    expect(code((await imp([], 0, 10001, 0)).error)).toBe("22023");
+    expect(code((await imp([], 0, 0, 1001)).error)).toBe("22023");
+    expect(code((await imp([], 0, 0, -0.01)).error)).toBe("22023");
+    expect((await imp(many.slice(0, 25), 25, 0, 0)).error).toBeUndefined();
+    await endTick(t);
+  });
+
+  test("an import list name stays within 80 characters", async () => {
+    const { ws, owner } = await seedSources(db);
+    const id = await enqueue(owner, ws, "maps", { ...MAPS_QUERY, label: "L".repeat(60) });
+    const t = await tick();
+    await rpc("select public.source_mark_started($1,$2,'e1','d1')", [t, id]);
+    await rpc("select public.source_import($1,$2,'[]'::jsonb,0,0,0)", [t, id]).catch(() => null);
+    await tryCommit(db, clock, "select public.source_import($1,$2,'[]'::jsonb,0,0,0)", [t, id]);
+    const name = (await db.admin<{ list_name: string }>("select list_name from public.lead_imports where workspace_id = $1", [ws]))[0].list_name;
+    expect(name.length).toBeLessThanOrEqual(80);
     await endTick(t);
   });
 
@@ -263,7 +329,7 @@ describe("0013 source tick path", () => {
     await endTick(t);
   });
 
-  test("source_import: apollo kind, null cost = reserve, 600 rows in chunks, bad rows roll the whole thing back", async () => {
+  test("source_import: apollo kind, null cost = reserve, 210 rows (max 200 + 20), bad rows roll the whole thing back", async () => {
     const { ws, owner } = await seedSources(db);
     const t = await tick();
     // apollo run
@@ -274,12 +340,12 @@ describe("0013 source tick path", () => {
     expect(ar).toMatchObject({ status: "imported", cost_usd: "0.00" });
     expect((await db.admin<{ kind: string; file_name: string }>("select kind, file_name from public.lead_imports where id = $1", [ar.import_id]))[0]).toEqual({ kind: "apollo", file_name: "Apollo" });
     // maps with null cost -> reserve; 600 rows -> two chunks
-    const m = await enqueue(owner, ws);
+    const m = await enqueue(owner, ws, "maps", MAPS_QUERY, 200);
     await rpc("select public.source_mark_started($1,$2,'m1','d1')", [t, m]);
-    const many = Array.from({ length: 600 }, (_, i) => row(i + 1, `Firm ${i}`, { website: `https://firm${i}.example` }));
-    const res = await rpc<{ r: { new: number; merged: number } }>("select public.source_import($1,$2,$3::jsonb,600,0,null) as r", [t, m, JSON.stringify(many)]);
-    expect(res[0].r).toEqual({ new: 600, merged: 0 });
-    expect(await runRow(m)).toMatchObject({ status: "imported", cost_usd: "0.50" });
+    const many = Array.from({ length: 210 }, (_, i) => row(i + 1, `Firm ${i}`, { website: `https://firm${i}.example` }));
+    const res = await rpc<{ r: { new: number; merged: number } }>("select public.source_import($1,$2,$3::jsonb,210,0,null) as r", [t, m, JSON.stringify(many)]);
+    expect(res[0].r).toEqual({ new: 210, merged: 0 });
+    expect(await runRow(m)).toMatchObject({ status: "imported", cost_usd: "0.80" });
     // a hostile row aborts the call and leaves the run running, no import behind
     const m2 = await enqueue(owner, ws);
     await rpc("select public.source_mark_started($1,$2,'m2','d2')", [t, m2]);

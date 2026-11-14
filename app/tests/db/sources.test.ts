@@ -67,11 +67,7 @@ describe("0013 connections", () => {
     expect(code((await db.try(as(owner), "select public.delete_source_connection($1,'serpapi')", [ws])).error)).toBe("22023");
     // no client reads the stored ciphertext: the old session function is gone, the tick path needs the clock's token
     expect(code((await db.try(as(owner), "select public.source_secret($1,'apify')", [ws])).error)).toBe("42501");
-    expect((await db.try(as(owner), "select public.source_secret_for_tick($1,'apify')", [ws])).error?.message).toMatch(/permission denied/);
-    expect(code((await db.try(anon, "select public.source_secret_for_tick($1,'apify')", [ws])).error)).toBe("42501");
-    await setSchedulerToken(db, TOKEN);
-    expect((await db.query<{ s: string }>(clock, "select public.source_secret_for_tick($1,'apify') as s", [ws]))[0].s).toBe(SOURCE_CIPHER);
-    expect((await db.query<{ s: string | null }>(clock, "select public.source_secret_for_tick($1,'serpapi') as s", [ws]))[0].s).toBeNull();
+    expect(code((await db.try(anon, "select public.source_secret_for_tick($1,'apify')", [ws])).error)).toBe("42883"); // dropped: next_work carries the ciphertext
     // a new key keeps the cap
     await db.query(as(owner), "select public.set_source_connection($1,'apify',$2,'ZZ99',null)", [ws, SOURCE_CIPHER]);
     const c = (await db.query<{ last4: string; daily_cap_usd: string }>(as(owner), "select * from public.list_source_connections($1) where provider = 'apify'", [ws]))[0];
