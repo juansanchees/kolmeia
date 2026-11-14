@@ -8,7 +8,7 @@ import { anonWithToken, setSchedulerToken, type TestDb } from "../db/helpers";
 export function pgRpc(db: TestDb, token: string): RpcFn {
   const actor = anonWithToken(token);
   return async (fn, args) => {
-    if (!/^hunter_[a-z_]+$/.test(fn)) throw new Error(`not a hunter function: ${fn}`);
+    if (!/^(hunter|qualifier|source)_[a-z_]+$/.test(fn)) throw new Error(`not a tick function: ${fn}`);
     const keys = Object.keys(args);
     const params = keys.map((k) => {
       const v = args[k];

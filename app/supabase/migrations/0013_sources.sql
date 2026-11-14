@@ -689,6 +689,345 @@ begin
 end;
 $$;
 
+-- ---------------------------------------------------------------- token-gated tick path (source_*)
+-- Like 0010's hunter_*: SECURITY DEFINER, granted to anon only, every entry point first checks scheduler_authorized()
+-- (the clock's token header). The clock decrypts keys in memory; ciphertext leaves the database only through
+-- source_next_work and source_secret_for_tick, both token-gated.
+create table if not exists public.source_ticks (
+  id uuid primary key default gen_random_uuid(),
+  started_at timestamptz not null default now(),
+  lease_until timestamptz not null,
+  finished_at timestamptz,
+  counts jsonb not null default '{}'::jsonb,
+  error text constraint source_ticks_error check (char_length(error) <= 60)
+);
+create index if not exists source_ticks_started_idx on public.source_ticks (started_at desc);
+alter table public.source_ticks enable row level security;
+alter table public.source_ticks force row level security;
+revoke all on table public.source_ticks from public, anon, authenticated;
+
+-- token + open tick, else 42501 / 55000. Not SECURITY DEFINER: runs with the rights of the entry point.
+create or replace function public.source_assert_tick(p_tick uuid)
+returns void
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if not public.scheduler_authorized() then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  if not exists (select 1 from public.source_ticks t where t.id = p_tick and t.finished_at is null and t.lease_until > now()) then
+    raise exception 'tick is not open' using errcode = '55000';
+  end if;
+end;
+$$;
+
+create or replace function public.source_begin_tick()
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_id uuid;
+begin
+  if not public.scheduler_authorized() then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  perform pg_advisory_xact_lock(hashtext('source:tick'));
+  delete from public.source_ticks where started_at < now() - interval '30 days';
+  if exists (select 1 from public.source_ticks t where t.finished_at is null and t.lease_until > now()) then
+    return jsonb_build_object('tick_id', null, 'busy', true);
+  end if;
+  update public.source_ticks set finished_at = now(), error = 'lease_expired' where finished_at is null;
+  insert into public.source_ticks (lease_until) values (now() + interval '330 seconds') returning id into v_id;
+  return jsonb_build_object('tick_id', v_id, 'busy', false);
+end;
+$$;
+
+create or replace function public.source_finish_tick(p_tick uuid, p_counts jsonb, p_error text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_counts jsonb;
+  v_n integer;
+begin
+  if not public.scheduler_authorized() then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  select coalesce(jsonb_object_agg(e.key, least(greatest((e.value #>> '{}')::numeric, 0), 100000)), '{}'::jsonb) into v_counts
+    from (
+      select j.key, j.value
+        from jsonb_each(case when jsonb_typeof(p_counts) = 'object' then p_counts else '{}'::jsonb end) j
+       where jsonb_typeof(j.value) = 'number' and j.key ~ '^[a-zA-Z_]{1,30}$'
+       limit 10
+    ) e;
+  update public.source_ticks t
+     set finished_at = now(), counts = v_counts, error = left(p_error, 60)
+   where t.id = p_tick and t.finished_at is null;
+  get diagnostics v_n = row_count;
+  if v_n = 0 then
+    raise exception 'tick is not open' using errcode = '55000';
+  end if;
+end;
+$$;
+
+-- Caçador runs that are running now (created < 24 h ago): one queued search per kind its agent turned on, once.
+-- Over the cap -> a 'refused source_cap' row (shows in the history). Returns the number of rows inserted.
+create or replace function public.source_enqueue_agent_runs(p_tick uuid)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v record;
+  v_kind text;
+  v_provider text;
+  v_query jsonb;
+  v_max int;
+  v_reserve numeric(8,2);
+  v_conn public.source_connections;
+  v_over boolean;
+  v_n int := 0;
+  v_label text;
+begin
+  perform public.source_assert_tick(p_tick);
+  for v in
+    select r.id as run_id, r.workspace_id, r.created_by, a.id as agent_id, a.name, s.*
+      from public.research_runs r
+      join public.agents a on a.id = r.agent_id and a.type = 'hunter' and a.archived_at is null and a.workspace_id = r.workspace_id
+      join public.agent_source_settings s on s.agent_id = a.id and s.workspace_id = r.workspace_id
+     where r.status = 'running' and r.created_at > now() - interval '24 hours'
+       and (s.maps_on or s.apollo_on)
+     order by r.created_at, r.id
+  loop
+    perform pg_advisory_xact_lock(hashtext('source:' || v.workspace_id::text));
+    v_label := left(v.name, 60);
+    foreach v_kind in array array['maps', 'apollo'] loop
+      if (v_kind = 'maps' and not v.maps_on) or (v_kind = 'apollo' and not v.apollo_on) then
+        continue;
+      end if;
+      v_provider := case v_kind when 'maps' then 'apify' else 'apollo' end;
+      select * into v_conn from public.source_connections c where c.workspace_id = v.workspace_id and c.provider = v_provider;
+      if not found then
+        continue;
+      end if;
+      if exists (select 1 from public.source_runs x where x.research_run_id = v.run_id and x.kind = v_kind) then
+        continue;
+      end if;
+      if v_kind = 'maps' then
+        v_query := jsonb_build_object('terms', to_jsonb(v.maps_terms), 'location', v.maps_location, 'label', v_label);
+        v_max := v.maps_max;
+        v_reserve := greatest(0.50, ceil(v_max * 0.004 * 100) / 100);
+        v_over := public.source_spent_today(v.workspace_id) + v_reserve > coalesce(v_conn.daily_cap_usd, 2.00);
+      else
+        v_query := jsonb_build_object('locations', to_jsonb(v.apollo_locations), 'naics', to_jsonb(v.apollo_naics), 'pages', v.apollo_pages, 'label', v_label);
+        v_max := v.apollo_pages * 25;
+        v_reserve := 0;
+        v_over := public.source_calls_today(v.workspace_id) >= coalesce(v_conn.daily_calls, 20);
+      end if;
+      insert into public.source_runs (workspace_id, provider, kind, agent_id, research_run_id, requested_by, query, max_results, reserve_usd, status, error, finished_at)
+      values (v.workspace_id, v_provider, v_kind, v.agent_id, v.run_id, v.created_by, v_query, v_max, v_reserve,
+              case when v_over then 'refused' else 'queued' end,
+              case when v_over then 'source_cap' end,
+              case when v_over then now() end)
+      on conflict (research_run_id, kind) where research_run_id is not null do nothing;
+      if found then
+        v_n := v_n + 1;
+      end if;
+    end loop;
+  end loop;
+  return v_n;
+end;
+$$;
+
+-- What to do now: { start: [<=3 oldest queued, cap re-checked], poll: [<=10 running, oldest started] }, each with the
+-- workspace's ciphertext. A queued run whose key is gone becomes refused 'disconnected'; one over the cap, 'source_cap'.
+-- A running run whose key is gone becomes failed 'disconnected'.
+create or replace function public.source_next_work(p_tick uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v record;
+  v_ct text;
+  v_cap_usd numeric;
+  v_cap_calls integer;
+  v_over boolean;
+  v_start jsonb := '[]'::jsonb;
+  v_poll jsonb := '[]'::jsonb;
+  v_n int := 0;
+begin
+  perform public.source_assert_tick(p_tick);
+  for v in
+    select r.* from public.source_runs r where r.status = 'queued' order by r.created_at, r.id
+  loop
+    exit when v_n >= 3;
+    perform pg_advisory_xact_lock(hashtext('source:' || v.workspace_id::text));
+    -- re-read under the lock: a client may have changed it meanwhile
+    if not exists (select 1 from public.source_runs r where r.id = v.id and r.status = 'queued') then
+      continue;
+    end if;
+    select c.secret_ciphertext, c.daily_cap_usd, c.daily_calls into v_ct, v_cap_usd, v_cap_calls
+      from public.source_connections c where c.workspace_id = v.workspace_id and c.provider = v.provider;
+    if v_ct is null then
+      update public.source_runs set status = 'refused', error = 'disconnected', finished_at = now() where id = v.id;
+      continue;
+    end if;
+    -- the queued run already counts in today's total: over the cap only if the total up to this run (younger queued
+    -- runs left out, so the oldest keep their place) exceeds it
+    if v.provider = 'apify' then
+      v_over := public.source_spent_today(v.workspace_id) - coalesce((
+          select sum(x.reserve_usd) from public.source_runs x
+           where x.workspace_id = v.workspace_id and x.provider = 'apify' and x.status = 'queued' and (x.created_at, x.id) > (v.created_at, v.id)), 0)
+        > coalesce(v_cap_usd, 2.00);
+    else
+      v_over := public.source_calls_today(v.workspace_id) - (
+          select count(*) from public.source_runs x
+           where x.workspace_id = v.workspace_id and x.provider = 'apollo' and x.status = 'queued' and (x.created_at, x.id) > (v.created_at, v.id))
+        > coalesce(v_cap_calls, 20);
+    end if;
+    if v_over then
+      update public.source_runs set status = 'refused', error = 'source_cap', finished_at = now() where id = v.id;
+      continue;
+    end if;
+    v_n := v_n + 1;
+    v_start := v_start || jsonb_build_array(jsonb_build_object(
+      'id', v.id, 'workspace_id', v.workspace_id, 'provider', v.provider, 'kind', v.kind, 'query', v.query,
+      'max_results', v.max_results, 'reserve_usd', v.reserve_usd, 'external_run_id', v.external_run_id,
+      'dataset_id', v.dataset_id, 'started_at', v.started_at, 'label', v.query ->> 'label', 'ciphertext', v_ct));
+  end loop;
+
+  for v in
+    select r.* from public.source_runs r where r.status = 'running' order by r.started_at nulls first, r.id limit 10
+  loop
+    select c.secret_ciphertext into v_ct from public.source_connections c where c.workspace_id = v.workspace_id and c.provider = v.provider;
+    if v_ct is null then
+      update public.source_runs set status = 'failed', error = 'disconnected', finished_at = now(), cost_usd = coalesce(cost_usd, reserve_usd) where id = v.id;
+      continue;
+    end if;
+    v_poll := v_poll || jsonb_build_array(jsonb_build_object(
+      'id', v.id, 'workspace_id', v.workspace_id, 'provider', v.provider, 'kind', v.kind, 'query', v.query,
+      'max_results', v.max_results, 'reserve_usd', v.reserve_usd, 'external_run_id', v.external_run_id,
+      'dataset_id', v.dataset_id, 'started_at', v.started_at, 'label', v.query ->> 'label', 'ciphertext', v_ct));
+  end loop;
+  return jsonb_build_object('start', v_start, 'poll', v_poll);
+end;
+$$;
+
+create or replace function public.source_mark_started(p_tick uuid, p_run uuid, p_external_id text, p_dataset text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_n int;
+begin
+  perform public.source_assert_tick(p_tick);
+  update public.source_runs r
+     set status = 'running', external_run_id = left(p_external_id, 100), dataset_id = left(p_dataset, 100), started_at = now()
+   where r.id = p_run and r.status = 'queued';
+  get diagnostics v_n = row_count;
+  if v_n = 0 then
+    raise exception 'run is not queued' using errcode = '22023';
+  end if;
+end;
+$$;
+
+-- Settles a run that did not deliver: failed, reserve freed, cost = what the provider charged. A null cost counts the
+-- reserve for a run that started (it may have been billed) and 0 for one that never started.
+create or replace function public.source_mark_failed(p_tick uuid, p_run uuid, p_error text, p_cost numeric)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_n int;
+begin
+  perform public.source_assert_tick(p_tick);
+  if p_cost is not null and p_cost < 0 then
+    raise exception 'invalid cost' using errcode = '22023';
+  end if;
+  update public.source_runs r
+     set status = 'failed', error = left(coalesce(nullif(btrim(p_error), ''), 'failed'), 60), finished_at = now(),
+         cost_usd = round(coalesce(p_cost, case when r.status = 'queued' then 0 else r.reserve_usd end), 2)
+   where r.id = p_run and ((r.status in ('queued', 'running')) or (r.status = 'succeeded' and r.import_id is null));
+  get diagnostics v_n = row_count;
+  if v_n = 0 then
+    raise exception 'run is not open' using errcode = '22023';
+  end if;
+end;
+$$;
+
+-- Imports a finished run's rows once. Only from running, or succeeded without an import (else 22023): a second call
+-- cannot import twice. The import is created and filled in this one transaction, so no finish/undo can touch it
+-- half-way; the core still refuses (22023) any import that is not 'importing'. Returns { new, merged }.
+create or replace function public.source_import(p_tick uuid, p_run uuid, p_rows jsonb, p_found int, p_dropped int, p_cost numeric)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_run public.source_runs;
+  v_imp uuid;
+  v_kind text;
+  v_label text;
+  v_total int;
+  v_off int := 0;
+  v_new int := 0;
+  v_merged int := 0;
+  v_res jsonb;
+  v_day text;
+begin
+  perform public.source_assert_tick(p_tick);
+  select * into v_run from public.source_runs r where r.id = p_run for update;
+  if not found or not (v_run.status = 'running' or (v_run.status = 'succeeded' and v_run.import_id is null)) or v_run.import_id is not null then
+    raise exception 'run is not importable' using errcode = '22023';
+  end if;
+  if v_run.kind not in ('maps', 'apollo') then
+    raise exception 'invalid kind' using errcode = '22023';
+  end if;
+  if p_rows is null or jsonb_typeof(p_rows) <> 'array' or jsonb_array_length(p_rows) > 5000
+     or p_found is null or p_dropped is null or p_found < 0 or p_dropped < 0 or (p_cost is not null and p_cost < 0) then
+    raise exception 'invalid rows' using errcode = '22023';
+  end if;
+  v_kind := case v_run.kind when 'maps' then 'apify_maps' else 'apollo' end;
+  v_label := coalesce(nullif(btrim(v_run.query ->> 'label'), ''), case v_run.kind when 'maps' then 'busca' else 'busca' end);
+  v_day := to_char(now() at time zone 'America/New_York', 'DD/MM');
+  insert into public.lead_imports (workspace_id, created_by, kind, file_name, list_name, status)
+  values (v_run.workspace_id, v_run.requested_by, v_kind,
+          case v_run.kind when 'maps' then 'Google Maps (Apify)' else 'Apollo' end,
+          left(case v_run.kind when 'maps' then 'Maps' else 'Apollo' end || ' · ' || v_label, 73) || ' · ' || v_day,
+          'importing')
+  returning id into v_imp;
+  v_total := jsonb_array_length(p_rows);
+  while v_off < v_total loop
+    select coalesce(jsonb_agg(e.value order by e.ord), '[]'::jsonb) into v_res
+      from jsonb_array_elements(p_rows) with ordinality e(value, ord)
+     where e.ord > v_off and e.ord <= v_off + 500;
+    v_res := public.import_rows_core(v_imp, v_res, v_kind);
+    v_new := v_new + (v_res ->> 'new')::int;
+    v_merged := v_merged + (v_res ->> 'merged')::int;
+    v_off := v_off + 500;
+  end loop;
+  update public.lead_imports set status = 'done', finished_at = now() where id = v_imp and status = 'importing';
+  update public.source_runs
+     set status = 'imported', import_id = v_imp, found = p_found, dropped = p_dropped, finished_at = now(),
+         cost_usd = round(coalesce(p_cost, reserve_usd), 2)
+   where id = p_run;
+  return jsonb_build_object('new', v_new, 'merged', v_merged);
+end;
+$$;
+
 -- ---------------------------------------------------------------- privileges and RLS
 revoke all on function public.source_array_ok(text[], int, int, text) from public, anon, authenticated;
 revoke all on function public.source_day_start() from public, anon, authenticated;
@@ -701,6 +1040,14 @@ revoke all on function public.set_source_cap(uuid, text, numeric) from public, a
 revoke all on function public.delete_source_connection(uuid, text) from public, anon;
 revoke all on function public.source_secret(uuid, text) from public, anon, authenticated;
 revoke all on function public.source_secret_for_tick(uuid, text) from public, authenticated;
+revoke all on function public.source_assert_tick(uuid) from public, anon, authenticated;
+revoke all on function public.source_begin_tick() from public, authenticated;
+revoke all on function public.source_finish_tick(uuid, jsonb, text) from public, authenticated;
+revoke all on function public.source_enqueue_agent_runs(uuid) from public, authenticated;
+revoke all on function public.source_next_work(uuid) from public, authenticated;
+revoke all on function public.source_mark_started(uuid, uuid, text, text) from public, authenticated;
+revoke all on function public.source_mark_failed(uuid, uuid, text, numeric) from public, authenticated;
+revoke all on function public.source_import(uuid, uuid, jsonb, int, int, numeric) from public, authenticated;
 revoke all on function public.set_agent_source_settings(uuid, jsonb) from public, anon;
 revoke all on function public.enqueue_source_run(uuid, text, jsonb, int) from public, anon;
 revoke all on function public.import_lead_rows(uuid, jsonb) from public, anon;
@@ -710,6 +1057,13 @@ grant execute on function public.set_source_connection(uuid, text, text, text, n
 grant execute on function public.set_source_cap(uuid, text, numeric) to authenticated;
 grant execute on function public.delete_source_connection(uuid, text) to authenticated;
 grant execute on function public.source_secret_for_tick(uuid, text) to anon;
+grant execute on function public.source_begin_tick() to anon;
+grant execute on function public.source_finish_tick(uuid, jsonb, text) to anon;
+grant execute on function public.source_enqueue_agent_runs(uuid) to anon;
+grant execute on function public.source_next_work(uuid) to anon;
+grant execute on function public.source_mark_started(uuid, uuid, text, text) to anon;
+grant execute on function public.source_mark_failed(uuid, uuid, text, numeric) to anon;
+grant execute on function public.source_import(uuid, uuid, jsonb, int, int, numeric) to anon;
 grant execute on function public.set_agent_source_settings(uuid, jsonb) to authenticated;
 grant execute on function public.enqueue_source_run(uuid, text, jsonb, int) to authenticated;
 grant execute on function public.import_lead_rows(uuid, jsonb) to authenticated;
