@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ID_CHUNK, inChunks, listLeads } from "@/lib/leads/queries";
+import { ID_CHUNK, getLead, inChunks, listLeads } from "@/lib/leads/queries";
 
 describe("F3a leads reads", () => {
   it("inChunks: 250 ids -> 3 requests of at most 100, merged in order", async () => {
@@ -28,6 +28,11 @@ describe("F3a leads reads", () => {
           select: () => q, eq: () => q, not: () => q, order: () => q, limit: () => q,
           in: (_col: string, ids: string[]) => {
             calls[table] = (calls[table] ?? 0) + 1;
+            if (table === "research_checks") {
+              const ev = [{ url: "https://x.test", title: "t", excerpt: "e", seen_at: "2026-11-01T00:00:00Z" }];
+              const data = ids.includes("c0") ? [{ id: "k1", candidate_id: "c0", result: "ok", research_evidence: ev }, { id: "k2", candidate_id: "c0", result: "no", research_evidence: ev }] : [];
+              return Promise.resolve({ data, error: null });
+            }
             const data = table === "research_candidates" ? ids.filter((id) => id !== "c7").map((id) => ({ id, name: `N ${id}` })) : [];
             return Promise.resolve({ data, error: null });
           },
@@ -40,6 +45,32 @@ describe("F3a leads reads", () => {
     expect(calls).toEqual({ research_candidates: 3, research_checks: 3 });
     expect(items).toHaveLength(249);
     expect(items.find((i) => i.lead.id === "l7")).toBeUndefined();
-    expect(items[0].proofOk).toBe(0);
+    expect(items.find((i) => i.lead.id === "l0")?.proofOk).toBe(1);
+    expect(items.find((i) => i.lead.id === "l1")?.proofOk).toBe(0);
+  });
+
+  it("getLead: checks from several chunks come back in created_at order", async () => {
+    const cands = Array.from({ length: 150 }, (_, i) => ({ id: `c${i}`, name: `N${i}`, research_runs: { title: "R", created_at: "2026-11-01T00:00:00Z" } }));
+    const db = {
+      from(table: string) {
+        const q = {
+          select: () => q, eq: () => q, order: () => q,
+          maybeSingle: () => Promise.resolve({ data: { id: "l1", origin_agent_id: null }, error: null }),
+          in: (_col: string, ids: string[]) => {
+            const res = Promise.resolve({
+              data: ids.includes("c0")
+                ? [{ id: "k-b", candidate_id: "c0", created_at: "2026-11-03T00:00:00Z", research_evidence: [] }, { id: "k-d", candidate_id: "c0", created_at: "2026-11-05T00:00:00Z", research_evidence: [] }]
+                : [{ id: "k-a", candidate_id: "c120", created_at: "2026-11-02T00:00:00Z", research_evidence: [] }, { id: "k-c", candidate_id: "c120", created_at: "2026-11-04T00:00:00Z", research_evidence: [] }],
+              error: null,
+            });
+            return Object.assign(res, { order: () => res });
+          },
+          then: (res: (v: unknown) => unknown) => res({ data: table === "research_candidates" ? cands : [], error: null }),
+        };
+        return q;
+      },
+    };
+    const d = await getLead(db as never, "l1");
+    expect(d?.checks.map((c) => c.id)).toEqual(["k-a", "k-b", "k-c", "k-d"]);
   });
 });

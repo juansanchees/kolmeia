@@ -11,6 +11,7 @@ import { LEAD_COLUMNS, type LeadDetail, type LeadListItem, type LeadRow } from "
  */
 export const ID_CHUNK = 100;
 
+/** The `as never` casts below exist because the Supabase builder is a PromiseLike with its own generics; inChunks only needs { data, error }. */
 /** Runs `run` for each chunk of ids in parallel and concatenates the rows; throws on the first error. */
 export async function inChunks<T>(
   ids: string[],
@@ -28,7 +29,7 @@ export async function inChunks<T>(
   return out;
 }
 
-const CHECK_SELECT = "id, candidate_id, kind, pass, result, summary, research_evidence(url, title, excerpt, seen_at)";
+const CHECK_SELECT = "id, candidate_id, kind, pass, result, summary, created_at, research_evidence(url, title, excerpt, seen_at)";
 
 type RawCheck = Record<string, unknown> & { research_evidence: CheckWithEvidence["evidence"] | null };
 
@@ -108,12 +109,13 @@ export async function getLead(db: SupabaseClient, id: string): Promise<LeadDetai
     agentName = (data as { name: string } | null)?.name ?? null;
   }
 
-  const checks = toChecks(
-    await inChunks<unknown>(
-      candidates.map((c) => c.id),
-      (c) => db.from("research_checks").select(CHECK_SELECT).in("candidate_id", c).order("created_at", { ascending: true }) as never,
-      "getLead checks",
-    ),
+  // Each chunk is ordered by the database, the concatenation is not: sort the merged rows by created_at.
+  const rawChecks = await inChunks<Record<string, unknown>>(
+    candidates.map((c) => c.id),
+    (c) => db.from("research_checks").select(CHECK_SELECT).in("candidate_id", c).order("created_at", { ascending: true }) as never,
+    "getLead checks",
   );
+  rawChecks.sort((a, b) => Date.parse(String(a.created_at)) - Date.parse(String(b.created_at)));
+  const checks = toChecks(rawChecks);
   return { lead, agentName, candidates, checks };
 }
