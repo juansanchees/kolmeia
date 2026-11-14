@@ -13,6 +13,10 @@ export type AiErrorCode =
   | "run_cap"
   /** The run's time cap passed (checked by the database against the trigger-owned started_at). */
   | "run_time"
+  /** The Qualificador's own daily cap (America/New_York day). */
+  | "qualifier_daily"
+  /** The cap of one lead in the Qualificador. */
+  | "lead_cap"
   | "refused"
   | "invalid_output"
   | "truncated"
@@ -42,6 +46,8 @@ export const STOP_CODES: ReadonlySet<AiErrorCode> = new Set([
   "global_cap",
   "run_cap",
   "run_time",
+  "qualifier_daily",
+  "lead_cap",
   "refused",
 ]);
 
@@ -63,7 +69,7 @@ export class AiTransportFailure extends Error {
   }
 }
 
-const CAP_CODES = new Set<AiErrorCode>(["no_access", "daily_cap", "user_cap", "global_cap", "run_cap", "run_time"]);
+const CAP_CODES = new Set<AiErrorCode>(["no_access", "daily_cap", "user_cap", "global_cap", "run_cap", "run_time", "qualifier_daily", "lead_cap"]);
 
 /** reserve_ai_call raises "ai_cap:<code>"; turns that database message into the typed error (null otherwise). */
 export function aiCapErrorFrom(message: string | null | undefined): AiError | null {

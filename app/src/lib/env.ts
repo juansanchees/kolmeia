@@ -27,6 +27,8 @@ export const envSchema = z.object({
   MAILBOX_ENC_KEY: opt,
   MAILBOX_ENC_KEY_PREVIOUS: opt,
   APP_PUBLIC_ORIGIN: opt,
+  /** Server-only, optional: Google Places key for the Qualificador's P3 step. Read only in src/lib/qualifier/places-config.ts. */
+  GOOGLE_PLACES_API_KEY: opt,
 });
 
 const publicEnvSchema = envSchema.pick({ NEXT_PUBLIC_SUPABASE_URL: true, NEXT_PUBLIC_SUPABASE_ANON_KEY: true });

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireSender } from "@/lib/workspace";
 import { hasAi } from "@/lib/ai/config";
+import { hasPlaces } from "@/lib/qualifier/places-config";
 import { createClient } from "@/lib/supabase/server";
 import { SupabaseAgentStore } from "@/lib/agents/store";
 import type { AgentRow } from "@/lib/agents/types";
@@ -36,9 +37,8 @@ export default async function AgentsPage() {
   }
   return (
     <div className="flex flex-col gap-8">
-      {/* Places (Task 6) is off until its key check lands */}
       {qualifierFailed && <Notice tone="warn">{t.qualifier.statusFailed}</Notice>}
-      {qualifier && <QualifierCard status={qualifier} placesOn={false} />}
+      {qualifier && <QualifierCard status={qualifier} placesOn={hasPlaces()} />}
       <section aria-labelledby="mine" className="flex flex-col gap-3">
         <h2 id="mine" className="text-2xl">
           {t.agents.mine}

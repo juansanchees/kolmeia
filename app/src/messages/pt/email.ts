@@ -345,6 +345,8 @@ export const email = {
     user_cap: "Seu teto diário pessoal de gasto com IA foi atingido. Continue amanhã.",
     global_cap: "O teto diário de gasto com IA do sistema foi atingido. Continue amanhã.",
     run_time: aiMessages.runTime,
+    qualifier_daily: aiMessages.qualifierDaily,
+    lead_cap: aiMessages.leadCap,
     refused: "A IA recusou este pedido.",
     invalid_output: "A IA devolveu algo fora do formato. Tentando de novo…",
     truncated: "A resposta da IA foi cortada. Tentando de novo…",

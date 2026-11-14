@@ -7,6 +7,8 @@ export const ai = {
   runTime: "O tempo máximo desta pesquisa acabou. Ela parou e entregou o que já tinha, marcado como parcial.",
   dailyCap: "O teto diário de gasto com IA deste espaço foi atingido. A pesquisa ficou pausada; continue amanhã ou peça ao dono para subir o teto.",
   runCap: "O teto de custo desta pesquisa foi atingido. Ela parou e entregou o que já tinha, marcado como parcial.",
+  qualifierDaily: "O teto do dia do Qualificador foi atingido. Ele volta sozinho à meia-noite (horário de Nova York).",
+  leadCap: "Este lead atingiu o teto de gasto do Qualificador. Ele parou nele.",
   refused: "A IA recusou este pedido. Reescreva o pedido e tente de novo.",
   invalidOutput: "A IA devolveu uma resposta fora do formato esperado. Tentamos de novo no próximo passo.",
   truncated: "A resposta da IA foi cortada antes do fim. Tentamos de novo no próximo passo.",

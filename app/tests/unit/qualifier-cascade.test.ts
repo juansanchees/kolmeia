@@ -2,6 +2,10 @@ import { describe, expect, test, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 const { qualifyLead } = await import("@/lib/qualifier/cascade");
+import { AiError } from "@/lib/ai/errors";
+import type { AiLedger } from "@/lib/ai/gateway";
+import type { PlaceHit, PlacesClient } from "@/lib/qualifier/types";
+import { FakeTransport } from "../engine/fake-ai";
 import { fakeHttp, fakeQualifierStore, field, htmlPage, snapshot } from "./qualifier-fakes";
 
 const SITE = "https://acme-hvac.test/";
@@ -155,5 +159,166 @@ describe("qualifyLead free cascade", () => {
     const store = fakeQualifierStore([]);
     await qualifyLead(snapshot({ nextStep: "p4" }), deps(store, undefined, { transport: {} }));
     expect(steps(store)).toEqual(["p4:skipped:p5:", "p5:skipped:done:complete"]);
+  });
+});
+
+// ---------------------------------------------------------------- P3 Places and P4 IA leve
+const HIT: PlaceHit = { placeId: "pl_1", name: "Acme HVAC", address: "12 Main Street, Worcester, MA", phone: "(508) 555-0142", website: SITE, status: "OPERATIONAL" };
+const places = (hit: PlaceHit | null) => {
+  const calls: unknown[] = [];
+  const client: PlacesClient = {
+    async search(q) {
+      calls.push(q);
+      return hit;
+    },
+  };
+  return { client, calls };
+};
+const NAME_ONLY = { name: "Acme HVAC", website: null, phone: null, city: "Worcester", state: "MA" };
+const added = (store: { log: unknown[][] }) => store.log.filter((l) => l[0] === "addFields").flatMap((l) => l[2] as { field: string; value: string; source: string; status: string; source_ref?: string }[]);
+
+describe("P3 Places", () => {
+  test("P3 off without a key says places_off and the cascade goes on", async () => {
+    const store = fakeQualifierStore([]);
+    const r = await qualifyLead(snapshot({ nextStep: "p3", best: NAME_ONLY }), deps(store));
+    expect(r.result).toBe("done");
+    expect(steps(store)).toEqual(["p3:places_off:p4:", "p4:no_ai:p5:", "p5:no_ai:done:complete"]);
+    expect(store.log.some((l) => l[0] === "reservePlaces")).toBe(false);
+  });
+
+  test("P3 stores only the place_id and values another source confirms (K-5); a found website is read by P2 in the same pass", async () => {
+    const store = fakeQualifierStore([]);
+    const http = fakeHttp({ [SITE]: PAGE });
+    const p = places(HIT);
+    const s = snapshot({ nextStep: "p3", best: NAME_ONLY, fields: [field({ field: "phone", value: "5085550142" })] });
+    const r = await qualifyLead(s, deps(store, http, { places: p.client }));
+    expect(r.result).toBe("done");
+    expect(p.calls).toEqual([{ name: "Acme HVAC", city: "Worcester", state: "MA" }]);
+    expect(store.log.find((l) => l[0] === "reservePlaces")!.slice(1)).toEqual(["lead-1", 0.04]);
+    expect(store.log.find((l) => l[0] === "settlePlaces")!.slice(1)).toEqual(["lead-1", "res-1", 0.04, true]);
+    const rows = added(store);
+    expect(rows.find((a) => a.field === "place_id")).toMatchObject({ value: "pl_1", source: "places", status: "unverified" });
+    // the phone is confirmed by a second source (the import already had it); the address is only Places' word: not stored from Places
+    expect(rows.find((a) => a.field === "phone" && a.source === "places")).toMatchObject({ status: "confirmed" });
+    expect(rows.some((a) => a.source === "places" && a.field === "address")).toBe(false);
+    // the Places website is not stored (nobody else showed it), but the site was read and its own facts were kept
+    expect(rows.some((a) => a.field === "website")).toBe(false);
+    expect(http.calls).toContain(SITE);
+    expect(rows.find((a) => a.field === "email")).toMatchObject({ value: "hello@acme-hvac.test", source: "site", source_ref: SITE });
+    expect(steps(store)).toEqual(["p3:ok:p4:", "p4:no_ai:p5:", "p5:no_ai:done:complete"]);
+  });
+
+  test("P3: a closed place with nothing else to reach is dead; with a phone it goes on; level 2+ and a lead without a name skip it", async () => {
+    const closed = { ...HIT, status: "CLOSED_PERMANENTLY" as const, website: null, phone: null };
+    const dead = fakeQualifierStore([]);
+    const r = await qualifyLead(snapshot({ nextStep: "p3", best: NAME_ONLY }), deps(dead, undefined, { places: places(closed).client }));
+    expect(r.result).toBe("done");
+    expect(steps(dead)).toEqual(["p3:closed:done:dead"]);
+    expect(added(dead).find((a) => a.field === "place_id")).toBeTruthy();
+    const alive = fakeQualifierStore([]);
+    await qualifyLead(snapshot({ nextStep: "p3", best: NAME_ONLY, fields: [field({ field: "phone", value: "5085550100" })] }), deps(alive, undefined, { places: places(closed).client }));
+    expect(steps(alive)[0]).toBe("p3:closed:p4:");
+    const lvl = places(HIT);
+    const high = fakeQualifierStore([]);
+    await qualifyLead(snapshot({ nextStep: "p3", level: 2, best: NAME_ONLY }), deps(high, undefined, { places: lvl.client }));
+    expect(steps(high)[0]).toBe("p3:skipped:p4:");
+    await qualifyLead(snapshot({ nextStep: "p3", best: { ...NAME_ONLY, name: null } }), deps(fakeQualifierStore([]), undefined, { places: lvl.client }));
+    expect(lvl.calls).toEqual([]);
+  });
+
+  test("P3: nothing found after a dead site is dead; nothing found otherwise is just ok", async () => {
+    const http = fakeHttp({ [SITE]: { status: 404 } });
+    const web = field({ field: "website", value: SITE });
+    const dead = fakeQualifierStore([]);
+    const r = await qualifyLead(snapshot({ nextStep: "p2", fields: [web], best: NAME_ONLY }), deps(dead, http, { places: places(null).client }));
+    expect(r.result).toBe("done");
+    expect(steps(dead)).toEqual(["p2:site_down:p3:", "p3:ok:done:dead"]);
+    const plain = fakeQualifierStore([]);
+    await qualifyLead(snapshot({ nextStep: "p3", best: NAME_ONLY }), deps(plain, undefined, { places: places(null).client }));
+    expect(steps(plain)[0]).toBe("p3:ok:p4:");
+  });
+
+  test("P3: a cap while reserving pauses or ends the lead; a failed call settles at zero and counts as a step error", async () => {
+    const daily = fakeQualifierStore([], { failOn: { reservePlaces: new AiError("qualifier_daily") } });
+    const r = await qualifyLead(snapshot({ nextStep: "p3", best: NAME_ONLY }), deps(daily, undefined, { places: places(HIT).client }));
+    expect(r).toMatchObject({ result: "paused", pauseReason: "daily_cap" });
+    expect(steps(daily)).toEqual([]);
+    const cap = fakeQualifierStore([], { failOn: { reservePlaces: new AiError("lead_cap") } });
+    const r2 = await qualifyLead(snapshot({ nextStep: "p3", best: NAME_ONLY }), deps(cap, undefined, { places: places(HIT).client }));
+    expect(r2.result).toBe("done");
+    expect(steps(cap)).toEqual(["p3:lead_cap:done:lead_cap"]);
+    const boom = fakeQualifierStore([]);
+    const failing: PlacesClient = { search: () => Promise.reject(Object.assign(new Error("places_http_500"), { status: 500 })) };
+    const r3 = await qualifyLead(snapshot({ nextStep: "p3", best: NAME_ONLY }), deps(boom, undefined, { places: failing }));
+    expect(r3).toMatchObject({ result: "requeued", errored: true });
+    expect(boom.log.find((l) => l[0] === "settlePlaces")!.slice(1)).toEqual(["lead-1", "res-1", 0, false]);
+    expect(steps(boom)).toEqual(["p3:error:p3:"]);
+  });
+});
+
+describe("P4 IA leve", () => {
+  const LIGHT = htmlPage(`<h1>Acme HVAC</h1><p>Pat Doe, President</p><a href="mailto:hello@acme-hvac.test">Mail</a>`);
+  const aiLedger = (reserveError?: Error) => {
+    const rows: string[] = [];
+    const ledger: AiLedger = {
+      dailyCapUsd: async () => 10,
+      spentTodayUsd: async () => 0,
+      record: async () => undefined,
+      reserve: async (r) => {
+        if (reserveError) throw reserveError;
+        rows.push(`reserve:${r.task}`);
+        return "c1";
+      },
+      settle: async () => {
+        rows.push("settle");
+      },
+    };
+    return { ledger, rows };
+  };
+  const model = (contacts: object[]) => new FakeTransport({ qualify_light: () => ({ json: { company_type: "builder", city: "", state: "", size_note: "", address: "", contacts } }) });
+  const withSite = (p = SITE) => field({ field: "website", value: p });
+
+  test("P4 runs only on pages read in this pass: the contact the page names is stored unverified with its URL; a made-up one is not", async () => {
+    const t = model([{ name: "Pat Doe", title: "President", email: "", phone: "" }, { name: "Sam Invented", title: "CEO", email: "", phone: "" }]);
+    const l = aiLedger();
+    const store = fakeQualifierStore([], { ledger: l.ledger });
+    const r = await qualifyLead(snapshot({ nextStep: "p2", fields: [withSite()] }), deps(store, fakeHttp({ [SITE]: LIGHT }), { transport: t }));
+    expect(r.result).toBe("done");
+    expect(steps(store).slice(0, 3)).toEqual(["p2:ok:p3:", "p3:places_off:p4:", "p4:ok:p5:"]);
+    const ai = added(store).filter((a) => a.source === "ai");
+    expect(ai.find((a) => a.field === "contact_name")).toMatchObject({ value: "Pat Doe", status: "unverified", source_ref: SITE });
+    expect(ai.find((a) => a.field === "contact_title")).toMatchObject({ value: "President" });
+    expect(ai.find((a) => a.field === "company_type")).toMatchObject({ value: "builder", status: "unverified" });
+    expect(ai.some((a) => /Sam/.test(a.value))).toBe(false);
+    expect(l.rows).toEqual(["reserve:qualify_light", "settle"]);
+    expect(t.calls).toHaveLength(1);
+    // a pass that read no page does not call the model
+    const t2 = model([]);
+    const none = fakeQualifierStore([], { ledger: aiLedger().ledger });
+    await qualifyLead(snapshot({ nextStep: "p4", fields: [withSite()] }), deps(none, undefined, { transport: t2 }));
+    expect(steps(none)[0]).toBe("p4:skipped:p5:");
+    expect(t2.calls).toHaveLength(0);
+  });
+
+  test("P4 without AI says no_ai", async () => {
+    const store = fakeQualifierStore([]);
+    await qualifyLead(snapshot({ nextStep: "p2", fields: [withSite()] }), deps(store, fakeHttp({ [SITE]: LIGHT })));
+    expect(steps(store)[2]).toBe("p4:no_ai:p5:");
+  });
+
+  test("P4: qualifier_daily pauses the lead with nothing written for the step; lead_cap ends the lead", async () => {
+    const daily = fakeQualifierStore([], { ledger: aiLedger(new AiError("qualifier_daily")).ledger });
+    const r = await qualifyLead(snapshot({ nextStep: "p2", fields: [withSite()] }), deps(daily, fakeHttp({ [SITE]: LIGHT }), { transport: model([]) }));
+    expect(r).toMatchObject({ result: "paused", pauseReason: "daily_cap" });
+    expect(steps(daily)).toEqual(["p2:ok:p3:", "p3:places_off:p4:"]);
+    const lead = fakeQualifierStore([], { ledger: aiLedger(new AiError("lead_cap")).ledger });
+    const r2 = await qualifyLead(snapshot({ nextStep: "p2", fields: [withSite()] }), deps(lead, fakeHttp({ [SITE]: LIGHT }), { transport: model([]) }));
+    expect(r2.result).toBe("done");
+    expect(steps(lead).at(-1)).toBe("p4:lead_cap:done:lead_cap");
+    for (const [code, reason] of [["daily_cap", "workspace_cap"], ["user_cap", "user_cap"], ["global_cap", "global_cap"], ["no_access", "no_access"]] as const) {
+      const st = fakeQualifierStore([], { ledger: aiLedger(new AiError(code)).ledger });
+      const x = await qualifyLead(snapshot({ nextStep: "p2", fields: [withSite()] }), deps(st, fakeHttp({ [SITE]: LIGHT }), { transport: model([]) }));
+      expect(x).toMatchObject({ result: "paused", pauseReason: reason });
+    }
   });
 });

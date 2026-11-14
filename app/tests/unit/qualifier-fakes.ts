@@ -50,7 +50,12 @@ const NO = () => Promise.reject(new Error("fake ledger"));
 /** Hands out the snapshots in order, then null. Every call is logged as [name, ...args] after the tick id. */
 export function fakeQualifierStore(
   snapshots: LeadSnapshot[],
-  o: { busy?: boolean; merge?: number | ((lead: string) => number); failOn?: Partial<Record<"merge" | "addFields" | "stepDone" | "claimNext" | "refute", Error>> } = {},
+  o: {
+    busy?: boolean;
+    merge?: number | ((lead: string) => number);
+    failOn?: Partial<Record<"merge" | "addFields" | "stepDone" | "claimNext" | "refute" | "reservePlaces", Error>>;
+    ledger?: AiLedger;
+  } = {},
 ): QualifierTickStore & { log: unknown[][] } {
   const queue = [...snapshots];
   const log: unknown[][] = [];
@@ -60,7 +65,7 @@ export function fakeQualifierStore(
     if (err) throw err;
     return v;
   };
-  const ledger: AiLedger = { dailyCapUsd: NO, spentTodayUsd: NO, record: NO };
+  const ledger: AiLedger = o.ledger ?? { dailyCapUsd: NO, spentTodayUsd: NO, record: NO };
   return {
     log,
     async beginTick() {
@@ -91,9 +96,11 @@ export function fakeQualifierStore(
       rec("pause", [ws, reason], undefined);
     },
     ledger: () => ledger,
-    async reservePlaces() {
-      return "res-1";
+    async reservePlaces(_t, lead, usd) {
+      return rec("reservePlaces", [lead, usd], "res-1");
     },
-    async settlePlaces() {},
+    async settlePlaces(_t, lead, id, cost, ok) {
+      rec("settlePlaces", [lead, id, cost, ok], undefined);
+    },
   };
 }

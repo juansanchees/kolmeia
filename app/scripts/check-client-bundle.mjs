@@ -1,6 +1,6 @@
 // Runs after `next build` (part of `npm run check`). Fails if anything that must stay on the server reached the
 // browser bundles: the Anthropic key's name or value shape, the SDK, the API host, the mailbox key, the mailbox
-// ciphertext column, or the mail transports.
+// ciphertext column, the mail transports, or the Places key and host.
 import { readdirSync, readFileSync, statSync, existsSync } from "node:fs";
 import path from "node:path";
 
@@ -10,7 +10,7 @@ if (!existsSync(dir)) {
   process.exit(1);
 }
 const walk = (d) => readdirSync(d).flatMap((f) => (statSync(path.join(d, f)).isDirectory() ? walk(path.join(d, f)) : [path.join(d, f)]));
-const forbidden = [/ANTHROPIC_API_KEY/, /sk-ant-[a-z0-9]/i, /api\.anthropic\.com/, /@anthropic-ai\/sdk/, /SERVICE_ROLE/i, /sb_secret_/, /MAILBOX_ENC_KEY/, /secret_ciphertext/, /smtp\.gmail\.com/, /imap\.gmail\.com/, /api\.apify\.com/, /api\.apollo\.io/];
+const forbidden = [/ANTHROPIC_API_KEY/, /sk-ant-[a-z0-9]/i, /api\.anthropic\.com/, /@anthropic-ai\/sdk/, /SERVICE_ROLE/i, /sb_secret_/, /MAILBOX_ENC_KEY/, /secret_ciphertext/, /smtp\.gmail\.com/, /imap\.gmail\.com/, /api\.apify\.com/, /api\.apollo\.io/, /GOOGLE_PLACES_API_KEY/, /places\.googleapis\.com/];
 const bad = [];
 let scanned = 0;
 for (const file of walk(dir)) {

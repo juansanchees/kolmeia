@@ -3,6 +3,7 @@ import { defaultTransport } from "@/lib/ai/gateway";
 import { runHunterTick } from "@/lib/hunter/tick";
 import { createHunterTickStore } from "@/lib/hunter/tick-store";
 import { createQualifierTickStore } from "@/lib/qualifier/store";
+import { placesClient } from "@/lib/qualifier/places";
 import { QUALIFIER_TICK_BUDGET_MS, runQualifierTick } from "@/lib/qualifier/tick";
 import { createSourceTickStore } from "@/lib/sources/store";
 import { runSourceTick, SOURCE_TICK_BUDGET_MS } from "@/lib/sources/tick";
@@ -27,7 +28,7 @@ async function qualifierTick(token: string, budgetMs: number): Promise<Qualifier
   try {
     const store = createQualifierTickStore(token);
     if (!store) return none;
-    const r = await runQualifierTick({ store, transport: hasAi() ? defaultTransport() : null, budgetMs });
+    const r = await runQualifierTick({ store, transport: hasAi() ? defaultTransport() : null, places: placesClient(), budgetMs });
     return { outcome: r.outcome, leads: r.leads, steps: r.steps, paused: r.paused, failed: r.failed };
   } catch (e) {
     if (e instanceof Error && e.name === "HunterAuthError") throw e;

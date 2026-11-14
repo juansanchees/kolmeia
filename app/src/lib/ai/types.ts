@@ -12,7 +12,10 @@ export type AiTask =
   | "email_draft"
   | "email_classify"
   | "email_reply_draft"
-  | "email_closer_brief";
+  | "email_closer_brief"
+  | "qualify_light"
+  | "qualify_deep"
+  | "profile_learn";
 
 export type AiUsage = {
   inputTokens: number;

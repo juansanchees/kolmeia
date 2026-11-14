@@ -12,7 +12,7 @@ const fold = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
 const digits = (s: string) => s.replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
 
 /** Comparison form of a value: by kind, the same thing the database keys on. */
-function norm(field: string, value: string): string {
+export function fieldKey(field: string, value: string): string {
   if (field === "phone") return digits(value);
   if (field === "email") return value.trim().toLowerCase();
   if (field === "website") return hostOf(value) ?? fold(value);
@@ -32,12 +32,12 @@ export function factsToFields(read: SiteRead, s: LeadSnapshot): { add: FieldIn[]
   }
   if (read.outcome !== "ok" || !read.finalHome) return { add: [], refute: [] };
 
-  const have = new Set(s.fields.filter((f) => f.status === "confirmed").map((f) => `${f.field}:${norm(f.field, f.value)}`));
+  const have = new Set(s.fields.filter((f) => f.status === "confirmed").map((f) => `${f.field}:${fieldKey(f.field, f.value)}`));
   const add: FieldIn[] = [];
   const push = (field: string, value: string, url: string, excerpt: string | null) => {
-    const id = `${field}:${norm(field, value)}`;
+    const id = `${field}:${fieldKey(field, value)}`;
     // a value over the database's 1000 characters is skipped, never cut into a different value
-    if (!norm(field, value) || [...value].length > 1000 || have.has(id) || add.length >= MAX_ROWS) return;
+    if (!fieldKey(field, value) || [...value].length > 1000 || have.has(id) || add.length >= MAX_ROWS) return;
     have.add(id);
     add.push({ field, value, source: "site", source_ref: url, status: "confirmed", excerpt: excerpt ? cut(excerpt, 300) : null });
   };
