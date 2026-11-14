@@ -203,4 +203,11 @@ describe("F3c-1 upload screen", () => {
   test("the wizard numbers rows from the data, not through its own counter", () => {
     expect(read("src/components/imports/ImportWizard.tsx")).toContain("mapGrid(");
   });
+  test("the wizard locks list name and training once the import exists, and Back after batches were sent", () => {
+    const w = read("src/components/imports/ImportWizard.tsx");
+    expect(w).toContain("readOnly={locked}");
+    expect(w).toContain("disabled={locked}");
+    expect(w).toContain("busy || sent > 0");
+    expect(w).not.toMatch(/setError\(e instanceof Error \? e\.message/);
+  });
 });

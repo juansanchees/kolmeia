@@ -15,7 +15,7 @@ const uuid = z.string().uuid();
 const generic: Fail = { ok: false, error: t.imports.errors.generic };
 
 const metaSchema = z.object({
-  fileName: z.string().trim().min(1).max(200),
+  fileName: z.string().trim().min(1).transform((s) => s.slice(0, 200)),
   sheetName: z.string().max(100).nullable(),
   listName: z.string().trim().min(1).max(80),
   mapping: z.array(z.enum(IMPORT_FIELDS).nullable()).max(500),

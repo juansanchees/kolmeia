@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { detectMapping, hasIdColumn, type Mapping } from "@/lib/imports/fields";
-import { mapGrid, mapRow, previewOutcomes, revalidateRow, rowErrorText, type ImportRow, type RowError } from "@/lib/imports/rows";
+import { ERROR_DATA_CAP, mapGrid, mapRow, previewOutcomes, revalidateRow, rowErrorText, type ImportRow, type RowError } from "@/lib/imports/rows";
 import { parseDelimited, sheetRows } from "@/lib/imports/parse";
 
 const m = (...f: (string | null)[]) => f as Mapping;
@@ -140,7 +140,7 @@ describe("Task 5 server re-validation and screen helpers", () => {
   it("revalidateRow passes a RowError through with its data capped", () => {
     const e = revalidateRow({ row: 9, error: "phone", data: { phone: "x".repeat(5000), junk: "y" } }) as RowError;
     expect(e.error).toBe("phone");
-    expect(e.data.phone.length).toBe(1000);
+    expect(e.data.phone.length).toBe(ERROR_DATA_CAP);
     expect(e.data.junk).toBeUndefined();
     expect((revalidateRow({ row: 9, error: "bogus", data: {} } as unknown as RowError) as RowError).error).toBe("empty");
   });
@@ -154,5 +154,10 @@ describe("Task 5 server re-validation and screen helpers", () => {
   it("the phone error tells the user to format the column as text; the others do not", () => {
     expect(rowErrorText(7, "phone")).toBe("linha 7: telefone inválido (formate a coluna como texto no Excel)");
     expect(rowErrorText(8, "email")).toBe("linha 8: e-mail inválido");
+  });
+  it("error rows carry short data, so a batch of 500 stays small", () => {
+    const e = mapRow(["x".repeat(900), "123"], m("note", "phone"), 2) as RowError;
+    expect(e.error).toBe("phone");
+    expect(e.data.note.length).toBe(ERROR_DATA_CAP);
   });
 });

@@ -14,6 +14,9 @@ type Step = "file" | "columns" | "preview" | "done";
 type Counts = { new: number; merged: number; errors: number };
 type Entry = ImportRow | RowError;
 
+/** Only a failure the server reported carries copy worth showing; anything else (network, crash) gets the generic text. */
+class ActionFail extends Error {}
+
 const isError = (e: Entry): e is RowError => "error" in e;
 const STEPS: Step[] = ["file", "columns", "preview", "done"];
 
@@ -50,6 +53,10 @@ export function ImportWizard() {
         setError(M.fileErrors.empty);
         return;
       }
+      if (g.rows[0].length > 500) {
+        setError(M.fileErrors.tooManyColumns);
+        return;
+      }
       setFile(f);
       setGrid(g.rows);
       setSheets(g.sheets);
@@ -74,7 +81,7 @@ export function ImportWizard() {
       let id = importId;
       if (!id) {
         const r = await startImportAction({ fileName: file.name, sheetName: sheet, listName: listName.trim(), mapping, useAsTraining: training });
-        if (!r.ok) throw new Error(r.error);
+        if (!r.ok) throw new ActionFail(r.error);
         id = r.importId;
         setImportId(id);
       }
@@ -83,7 +90,7 @@ export function ImportWizard() {
       const found = new Map<number, string | null>();
       for (const part of chunk(valid, IMPORT_LIMITS.batch)) {
         const r = await previewBatchAction(id, part);
-        if (!r.ok) throw new Error(r.error);
+        if (!r.ok) throw new ActionFail(r.error);
         for (const [row, lead] of r.existing) found.set(row, lead);
       }
       setEntries(all);
@@ -92,7 +99,7 @@ export function ImportWizard() {
       setCounts({ new: 0, merged: 0, errors: 0 });
       setStep("preview");
     } catch (e) {
-      setError(e instanceof Error ? e.message : M.errors.generic);
+      setError(e instanceof ActionFail ? e.message : M.errors.generic);
     } finally {
       setBusy(false);
     }
@@ -108,7 +115,7 @@ export function ImportWizard() {
       for (let b = sent; b < batches.length; b++) {
         setProgress(Math.min(b * IMPORT_LIMITS.batch, entries.length));
         const r = await importBatchAction(importId, batches[b]);
-        if (!r.ok) throw new Error(r.error);
+        if (!r.ok) throw new ActionFail(r.error);
         total.new += r.new;
         total.merged += r.merged;
         total.errors += r.errors;
@@ -116,10 +123,10 @@ export function ImportWizard() {
         setSent(b + 1);
       }
       const f = await finishImportAction(importId);
-      if (!f.ok) throw new Error(f.error);
+      if (!f.ok) throw new ActionFail(f.error);
       setStep("done");
     } catch (e) {
-      setError(e instanceof Error ? e.message : M.errors.generic);
+      setError(e instanceof ActionFail ? e.message : M.errors.generic);
     } finally {
       setBusy(false);
     }
@@ -140,6 +147,7 @@ export function ImportWizard() {
   const outcomes = new Map(previewOutcomes(valid, existing).map((o) => [o.row, o.outcome]));
   const previewNew = [...outcomes.values()].filter((o) => o === "new").length;
   const stepIdx = STEPS.indexOf(step);
+  const locked = importId !== null; // the import row already holds the list name and the training choice
   const noId = grid.length > 0 && !hasIdColumn(mapping);
 
   return (
@@ -179,8 +187,9 @@ export function ImportWizard() {
           )}
           <label className="flex flex-col gap-1 text-sm">
             {M.listName}
-            <input value={listName} maxLength={80} onChange={(e) => setListName(e.target.value)} className={input} />
+            <input value={listName} maxLength={80} readOnly={locked} onChange={(e) => setListName(e.target.value)} className={input} />
           </label>
+          {locked && <p className="m-0 text-sm text-muted">{M.lockedNote}</p>}
           <ul className="m-0 flex list-none flex-col border border-line bg-surface p-0">
             {grid[0].map((h, i) => (
               <li key={i} className="grid min-w-0 gap-2 border-b border-line px-3.5 py-2.5 last:border-b-0 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] md:items-center">
@@ -195,7 +204,7 @@ export function ImportWizard() {
           </ul>
           <label className="flex flex-col gap-1 text-sm">
             <span className="flex items-center gap-2">
-              <input type="checkbox" checked={training} onChange={(e) => setTraining(e.target.checked)} className="size-5" />
+              <input type="checkbox" checked={training} disabled={locked} onChange={(e) => setTraining(e.target.checked)} className="size-5" />
               {M.training}
             </span>
             <span className="text-muted">{M.trainingHelp}</span>
@@ -245,7 +254,7 @@ export function ImportWizard() {
           )}
           {busy && <p role="status" className="m-0 font-mono text-sm">{fill(M.progress, { done: progress, total: entries.length })}</p>}
           <div className="flex flex-wrap gap-2">
-            <button type="button" disabled={busy} onClick={() => setStep("columns")} className={btn.ghost}>{M.back}</button>
+            <button type="button" disabled={busy || sent > 0} onClick={() => setStep("columns")} className={btn.ghost}>{M.back}</button>
             <button type="button" disabled={busy || entries.length === 0} onClick={() => void run()} className={btn.primary}>
               {error && sent > 0 ? M.retry : M.import}
             </button>

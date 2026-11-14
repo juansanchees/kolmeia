@@ -13,6 +13,8 @@ export const WEBMAIL_HOSTS: readonly string[] = [
   "icloud.com", "me.com", "mac.com", "proton.me", "protonmail.com", "comcast.net", "verizon.net", "att.net", "gmx.com",
 ];
 export const IMPORT_CAPS = { name: 200, field: 300, note: 1000 };
+/** Error rows only carry a short preview of each value: keeps a 500-row batch of them far below the body limit. */
+export const ERROR_DATA_CAP = 200;
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -33,7 +35,7 @@ export function mapRow(cells: string[], mapping: Mapping, row: number): ImportRo
     if (raw) any = true;
     if (f && raw && v[f] === undefined) {
       v[f] = raw;
-      data[f] = raw.length > IMPORT_CAPS.note ? raw.slice(0, IMPORT_CAPS.note) : raw;
+      data[f] = raw.length > ERROR_DATA_CAP ? raw.slice(0, ERROR_DATA_CAP) : raw;
     }
   });
   if (!any) return null;
@@ -87,7 +89,7 @@ export function revalidateRow(r: ImportRow | RowError): ImportRow | RowError {
     const data: Record<string, string> = {};
     for (const f of IMPORT_FIELDS) {
       const v = text(src[f]);
-      if (v) data[f] = v.length > IMPORT_CAPS.note ? v.slice(0, IMPORT_CAPS.note) : v;
+      if (v) data[f] = v.length > ERROR_DATA_CAP ? v.slice(0, ERROR_DATA_CAP) : v;
     }
     const error = ERROR_CODES.includes(raw.error as RowErrorCode) ? (raw.error as RowErrorCode) : "empty";
     return { row: r.row, error, data };
