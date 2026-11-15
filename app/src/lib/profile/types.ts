@@ -16,3 +16,14 @@ export type LearnedProfile = {
 
 /** The snapshot a Caçador run carries (research_runs.profile_hints). */
 export type ProfileHints = { version: number; lines: string[]; queries: string[] };
+
+/** One row of a training list as the training call sees it (`row` = the import row number). */
+export type TrainingRow = {
+  row: number;
+  name: string;
+  city: string | null;
+  state: string | null;
+  website: string | null;
+  contact_title: string | null;
+  note: string | null;
+};
