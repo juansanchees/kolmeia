@@ -16,7 +16,7 @@ const SUPABASE_BOOTSTRAP = `
   create role service_role nologin noinherit bypassrls;
 
   create schema auth;
-  create table auth.users (id uuid primary key, email text);
+  create table auth.users (id uuid primary key, email text, email_confirmed_at timestamptz default now());
   create function auth.uid() returns uuid
     language sql stable
     as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;

@@ -11,6 +11,7 @@ const CLOSER = "30000000-0000-4000-8000-000000000004"; // closer@a.example, join
 const OTHER = "30000000-0000-4000-8000-000000000005"; // other@a.example, no workspace
 const OWNER_B = "40000000-0000-4000-8000-000000000001"; // owner-b@b.example
 const CLOSER_B = "40000000-0000-4000-8000-000000000002";
+const UPPER = "40000000-0000-4000-8000-000000000003"; // UPPER@B.example in auth, no workspace
 
 let db: TestDb;
 let wsA: string;
@@ -47,6 +48,7 @@ beforeAll(async () => {
     [OTHER, "other@a.example"],
     [OWNER_B, "owner-b@b.example"],
     [CLOSER_B, "closer@b.example"],
+    [UPPER, "UPPER@B.example"],
   ];
   for (const [id, email] of emails) await db.addUser(id, true, email);
   wsA = (await one<{ create_workspace: string }>(OWNER_A, "select public.create_workspace('Empresa A')")).create_workspace;
@@ -91,8 +93,10 @@ describe("0020 part A: invites, people, hand-off, won/lost", () => {
     const token = await invite(OWNER_A, wsA, "Ana", "Ana@A.example");
     expect(token).toMatch(/^[0-9a-f]{64}$/);
 
-    const denied = await db.try(as(OWNER_A), "select token_hash from public.workspace_invites");
-    expect(msg(denied.error)).toMatch(/permission denied/);
+    for (const u of [OWNER_A, SDR_A, CLOSER_2]) {
+      const denied = await db.try(as(u), "select token_hash from public.workspace_invites");
+      expect(msg(denied.error), u).toMatch(/permission denied/);
+    }
     const rows = await db.query<{ id: string; email: string; role: string; created_by: string; expires_at: string }>(
       as(OWNER_A),
       "select id, email, role, created_by, expires_at from public.workspace_invites where workspace_id = $1",
@@ -137,11 +141,19 @@ describe("0020 part A: invites, people, hand-off, won/lost", () => {
     const old = await invite(OWNER_A, wsA, "Ana Closer", "closer@a.example");
     await db.admin("update public.workspace_invites set expires_at = now() - interval '1 minute' where token_hash = encode(sha256(convert_to($1::text, 'UTF8')),'hex')", [old]);
     expect(msg((await db.try(as(CLOSER), "select public.accept_workspace_invite($1)", [old])).error)).toBe("expired");
+    expect((await db.query<{ valid: boolean }>(as(CLOSER), "select valid from public.invite_preview($1)", [old]))[0].valid).toBe(false);
 
     const revoked = await invite(OWNER_A, wsA, "Ana Closer", "closer@a.example");
     const [rid] = await db.admin<{ id: string }>("select id from public.workspace_invites where token_hash = encode(sha256(convert_to($1::text, 'UTF8')),'hex')", [revoked]);
     await db.query(as(OWNER_A), "select public.revoke_workspace_invite($1)", [rid.id]);
     expect(msg((await db.try(as(CLOSER), "select public.accept_workspace_invite($1)", [revoked])).error)).toBe("expired");
+    expect((await db.query<{ valid: boolean }>(as(CLOSER), "select valid from public.invite_preview($1)", [revoked]))[0].valid).toBe(false);
+
+    // an e-mail that is not confirmed yet does not count
+    await db.admin("update auth.users set email_confirmed_at = null where id = $1", [CLOSER]);
+    const unconfirmed = await db.try(as(CLOSER), "select public.accept_workspace_invite($1)", [token]);
+    expect([code(unconfirmed.error), msg(unconfirmed.error)]).toEqual(["P0001", "wrong_email"]);
+    await db.admin("update auth.users set email_confirmed_at = now() where id = $1", [CLOSER]);
     expect(msg((await db.try(as(CLOSER), "select public.accept_workspace_invite($1)", ["f".repeat(64)])).error)).toBe("expired");
 
     expect(await db.admin("select 1 from public.workspace_members where user_id = any($1)", [[OTHER, CLOSER]])).toHaveLength(0);
@@ -243,5 +255,12 @@ describe("0020 part A: invites, people, hand-off, won/lost", () => {
     expect(await leadRow(l1)).toMatchObject({ owner_id: null, status: "won" });
     expect(await leadRow(l4)).toMatchObject({ owner_id: null, status: "with_closer" });
     expect((await leadRow(l2)).owner_id).toBe(CLOSER_2);
+  });
+
+  test("the auth e-mail matches the invite whatever its case", async () => {
+    const token = await invite(OWNER_B, wsB, "Upper", "upper@b.example");
+    const ok = await one<{ ws: string }>(UPPER, "select public.accept_workspace_invite($1) as ws", [token]);
+    expect(ok.ws).toBe(wsB);
+    expect(await db.admin("select role from public.workspace_members where user_id = $1", [UPPER])).toEqual([{ role: "closer" }]);
   });
 });

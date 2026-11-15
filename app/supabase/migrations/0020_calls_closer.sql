@@ -151,10 +151,16 @@ begin
   if v_inv.id is null or v_inv.accepted_at is not null or v_inv.revoked_at is not null or v_inv.expires_at <= now() then
     raise exception 'expired';
   end if;
-  select lower(btrim(u.email)) into v_email from auth.users u where u.id = v_uid;
+  -- Only a confirmed e-mail counts: a sign-up that has not confirmed (or a path that sets email unverified) cannot
+  -- claim a leaked link.
+  select lower(btrim(u.email)) into v_email from auth.users u where u.id = v_uid and u.email_confirmed_at is not null;
   if v_email is null or v_email <> v_inv.email then
     raise exception 'wrong_email';
   end if;
+  -- Same lock as create_workspace (0004): two accepts (two invites, two workspaces) or an accept racing a
+  -- create_workspace for this user run one after the other, so has_workspace sees the other's row.
+  -- create_workspace itself still lets a member own up to 3 workspaces (0004 rule, unchanged; C11 gap, known).
+  perform pg_advisory_xact_lock(hashtext('public.create_workspace'), hashtext(v_uid::text));
   if exists (select 1 from public.workspace_members m where m.user_id = v_uid) then
     raise exception 'has_workspace';
   end if;
