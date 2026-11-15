@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { GhostButton } from "@/components/research/controls";
 import { t } from "@/messages/pt";
+import type { Person } from "@/lib/team/types";
+import { CallAgentForm } from "./CallAgentForm";
 import { HunterStartForm } from "./HunterStartForm";
 
 const G = t.agents.gallery;
@@ -17,10 +19,11 @@ function Card({ title, text, children, off }: { title: string; text: string; chi
   );
 }
 
-export function AgentGallery({ hasProfile, serviceArea, ai, defaultRegion = "" }: { hasProfile: boolean; serviceArea: string; ai: boolean; defaultRegion?: string }) {
+export function AgentGallery({ hasProfile, serviceArea, ai, defaultRegion = "", people = [] }: { hasProfile: boolean; serviceArea: string; ai: boolean; defaultRegion?: string; people?: Person[] }) {
   const [describe, setDescribe] = useState("");
   const [open, setOpen] = useState(defaultRegion !== "");
   const [seed, setSeed] = useState("");
+  const [openCall, setOpenCall] = useState(false);
   const create = () => {
     setSeed(describe.trim());
     setOpen(true);
@@ -50,11 +53,12 @@ export function AgentGallery({ hasProfile, serviceArea, ai, defaultRegion = "" }
         <Card title={t.agents.types.email} text={G.email} off>
           <span className="font-mono text-xs">{G.soon}</span>
         </Card>
-        <Card title={t.agents.types.call} text={G.call} off>
-          <span className="font-mono text-xs">{G.soon}</span>
+        <Card title={t.agents.types.call} text={G.call}>
+          <GhostButton onClick={() => setOpenCall(true)}>{G.create}</GhostButton>
         </Card>
       </div>
       <p className="text-sm text-muted">{G.aiCall}</p>
+      {openCall && <CallAgentForm people={people} />}
       {open && <HunterStartForm key={seed} hasProfile={hasProfile} serviceArea={serviceArea} ai={ai} seedText={seed} defaultRegion={defaultRegion} />}
     </div>
   );

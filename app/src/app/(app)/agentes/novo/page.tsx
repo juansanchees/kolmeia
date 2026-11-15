@@ -1,6 +1,7 @@
 import { requireSender } from "@/lib/workspace";
 import { hasAi } from "@/lib/ai/config";
 import { createClient } from "@/lib/supabase/server";
+import type { Person } from "@/lib/team/types";
 import { AgentGallery } from "@/components/agents/AgentGallery";
 
 // `?regiao=` comes from [Caçar ▸] on the Cobertura tab (searchParams is a Promise in Next 16 pages).
@@ -11,6 +12,7 @@ export default async function NewAgentPage({ searchParams }: { searchParams: Pro
   const supabase = await createClient();
   let whatWeDo = "";
   let serviceArea = "";
+  let people: Person[] = [];
   if (supabase) {
     const { data } = await supabase
       .from("company_profiles")
@@ -19,6 +21,9 @@ export default async function NewAgentPage({ searchParams }: { searchParams: Pro
       .maybeSingle();
     whatWeDo = String(data?.what_we_do ?? "").trim();
     serviceArea = String(data?.service_area ?? "").trim();
+    // who can be the caller of a Ligação agent (owner/sdr read the team through this RPC)
+    const { data: team } = await supabase.rpc("list_workspace_people", { p_ws: workspace.id });
+    people = (team ?? []) as Person[];
   }
-  return <AgentGallery hasProfile={whatWeDo.length > 0} serviceArea={serviceArea} ai={hasAi()} defaultRegion={defaultRegion} />;
+  return <AgentGallery hasProfile={whatWeDo.length > 0} serviceArea={serviceArea} ai={hasAi()} defaultRegion={defaultRegion} people={people} />;
 }

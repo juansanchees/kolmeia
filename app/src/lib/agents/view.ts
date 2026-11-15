@@ -3,7 +3,9 @@ import type { RunRow } from "@/lib/research/rows";
 import { t } from "@/messages/pt";
 import type { AgentRow } from "./types";
 
-function metricOf(a: AgentRow, now: Date): string {
+function metricOf(a: AgentRow, now: Date, listSize?: number): string {
+  // A call agent has no runs: its number is the size of today's list (when the page knows it).
+  if (a.type === "call" && listSize !== undefined && a.status !== "draft") return `${listSize} ${t.callAgent.metrics.inList}`;
   switch (a.status) {
     case "draft":
       return t.agents.metric.draft;
@@ -18,12 +20,12 @@ function metricOf(a: AgentRow, now: Date): string {
   }
 }
 
-export function agentRowView(a: AgentRow, now: Date): { href: string; type: string; status: string; metric: string; cta: string } {
+export function agentRowView(a: AgentRow, now: Date, opts: { listSize?: number } = {}): { href: string; type: string; status: string; metric: string; cta: string } {
   return {
     href: `/agentes/${a.id}`,
     type: t.agents.types[a.type],
     status: t.agents.statuses[a.status],
-    metric: metricOf(a, now),
+    metric: metricOf(a, now, opts.listSize),
     cta: a.status === "draft" ? t.agents.continue : t.agents.open,
   };
 }

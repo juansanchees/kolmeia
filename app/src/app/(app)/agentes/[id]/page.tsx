@@ -7,6 +7,9 @@ import { hunterStep } from "@/lib/agents/steps";
 import { needsAdvance } from "@/lib/research/engine";
 import { createClient } from "@/lib/supabase/server";
 import { requireSender } from "@/lib/workspace";
+import { CallAgentDetail, type CallDetailRow } from "@/components/agents/CallAgentDetail";
+import { agentCallStats, todayList } from "@/lib/calls/list-queries";
+import type { Person } from "@/lib/team/types";
 import { AgentDetail } from "@/components/agents/AgentDetail";
 import { HunterReviewCard } from "@/components/agents/HunterReviewCard";
 import { QuestionsForm } from "@/components/research/QuestionsForm";
@@ -45,6 +48,24 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
   const agent = await store.getAgent(id);
   if (!agent || agent.workspace_id !== workspace.id) notFound();
   if (agent.archived_at) redirect("/agentes");
+  if (agent.type === "call") {
+    const [{ data: team }, stats, list] = await Promise.all([
+      supabase.rpc("list_workspace_people", { p_ws: workspace.id }),
+      agentCallStats(supabase, id),
+      todayList(supabase, { agentId: id }),
+    ]);
+    const callerId = typeof agent.config.caller_id === "string" ? agent.config.caller_id : "";
+    const caller = ((team ?? []) as Person[]).find((p) => p.user_id === callerId);
+    const rows: CallDetailRow[] = list.map((r) => ({
+      leadId: r.lead.lead.id,
+      name: r.lead.display.name,
+      temperature: r.lead.best?.temperature ?? null,
+      level: r.lead.lead.level,
+      phone: r.lead.display.phone,
+      outcome: r.calledToday ? (r.lastCall?.outcome ?? null) : null,
+    }));
+    return <CallAgentDetail agent={agent} callerLabel={caller?.label ?? "?"} stats={stats} rows={rows} />;
+  }
   const run = await store.getSetupRun(id);
 
   const ai = hasAi();
