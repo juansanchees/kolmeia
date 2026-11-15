@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { TestDb, anon, anonWithToken, as, ageEmailClaims, setSchedulerToken, UUID_A, UUID_B, UUID_C } from "./helpers";
 import { addCampaignMailbox, CIPHER, createOwner, seedCampaign, TOKEN, type Seeded } from "./scheduler-seed";
 import { approveAllC12 } from "./c12-seed";
@@ -170,6 +170,10 @@ describe("E3 rodízio", () => {
   });
 
   test("(c) a mailbox in its gap or at its limit is skipped; when all are blocked the earliest wait wins", async () => {
+    // The daily limit counts from the campaign's local midnight (America/New_York) and the test back-dates claims by 10 min,
+    // so near that midnight the claims fall into "yesterday". PGlite's now() reads the JS clock: pin it to local noon (EST).
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-10T17:00:00Z"), shouldAdvanceTime: true });
+    try {
     const s = await seedCampaign(db, ws, "r2c", { n: 3 });
     await set(s.campaign, "min_gap_minutes = 9, random_gap_minutes = 0");
     expect((await send(s.campaign)).from).toBe(s.address);                    // only A attached
@@ -183,6 +187,9 @@ describe("E3 rodízio", () => {
     expect((await send(s.campaign)).from).toBe(b.address);                    // A at its limit; B (1 today) is used
     const g = await claim(s.campaign);
     expect([g.outcome, iso(g.wait_until)]).toEqual(["gap", await gapEnd(b.address)]);   // B's gap beats A's next day
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test("(f) the campaign limit counts the claims of all its mailboxes", async () => {
