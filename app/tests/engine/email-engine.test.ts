@@ -8,6 +8,7 @@ import { draftAnswer, draftStep, fetchReplies, handOffWithBrief, sendReplyAnswer
 import type { Incoming } from "@/lib/email/replies";
 import type { ImapTransport, MailCreds, SmtpTransport } from "@/lib/email/transport";
 import { TestDb, ageEmailClaims, as, installEmailTestHelpers, openGates, UUID_A } from "../db/helpers";
+import { approveAllC12 } from "../db/c12-seed";
 import { SqlEmailStore } from "./email-sql-store";
 import { FakeTransport } from "./fake-ai";
 
@@ -94,6 +95,7 @@ beforeAll(async () => {
   const list = (await q<{ id: string }>("select public.create_research_list($1,'Construtores') as id", [run]))[0].id;
 
   await q("insert into public.sender_profiles (workspace_id, legal_name, postal_address, sender_name) values ($1,'New England Air HVAC Corp','1 Main St, Millbury, MA 01527','Juan Sanches')", [ws]);
+  await approveAllC12(db, ws); // 0018 C12: these tests cover older rules; the gate has its own file (c12-gate.test.ts)
   ids.mb = (await q<{ id: string }>("select public.save_mailbox($1,'sales@neair.example',$2) as id", [ws, encryptSecret(APP_PASSWORD, mailboxAad(ws, "sales@neair.example"), KEY)]))[0].id;
   ids.camp = (await q<{ id: string }>("insert into public.email_campaigns (workspace_id, list_id, name, mailbox_id) values ($1,$2,'Construtores',$3) returning id", [ws, list, ids.mb]))[0].id;
   await openGates(db, ids.camp);

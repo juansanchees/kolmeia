@@ -1,11 +1,12 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { TestDb, anon as anonActor, as, UUID_A, UUID_B, anonWithToken, setSchedulerToken, ageEmailClaims, NOT_TODAY } from "./helpers";
 import { createOwner, seedCampaign, TOKEN, type Seeded } from "./scheduler-seed";
+import { approveAllC12 } from "./c12-seed";
 
 // Migration 0006 (E2 "Portões novos"): window, time zone, campaign limit, 9 + 5 min gap, one person per company [R2] [R7].
 let db: TestDb;
 let ws: string;
-beforeAll(async () => { db = await TestDb.create(); ws = await createOwner(db); });
+beforeAll(async () => { db = await TestDb.create(); ws = await createOwner(db); await approveAllC12(db, ws); }); // 0018 C12: these tests cover older rules; the gate has its own file (c12-gate.test.ts)
 afterAll(async () => { await db.pg.close(); });
 const iso = (d: unknown) => new Date(d as string).toISOString();
 
@@ -274,6 +275,7 @@ describe("E2 gate 6: Uma pessoa por empresa [R7]", () => {
     expect(await drain(s2.campaign, 2)).toEqual([s2.messages[0], "nothing_due"]);
     expect(await statusOf(twin.message)).toBe("approved");
     const wsB = await createOwner(db, UUID_B);
+    await approveAllC12(db, wsB, UUID_B);
     const b = await seedCampaign(db, wsB, "cocb", { userId: UUID_B });
     await set(b.campaign, "min_gap_minutes = 0, random_gap_minutes = 0");
     const other = await addProspect(b.campaign, "Shared", "w@shared.example", null, wsB, UUID_B);

@@ -9,6 +9,7 @@ import { emailSession } from "@/lib/email/session";
 import { CAMPAIGN_COLUMNS, MESSAGE_COLUMNS, PROSPECT_COLUMNS, type CampaignRow, type MessageRow, type ProspectRow } from "@/lib/email/types";
 import { confirmSuggestedEmail, retryMessage, setCampaignStatus, setProspectSkipped, setSendMode, writeTemplateDrafts } from "../actions";
 import { ActionButton } from "@/components/email/ActionButton";
+import { C12Checklist, type C12Approval } from "@/components/email/C12Checklist";
 import { Badge, Card, CardTitle, Label, NextStep, Notice } from "@/components/email/bits";
 import { DraftDriver, SendDriver } from "@/components/email/Drivers";
 import { FetchRepliesButton } from "@/components/email/ReplyControls";
@@ -27,13 +28,15 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
   const { data: campaignData } = await s.supabase.from("email_campaigns").select(CAMPAIGN_COLUMNS).eq("id", id).maybeSingle();
   if (!campaignData) notFound();
   const campaign = campaignData as CampaignRow;
-  const [prospectsRes, messagesRes, sender, mailboxes, listRes, sentRes] = await Promise.all([
+  const [prospectsRes, messagesRes, sender, mailboxes, listRes, sentRes, c12Res] = await Promise.all([
     s.supabase.from("email_prospects").select(PROSPECT_COLUMNS).eq("campaign_id", id).order("created_at", { ascending: true }),
     s.supabase.from("email_messages").select(MESSAGE_COLUMNS).eq("campaign_id", id).order("created_at", { ascending: true }),
     loadSender(s.supabase, campaign.workspace_id),
     loadMailboxes(s.supabase, campaign.workspace_id),
     s.supabase.from("campaign_mailboxes").select("mailbox_id").eq("campaign_id", id).order("seq", { ascending: true }),
     s.supabase.from("email_send_log").select("mailbox_address").eq("mode", campaign.send_mode).gt("claimed_at", localDayStart(campaign.timezone, new Date()).toISOString()),
+    // C12 (0018): owner and sdr read the checklist; a closer gets no rows
+    s.supabase.from("c12_approvals").select("item, evidence, approved_at").eq("workspace_id", campaign.workspace_id),
   ]);
   const prospects = (prospectsRes.data ?? []) as ProspectRow[];
   const messages = (messagesRes.data ?? []) as MessageRow[];
@@ -49,7 +52,9 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
   const chosen = selected.map((mid) => mailboxes.find((m) => m.id === mid)).filter((m): m is (typeof mailboxes)[number] => Boolean(m));
   const sentToday = sentTodayByAddress((sentRes.data ?? []) as { mailbox_address: string }[]);
   const mailboxOptions = mailboxes.map((m) => ({ id: m.id, email: m.email, status: m.status, sentToday: sentToday[m.email] ?? 0 }));
-  const realReady = Boolean(chosen.some((m) => m.status === "ok") && senderComplete(sender));
+  const c12 = (c12Res.data ?? []) as C12Approval[];
+  const c12Ready = Object.keys(t.email.c12.items).every((item) => c12.some((a) => a.item === item));
+  const realReady = Boolean(chosen.some((m) => m.status === "ok") && senderComplete(sender) && c12Ready);
   const failed = messages.filter((m) => m.status === "failed");
 
   const archived = campaign.status === "archived";
@@ -204,6 +209,8 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
           </div>
         </Card>
       </div>
+
+      {s.canSend && <C12Checklist campaignId={id} approvals={c12} isOwner={s.workspace.role === "owner"} />}
 
       <Card aria-labelledby="pros-title">
         <CardTitle id="pros-title">

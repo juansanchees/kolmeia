@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { TestDb, anon, anonWithToken, as, ageEmailClaims, setSchedulerToken, UUID_A, UUID_B, UUID_C } from "./helpers";
 import { addCampaignMailbox, CIPHER, createOwner, seedCampaign, TOKEN, type Seeded } from "./scheduler-seed";
+import { approveAllC12 } from "./c12-seed";
 
 // Migration 0007 (E3 "Rodízio de caixas"): several mailboxes per campaign, one fixed mailbox per person.
 let db: TestDb;
@@ -10,6 +11,8 @@ beforeAll(async () => {
   db = await TestDb.create();
   ws = await createOwner(db);
   wsB = await createOwner(db, UUID_B);
+  await approveAllC12(db, ws); // 0018 C12: these tests cover older rules; the gate has its own file (c12-gate.test.ts)
+  await approveAllC12(db, wsB, UUID_B);
   await db.addUser(UUID_C);
   await db.admin("insert into public.workspace_members (workspace_id, user_id, role) values ($1,$2,'closer')", [ws, UUID_C]);
 });

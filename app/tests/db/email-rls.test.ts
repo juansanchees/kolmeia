@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { TestDb, ageEmailClaims, anon, as, endCompanyDay, installEmailTestHelpers, openGates, UUID_A, UUID_B, UUID_C } from "./helpers";
+import { approveAllC12 } from "./c12-seed";
 
 // Migration 0003 (E-mail): RLS, column grants and the sending rules enforced in the database
 // [R1] [R2] [R3] [R4] [R5] [R8] [R9] [R12] [R14] [R18]. Real migrations, non-superuser roles (PGlite).
@@ -67,6 +68,7 @@ async function seedWorkspace(user: string, ws: string, key: string) {
   ids[`list${key}`] = l.list;
   ids[`candMail${key}`] = l.withEmail;
   await db.query(as(user), "insert into public.sender_profiles (workspace_id, legal_name, postal_address, sender_name) values ($1,'Acme HVAC Corp','1 Main St, Millbury, MA 01527','Pat Sender')", [ws]);
+  await approveAllC12(db, ws, user); // 0018 C12: these tests cover older rules; the gate has its own file (c12-gate.test.ts)
   ids[`mb${key}`] = (await one<{ save_mailbox: string }>(user, "select public.save_mailbox($1,$2,$3)", [ws, `sales${key.toLowerCase()}@gmail.com`, CIPHER])).save_mailbox;
   await db.query(as(user), "select public.set_mailbox_verified($1, true, null)", [ids[`mb${key}`]]);
   ids[`camp${key}`] = (

@@ -131,6 +131,8 @@ describe("proof that RLS is really enforced in PGlite", () => {
         "qualifier_request_contacts", "source_contact_leads", "source_add_contacts",
         // 0017 (closer scope: a closer reads e-mail rows only of the leads assigned to her)
         "prospect_visible_to_assignee", "message_visible_to_assignee",
+        // 0018 (C12 checklist: owner-only approval; c12_ready is NOT definer)
+        "approve_c12_item",
       ].sort(),
     );
     for (const r of rows) expect(r.proconfig).toContain("search_path=\"\"");

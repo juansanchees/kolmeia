@@ -6,6 +6,7 @@ import { sendStep, type Origins, type SendDeps } from "@/lib/email/engine";
 import type { MailCreds, SmtpTransport } from "@/lib/email/transport";
 import { TestDb, as, UUID_A } from "../db/helpers";
 import { addCampaignMailbox, createOwner, seedCampaign, type Seeded } from "../db/scheduler-seed";
+import { approveAllC12 } from "../db/c12-seed";
 import { SqlEmailStore } from "./email-sql-store";
 
 // E3 on the send path: credentials and From come from the mailbox stamped on the claimed message (two real mailboxes, fake SMTP).
@@ -42,6 +43,7 @@ async function nextStep(prospect: string): Promise<string> {
 beforeAll(async () => {
   db = await TestDb.create();
   ws = await createOwner(db);
+  await approveAllC12(db, ws); // 0018 C12: these tests cover older rules; the gate has its own file (c12-gate.test.ts)
   s = await seedCampaign(db, ws, "eng", { n: 2 });
   b = await addCampaignMailbox(db, ws, s.campaign, "engb");
   for (const [mb, address] of [[s.mailbox, s.address], [b.mailbox, b.address]]) {
