@@ -10,6 +10,7 @@ import { getCurrentWorkspace, getUser } from "@/lib/workspace";
 import { HandOffForm } from "@/components/leads/HandOffForm";
 import { StatusButtons } from "@/components/leads/StatusButtons";
 import { AddToCallList } from "@/components/leads/AddToCallList";
+import { AddToCampaign } from "@/components/leads/AddToCampaign";
 import { displayOf, isStaleProof, originLabel } from "@/lib/leads/view";
 import { count, date, host, money, UNKNOWN } from "@/components/research/format";
 import { Hook, ProofList } from "@/components/research/proof";
@@ -50,14 +51,17 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   // Sender-only inputs of the hand-off and the call list (RLS keeps them from the closer anyway).
   let people: Person[] = [];
   let callAgents: { id: string; name: string }[] = [];
+  let campaigns: { id: string; name: string; status: string }[] = [];
   let draft: ReturnType<typeof draftBrief> | null = null;
   if (sender && workspace && open) {
-    const [peopleRes, agentsRes, callsRes, emailBrief] = await Promise.all([
+    const [peopleRes, agentsRes, callsRes, emailBrief, campaignsRes] = await Promise.all([
       supabase.rpc("list_workspace_people", { p_ws: workspace.id }),
       supabase.from("agents").select("id, name").eq("workspace_id", workspace.id).eq("type", "call").eq("status", "running").is("archived_at", null).order("name"),
       supabase.from("call_logs").select("notes").eq("lead_id", lead.id).eq("outcome", "talked").order("called_at", { ascending: false }).limit(1).maybeSingle(),
       emailBriefOf(supabase, lead.id),
+      supabase.from("email_campaigns").select("id, name, status").eq("workspace_id", workspace.id).neq("status", "archived").order("created_at", { ascending: false }),
     ]);
+    campaigns = (campaignsRes.data ?? []) as { id: string; name: string; status: string }[];
     people = (peopleRes.data ?? []) as Person[];
     callAgents = (agentsRes.data ?? []) as { id: string; name: string }[];
     const proofUrls = [
@@ -200,6 +204,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
           </h2>
           {sender && draft && <HandOffForm leadId={lead.id} closers={people} draft={draft} />}
           {sender && callable && <AddToCallList leadId={lead.id} agents={callAgents} />}
+          {sender && !lead.do_not_call && <AddToCampaign leadIds={[lead.id]} campaigns={campaigns} />}
           {mine && !sender && !lead.do_not_call && display.phone && (
             <Link href={`/leads/ligar/${lead.id}`} className="inline-flex min-h-11 w-fit items-center border border-blue bg-surface px-4 text-sm font-semibold text-blue no-underline hover:bg-blue-wash">
               {H.callNow}

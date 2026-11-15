@@ -167,6 +167,13 @@ describe("F2 setup chat", () => {
   });
 });
 
+describe("F4 LEADS Pôr em campanha", () => {
+  test("the lead page offers it to senders only, and the action is sender-only", () => {
+    expect(read("src/app/(app)/leads/[id]/page.tsx")).toMatch(/sender && [^\n]*<AddToCampaign/);
+    expect(read("src/app/(app)/leads/campaign-actions.ts")).toContain("await requireSender()");
+  });
+});
+
 describe("F3a LEADS", () => {
   test("LEADS lists leads, not searches", () => {
     const page = read("src/app/(app)/leads/page.tsx");
