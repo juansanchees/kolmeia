@@ -180,3 +180,21 @@ describe("Task 5 server re-validation and screen helpers", () => {
     expect(e.data.note.length).toBe(ERROR_DATA_CAP);
   });
 });
+
+describe("listImports", () => {
+  it("hides drafts that never got rows: status importing and row_count 0", async () => {
+    const calls: [string, unknown[]][] = [];
+    const chain: Record<string, unknown> = {};
+    for (const m of ["from", "select", "eq", "or", "order"]) {
+      chain[m] = (...args: unknown[]) => {
+        calls.push([m, args]);
+        return chain;
+      };
+    }
+    chain.limit = async () => ({ data: [], error: null });
+    const { listImports } = await import("@/lib/imports/store");
+    await listImports(chain as unknown as Parameters<typeof listImports>[0], "ws-1");
+    expect(calls.find(([m]) => m === "or")?.[1]).toEqual(["status.neq.importing,row_count.gt.0"]);
+    expect(calls.findIndex(([m]) => m === "or")).toBeLessThan(calls.findIndex(([m]) => m === "order"));
+  });
+});

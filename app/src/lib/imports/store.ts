@@ -67,6 +67,8 @@ export async function listImports(db: SupabaseClient, ws: string): Promise<Impor
     .from("lead_imports")
     .select("id, list_name, file_name, status, row_count, new_count, merged_count, error_count, use_as_training, created_at")
     .eq("workspace_id", ws)
+    // hide drafts left at the preview step (never started, no rows): they are not lists
+    .or("status.neq.importing,row_count.gt.0")
     .order("created_at", { ascending: false })
     .limit(100);
   if (error) fail("listImports", error);
