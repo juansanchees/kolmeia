@@ -168,7 +168,7 @@ export type ReplyRow = {
   possible_bounce: boolean;
   bounced_address: string | null;
   classification: ReplyClass | null;
-  class_source: "ai" | "human" | null;
+  class_source: "ai" | "human" | "rule" | null;
   class_reason: string | null;
   created_at: string;
 };

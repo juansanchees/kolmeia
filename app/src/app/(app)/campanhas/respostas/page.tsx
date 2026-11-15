@@ -77,7 +77,7 @@ export default async function RepliesPage() {
                   ) : r.classification ? (
                     <Badge tone={r.classification === "interested" ? "blue" : r.classification === "unsubscribe" ? "warn" : "cold"} title={r.class_reason ?? undefined}>
                       {R.labels[r.classification]}
-                      {r.class_source === "ai" ? ` · ${R.labelHint}` : ""}
+                      {r.class_source === "ai" ? ` · ${R.labelHint}` : r.class_source === "rule" ? ` · ${R.labelRule}` : ""}
                     </Badge>
                   ) : null}
                   {p?.status === "handed_off" && <Badge tone="ink">{R.handedOff}</Badge>}
@@ -88,7 +88,7 @@ export default async function RepliesPage() {
                   <p className="m-0 mt-1 whitespace-pre-wrap break-words border-l-2 border-line pl-3 text-sm" title={R.untrusted}>
                     {r.body_text}
                   </p>
-                  {r.class_reason && r.class_source === "ai" && <p className="mt-1 text-[13px] text-muted">{r.class_reason}</p>}
+                  {r.class_reason && (r.class_source === "ai" || r.class_source === "rule") && <p className="mt-1 text-[13px] text-muted">{r.class_reason}</p>}
                 </div>
                 {r.possible_bounce && (
                   <div className="flex flex-col gap-2 border border-warn-soft bg-warn-soft/40 p-3">

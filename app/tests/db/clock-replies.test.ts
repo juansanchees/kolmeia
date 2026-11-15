@@ -209,7 +209,10 @@ describe("secret, sent references and recording: only for a mailbox listed in th
     const run = await begin();
     await listed(run);
     const ooo = (await record(clock, run, s, s.messages[0], "reply", "out_of_office", "<ooo@mail.example>")).rows![0].r;
-    expect((await admin<{ classification: string; class_source: string }>("select classification, class_source from public.email_replies where id = $1", [ooo]))[0]).toEqual({ classification: "out_of_office", class_source: "ai" });
+    expect((await admin<{ classification: string; class_source: string }>("select classification, class_source from public.email_replies where id = $1", [ooo]))[0]).toEqual({ classification: "out_of_office", class_source: "rule" });
+    // clients (people, the screen's AI) cannot write 'rule'
+    expect(code((await db.try(as(UUID_A), "select public.set_reply_class($1,'other','rule',null,null)", [ooo])).error)).toBe("22023");
+    expect((await db.try(as(UUID_A), "select public.set_reply_class($1,'other','human',null,null)", [ooo])).error).toBeUndefined();
     expect(await admin("select 1 from public.suppressions where workspace_id = $1 and value = $2", [ws, s.emails[0]])).toHaveLength(0);
     const unsub = (await record(clock, run, s, s.messages[0], "reply", "unsubscribe", "<unsub@mail.example>")).rows![0].r;
     expect((await admin<{ classification: string }>("select classification from public.email_replies where id = $1", [unsub]))[0].classification).toBe("unsubscribe");
@@ -230,6 +233,33 @@ describe("secret, sent references and recording: only for a mailbox listed in th
     expect(code((await fail(s.mailbox, "timeout")).error)).toBe("22023");
     expect((await fail(s.mailbox, "auth_failed")).error).toBeUndefined();
     expect((await admin<{ status: string; last_error: string }>("select status, last_error from public.mailboxes where id = $1", [s.mailbox]))[0]).toEqual({ status: "error", last_error: "auth_failed" });
+    await finish(run);
+    await park(s);
+  });
+});
+
+describe("review fixes", () => {
+  test("E4: several delivery reports about ONE e-mail count once (3 forged DSNs for one message do not pause)", async () => {
+    const s = await sentCampaign("forgeddsn");
+    for (let i = 0; i < 3; i++) {
+      await db.query(as(UUID_A), "select public.record_email_reply($1,$2,$3,'mailer-daemon@googlemail.com','Delivery Status Notification (Failure)','550 5.1.1',$4,now(),'bounce',$5)",
+        [s.prospects[0], s.mailbox, s.messages[0], `<forged-${i}@mail.example>`, s.emails[0]]);
+    }
+    expect(await admin("select 1 from public.email_replies where message_id = $1 and is_bounce", [s.messages[0]])).toHaveLength(3);
+    expect((await admin<{ health_status: string }>("select health_status from public.mailboxes where id = $1", [s.mailbox]))[0].health_status).toBe("ok");
+    await park(s);
+  });
+
+  test("the listing returns each mailbox's previous read time (null the first time)", async () => {
+    const s = await sentCampaign("lastread");
+    let run = await begin();
+    const a = (await listed(run)).find((m) => m.id === s.mailbox) as Mb & { last_read_at: string | null };
+    expect(a.last_read_at).toBeNull();
+    await finish(run);
+    const [{ at }] = await admin<{ at: Date }>("select clock_replies_at as at from public.mailboxes where id = $1", [s.mailbox]);
+    run = await begin();
+    const b = (await listed(run)).find((m) => m.id === s.mailbox) as Mb & { last_read_at: string | null };
+    expect(new Date(b.last_read_at!).getTime()).toBe(new Date(at).getTime());
     await finish(run);
     await park(s);
   });

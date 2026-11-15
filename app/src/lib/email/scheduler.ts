@@ -19,6 +19,8 @@ export const TICK_BUDGET_MS = 40_000;
 export const TICK_REAL_BUDGET_MS = 30_000;
 /** E5: the reply phase starts only if the sends ended before this (its own budget, CLOCK_REPLY_BUDGET_MS, then applies). */
 export const TICK_REPLY_START_MS = 25_000;
+/** E5: the hard stop of the reply phase, from the tick's start (IMAP raced against it), inside maxDuration 60. */
+export const TICK_DEADLINE_MS = 50_000;
 
 const CODE = /^[a-z0-9_:]{1,60}$/;
 
@@ -102,7 +104,7 @@ export async function runTick(opts: {
     }
     // E5: replies after the sends, only with an IMAP reader (real switch) and a store that can list reply mailboxes
     if (opts.imap && "replyMailboxes" in store && now() - started < TICK_REPLY_START_MS) {
-      const r = await clockReplies(store, opts.imap, now, { key: opts.key });
+      const r = await clockReplies(store, opts.imap, now, { key: opts.key, deadline: started + TICK_DEADLINE_MS });
       replies = r.recorded;
       failed += r.failed;
       if (r.error) firstError ??= codeOf(r.error, "reply_error");

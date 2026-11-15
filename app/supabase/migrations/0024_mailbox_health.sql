@@ -102,7 +102,9 @@ begin
   end if;
   v_since := greatest(now() - interval '30 days', coalesce(b.pause_cleared_at, '-infinity'::timestamptz));
   -- a bounce belongs to the mailbox that sent the bounced e-mail (else the mailbox that received the report)
-  select count(*) into v_bounces
+  -- distinct bounced messages (or prospects): several reports about one e-mail (duplicates, or forged by its recipient,
+  -- who knows our Message-ID) count once
+  select count(distinct coalesce(r.message_id::text, r.prospect_id::text, r.id::text)) into v_bounces
     from public.email_replies r
     left join public.email_messages m on m.id = r.message_id
    where r.is_bounce and r.created_at > v_since

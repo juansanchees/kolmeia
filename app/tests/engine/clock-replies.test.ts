@@ -8,6 +8,7 @@ import { realClockEnabled } from "@/lib/email/config";
 import { encryptSecret, mailboxAad } from "@/lib/email/crypto";
 import type { Origins } from "@/lib/email/engine";
 import type { Incoming } from "@/lib/email/replies";
+import { incomingText } from "@/lib/email/text";
 import { runTick } from "@/lib/email/scheduler";
 import { SchedulerStore } from "@/lib/email/scheduler-store";
 import type { ImapTransport, MailCreds, SmtpTransport } from "@/lib/email/transport";
@@ -39,17 +40,34 @@ class SpySmtp implements SmtpTransport {
 /** An inbox per mailbox address. Counts every login. */
 class SpyImap implements ImapTransport {
   logins: MailCreds[] = [];
+  sinces: Date[] = [];
   inbox = new Map<string, Incoming[]>();
   fail: Error | null = null;
+  /** Never answers until aborted (a server that trickles). */
+  hang = false;
+  aborted = false;
+  /** Called after the read, before the result is handed back (a slow read). */
+  after: (() => void) | null = null;
   get calls() {
     return this.logins.length;
   }
-  async fetchSince(creds: MailCreds): Promise<Incoming[]> {
+  async fetchSince(creds: MailCreds, since: Date, _max: number, signal?: AbortSignal): Promise<Incoming[]> {
     this.logins.push(creds);
+    this.sinces.push(since);
     if (this.fail) throw this.fail;
+    if (this.hang) {
+      return new Promise((_, reject) => signal?.addEventListener("abort", () => {
+        this.aborted = true;
+        reject(new Error("closed"));
+      }));
+    }
+    this.after?.();
     return this.inbox.get(creds.user) ?? [];
   }
 }
+/** The tick's clock: real time plus a jump the tests control. */
+let offset = 0;
+const clockNow = () => Date.now() + offset;
 
 let db: TestDb;
 let ws: string;
@@ -76,7 +94,7 @@ function clockClient(): SupabaseClient {
 const storeFor = (env: Record<string, string | undefined>) => new SchedulerStore(clockClient(), realClockEnabled(env));
 const ON = { SCHEDULER_REAL_SEND: "1" };
 const OFF = {};
-const tick = (store: SchedulerStore, withImap = true) => runTick({ store, origins: ORIGINS, smtp, key: KEY, imap: withImap ? imap : null });
+const tick = (store: SchedulerStore, withImap = true) => runTick({ store, origins: ORIGINS, smtp, key: KEY, imap: withImap ? imap : null, now: clockNow });
 const admin = <T = Record<string, unknown>>(sql: string, params: unknown[] = []) => db.admin<T>(sql, params);
 const replies = (campaign: string) => admin<{ id: string; is_bounce: boolean; classification: string | null }>("select id, is_bounce, classification from public.email_replies where campaign_id = $1", [campaign]);
 const prospect = async (id: string) => (await admin<{ status: string; stop_reason: string | null }>("select status, stop_reason from public.email_prospects where id = $1", [id]))[0];
@@ -123,6 +141,7 @@ afterAll(async () => {
 beforeEach(async () => {
   smtp = new SpySmtp();
   imap = new SpyImap();
+  offset = 0;
   await setSchedulerToken(db, TOKEN);
   await admin("update public.scheduler_state set lease_run = null, lease_until = null");
   await admin("update public.workspace_settings set sending_paused = false where workspace_id = $1", [ws]);
@@ -281,16 +300,124 @@ describe("every lock open (test only): replies read by the clock, rules only", (
   });
 });
 
+describe("hard limits and narrow rules (review fixes)", () => {
+  test("an 'unsubscribe' that matches only by address stops the sequence as a reply but never suppresses", async () => {
+    const s = await sentCampaign("addronly");
+    imap.inbox.set(s.address, [incoming({ from: s.emails[0], subject: "hello", text: "Please unsubscribe me." })]);
+    expect((await tick(storeFor(ON))).replies).toBe(1);
+    expect((await replies(s.campaign))[0].classification).toBeNull();
+    expect(await admin("select 1 from public.suppressions where workspace_id = $1 and value = $2", [ws, s.emails[0]])).toHaveLength(0);
+    expect(await prospect(s.prospects[0])).toEqual({ status: "replied", stop_reason: "replied" });
+    await park(s);
+  });
+
+  test("a thread-matched unsubscribe from a forged stranger's From suppresses the prospect, never the stranger", async () => {
+    const s = await sentCampaign("forgedfrom");
+    replyTo(s, 0, { from: "victim@other.example", text: "unsubscribe" });
+    expect((await tick(storeFor(ON))).replies).toBe(1);
+    const rows = await admin<{ value: string }>("select value from public.suppressions where workspace_id = $1 and value in ($2,'victim@other.example')", [ws, s.emails[0]]);
+    expect(rows).toEqual([{ value: s.emails[0] }]);
+    const [r] = await admin<{ class_source: string }>("select class_source from public.email_replies where campaign_id = $1", [s.campaign]);
+    expect(r.class_source).toBe("rule");
+    await park(s);
+  });
+
+  test("the IMAP search starts a day before the last read (a busy inbox does not hide older replies behind 50 new ones)", async () => {
+    const s = await sentCampaign("since");
+    await tick(storeFor(ON));
+    const first = imap.sinces[0].getTime();
+    expect(Math.abs(first - (Date.now() - 30 * 86_400_000))).toBeLessThan(60_000);
+    const [{ at }] = await admin<{ at: Date }>("select clock_replies_at as at from public.mailboxes where id = $1", [s.mailbox]);
+    await tick(storeFor(ON));
+    expect(imap.sinces[1].getTime()).toBe(new Date(at).getTime() - 86_400_000);
+    await park(s);
+  });
+
+  test("an IMAP read that hangs is cut at the tick's deadline and its connection closed; the mailbox is not blamed", async () => {
+    const s = await sentCampaign("hang");
+    imap.hang = true;
+    const store = storeFor(ON);
+    const { runId } = await store.beginRun();
+    const t0 = Date.now();
+    const r = await clockReplies(store, imap, Date.now, { key: KEY, deadline: Date.now() + 80 });
+    await store.finishRun(runId, { campaigns: 0, sent: 0, failed: 0 }, r.error);
+    expect(Date.now() - t0).toBeLessThan(2_000);
+    expect(r).toMatchObject({ read: 0, recorded: 0, failed: 1, error: "imap_timeout" });
+    expect(imap.aborted).toBe(true);
+    expect((await admin<{ status: string }>("select status from public.mailboxes where id = $1", [s.mailbox]))[0].status).toBe("ok");
+    await park(s);
+  });
+
+  test("past the deadline the clock stops recording and finishes its run; the next tick records the rest once", async () => {
+    const s = await sentCampaign("deadline", 2);
+    replyTo(s, 0);
+    replyTo(s, 1);
+    imap.after = () => {
+      offset = 60_000; // the read took too long: the tick's 50 s are gone
+    };
+    const r = await tick(storeFor(ON));
+    expect(r.replies).toBe(0);
+    expect(await replies(s.campaign)).toHaveLength(0);
+    expect((await admin<{ outcome: string }>("select outcome from public.scheduler_runs where id = $1", [r.runId]))[0].outcome).not.toBe("running");
+    imap.after = null;
+    offset = 0;
+    expect((await tick(storeFor(ON))).replies).toBe(2);
+    expect((await tick(storeFor(ON))).replies).toBe(0);
+    await park(s);
+  });
+});
+
 describe("rules only on the clock", () => {
   test("asksToStop reads the person's own words, not the quoted e-mail", () => {
     const base = incoming({});
-    expect(asksToStop({ ...base, text: "Please unsubscribe me." })).toBe(true);
-    expect(asksToStop({ ...base, text: "Take me off your list" })).toBe(true);
-    expect(asksToStop({ ...base, subject: "Unsubscribe", text: "" })).toBe(true);
-    expect(asksToStop({ ...base, text: "Stop emailing me" })).toBe(true);
-    expect(asksToStop({ ...base, text: "Yes, call me Tuesday." })).toBe(false);
-    expect(asksToStop({ ...base, text: "Sure.\n\nOn Mon, Juan wrote:\n> reply STOP to unsubscribe" })).toBe(false);
-    expect(asksToStop({ ...base, text: "Sure.\n> unsubscribe" })).toBe(false);
+    const says = (text: string, subject = "Re: Quick question") => asksToStop({ ...base, subject, text });
+    // real requests
+    for (const t of [
+      "Please unsubscribe me.",
+      "Take me off your list",
+      "Please remove me from your mailing list.",
+      "remove me from the email list thanks",
+      "opt me out",
+      "I'd like to opt out of these emails",
+      "Stop emailing me",
+      "please stop sending me these",
+      "Don't email me again.",
+      "No more emails please",
+    ]) expect(says(t), t).toBe(true);
+    expect(says("", "Unsubscribe")).toBe(true);
+    // normal replies
+    for (const t of [
+      "Yes, call me Tuesday.",
+      "Can you stop by tomorrow at 10?",
+      "Please take me off the cc and add Bob.",
+      "Stop sending to my old address, use new@builder.example from now on.",
+      "Is there an opt-out on the warranty?",
+      "Please don't remove me from your list, we may need you in spring.",
+      "Never unsubscribe me, this is useful.",
+      "Remove me as the contact, Bob handles HVAC.",
+    ]) expect(says(t), t).toBe(false);
+  });
+
+  test("asksToStop never reads our own e-mail or footer, however the client quoted it", () => {
+    const base = incoming({});
+    const footer = "--\nJuan Sanches\nNew England Air HVAC Corp\n1 Main St, Millbury, MA 01527\n\nIf you'd rather not hear from us, unsubscribe here: https://app.example.com/u/abcdEFGH1234";
+    const says = (text: string) => asksToStop({ ...base, text });
+    expect(says(`Sure.\n\nOn Mon, Juan wrote:\n> reply STOP to unsubscribe`)).toBe(false);
+    expect(says("Sure.\n> unsubscribe")).toBe(false);
+    // Gmail header wrapped on two lines, no ">" (some clients)
+    expect(says(`Sounds good.\n\nOn Mon, Nov 9, 2026 at 10:00 AM Juan Sanches <\nsales@neair.example> wrote:\nHi Pat\n${footer}`)).toBe(false);
+    // Portuguese and Spanish clients
+    expect(says(`Pode ligar.\n\nEm seg., 9 de nov. de 2026 às 10:00, Juan Sanches <sales@neair.example> escreveu:\nHi Pat\n${footer}`)).toBe(false);
+    expect(says(`Claro.\n\nEl lun, 9 nov 2026 a las 10:00, Juan Sanches (<sales@neair.example>) escribió:\nHi Pat\n${footer}`)).toBe(false);
+    // Outlook header block
+    expect(says(`OK\n\nFrom: Juan Sanches <sales@neair.example>\nSent: Monday\nSubject: Quick question\n\nHi Pat\n${footer}`)).toBe(false);
+    // our footer leaked with no header at all
+    expect(says(`Thanks, talk soon.\n\n${footer}`)).toBe(false);
+    expect(says("Thanks!\nIf you'd rather not hear from us, unsubscribe here: https://app.example.com/u/abcdEFGH1234")).toBe(false);
+    // an HTML-only reply (blockquote, no ">")
+    const html = `<div>Great, call me.</div><div class="gmail_quote"><div>On Mon, Juan wrote:</div><blockquote class="gmail_quote"><div>Hi Pat</div><div>If you'd rather not hear from us, unsubscribe here: <a href="https://app.example.com/u/abcdEFGH1234">link</a></div></blockquote></div>`;
+    expect(says(incomingText({ text: null, html }))).toBe(false);
+    expect(incomingText({ text: null, html })).toBe("Great, call me.");
   });
 
   test("clock-replies.ts never imports the AI and never classifies with it", () => {

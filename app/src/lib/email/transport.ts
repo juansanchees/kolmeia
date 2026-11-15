@@ -21,8 +21,11 @@ export interface SmtpTransport {
 }
 
 export interface ImapTransport {
-  /** Recent INBOX messages since a date, newest last, at most `max`, each capped in size and parsed to text. */
-  fetchSince(creds: MailCreds, since: Date, max: number): Promise<Incoming[]>;
+  /**
+   * Recent INBOX messages since a date, newest last, at most `max`, each capped in size and parsed to text.
+   * `signal` (the clock's deadline): when aborted, the connection is closed at once.
+   */
+  fetchSince(creds: MailCreds, since: Date, max: number, signal?: AbortSignal): Promise<Incoming[]>;
 }
 
 type SmtpTimeouts = { connectionTimeout: number; greetingTimeout: number; socketTimeout: number };
@@ -93,7 +96,8 @@ export class GmailSmtp implements SmtpTransport {
 export class GmailImap implements ImapTransport {
   constructor(private readonly timeouts: SmtpTimeouts = TIMEOUTS) {}
 
-  async fetchSince(creds: MailCreds, since: Date, max: number): Promise<Incoming[]> {
+  async fetchSince(creds: MailCreds, since: Date, max: number, signal?: AbortSignal): Promise<Incoming[]> {
+    if (signal?.aborted) throw new Error("imap_timeout");
     const client = new ImapFlow({
       host: GMAIL_IMAP.host,
       port: GMAIL_IMAP.port,
@@ -104,6 +108,16 @@ export class GmailImap implements ImapTransport {
       greetingTimeout: this.timeouts.greetingTimeout,
       socketTimeout: this.timeouts.socketTimeout,
     });
+    const onAbort = () => client.close();
+    signal?.addEventListener("abort", onAbort, { once: true });
+    try {
+      return await this.read(client, since, max);
+    } finally {
+      signal?.removeEventListener("abort", onAbort);
+    }
+  }
+
+  private async read(client: ImapFlow, since: Date, max: number): Promise<Incoming[]> {
     await client.connect();
     const out: Incoming[] = [];
     try {

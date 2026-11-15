@@ -5,7 +5,8 @@
 --   database: clock_real_ready(ws) (C12 gate AND the owner's switch AND the emergency stop off), and the mailbox itself
 --     'ok' with health 'ok', attached to an ACTIVE REAL campaign, with real mail sent from it in the last 30 days.
 -- scheduler_reply_mailboxes(p_run): at most 5 such mailboxes per tick, least recently read first; each is stamped with
---   this run (mailboxes.clock_replies_run). Only a mailbox listed in THIS run can then be used:
+--   this run (mailboxes.clock_replies_run) and returned with its previous read time (last_read_at: the IMAP search starts
+--   a day before it). Only a mailbox listed in THIS run can then be used:
 -- scheduler_imap_secret(p_run, p_mailbox): { id, workspace_id, email, ciphertext } of a listed mailbox while it is still
 --   readable (same rules, re-checked); else 42501 'mailbox not available'. The second (and last) scheduler function that
 --   reads a ciphertext; useless without the server-only MAILBOX_ENC_KEY.
@@ -14,7 +15,9 @@
 -- scheduler_record_reply(p_run, ...the 10 args of record_email_reply..., p_rule_class): records one matched message for
 --   a listed mailbox through record_email_reply_core (a reply stops the prospect's sequence, a bounce suppresses and
 --   counts toward E4's auto pause through the 0024 trigger). p_rule_class (rule-based, set by the server's own rules,
---   never by the AI): 'unsubscribe' (suppresses, like set_reply_class) or 'out_of_office' (label only), for replies only.
+--   never by the AI; stored with class_source 'rule', which clients cannot write): 'unsubscribe' (suppresses like
+--   set_reply_class, but the sender only when it is the prospect or their own domain) or 'out_of_office' (label only),
+--   for replies only.
 --   Recording is NOT re-gated after the listing: it only stops or suppresses (the safe direction).
 -- scheduler_mailbox_failed gains p_mailbox (default null): when p_message is null, a reply mailbox listed in this run
 --   whose login failed (auth_failed / mailbox_secret / key_missing) is marked 'error' so the clock stops logging in.
@@ -25,6 +28,10 @@
 -- ---------------------------------------------------------------- which run listed a mailbox for replies
 alter table public.mailboxes add column if not exists clock_replies_run uuid;
 alter table public.mailboxes add column if not exists clock_replies_at timestamptz;
+
+-- ---------------------------------------------------------------- labels set by the clock's rules are marked as such
+alter table public.email_replies drop constraint if exists email_replies_class_source;
+alter table public.email_replies add constraint email_replies_class_source check (class_source in ('ai', 'human', 'rule'));
 
 -- ---------------------------------------------------------------- record_email_reply: core + wrapper (0003 body)
 -- Internal (plain, no grant): only definer callers (record_email_reply, scheduler_record_reply).
@@ -127,7 +134,7 @@ begin
   if r.id is null then
     raise exception 'not allowed' using errcode = '42501';
   end if;
-  if p_source not in ('ai', 'human') then
+  if p_source not in ('ai', 'human', 'rule') then
     raise exception 'invalid source' using errcode = '22023';
   end if;
   update public.email_replies
@@ -138,7 +145,10 @@ begin
     select p.email into v_email from public.email_prospects p where p.id = r.prospect_id;
     insert into public.suppressions (workspace_id, kind, value, reason, note)
     select r.workspace_id, 'address', a.v, 'asked_to_stop', 'pediu para parar na resposta'
-      from (select distinct v from unnest(array[v_email, case when not r.is_bounce and not r.possible_bounce then r.from_address end]) as v) a
+      -- a rule (the clock, unattended) suppresses the sender only when it is the prospect or a colleague on their own
+      -- (non free-mail) domain (reply_target_address, 0003); anything else would let a forged From suppress a stranger
+      from (select distinct v from unnest(array[v_email, case when not r.is_bounce and not r.possible_bounce then
+                                                  case when p_source = 'rule' then public.reply_target_address(r.id, v_email) else r.from_address end end]) as v) a
      where a.v is not null and public.is_email_address(a.v)
     on conflict (workspace_id, kind, value) do nothing;
     update public.email_prospects set status = 'stopped', stop_reason = 'asked_to_stop'
@@ -163,6 +173,10 @@ begin
   select r.workspace_id into v_ws from public.email_replies r where r.id = p_reply;
   if v_ws is null or not public.is_workspace_sender(v_ws) then
     raise exception 'not allowed' using errcode = '42501';
+  end if;
+  -- people and the screen's AI only: 'rule' is written by the clock (scheduler_record_reply), never by a client
+  if p_source is null or p_source not in ('ai', 'human') then
+    raise exception 'invalid source' using errcode = '22023';
   end if;
   perform public.set_reply_class_core(p_reply, p_class, p_source, p_reason, p_model);
 end;
@@ -214,7 +228,7 @@ begin
   end if;
   perform public.scheduler_renew_lease(p_run);
   with picked as (
-    select b.id
+    select b.id, b.clock_replies_at as last_read_at
       from public.mailboxes b
      where public.clock_reply_mailbox_ok(b.id)
      order by b.clock_replies_at nulls first, b.id
@@ -222,9 +236,10 @@ begin
   ), stamped as (
     update public.mailboxes b set clock_replies_run = p_run, clock_replies_at = now()
       from picked where b.id = picked.id
-    returning b.id, b.workspace_id, b.email, b.clock_replies_at
+    returning b.id, b.workspace_id, b.email, picked.last_read_at
   )
-  select coalesce(jsonb_agg(jsonb_build_object('id', s.id, 'workspace_id', s.workspace_id, 'email', s.email) order by s.id), '[]'::jsonb)
+  select coalesce(jsonb_agg(jsonb_build_object('id', s.id, 'workspace_id', s.workspace_id, 'email', s.email, 'last_read_at', s.last_read_at)
+                            order by s.id), '[]'::jsonb)
     into v from stamped s;
   return jsonb_build_object('mailboxes', v);
 end;
@@ -332,9 +347,9 @@ begin
   -- the core checks the prospect and that the mailbox is in its workspace
   v_id := public.record_email_reply_core(p_prospect, p_mailbox, p_message, p_from, p_subject, p_body, p_rfc_id, p_received_at, p_kind, p_bounced);
   if v_id is not null and p_rule_class is not null then
-    -- rule labels go through the same path as the screen's (source 'ai' = a suggestion a person can change, as the
-    -- engine's header rule did before); 'unsubscribe' suppresses (the safe direction)
-    perform public.set_reply_class_core(v_id, p_rule_class, 'ai',
+    -- rule labels go through the same path as the screen's, marked 'rule' (a person can change them); 'unsubscribe'
+    -- suppresses (the safe direction)
+    perform public.set_reply_class_core(v_id, p_rule_class, 'rule',
       case p_rule_class when 'unsubscribe' then 'Pediu para sair (regra).' else 'Resposta automática (cabeçalho).' end, null);
   end if;
   return v_id;

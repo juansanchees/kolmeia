@@ -10,6 +10,8 @@ export function htmlToText(html: string): string {
     .slice(0, INCOMING_MAX * 5)
     .replace(/<!--[\s\S]*?-->/g, "")
     .replace(/<(script|style|head|title)[^>]*>[\s\S]*?<\/\1\s*>/gi, "")
+    // the quoted history of an HTML-only reply (no ">" survives the tag strip): dropped as a whole
+    .replace(/<blockquote[\s\S]*<\/blockquote\s*>/gi, "\n")
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/(p|div|li|tr|h[1-6]|blockquote)\s*>/gi, "\n")
     .replace(/<[^>]*>/g, "")
@@ -22,18 +24,42 @@ export function htmlToText(html: string): string {
     });
 }
 
-/** Strips the quoted history ("On ... wrote:" and "> " lines) so only what the person wrote remains. */
+/** Attribution lines of a quoted reply: English, Portuguese and Spanish ("On … wrote:", "Em … escreveu:", "El … escribió:"). */
+const ATTRIBUTION_START = /^\s*(On|Em|El)\s.{3,200}$/i;
+const ATTRIBUTION_END = /(wrote|escreveu|escribi[oó]):\s*$/i;
+/** An Outlook-style header block of the quoted message ("From: Name <a@b>", "De: …", "*From:* …"). */
+const QUOTED_HEADER = /^\s*\*?(From|De|Von):\*?\s.*(@|\[mailto:)/i;
+
+/** Strips the quoted history ("On ... wrote:", its pt/es forms, header blocks and "> " lines) so only what the person wrote remains. */
 export function stripQuoted(text: string): string {
   const lines = text.split("\n");
   const out: string[] = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (/^\s*On .{3,200}wrote:\s*$/i.test(line) || (/^\s*On .{3,200}$/i.test(line) && /wrote:\s*$/i.test(lines[i + 1] ?? ""))) break;
-    if (/^-{2,}\s*Original Message\s*-{2,}/i.test(line) || /^_{5,}$/.test(line.trim())) break;
+    if (ATTRIBUTION_START.test(line) && ATTRIBUTION_END.test(line)) break;
+    // a header wrapped on two (or three) lines by the client
+    if (ATTRIBUTION_START.test(line) && (ATTRIBUTION_END.test(lines[i + 1] ?? "") || ATTRIBUTION_END.test(`${lines[i + 1] ?? ""} ${lines[i + 2] ?? ""}`))) break;
+    if (/^-{2,}\s*(Original Message|Mensagem original|Mensaje original)\s*-{2,}/i.test(line) || /^_{5,}$/.test(line.trim())) break;
+    if (QUOTED_HEADER.test(line)) break;
     if (/^\s*>/.test(line)) continue;
     out.push(line);
   }
   return out.join("\n");
+}
+
+/**
+ * The person's own words for the clock's rules (E5): quoted history stripped, and nothing from OUR e-mail even when a
+ * client leaked it unquoted: stops at a signature marker ("--") and drops any line with our unsubscribe link (/u/) or
+ * the footer sentence.
+ */
+export function ownWordsForRules(text: string): string {
+  const out: string[] = [];
+  for (const line of stripQuoted(text.replace(/\r\n?/g, "\n")).split("\n")) {
+    if (/^\s*--\s*$/.test(line)) break;
+    if (/\/u\/[A-Za-z0-9_-]{8,}|\/api\/unsubscribe\/|rather not hear from us|unsubscribe here/i.test(line)) continue;
+    out.push(line);
+  }
+  return out.join("\n").slice(0, 2000);
 }
 
 /** Bounded, control-character-free plain text. */

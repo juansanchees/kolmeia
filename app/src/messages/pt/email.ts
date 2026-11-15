@@ -341,6 +341,7 @@ export const email = {
     from: "De",
     label: "Classificação",
     labelHint: "sugestão da IA",
+    labelRule: "Regra",
     labels: {
       interested: "interessado",
       not_now: "agora não",
