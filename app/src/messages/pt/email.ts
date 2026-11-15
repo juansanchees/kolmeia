@@ -183,6 +183,7 @@ export const email = {
     saveMailboxes: "Salvar caixas",
     mailboxesError: "Escolha de 1 a 10 caixas deste espaço.",
     mailboxesMax: "Uma campanha pode ter no máximo 10 caixas.",
+    delaysFromSequence: "Os prazos vêm da sequência aprovada.",
     delaysError: "E-mail 2 entre 1 e 30 dias; e-mail 3 depois do 2 e até 60.",
     start: "Começar a campanha",
     pause: "Pausar",

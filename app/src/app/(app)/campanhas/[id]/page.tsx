@@ -38,6 +38,9 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
     // C12 (0018): owner and sdr read the checklist; a closer gets no rows
     s.supabase.from("c12_approvals").select("item, evidence, approved_at").eq("workspace_id", campaign.workspace_id),
   ]);
+  // a campaign with a sequence takes its delays from the approved version (set_campaign_delays refuses them)
+  const { count: sequenceCount } = await s.supabase.from("email_sequences").select("id", { count: "exact", head: true }).eq("campaign_id", id);
+  const hasSequence = (sequenceCount ?? 0) > 0;
   const prospects = (prospectsRes.data ?? []) as ProspectRow[];
   const messages = (messagesRes.data ?? []) as MessageRow[];
   const byProspect = new Map<string, MessageRow[]>();
@@ -184,7 +187,7 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
           <div className="flex flex-col gap-2 border-t border-line pt-3">
             <Label>{C.delays}</Label>
             <p className="text-sm">{fill(C.delaysText, { s2: campaign.step2_delay_days, s3: campaign.step3_delay_days })}</p>
-            {s.canSend && <DelaysForm campaignId={id} step2={campaign.step2_delay_days} step3={campaign.step3_delay_days} />}
+            {s.canSend && !hasSequence && <DelaysForm campaignId={id} step2={campaign.step2_delay_days} step3={campaign.step3_delay_days} />}
           </div>
           <div className="flex flex-col gap-2 border-t border-line pt-3">
             <Label>{C.mailboxes}</Label>

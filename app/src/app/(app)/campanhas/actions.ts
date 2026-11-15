@@ -242,9 +242,10 @@ export async function setSendMode(campaignId: string, mode: "dry_run" | "real"):
 export async function setDelays(campaignId: string, step2: number, step3: number): Promise<ActionResult> {
   const s = await sender();
   if (!s || !uuid.safeParse(campaignId).success || !validDelays({ step2, step3 })) return err(M.campaign.delaysError);
-  const { data, error } = await s.supabase.from("email_campaigns").update({ step2_delay_days: step2, step3_delay_days: step3 }).eq("id", campaignId).select("id");
+  const { error } = await s.supabase.rpc("set_campaign_delays", { p_campaign: campaignId, p_step2: step2, p_step3: step3 });
   refresh(`/campanhas/${campaignId}`);
-  return error || !data?.length ? err(M.campaign.delaysError) : ok(M.saved);
+  if (error?.code === "55000") return err(M.campaign.delaysFromSequence);
+  return error ? err(M.campaign.delaysError) : ok(M.saved);
 }
 
 /**

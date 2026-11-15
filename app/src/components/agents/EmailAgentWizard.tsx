@@ -68,6 +68,7 @@ export function EmailAgentWizard({ mailboxes, hunters, ai, estimateUsd }: { mail
       const r = await createEmailAgentAction(
         { filter, tone, steps, delays: { step2: steps === 1 ? 3 : d2, step3: steps === 3 ? d3 : Math.max(d2 + 1, 7) }, mailboxIds: picked },
         name,
+        error?.agentId ?? null,
       );
       if (r.ok) router.push(`/agentes/${r.agentId}`);
       else setError({ message: r.error, agentId: r.agentId });

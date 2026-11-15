@@ -48,7 +48,7 @@ type Created = { ok: true; agentId: string; added: Record<string, number> } | { 
  * Born paused, with a draft sequence (one Sonnet call, charged to this user's AI caps) that nobody has approved:
  * nothing is queued as sent and no mail leaves. An AI failure leaves the agent in draft with its campaign.
  */
-export async function createEmailAgentAction(input: EmailAgentConfig, agentName: string): Promise<Created> {
+export async function createEmailAgentAction(input: EmailAgentConfig, agentName: string, reuseAgentId: string | null = null): Promise<Created> {
   const ws = await requireSender();
   const cfg = emailAgentConfigSchema.safeParse(input);
   const n = name.safeParse(agentName);
@@ -70,32 +70,44 @@ export async function createEmailAgentAction(input: EmailAgentConfig, agentName:
   const withEmail = picked.filter((i) => Boolean(i.display.email));
   if (withEmail.length === 0) return { ok: false, error: E.noLeads };
 
-  const { data: agent, error: agentErr } = await db
-    .from("agents")
-    .insert({ workspace_id: ws.id, type: "email", name: n.data, config: c, schedule: "daily" })
-    .select("id")
-    .single();
-  if (agentErr || !agent) return { ok: false, error: E.failed };
-  const agentId = String(agent.id);
+  // A retry after an AI failure reuses the draft agent and its campaign (no second agent, leads not added twice)
+  let agentId: string;
+  let campaignId: string;
+  let fresh = true;
+  const reuse = z.string().uuid().safeParse(reuseAgentId);
+  if (reuse.success) {
+    const { data: a } = await db.from("agents").select("id").eq("id", reuse.data).eq("workspace_id", ws.id).eq("type", "email").eq("status", "draft").is("archived_at", null).maybeSingle();
+    const { data: k } = a ? await db.from("email_campaigns").select("id").eq("agent_id", reuse.data).maybeSingle() : { data: null };
+    if (!a || !k) return { ok: false, error: E.failed };
+    agentId = String(a.id);
+    campaignId = String(k.id);
+    fresh = false;
+  } else {
+    const { data: agent, error: agentErr } = await db
+      .from("agents")
+      .insert({ workspace_id: ws.id, type: "email", name: n.data, config: c, schedule: "daily" })
+      .select("id")
+      .single();
+    if (agentErr || !agent) return { ok: false, error: E.failed };
+    agentId = String(agent.id);
+    const { data: camp, error: campErr } = await db.rpc("create_email_agent_campaign", { p_agent: agentId, p_name: n.data, p_list_id: null });
+    if (campErr || !camp) {
+      await db.from("agents").delete().eq("id", agentId).eq("status", "draft");
+      return { ok: false, error: E.failed };
+    }
+    campaignId = String(camp);
+  }
 
   const undo = async () => {
-    await db.from("email_campaigns").delete().eq("agent_id", agentId);
+    if (!fresh) return;
+    await db.from("email_campaigns").delete().eq("id", campaignId);
     await db.from("agents").delete().eq("id", agentId).eq("status", "draft");
   };
 
-  const { data: camp, error: campErr } = await db
-    .from("email_campaigns")
-    .insert({ workspace_id: ws.id, name: n.data, mailbox_id: c.mailboxIds[0], step2_delay_days: c.delays.step2, step3_delay_days: c.delays.step3, agent_id: agentId })
-    .select("id")
-    .single();
-  if (campErr || !camp) {
-    await undo();
-    return { ok: false, error: E.failed };
-  }
-  const campaignId = String(camp.id);
-
-  // the first mailbox came with the campaign (migration 0007 keeps the list in step); the others follow in screen order
-  for (const mailboxId of c.mailboxIds.slice(1)) {
+  // every chosen mailbox goes into the campaign list, in screen order
+  const { data: have } = await db.from("campaign_mailboxes").select("mailbox_id").eq("campaign_id", campaignId);
+  const haveIds = new Set((have ?? []).map((r: { mailbox_id: string }) => r.mailbox_id));
+  for (const mailboxId of c.mailboxIds.filter((m) => !haveIds.has(m))) {
     const { error } = await db.from("campaign_mailboxes").insert({ campaign_id: campaignId, mailbox_id: mailboxId });
     if (error) {
       await undo();

@@ -8,8 +8,8 @@ import { TEMPERATURES } from "@/lib/research/types";
 export const TONES = ["direct", "friendly", "consultive"] as const;
 export type Tone = (typeof TONES)[number];
 
-/** Leads the chat may pick from: new ones, the call list, and lost ones (others are blocked by C2/C3 anyway). */
-export const PICKABLE_STATUSES = ["new", "call_list", "lost"] as const satisfies readonly LeadStatus[];
+/** Leads the chat may pick from: new ones and the call list (lost ones are blocked by D5, the rest by C2/C3). */
+export const PICKABLE_STATUSES = ["new", "call_list"] as const satisfies readonly LeadStatus[];
 
 export const MAX_LEADS = 500;
 export const MAX_MAILBOXES = 10;

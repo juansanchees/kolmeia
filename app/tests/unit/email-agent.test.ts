@@ -75,3 +75,33 @@ describe("F4 E-mail agent creation chat", () => {
     expect(a).not.toMatch(/input\.workspace|cfg\.workspace/);
   });
 });
+
+describe("F4 E-mail agent creation through RPCs", () => {
+  test("the campaign comes from create_email_agent_campaign, all mailboxes are inserted, no delays on the campaign", () => {
+    const a = read("src/app/(app)/agentes/novo/email/actions.ts");
+    expect(a).toContain('rpc("create_email_agent_campaign"');
+    expect(a).not.toMatch(/from\("email_campaigns"\)\s*\.insert/);
+    expect(a).not.toContain("step2_delay_days");
+    expect(a).toContain("c.mailboxIds.filter");
+    expect(a).not.toContain("slice(1)");
+  });
+  test("only new and call_list leads are pickable", async () => {
+    const { PICKABLE_STATUSES } = await import("@/lib/email-agent/types");
+    expect([...PICKABLE_STATUSES]).toEqual(["new", "call_list"]);
+  });
+  test("a retry reuses the draft agent; the button is disabled while pending", () => {
+    const a = read("src/app/(app)/agentes/novo/email/actions.ts");
+    expect(a).toContain("reuseAgentId");
+    expect(a).toMatch(/eq\("status", "draft"\)/);
+    const w = read("src/components/agents/EmailAgentWizard.tsx");
+    expect(w).toContain("error?.agentId ?? null");
+    expect(w).toMatch(/disabled=\{pending \|\| !ready\}/);
+  });
+  test("delays change through set_campaign_delays and the form is hidden once a sequence exists", () => {
+    const a = read("src/app/(app)/campanhas/actions.ts");
+    expect(a).toContain('rpc("set_campaign_delays"');
+    expect(a).toContain("55000");
+    expect(a).not.toMatch(/update\(\{ step2_delay_days/);
+    expect(read("src/app/(app)/campanhas/[id]/page.tsx")).toContain("!hasSequence && <DelaysForm");
+  });
+});
