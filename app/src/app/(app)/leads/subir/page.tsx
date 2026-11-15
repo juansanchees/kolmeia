@@ -13,7 +13,7 @@ export default async function UploadListPage() {
   // newest learned profile of each import, for the "Ver perfil aprendido" links
   const profiles: Record<string, string> = {};
   if (supabase) {
-    const { data } = await supabase.from("learned_profiles").select("id, import_id").eq("workspace_id", workspace.id).order("created_at", { ascending: false }).limit(200);
+    const { data } = await supabase.from("learned_profiles").select("id, import_id").eq("workspace_id", workspace.id).in("status", ["proposed", "approved"]).order("created_at", { ascending: false }).limit(200);
     for (const p of data ?? []) if (p.import_id && !(p.import_id in profiles)) profiles[p.import_id as string] = p.id as string;
   }
   return (
