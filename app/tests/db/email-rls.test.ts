@@ -22,6 +22,7 @@ const TABLES = [
   "email_messages",
   "email_approvals",
   "campaign_mailboxes",
+  "lead_campaign_locks",
 ] as const;
 
 const CIPHER = "v1:" + "A".repeat(60);

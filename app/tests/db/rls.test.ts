@@ -142,6 +142,8 @@ describe("proof that RLS is really enforced in PGlite", () => {
         // only owner/sdr of the workspace because guard_agent runs as the client)
         "call_day", "lead_status_after_call", "lead_phone", "lead_in_active_campaign", "lead_callable", "call_agent_caller",
         "call_agent_config_ok", "log_call", "build_call_list", "build_my_call_lists", "add_to_call_list",
+        // 0021 (leads into campaigns: the C3 lock triggers and the one RPC; lead_blocks_email / best_lead_field are NOT definer)
+        "guard_prospect_lead", "sync_lead_lock", "sync_campaign_locks", "add_leads_to_campaign",
       ].sort(),
     );
     for (const r of rows) expect(r.proconfig).toContain("search_path=\"\"");

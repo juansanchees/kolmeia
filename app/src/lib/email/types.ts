@@ -66,12 +66,16 @@ export type ProspectRow = {
   workspace_id: string;
   campaign_id: string;
   candidate_id: string | null;
+  /** F4: the lead this prospect belongs to (from the candidate, or put into the campaign from LEADS). */
+  lead_id: string | null;
   company_name: string;
   contact_name: string | null;
   contact_title: string | null;
   email: string | null;
-  email_source: "research" | "manual" | null;
+  email_source: "research" | "manual" | "lead" | null;
   email_source_url: string | null;
+  /** R18 for 'lead' addresses: "<lead_fields.source>:<source_ref or field id>". */
+  email_source_ref: string | null;
   email_confirmed_by: string | null;
   /** E3: the mailbox this person stays on (set by the first claim); null until then. */
   mailbox_id: string | null;
@@ -93,7 +97,7 @@ export type ProspectRow = {
   created_at: string;
 };
 export const PROSPECT_COLUMNS =
-  "id, workspace_id, campaign_id, candidate_id, company_name, contact_name, contact_title, email, email_source, email_source_url, email_confirmed_by, mailbox_id, suggested_email, suggested_email_url, website, hook, evidence, status, stop_reason, unsub_token, replied_at, handed_off_at, handed_off_by, closer_brief, closer_brief_at, created_at";
+  "id, workspace_id, campaign_id, candidate_id, lead_id, company_name, contact_name, contact_title, email, email_source, email_source_url, email_source_ref, email_confirmed_by, mailbox_id, suggested_email, suggested_email_url, website, hook, evidence, status, stop_reason, unsub_token, replied_at, handed_off_at, handed_off_by, closer_brief, closer_brief_at, created_at";
 
 export type MessageRow = {
   id: string;
