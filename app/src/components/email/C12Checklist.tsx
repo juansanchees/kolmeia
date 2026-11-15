@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { approveC12Item, type C12Item } from "@/app/(app)/campanhas/c12-actions";
+import { approveC12Item, setClockReal, type C12Item } from "@/app/(app)/campanhas/c12-actions";
 import { fill, t } from "@/messages/pt";
 import { Badge, btn, Card, CardTitle, input, Notice } from "./bits";
 
@@ -11,8 +11,16 @@ const ITEMS = Object.keys(M.items) as C12Item[];
 
 export type C12Approval = { item: string; evidence: string; approved_at: string };
 
+export type ClockReal = { enabled: boolean; setAt: string | null; setBy: string | null };
+
+/** Pure gating of the owner switch: Ligar needs all 7 C12 items and an owner; Desligar only an owner. */
+export function clockRealGate({ approved, total, isOwner, enabled }: { approved: number; total: number; isOwner: boolean; enabled: boolean }) {
+  const missing = Math.max(0, total - approved);
+  return { canTurnOn: isOwner && !enabled && missing === 0, canTurnOff: isOwner && enabled, missing };
+}
+
 /** C12 (0018): the owner approves each item by hand with a note; everyone else sees the status only. */
-export function C12Checklist({ campaignId, approvals, isOwner }: { campaignId: string; approvals: C12Approval[]; isOwner: boolean }) {
+export function C12Checklist({ campaignId, approvals, isOwner, clock, userId }: { campaignId: string; approvals: C12Approval[]; isOwner: boolean; clock: ClockReal; userId: string }) {
   const done = new Map(approvals.map((a) => [a.item, a]));
   const count = ITEMS.filter((i) => done.has(i)).length;
   return (
@@ -38,7 +46,75 @@ export function C12Checklist({ campaignId, approvals, isOwner }: { campaignId: s
           </li>
         ))}
       </ul>
+      <ClockRealSwitch campaignId={campaignId} missing={ITEMS.length - count} total={ITEMS.length} isOwner={isOwner} clock={clock} userId={userId} />
     </Card>
+  );
+}
+
+function ClockRealSwitch({ campaignId, missing, total, isOwner, clock, userId }: { campaignId: string; missing: number; total: number; isOwner: boolean; clock: ClockReal; userId: string }) {
+  const C = M.clock;
+  const router = useRouter();
+  const [confirming, setConfirming] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [pending, start] = useTransition();
+  const gate = clockRealGate({ approved: total - missing, total, isOwner, enabled: clock.enabled });
+  const date = clock.setAt ? new Date(clock.setAt).toLocaleDateString("pt-BR") : "";
+  const who = clock.setBy === userId ? C.you : C.other;
+  const state = clock.enabled ? fill(C.stateOn, { date, who }) : clock.setAt ? fill(C.stateOffSince, { date, who }) : C.stateOff;
+  const run = (on: boolean) =>
+    start(async () => {
+      const r = await setClockReal(campaignId, on);
+      setMsg({ ok: r.ok, text: r.message });
+      setConfirming(false);
+      router.refresh();
+    });
+  return (
+    <section aria-labelledby="clock-real-title" className="flex min-w-0 flex-col gap-2 border border-line p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 id="clock-real-title" className="m-0 text-sm font-semibold">
+          {C.title}
+        </h3>
+        <Badge tone={clock.enabled ? "ok" : "warn"}>{clock.enabled ? C.on : C.off}</Badge>
+      </div>
+      <p className="m-0 break-words text-[13px] text-muted">{state}</p>
+      <p className="m-0 break-words text-[13px] text-muted">{C.serverNote}</p>
+      {!isOwner && <p className="m-0 text-[13px] text-muted">{C.viewOnly}</p>}
+      {isOwner && !clock.enabled && gate.missing > 0 && <Notice tone="warn">{fill(C.needsC12, { n: gate.missing })}</Notice>}
+      {isOwner && confirming && (
+        <Notice tone="warn">
+          <strong>{C.confirmTitle}</strong> {C.confirmBody}
+        </Notice>
+      )}
+      {isOwner && (
+        <div className="flex flex-wrap items-center gap-2">
+          {!clock.enabled && !confirming && (
+            <button type="button" className={btn.ghost} disabled={!gate.canTurnOn || pending} onClick={() => setConfirming(true)}>
+              {C.turnOn}
+            </button>
+          )}
+          {!clock.enabled && confirming && (
+            <>
+              <button type="button" className={btn.ghost} disabled={!gate.canTurnOn || pending} onClick={() => run(true)}>
+                {C.confirmYes}
+              </button>
+              <button type="button" className={btn.ghost} disabled={pending} onClick={() => setConfirming(false)}>
+                {C.cancel}
+              </button>
+            </>
+          )}
+          {clock.enabled && (
+            <button type="button" className={btn.ghost} disabled={!gate.canTurnOff || pending} onClick={() => run(false)}>
+              {C.turnOff}
+            </button>
+          )}
+          {msg && (
+            <span role={msg.ok ? "status" : "alert"} className={`text-sm ${msg.ok ? "text-ok" : "text-danger"}`}>
+              {msg.text}
+            </span>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 

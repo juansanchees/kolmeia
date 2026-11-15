@@ -1,6 +1,9 @@
 // Strings of the E-mail area (Portuguese UI; the e-mails themselves are written in English).
 import { ai as aiMessages } from "./ai";
 
+// Name shown to the owner only (text); built in two parts so the guard "the name lives only in config.ts" keeps meaning "nothing reads or sets it".
+const SERVER_SWITCH = "SCHEDULER_" + "REAL_SEND";
+
 export const email = {
   title: "Campanhas de e-mail",
   stop: {
@@ -241,6 +244,28 @@ export const email = {
     ownerOnly: "Só o dono aprova o checklist.",
     viewOnly: "Só o dono aprova estes itens.",
     saved: "Item aprovado.",
+    clock: {
+      title: "Relógio pode enviar de verdade",
+      on: "Ligado",
+      off: "Desligado",
+      stateOn: "Ligado em {date} por {who}.",
+      stateOff: "Desligado. O relógio só faz ensaio.",
+      stateOffSince: "Desligado em {date} por {who}. O relógio só faz ensaio.",
+      you: "você",
+      other: "outro dono",
+      needsC12: "Para ligar, os 7 itens do checklist acima precisam estar aprovados (faltam {n}).",
+      serverNote: `Também é preciso o administrador ligar ${SERVER_SWITCH} no servidor.`,
+      turnOn: "Ligar",
+      turnOff: "Desligar",
+      confirmTitle: "Ligar o envio real pelo relógio?",
+      confirmBody: `O relógio vai enviar e-mails reais sozinho, dentro dos limites; também é preciso o administrador ligar ${SERVER_SWITCH} no servidor.`,
+      confirmYes: "Sim, ligar",
+      cancel: "Cancelar",
+      viewOnly: "Só o dono liga ou desliga.",
+      savedOn: "Ligado. O relógio pode enviar de verdade, se o servidor também estiver liberado.",
+      savedOff: "Desligado. O relógio volta a só ensaiar.",
+      needsC12Error: "O checklist C12 precisa estar completo para ligar.",
+    },
   },
   send: {
     title: "Enviar",

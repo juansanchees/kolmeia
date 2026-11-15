@@ -38,6 +38,9 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
     // C12 (0018): owner and sdr read the checklist; a closer gets no rows
     s.supabase.from("c12_approvals").select("item, evidence, approved_at").eq("workspace_id", campaign.workspace_id),
   ]);
+  // 0025: the owner's switch for real sends by the clock (read-only here; set_clock_real writes it)
+  const { data: clockRow } = await s.supabase.from("workspace_settings").select("clock_real_enabled, clock_real_set_at, clock_real_set_by").eq("workspace_id", campaign.workspace_id).maybeSingle();
+  const clock = { enabled: clockRow?.clock_real_enabled === true, setAt: (clockRow?.clock_real_set_at as string | null) ?? null, setBy: (clockRow?.clock_real_set_by as string | null) ?? null };
   // a campaign with a sequence takes its delays from the approved version (set_campaign_delays refuses them)
   const { count: sequenceCount } = await s.supabase.from("email_sequences").select("id", { count: "exact", head: true }).eq("campaign_id", id);
   const hasSequence = (sequenceCount ?? 0) > 0;
@@ -213,7 +216,7 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
         </Card>
       </div>
 
-      {s.canSend && <C12Checklist campaignId={id} approvals={c12} isOwner={s.workspace.role === "owner"} />}
+      {s.canSend && <C12Checklist campaignId={id} approvals={c12} isOwner={s.workspace.role === "owner"} clock={clock} userId={s.user.id} />}
 
       <Card aria-labelledby="pros-title">
         <CardTitle id="pros-title">
