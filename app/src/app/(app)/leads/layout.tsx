@@ -1,5 +1,5 @@
 import { getCurrentWorkspace } from "@/lib/workspace";
-import { LEADS_TABS } from "@/lib/nav";
+import { LEADS_TABS, leadsTabsFor } from "@/lib/nav";
 import { SubNav } from "@/components/SubNav";
 import { Notice } from "@/components/email/bits";
 import { t } from "@/messages/pt";
@@ -14,7 +14,7 @@ export default async function LeadsLayout({ children }: { children: React.ReactN
           <h1 className="text-4xl">{t.leads.title}</h1>
           <p className="text-muted">{t.leads.subtitle}</p>
         </header>
-        <SubNav label={t.leads.nav.label} items={LEADS_TABS} />
+        <SubNav label={t.leads.nav.label} items={workspace ? leadsTabsFor(workspace.role) : LEADS_TABS} />
       </div>
       {workspace?.role === "closer" && <Notice tone="info">{t.roles.closerNotice}</Notice>}
       {children}

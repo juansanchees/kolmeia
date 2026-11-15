@@ -17,9 +17,9 @@ function Card({ title, text, children, off }: { title: string; text: string; chi
   );
 }
 
-export function AgentGallery({ hasProfile, serviceArea, ai }: { hasProfile: boolean; serviceArea: string; ai: boolean }) {
+export function AgentGallery({ hasProfile, serviceArea, ai, defaultRegion = "" }: { hasProfile: boolean; serviceArea: string; ai: boolean; defaultRegion?: string }) {
   const [describe, setDescribe] = useState("");
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultRegion !== "");
   const [seed, setSeed] = useState("");
   const create = () => {
     setSeed(describe.trim());
@@ -55,7 +55,7 @@ export function AgentGallery({ hasProfile, serviceArea, ai }: { hasProfile: bool
         </Card>
       </div>
       <p className="text-sm text-muted">{G.aiCall}</p>
-      {open && <HunterStartForm key={seed} hasProfile={hasProfile} serviceArea={serviceArea} ai={ai} seedText={seed} />}
+      {open && <HunterStartForm key={seed} hasProfile={hasProfile} serviceArea={serviceArea} ai={ai} seedText={seed} defaultRegion={defaultRegion} />}
     </div>
   );
 }

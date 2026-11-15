@@ -117,6 +117,21 @@ Valem para os e-mails da sequência, no clique e no relógio, em ensaio e em env
 - **LEADS**: marque leads ou use "Qualificar os próximos 10/25/50 do filtro". A estimativa aparece antes de [Confirmar].
 - Aplicar a migração 0014 antes do código. Nenhum cron novo.
 
+## Perfil aprendido e Cobertura (F3c-3)
+Antes do código: aplicar `supabase/migrations/0015_profile_coverage.sql` (depende de 0001-0011, 0013 e 0014; não precisa da 0012).
+
+**Perfil aprendido**
+- Suba uma lista com "Usar como treino" e clique em Treinar (uma chamada de IA, com estimativa de custo). Sai um cartão com pontos, cada um com as linhas que o provam.
+- Você pode aprovar, editar e aprovar, ou descartar. Sem aprovação nada muda: só vale com OK.
+- Aprovado para um Caçador (ou todos), a próxima execução dele usa o perfil. A versão fica gravada em cada execução. O filtro do Qualificador segue o perfil aprovado.
+- "Comparar com o Caçador" mostra precisão e cobertura do Caçador contra a lista.
+
+**Cobertura** (LEADS, aba só para dono e SDR)
+- Lista as 351 cidades de Massachusetts por condado. Cidade coberta = buscada nos últimos 90 dias (Caçador, pesquisa avulsa, lista importada com leads ali, ou marca manual).
+- "Já procurei aqui fora do app" cria uma marca manual (cidade, data, nota).
+- "Caçar ▸" numa cidade sem busca abre o Caçador com a região preenchida.
+- Limites: lê as 500 execuções e 100 listas mais novas, cidades de até 25 listas dentro dos 90 dias (5.000 linhas cada) e até 5.000 leads.
+
 ## Pendências
 - O painel de uso das caixas (`mailbox_usage`) ainda conta as últimas 24 horas e pode divergir do portão de limite do dia até ser atualizado.
 

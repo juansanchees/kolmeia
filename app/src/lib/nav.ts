@@ -29,6 +29,11 @@ export const LEADS_TABS: readonly NavItem[] = [
   { href: "/leads/closer", label: t.leads.nav.closer },
 ];
 
+/** Cobertura is for owner and sdr; the closer keeps the two tabs above. */
+export function leadsTabsFor(role: Role): readonly NavItem[] {
+  return role === "closer" ? LEADS_TABS : [...LEADS_TABS, { href: "/leads/cobertura", label: t.coverage.tab }];
+}
+
 export const CAMPAIGN_TABS: readonly NavItem[] = [
   { href: "/campanhas", label: t.email.nav.campaigns },
   { href: "/campanhas/respostas", label: t.email.nav.replies },

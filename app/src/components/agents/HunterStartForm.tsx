@@ -31,11 +31,13 @@ export function HunterStartForm({
   serviceArea,
   ai,
   seedText,
+  defaultRegion = "",
 }: {
   hasProfile: boolean;
   serviceArea: string;
   ai: boolean;
   seedText: string;
+  defaultRegion?: string;
 }) {
   const [state, action, pending] = useActionState(startHunterAction, idle);
   const err = state.fieldErrors ?? {};
@@ -44,8 +46,10 @@ export function HunterStartForm({
   const [audience, setAudience] = useState<(typeof AUDIENCES)[number]>(seedText ? "other" : "builder");
   const [audienceText, setAudienceText] = useState(seedText);
   const options = regionOptions(serviceArea);
-  const [regionChoice, setRegionChoice] = useState<string>(options[0] ?? OTHER);
-  const [regionText, setRegionText] = useState("");
+  // A region from [Caçar ▸] that is not one of the options pre-fills the "other" text.
+  const preset = defaultRegion !== "" && !options.includes(defaultRegion);
+  const [regionChoice, setRegionChoice] = useState<string>(preset ? OTHER : defaultRegion || (options[0] ?? OTHER));
+  const [regionText, setRegionText] = useState(preset ? defaultRegion : "");
   const region = regionChoice === OTHER ? regionText : regionChoice;
 
   return (

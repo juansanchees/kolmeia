@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { CAMPAIGN_TABS, LEADS_TABS, MAIN_AREAS, SETTINGS_HREF, SETTINGS_TABS, activeHref, areasFor, settingsTabsFor } from "@/lib/nav";
+import { CAMPAIGN_TABS, LEADS_TABS, MAIN_AREAS, SETTINGS_HREF, SETTINGS_TABS, activeHref, areasFor, leadsTabsFor, settingsTabsFor } from "@/lib/nav";
 import { isSender } from "@/lib/roles";
 
 const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
@@ -284,5 +284,17 @@ describe("F3c-3 profile card", () => {
     const src = read("src/components/profile/TrainButton.tsx");
     expect(src).toContain("t.profile.train");
     expect(src).toContain("estimateUsd");
+  });
+});
+
+describe("F3c-3 Cobertura tab", () => {
+  test("Cobertura is an owner/sdr tab and [Caçar ▸] opens the Caçador with the region filled", () => {
+    expect(leadsTabsFor("closer").some((i) => i.href === "/leads/cobertura")).toBe(false);
+    expect(leadsTabsFor("closer")).toEqual(LEADS_TABS);
+    for (const role of ["owner", "sdr"] as const) expect(leadsTabsFor(role).map((i) => [i.label, i.href])).toContainEqual(["Cobertura", "/leads/cobertura"]);
+    expect(read("src/app/(app)/leads/cobertura/page.tsx")).toContain("requireSender");
+    expect(read("src/app/(app)/leads/cobertura/actions.ts")).toContain("requireSender");
+    expect(read("src/app/(app)/agentes/novo/page.tsx")).toContain("regiao");
+    expect(read("src/components/agents/HunterStartForm.tsx")).toContain("defaultRegion");
   });
 });
