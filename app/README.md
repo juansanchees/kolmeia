@@ -44,7 +44,7 @@ A IA é trocada por um cliente falso (`tests/engine/fake-ai.ts`): **nenhum teste
 
 ## O que o dono precisa fazer depois
 1. Criar um projeto Supabase **separado** para o produto (não o do site).
-2. Aplicar as migrações de `supabase/migrations/` em ordem, de `0001` a `0006` (SQL Editor, como o papel `postgres`). A `0006_gates.sql` tem que estar aplicada **antes** de publicar esta versão do app.
+2. Aplicar as migrações de `supabase/migrations/` em ordem, de `0001` a `0020` (SQL Editor, como o papel `postgres`; não há `0012` nesta pasta). A `0007_rotation.sql` tem que estar aplicada **antes** de publicar esta versão do app.
 3. Em Authentication, **manter a confirmação de e-mail LIGADA** (desligada, o cadastro revela se um e-mail já existe).
 4. Colar as duas chaves públicas em `.env.local` (e na Vercel, quando houver deploy).
 5. Para a Pesquisa: criar uma chave na Console da Anthropic, ligar a busca na web para a organização, e colar em `ANTHROPIC_API_KEY` (só servidor; na Vercel, sem o prefixo `NEXT_PUBLIC_`).
@@ -70,7 +70,7 @@ A IA é trocada por um cliente falso (`tests/engine/fake-ai.ts`): **nenhum teste
 - **O que faz:** a cada 5 minutos o `pg_cron` do Supabase chama `POST /api/scheduler/tick`, sem ninguém logado. O tick pega os e-mails **aprovados e vencidos** de campanhas **em ensaio** e roda o mesmo passo de envio (`sendStep`), no máximo 1 por campanha e 10 por tick. Cada tick grava uma linha em `scheduler_runs` (hora, contagens, código curto de erro; nada de endereço, assunto ou texto).
 - **Só ensaio, só envio:** o banco recusa qualquer campanha que não esteja em ensaio e o transporte SMTP do relógio sempre falha. Não lê respostas, não usa senha da caixa, não chama IA. Envio real continua só com a tela aberta.
 - **Credencial:** um token de 64 caracteres hex, conferido pelo banco (guarda só o hash em `scheduler_state`). O app não tem variável nova. Sem token configurado, o relógio está desligado.
-- **Para ligar (uma vez, o dono):** aplicar as migrações `0005_scheduler.sql` e `0006_gates.sql` e colar `supabase/manual/scheduler_cron.sql` no editor SQL do Supabase, trocando `<APP_URL>` e `<TOKEN>`. O mesmo arquivo tem os comandos para parar o relógio e trocar o token.
+- **Para ligar (uma vez, o dono):** aplicar as migrações `0005_scheduler.sql`, `0006_gates.sql` e `0007_rotation.sql` e colar `supabase/manual/scheduler_cron.sql` no editor SQL do Supabase, trocando `<APP_URL>` e `<TOKEN>`. O mesmo arquivo tem os comandos para parar o relógio e trocar o token.
 
 ## Portões de envio (E2)
 Valem para os e-mails da sequência, no clique e no relógio, em ensaio e em envio real.
@@ -82,6 +82,15 @@ Valem para os e-mails da sequência, no clique e no relógio, em ensaio e em env
 - **1 pessoa por empresa por dia**, por espaço. "Empresa" = a empresa da pesquisa; sem ela, o domínio do e-mail (exceto e-mail pessoal, como gmail ou comcast); sem isso, o nome da empresa. Ensaio e envio real são contados separados. A regra lê o registro de envios (que ninguém apaga): falha ou envio interrompido não bloqueia a empresa. Quem é bloqueado é pulado e espera o dia seguinte, sem travar a fila.
 - Esses valores ainda não se editam pela tela. A página da campanha mostra a regra em uma linha.
 - **Antes de publicar** esta versão do app, aplicar `0006_gates.sql`: a página da campanha lê as colunas novas.
+
+## Rodízio de caixas (E3)
+- **Várias caixas por campanha**: na página da campanha, marque de 1 a 10 caixas deste espaço. Cada caixa mostra quantos e-mails saíram dela hoje.
+- **Quem recebe o 1º e-mail**: a caixa que menos enviou hoje (desde a meia-noite do fuso da campanha), entre as que podem enviar agora. Em envio real, só caixas verificadas. Caixa no limite do dia, no teto de 50 em 24 h ou no intervalo é pulada.
+- **Caixa fixa por pessoa**: o 2º e 3º e-mails e as respostas saem sempre pela caixa do 1º e-mail, na mesma conversa. Se essa caixa for desmarcada, apagada, ou não estiver verificada em envio real, a pessoa **espera** (nunca muda de caixa). Marcar a caixa de novo faz ela voltar.
+- **Limites**: o limite da campanha soma todas as caixas dela; o limite, o teto e o intervalo de cada caixa valem por endereço, somando todas as campanhas.
+- **Envio real**: precisa de pelo menos uma caixa verificada. Ao passar de ensaio para real, as caixas escolhidas no ensaio são esquecidas. Trocar a primeira caixa de uma campanha em envio real volta a campanha para ensaio (como antes).
+- `email_campaigns.mailbox_id` continua existindo e quer dizer "primeira caixa da campanha"; o banco mantém as duas coisas em sincronia.
+- **Antes de publicar** esta versão do app, aplicar `0007_rotation.sql`: o envio lê a caixa gravada em cada e-mail.
 
 ## Leads (F3a)
 - **LEADS** = todas as empresas que as pesquisas acharam, **sem repetir** (uma linha por empresa, por espaço). Mesma empresa escrita diferente (nome, site, telefone) vira um lead só.
