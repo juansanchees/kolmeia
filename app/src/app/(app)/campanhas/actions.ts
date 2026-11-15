@@ -204,6 +204,28 @@ export async function pauseAllCampaigns(): Promise<ActionResult> {
   return error ? err() : ok(fill(M.overview.pausedN, { n: data?.length ?? 0 }));
 }
 
+/**
+ * E4 emergency stop ("Parar todos os envios"): any sender turns it on; only an owner turns it off (checked again in SQL).
+ * While on, no claim of any kind happens (click, clock, rehearsal, real, answers).
+ */
+export async function setSendingPaused(on: boolean): Promise<ActionResult> {
+  const s = await sender();
+  if (!s || typeof on !== "boolean") return err();
+  if (!on && s.workspace.role !== "owner") return err(M.stop.onlyOwner);
+  const { error } = await s.supabase.rpc("set_sending_paused", { p_ws: s.workspace.id, p_on: on });
+  refresh("/campanhas", "/configuracoes/caixas");
+  return error ? err() : ok(on ? M.stop.done : M.stop.resumed);
+}
+
+/** E4: an owner puts a mailbox paused on bounces back to work. */
+export async function clearMailboxPause(mailboxId: string): Promise<ActionResult> {
+  const s = await emailSession();
+  if (!s || s.workspace.role !== "owner" || !uuid.safeParse(mailboxId).success) return err();
+  const { error } = await s.supabase.rpc("clear_mailbox_pause", { p_mailbox: mailboxId });
+  refresh("/configuracoes/caixas");
+  return error ? err() : ok(M.saved);
+}
+
 /** Rehearsal <-> real. Real is owner-only, with a verified mailbox and postal address (checked again in SQL; R4). */
 export async function setSendMode(campaignId: string, mode: "dry_run" | "real"): Promise<ActionResult> {
   const s = await sender();

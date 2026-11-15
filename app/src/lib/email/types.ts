@@ -31,8 +31,20 @@ export type MailboxRow = {
   verified_at: string | null;
   daily_limit: number;
   created_at: string;
+  /** E4 (0024): warm-up ramp. Real sends a day = ramp_start + ramp_step x business days since ramp_started_at (≤ daily_limit). */
+  ramp_enabled: boolean;
+  ramp_start: number;
+  ramp_step: number;
+  /** Set by the mailbox's first real claim; null = not started (day 0). */
+  ramp_started_at: string | null;
+  /** E4: 'paused_bounce' = too many bounces (≥ 3 and ≥ 5 % in 30 days); only an owner clears it. */
+  health_status: MailboxHealth;
+  paused_reason: string | null;
+  paused_at: string | null;
 };
-export const MAILBOX_COLUMNS = "id, workspace_id, email, status, last_error, verified_at, daily_limit, created_at";
+export type MailboxHealth = "ok" | "paused_bounce";
+export const MAILBOX_COLUMNS =
+  "id, workspace_id, email, status, last_error, verified_at, daily_limit, created_at, ramp_enabled, ramp_start, ramp_step, ramp_started_at, health_status, paused_reason, paused_at";
 
 export type CampaignRow = {
   id: string;
@@ -183,7 +195,9 @@ export type ClaimOutcome =
   | "gap"
   | "outside_window"
   | "campaign_limit"
-  | "nothing_due";
+  | "nothing_due"
+  /** E4 (0024): the workspace's emergency stop is on; nothing is claimed until an owner turns it off. */
+  | "sending_paused";
 
 export type ClaimResult = { outcome: ClaimOutcome; message_id?: string; wait_until?: string };
 

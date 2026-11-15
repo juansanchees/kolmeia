@@ -4,7 +4,7 @@ import { hasMailboxKey } from "@/lib/email/config";
 import { senderComplete } from "@/lib/email/compose";
 import { loadMailboxes, loadSender } from "@/lib/email/queries";
 import { emailSession } from "@/lib/email/session";
-import { removeMailbox, reverifyMailbox, sendTestMessage } from "@/app/(app)/campanhas/actions";
+import { clearMailboxPause, removeMailbox, reverifyMailbox, sendTestMessage } from "@/app/(app)/campanhas/actions";
 import { ActionButton } from "@/components/email/ActionButton";
 import { Badge, Card, CardTitle, Label, Notice } from "@/components/email/bits";
 import { ConnectMailboxForm, MailboxLimitForm, SenderForm } from "@/components/email/forms";
@@ -13,6 +13,9 @@ import { fill, t } from "@/messages/pt";
 
 const M = t.email;
 const STATUS_TONE = { unverified: "cold", ok: "ok", error: "danger" } as const;
+
+/** E4 (0024): mailbox_usage also answers the real limit of today (warm-up ramp). */
+type UsageWithRamp = { real_limit?: number } | null;
 
 export default async function MailboxPage() {
   const s = await emailSession();
@@ -41,8 +44,20 @@ export default async function MailboxPage() {
               <li key={m.id} className="flex min-w-0 flex-col gap-3 border border-line p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="break-all font-semibold">{m.email}</span>
-                  <Badge tone={STATUS_TONE[m.status]}>{M.mailbox.statuses[m.status]}</Badge>
+                  <span className="flex flex-wrap gap-2">
+                    <Badge tone={STATUS_TONE[m.status]}>{M.mailbox.statuses[m.status]}</Badge>
+                    <Badge tone={m.health_status === "ok" ? "ok" : "danger"} title={m.paused_reason ?? undefined}>{M.mailbox.health[m.health_status]}</Badge>
+                  </span>
                 </div>
+                {m.health_status === "paused_bounce" && (
+                  <div className="flex flex-col gap-2">
+                    <Notice role="alert">
+                      {M.mailbox.pausedHint}
+                      {m.paused_reason ? ` (${m.paused_reason}${m.paused_at ? ` · ${when(m.paused_at)}` : ""})` : ""}
+                    </Notice>
+                    {isOwner && <ActionButton action={clearMailboxPause.bind(null, m.id)} label={M.mailbox.clearPause} confirm={M.mailbox.clearPauseConfirm} />}
+                  </div>
+                )}
                 {m.last_error && (
                   <p className="text-sm text-danger">
                     {m.last_error === "auth_failed" || m.last_error === "mailbox_secret" || m.last_error === "key_missing" ? M.mailbox.errors[m.last_error] : m.last_error}
@@ -53,6 +68,19 @@ export default async function MailboxPage() {
                   <div className="text-sm">
                     {m.usage ? fill(M.mailbox.todayValue, { real: m.usage.real, dry: m.usage.dry_run, limit: m.usage.limit, test: m.usage.test ?? 0 }) : "?"}
                     {m.verified_at ? ` · ${when(m.verified_at)}` : ""}
+                  </div>
+                </div>
+                <div>
+                  <Label>{M.mailbox.ramp}</Label>
+                  <div className="text-sm">
+                    {!m.ramp_enabled
+                      ? fill(M.mailbox.rampOff, { limit: m.daily_limit })
+                      : fill(M.mailbox.rampValue, {
+                          today: (m.usage as UsageWithRamp)?.real_limit ?? "?",
+                          start: m.ramp_start,
+                          step: m.ramp_step,
+                          limit: m.daily_limit,
+                        }) + (m.ramp_started_at ? ` · ${when(m.ramp_started_at)}` : ` · ${M.mailbox.rampNotStarted}`)}
                   </div>
                 </div>
                 {isOwner && <MailboxLimitForm mailboxId={m.id} limit={m.daily_limit} />}
