@@ -149,6 +149,8 @@ describe("proof that RLS is really enforced in PGlite", () => {
         // 0023 part 1 (sequences: owner/sdr save a version and preview it; render_email_template / js_trim / prospect_template_vars /
         // email_step_ok / render_sequence_for are NOT definer)
         "save_sequence_draft", "preview_sequence",
+        // 0023 part 2 (J1: the owner approves a version; Ligar/Pausar an e-mail agent; queue_approved_sequence is NOT definer)
+        "approve_email_sequence", "set_email_agent_running",
         // 0024 (E4 mailbox health: bounce pause, owner clears it, emergency stop)
         "pause_mailbox_on_bounces", "clear_mailbox_pause", "set_sending_paused",
       ].sort(),

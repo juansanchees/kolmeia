@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { TEMPLATE_VECTORS } from "../fixtures/template-vectors";
-import { TestDb, as, openGates, UUID_A, UUID_B, UUID_C } from "./helpers";
-import { CIPHER, createOwner } from "./scheduler-seed";
+import { TestDb, anonWithToken, as, openGates, setSchedulerToken, tryCommit, UUID_A, UUID_B, UUID_C } from "./helpers";
+import { CIPHER, TOKEN, createOwner } from "./scheduler-seed";
+import { randomUUID as gen } from "node:crypto";
 
 // Migration 0023 part 1 (F4 Task 4): versioned e-mail sequences, ONE SQL renderer (pinned to the TS preview by
 // tests/fixtures/template-vectors.ts) and the 3-example preview. Fictional data only.
@@ -237,5 +238,249 @@ describe("0023 versioned sequences", () => {
     expect(code((await db.try(as(UUID_A), "select public.preview_sequence(gen_random_uuid())")).error)).toBe("42501");
     // the agent link on the campaign is not client-writable either
     expect((await db.try(as(UUID_A), "update public.email_campaigns set agent_id = null where id = $1", [camp])).error?.message).toMatch(/permission denied/);
+  });
+});
+
+// ---------------------------------------------------------------- 0023 part 2 (F4 Task 5): J1 approval, queue, Ligar/Pausar
+type Msg = { id: string; prospect_id: string; step: number; status: string; subject: string; body: string; approved_by: string | null;
+  approved_at: string | null; approved_to: string | null; approved_digest: string | null; ai_drafted: boolean; prompt_version: string | null;
+  due_at: string | null; cancel_reason: string | null };
+const messagesOf = (camp: string) => db.admin<Msg>(
+  "select id, prospect_id, step, status, subject, body, approved_by, approved_at, approved_to, approved_digest, ai_drafted, prompt_version, due_at, cancel_reason from public.email_messages where campaign_id = $1 order by prospect_id, step", [camp]);
+const approve = (seq: string, digest: string, user = UUID_A) =>
+  tryCommit<{ n: number }>(db, as(user), "select public.approve_email_sequence($1,$2) as n", [seq, digest]);
+async function emailAgent(label: string): Promise<{ agent: string; camp: string }> {
+  const agent = (await db.query<{ id: string }>(as(UUID_A), "insert into public.agents (workspace_id, type, name) values ($1,'email',$2) returning id", [ws, label]))[0].id;
+  const camp = await newCampaign(label);
+  await db.admin("update public.email_campaigns set agent_id = $2 where id = $1", [camp, agent]);
+  return { agent, camp };
+}
+const prospectOf = async (lead: string) => (await db.admin<{ id: string }>("select id from public.email_prospects where lead_id = $1", [lead]))[0].id;
+
+describe("0023 part 2: owner approves once (J1), the queue, Ligar/Pausar", () => {
+  test("the approval is tied to the digest the screen showed; an sdr cannot approve", async () => {
+    const camp = await newCampaign("j1-digest");
+    await db.query(as(UUID_A), "select public.add_leads_to_campaign($1,$2::uuid[])", [camp, [
+      await newLead("Dig One", "pat@dig1.example", "Pat Doe", "Worcester"),
+      await newLead("Dig Two", "sam@dig2.example", "Sam Roe", null),
+    ]]);
+    const seq = await saved(camp);
+    const shown = await preview(seq);
+    // D3: only the owner; the sdr, the closer and another workspace are refused
+    for (const user of [SDR, UUID_C, UUID_B]) expect(code((await approve(seq, shown.digest, user)).error), user).toBe("42501");
+    expect((await approve(seq, shown.digest, SDR)).error?.message).toMatch(/J1: only the owner approves/);
+    // a digest the screen never showed, or text that changed after the preview: review again (40001), nothing queued
+    expect(code((await approve(seq, "0".repeat(64))).error)).toBe("40001");
+    await db.query(as(UUID_A), "update public.email_prospects set contact_name = 'Bob Roe' where id = $1", [shown.examples[0].prospect_id]);
+    const stale = await approve(seq, shown.digest);
+    expect(code(stale.error)).toBe("40001");
+    expect(stale.error?.message).toMatch(/sequence changed; review again/);
+    expect(await messagesOf(camp)).toHaveLength(0);
+    expect(await db.admin("select status from public.email_sequences where id = $1", [seq])).toEqual([{ status: "draft" }]);
+
+    const again = await preview(seq);
+    const r = await approve(seq, again.digest);
+    expect(r.error).toBeUndefined();
+    expect(r.rows?.[0].n).toBe(4); // 2 leads x 2 steps
+    const s = (await db.admin<{ status: string; approved_by: string; approved_at: string | null; approved_digest: string; example_prospect_ids: string[] }>(
+      "select status, approved_by, approved_at, approved_digest, example_prospect_ids from public.email_sequences where id = $1", [seq]))[0];
+    expect(s).toMatchObject({ status: "approved", approved_by: UUID_A, approved_digest: again.digest });
+    expect(s.approved_at).not.toBeNull();
+    expect(s.example_prospect_ids).toEqual(again.examples.map((e) => e.prospect_id));
+    // two tabs: the second click finds the version no longer a draft
+    expect(code((await approve(seq, again.digest)).error)).toBe("55000");
+    // only a draft that is the newest version: an older (superseded) one is refused even with its own digest
+    const v2 = await saved(camp, [{ step: 1, subject: "Other", body: "Hi {{first_name}}" }]);
+    const v2shown = await preview(v2);
+    const v3 = await saved(camp, [{ step: 1, subject: "Third", body: "Hi {{first_name}}" }]);
+    expect(code((await approve(v2, v2shown.digest)).error)).toBe("55000");
+    expect(code((await approve(seq, again.digest)).error)).toBe("55000");
+    // a sequence with no lead to show cannot be approved (J1 needs at least one example)
+    const empty = await newCampaign("j1-empty");
+    const lone = await saved(empty);
+    expect(code((await approve(lone, (await preview(lone)).digest)).error)).toBe("22023");
+    expect(code((await approve(gen(), "x")).error)).toBe("42501");
+    expect(v3).toBeTruthy();
+  });
+
+  test("approving queues one approved message per step per lead with the R1 stamp and sends nothing", async () => {
+    const camp = await newCampaign("j1-queue");
+    const [ok, noCity, linky, blocked] = [
+      await newLead("Que One", "pat@que1.example", "Pat Doe", "Worcester"),
+      await newLead("Que Two", "sam@que2.example", null, null),
+      await newLead("Que Link", "max@quelink.example", "Max Poe", "www.que-evil.example"),
+      await newLead("Que Block", "kim@queblock.example", "Kim Loe", "Salem"),
+    ];
+    await db.query(as(UUID_A), "select public.add_leads_to_campaign($1,$2::uuid[])", [camp, [ok, noCity, linky, blocked]]);
+    // C2: a lead that became do_not_call while its prospect still looks active is never queued
+    await db.pg.exec("alter table public.leads disable trigger stop_email_on_lead_block");
+    await db.admin("update public.leads set do_not_call = true where id = $1", [blocked]);
+    await db.pg.exec("alter table public.leads enable trigger stop_email_on_lead_block");
+    // a prospect without an address is never queued
+    await db.admin("insert into public.email_prospects (workspace_id, campaign_id, company_name) values ($1,$2,'Que NoMail')", [ws, camp]);
+    const seq = await saved(camp);
+    const r = await approve(seq, (await preview(seq)).digest);
+    expect(r.rows?.[0].n).toBe(4);
+
+    const msgs = await messagesOf(camp);
+    const [pOk, pNoCity] = [await prospectOf(ok), await prospectOf(noCity)];
+    expect(new Set(msgs.map((m) => m.prospect_id))).toEqual(new Set([pOk, pNoCity]));
+    for (const m of msgs) {
+      const to = m.prospect_id === pOk ? "pat@que1.example" : "sam@que2.example";
+      expect(m).toMatchObject({ status: "approved", approved_by: UUID_A, approved_to: to, ai_drafted: true, prompt_version: "seq-v1" });
+      expect(m.approved_at).not.toBeNull();
+      const d = await db.admin<{ d: string }>("select public.message_digest($1,$2) as d", [m.subject, m.body]);
+      expect(m.approved_digest).toBe(d[0].d);
+      // step 1 is due now; later steps wait for step 1 to go out
+      if (m.step === 1) expect(new Date(m.due_at as string).getTime()).toBeLessThanOrEqual(Date.now() + 1000);
+      else expect(m.due_at).toBeNull();
+    }
+    const first = msgs.find((m) => m.prospect_id === pOk && m.step === 1);
+    expect(first).toMatchObject({ subject: "Quick question, Pat", body: "Hi Pat, who handles HVAC for Que One in Worcester?" });
+    expect(msgs.find((m) => m.prospect_id === pNoCity && m.step === 1)?.body).toBe("Hi there, who handles HVAC for Que Two in your area?");
+    expect(await db.admin("select user_id, action, approved_to from public.email_approvals where message_id = $1", [first?.id]))
+      .toEqual([{ user_id: UUID_A, action: "approve", approved_to: "pat@que1.example" }]);
+    // nothing left: no claim, no send log, the campaign is still a draft
+    expect(msgs.filter((m) => ["sending", "sent", "dry_run"].includes(m.status))).toHaveLength(0);
+    expect(await db.admin("select 1 from public.email_send_log where campaign_id = $1", [camp])).toHaveLength(0);
+    expect(await db.admin("select status, send_mode from public.email_campaigns where id = $1", [camp])).toEqual([{ status: "draft", send_mode: "dry_run" }]);
+  });
+
+  test("an edit after approval sends nothing from the old text; follow-ups of the approved version need no new approval", async () => {
+    const camp = await newCampaign("j1-edit");
+    const [la, lb] = [await newLead("Edit One", "pat@edit1.example", "Pat Doe", null), await newLead("Edit Two", "sam@edit2.example", "Sam Roe", null)];
+    await db.query(as(UUID_A), "select public.add_leads_to_campaign($1,$2::uuid[])", [camp, [la, lb]]);
+    const [pa, pb] = [await prospectOf(la), await prospectOf(lb)];
+    const v1 = await saved(camp);
+    await approve(v1, (await preview(v1)).digest);
+    await db.admin("update public.email_campaigns set status = 'active' where id = $1", [camp]);
+    // A's step 1 goes out in rehearsal; its follow-up becomes due by itself, with the stamp it already had
+    const holder = gen();
+    const c = (await db.query<{ r: { outcome: string; message_id: string } }>(as(UUID_A), "select public.claim_next_email($1,$2) as r", [camp, holder]))[0].r;
+    expect(c.outcome).toBe("claimed");
+    const claimedProspect = (await db.admin<{ prospect_id: string }>("select prospect_id from public.email_messages where id = $1", [c.message_id]))[0].prospect_id;
+    await db.query(as(UUID_A), "select public.finish_email_send($1,$2,'dry_run',null)", [c.message_id, holder]);
+    const [sentP, otherP] = claimedProspect === pa ? [pa, pb] : [pb, pa];
+    let msgs = await messagesOf(camp);
+    const follow = msgs.find((m) => m.prospect_id === sentP && m.step === 2) as Msg;
+    expect(follow).toMatchObject({ status: "approved", approved_by: UUID_A });
+    expect(follow.due_at).not.toBeNull();
+    expect(await db.admin("select count(*)::int as n from public.email_approvals where message_id = $1", [follow.id])).toEqual([{ n: 1 }]);
+    // a step cancelled for a stop reason (not an edit) must never come back
+    const otherStep2 = msgs.find((m) => m.prospect_id === otherP && m.step === 2) as Msg;
+    await db.admin("update public.email_messages set status = 'cancelled', cancel_reason = 'lead_status' where id = $1", [otherStep2.id]);
+
+    // the edit: nothing approved is left from the old text, nothing can be claimed
+    const v2Steps: Step[] = [{ step: 1, subject: "New hello {{first_name}}", body: "New text for {{company}}." }, { step: 2, subject: "New follow-up", body: "Still there, {{first_name}}?" }];
+    const v2 = await saved(camp, v2Steps);
+    msgs = await messagesOf(camp);
+    expect(msgs.filter((m) => m.status === "approved")).toHaveLength(0);
+    const nothing = (await db.query<{ r: { outcome: string } }>(as(UUID_A), "select public.claim_next_email($1,$2) as r", [camp, gen()]))[0].r;
+    expect(nothing.outcome).not.toBe("claimed");
+
+    // approving v2 re-writes the same rows from the new text; what went out and the stop-reason row stay as they are
+    const n = (await approve(v2, (await preview(v2)).digest)).rows?.[0].n;
+    expect(n).toBe(2); // sent prospect's step 2 + other prospect's step 1
+    msgs = await messagesOf(camp);
+    const by = (p: string, step: number) => msgs.find((m) => m.prospect_id === p && m.step === step) as Msg;
+    expect(by(sentP, 1).status).toBe("dry_run");
+    expect(by(sentP, 1).subject).toBe("Quick question, " + (sentP === pa ? "Pat" : "Sam"));
+    expect(by(sentP, 2)).toMatchObject({ id: follow.id, status: "approved", subject: "New follow-up", cancel_reason: null });
+    expect(by(sentP, 2).due_at).not.toBeNull(); // from step 1's sent_at
+    const due = await db.admin<{ ok: boolean }>(
+      "select m.due_at = public.add_business_days(f.sent_at, c.step2_delay_days) as ok from public.email_messages m join public.email_messages f on f.prospect_id = m.prospect_id and f.step = 1 join public.email_campaigns c on c.id = m.campaign_id where m.id = $1",
+      [follow.id]);
+    expect(due).toEqual([{ ok: true }]);
+    expect(by(otherP, 1)).toMatchObject({ status: "approved", subject: `New hello ${otherP === pa ? "Pat" : "Sam"}` });
+    expect(by(otherP, 2)).toMatchObject({ id: otherStep2.id, status: "cancelled", cancel_reason: "lead_status" });
+    expect(msgs).toHaveLength(4);
+  });
+
+  test("a lead added after approval is queued from the approved version", async () => {
+    const camp = await newCampaign("j1-late");
+    const first = await newLead("Late One", "pat@late1.example", "Pat Doe", "Worcester");
+    await db.query(as(UUID_A), "select public.add_leads_to_campaign($1,$2::uuid[])", [camp, [first]]);
+    const seq = await saved(camp);
+    await approve(seq, (await preview(seq)).digest);
+    const before = await messagesOf(camp);
+    const approvalsBefore = await db.admin("select id from public.email_approvals where workspace_id = $1", [ws]);
+    // D6: the sdr adds a lead; it goes out with the approved text, stamped by the owner who approved it
+    const late = await newLead("Late Two", "ann@late2.example", "Ann Lee", "Salem");
+    const added = (await db.query<{ r: { added: number } }>(as(SDR), "select public.add_leads_to_campaign($1,$2::uuid[]) as r", [camp, [late]]))[0].r;
+    expect(added).toMatchObject({ added: 1 });
+    const pLate = await prospectOf(late);
+    const msgs = await messagesOf(camp);
+    const mine = msgs.filter((m) => m.prospect_id === pLate);
+    expect(mine.map((m) => [m.step, m.status, m.approved_by, m.approved_to])).toEqual([[1, "approved", UUID_A, "ann@late2.example"], [2, "approved", UUID_A, "ann@late2.example"]]);
+    expect(mine[0].body).toBe("Hi Ann, who handles HVAC for Late Two in Salem?");
+    // the earlier lead's messages are untouched (no second stamp)
+    expect(msgs.filter((m) => m.prospect_id !== pLate)).toEqual(before);
+    expect((await db.admin("select id from public.email_approvals where workspace_id = $1", [ws])).length).toBe(approvalsBefore.length + 2);
+    // a campaign with no approved version queues nothing
+    const other = await newCampaign("j1-late-none");
+    await saved(other);
+    const r = (await db.query<{ r: { added: number } }>(as(UUID_A), "select public.add_leads_to_campaign($1,$2::uuid[]) as r", [other, [await newLead("None Co", "x@none.example", null, null)]]))[0].r;
+    expect(r).toMatchObject({ added: 1 });
+    expect(await messagesOf(other)).toHaveLength(0);
+  });
+
+  test("Ligar needs an approved sequence, a mailbox and the sender profile; Pausar stops the clock picking the campaign", async () => {
+    const { agent, camp } = await emailAgent("j1-run");
+    const run = (on: boolean, user = UUID_A) => tryCommit(db, as(user), "select public.set_email_agent_running($1,$2)", [agent, on]);
+    const state = async () => (await db.admin<{ a: string; c: string }>(
+      "select a.status as a, c.status as c from public.agents a join public.email_campaigns c on c.agent_id = a.id where a.id = $1", [agent]))[0];
+    await db.query(as(UUID_A), "select public.add_leads_to_campaign($1,$2::uuid[])", [camp, [await newLead("Run One", "pat@run1.example", "Pat Doe", null)]]);
+    // the client leaves draft only once a sequence exists
+    expect(code((await db.try(as(UUID_A), "update public.agents set status = 'paused' where id = $1", [agent])).error)).toBe("23514");
+    const seq = await saved(camp);
+    expect((await tryCommit(db, as(SDR), "update public.agents set status = 'paused' where id = $1", [agent])).error).toBeUndefined();
+    // no approved version yet
+    expect(code((await run(true)).error)).toBe("55000");
+    await approve(seq, (await preview(seq)).digest);
+    // no mailbox
+    const links = await db.admin<{ mailbox_id: string }>("select mailbox_id from public.campaign_mailboxes where campaign_id = $1", [camp]);
+    await db.admin("delete from public.campaign_mailboxes where campaign_id = $1", [camp]);
+    expect(code((await run(true)).error)).toBe("55000");
+    await db.query(as(UUID_A), "insert into public.campaign_mailboxes (campaign_id, mailbox_id) values ($1,$2)", [camp, links[0].mailbox_id]);
+    // no complete sender profile
+    await db.admin("update public.sender_profiles set postal_address = 'x' where workspace_id = $1", [ws]);
+    expect(code((await run(true)).error)).toBe("55000");
+    await db.admin("update public.sender_profiles set postal_address = '1 Main St, Millbury, MA 01527' where workspace_id = $1", [ws]);
+    // the closer and another workspace cannot; a client cannot set running/paused by hand
+    for (const user of [UUID_C, UUID_B]) expect(code((await run(true, user)).error)).toBe("42501");
+    expect(code((await db.try(as(UUID_A), "update public.agents set status = 'running' where id = $1", [agent])).error)).toBe("23514");
+    expect(await state()).toEqual({ a: "paused", c: "draft" });
+
+    // Ligar (the sdr may): the agent runs and the clock lists the campaign
+    expect((await run(true, SDR)).error).toBeUndefined();
+    expect(await state()).toEqual({ a: "running", c: "active" });
+    expect(await db.admin("select send_mode from public.email_campaigns where id = $1", [camp])).toEqual([{ send_mode: "dry_run" }]);
+    await db.admin("update public.email_campaigns set status = 'paused' where status = 'active' and id <> $1", [camp]);
+    await setSchedulerToken(db, TOKEN);
+    const clock = anonWithToken(TOKEN);
+    const due = async () => {
+      const r = (await db.query<{ r: { run_id: string } }>(clock, "select public.scheduler_begin_run() as r"))[0].r.run_id;
+      const ids = (await db.query<{ r: { campaign_ids: string[] } }>(clock, "select public.scheduler_due_work($1) as r", [r]))[0].r.campaign_ids;
+      await db.query(clock, "select public.scheduler_finish_run($1,'{}'::jsonb,null)", [r]);
+      return ids;
+    };
+    expect(await due()).toContain(camp);
+    expect(code((await db.try(as(UUID_A), "update public.agents set status = 'paused' where id = $1", [agent])).error)).toBe("23514");
+    // Pausar: both paused, the clock no longer picks the campaign
+    expect((await run(false)).error).toBeUndefined();
+    expect(await state()).toEqual({ a: "paused", c: "paused" });
+    expect(await due()).not.toContain(camp);
+    // Ligar again works; a non-email agent is refused
+    expect((await run(true)).error).toBeUndefined();
+    expect(await state()).toEqual({ a: "running", c: "active" });
+    const hunter = (await db.query<{ id: string }>(as(UUID_A), "insert into public.agents (workspace_id, type, name) values ($1,'hunter','h') returning id", [ws]))[0].id;
+    expect(code((await db.try(as(UUID_A), "select public.set_email_agent_running($1,true)", [hunter])).error)).toBe("22023");
+    await run(false);
+  });
+
+  test("the e-mail sequence writer is a known AI task", async () => {
+    const def = await db.admin<{ d: string }>("select pg_get_constraintdef(oid) as d from pg_constraint where conname = 'ai_calls_task'");
+    expect(def[0].d).toContain("email_sequence");
+    for (const t of ["qualify_deep", "profile_learn", "email_draft"]) expect(def[0].d).toContain(t);
   });
 });

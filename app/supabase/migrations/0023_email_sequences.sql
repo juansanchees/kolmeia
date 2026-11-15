@@ -314,3 +314,387 @@ revoke all on function public.preview_sequence(uuid) from public, anon, authenti
 grant execute on function public.preview_sequence(uuid) to authenticated;
 
 -- part 2 (Task 5): approve_email_sequence, queue_approved_sequence, e-mail agent life cycle
+-- Part 2 (Task 5):
+--   * approve_email_sequence(): the OWNER (D3) approves the newest draft once (J1), against the digest the screen showed
+--     (40001 when anything shown changed). The campaign row is locked FOR UPDATE first (save_sequence_draft takes the
+--     same lock), so no edit lands between the recomputed digest and the stamp.
+--   * queue_approved_sequence(): the approved text, rendered per active lead, becomes one 'approved' message per step
+--     with the R1 stamp of the approver. It never sends: the claim (C12, E2, E4, C2 gates) is still the only way out.
+--     Only unsent rows are (re)written: new, draft/rejected, approved with other text, or cancelled by an edit
+--     ('sequence_edited'); never a row cancelled for a stop reason. Leads blocked by C2 or whose values would break a
+--     rule (render_sequence_for null) are skipped.
+--   * add_leads_to_campaign (0021 body): leads added after the approval are queued from the approved version (D6).
+--   * guard_agent (0020 body): an e-mail agent leaves draft (-> paused) once a sequence exists; Ligar/Pausar only
+--     through set_email_agent_running (approved version, a mailbox, a complete sender profile). Real mode stays
+--     set_campaign_send_mode (owner + C12).
+--   * ai_calls_task (0014 list) += 'email_sequence'.
+
+-- ---------------------------------------------------------------- the queue (internal)
+-- Called by the definer functions below only (plain, no grant). Returns how many messages were stamped.
+create or replace function public.queue_approved_sequence(p_campaign uuid)
+returns integer
+language plpgsql
+set search_path = ''
+as $$
+declare
+  c record;
+  q record;
+  p record;
+  m record;
+  s jsonb;
+  v_steps jsonb;
+  v_step integer;
+  v_subject text;
+  v_body text;
+  v_first timestamptz;
+  v_id uuid;
+  n integer := 0;
+begin
+  -- same lock order as save_sequence_draft and the claim (campaign, then messages): a concurrent edit either lands
+  -- before (and this sees the new state) or waits
+  select * into c from public.email_campaigns where id = p_campaign for share;
+  select * into q from public.email_sequences where campaign_id = p_campaign and status = 'approved';
+  if c.id is null or q.id is null or c.status = 'archived' then
+    return 0;
+  end if;
+  for p in
+    select x.id, x.workspace_id, x.email, x.lead_id, x.candidate_id
+      from public.email_prospects x
+     where x.campaign_id = c.id and x.status = 'active' and x.email is not null
+     order by x.id
+  loop
+    continue when public.lead_blocks_message(public.prospect_lead(p.lead_id, p.candidate_id, p.workspace_id), 'sequence');
+    v_steps := public.render_sequence_for(q.steps, p.id);
+    continue when v_steps is null;
+    select f.sent_at into v_first from public.email_messages f
+     where f.prospect_id = p.id and f.kind = 'sequence' and f.step = 1 and f.status in ('sent', 'dry_run');
+    for s in select x from jsonb_array_elements(v_steps) x loop
+      v_step := (s ->> 'step')::integer;
+      v_subject := s ->> 'subject';
+      v_body := s ->> 'body';
+      select * into m from public.email_messages x
+       where x.prospect_id = p.id and x.kind = 'sequence' and x.step = v_step
+         for update;
+      if m.id is null then
+        insert into public.email_messages (workspace_id, campaign_id, prospect_id, kind, step, subject, body, ai_drafted,
+                                           ai_model, prompt_version)
+        values (p.workspace_id, c.id, p.id, 'sequence', v_step, v_subject, v_body, true, q.ai_model, q.prompt_version)
+        returning id into v_id;
+      elsif m.status in ('draft', 'rejected')
+         or (m.status = 'cancelled' and m.cancel_reason = 'sequence_edited')
+         or (m.status = 'approved' and (m.subject, m.body, m.approved_to) is distinct from (v_subject, v_body, p.email)) then
+        v_id := m.id;
+      else
+        -- sent, sending, dry_run, failed, cancelled for a stop reason, or already approved with this very text
+        continue;
+      end if;
+      update public.email_messages
+         set subject = v_subject, body = v_body, ai_drafted = true, ai_model = q.ai_model, prompt_version = q.prompt_version,
+             human_edited = q.human_edited, ai_facts = '[]'::jsonb, ai_no_fact = null, cancel_reason = null, error = null,
+             status = 'approved', approved_by = q.approved_by, approved_at = now(), approved_to = p.email,
+             approved_digest = public.message_digest(v_subject, v_body),
+             due_at = case
+                        when v_step = 1 then now()
+                        when v_first is null then null
+                        else public.add_business_days(v_first, case v_step when 2 then c.step2_delay_days else c.step3_delay_days end)
+                      end
+       where id = v_id;
+      insert into public.email_approvals (workspace_id, message_id, user_id, action, approved_to)
+      values (p.workspace_id, v_id, q.approved_by, 'approve', p.email);
+      n := n + 1;
+    end loop;
+  end loop;
+  return n;
+end;
+$$;
+
+-- ---------------------------------------------------------------- J1 approval (owner only, D3)
+create or replace function public.approve_email_sequence(p_sequence uuid, p_digest text)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  q record;
+  c record;
+  v_preview jsonb;
+begin
+  select * into q from public.email_sequences where id = p_sequence;
+  if q.id is null or auth.uid() is null or not public.is_workspace_owner(q.workspace_id) then
+    raise exception 'J1: only the owner approves' using errcode = '42501';
+  end if;
+  -- the save lock: no new version can land between the digest below and the stamp
+  select * into c from public.email_campaigns where id = q.campaign_id for update;
+  select * into q from public.email_sequences where id = p_sequence for update;
+  if q.status <> 'draft'
+     or q.version <> (select max(x.version) from public.email_sequences x where x.campaign_id = q.campaign_id) then
+    raise exception 'only the newest draft can be approved; review again' using errcode = '55000';
+  end if;
+  if c.status = 'archived' then
+    raise exception 'campaign archived' using errcode = '55000';
+  end if;
+  v_preview := public.preview_sequence(q.id);
+  if p_digest is null or p_digest is distinct from v_preview ->> 'digest' then
+    raise exception 'sequence changed; review again' using errcode = '40001';
+  end if;
+  if jsonb_array_length(v_preview -> 'examples') = 0 then
+    raise exception 'J1: no lead to show as an example; add leads with an e-mail first' using errcode = '22023';
+  end if;
+
+  update public.email_sequences x set status = 'superseded'
+   where x.campaign_id = q.campaign_id and x.id <> q.id and x.status <> 'superseded';
+  update public.email_sequences
+     set status = 'approved', approved_by = auth.uid(), approved_at = now(), approved_digest = p_digest,
+         example_prospect_ids = array(select (e ->> 'prospect_id')::uuid from jsonb_array_elements(v_preview -> 'examples') e)
+   where id = q.id;
+  return public.queue_approved_sequence(q.campaign_id);
+end;
+$$;
+
+-- ---------------------------------------------------------------- add_leads_to_campaign (0021 body + D6 queue)
+create or replace function public.add_leads_to_campaign(p_campaign uuid, p_leads uuid[])
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  c record;
+  l record;
+  e record;
+  v_name text;
+  v_contact text;
+  v_title text;
+  v_status text;
+  v_added integer := 0;
+  v_no_email integer := 0;
+  v_blocked integer := 0;
+  v_other integer := 0;
+  v_suppressed integer := 0;
+  v_already integer := 0;
+begin
+  select * into c from public.email_campaigns where id = p_campaign;
+  if auth.uid() is null or c.id is null or not public.is_workspace_sender(c.workspace_id) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  if coalesce(cardinality(p_leads), 0) > 500 then
+    raise exception 'at most 500 leads at a time' using errcode = '22023';
+  end if;
+  if c.status = 'archived' then
+    raise exception 'campaign archived' using errcode = '55000';
+  end if;
+
+  for l in
+    select x.id, x.best_candidate_id
+      from public.leads x
+     where x.workspace_id = c.workspace_id
+       and x.id in (select distinct u from unnest(coalesce(p_leads, '{}'::uuid[])) u)
+     order by x.id
+  loop
+    perform pg_advisory_xact_lock(hashtextextended('lead-campaign:' || l.id::text, 0));
+    if public.lead_blocks_email(l.id) then
+      v_blocked := v_blocked + 1;
+      continue;
+    end if;
+    if exists (select 1 from public.lead_campaign_locks k where k.lead_id = l.id and k.campaign_id <> c.id) then
+      v_other := v_other + 1;
+      continue;
+    end if;
+    if exists (select 1 from public.email_prospects p where p.campaign_id = c.id and p.lead_id = l.id) then
+      v_already := v_already + 1;
+      continue;
+    end if;
+    select lower(btrim(f.value)) as email, f.source || ':' || coalesce(f.source_ref, f.id::text) as ref into e
+      from public.lead_fields f
+     where f.lead_id = l.id and f.workspace_id = c.workspace_id and f.field = 'email' and f.status <> 'refuted'
+       and public.is_email_address(lower(btrim(f.value)))
+     order by (f.status = 'confirmed') desc, f.seen_at desc, f.id
+     limit 1;
+    if e.email is null then
+      v_no_email := v_no_email + 1;
+      continue;
+    end if;
+    if public.is_suppressed(c.workspace_id, e.email) then
+      v_suppressed := v_suppressed + 1;
+      continue;
+    end if;
+    v_name := public.best_lead_field(l.id, 'name');
+    if v_name is null then
+      select k.name into v_name from public.research_candidates k where k.id = l.best_candidate_id and k.workspace_id = c.workspace_id;
+    end if;
+    v_name := left(btrim(coalesce(nullif(btrim(v_name), ''), split_part(e.email, '@', 2))), 200);
+    v_contact := left(btrim(regexp_replace(public.best_lead_field(l.id, 'contact_name'), '[\r\n]+', ' ', 'g')), 120);
+    v_title := left(btrim(regexp_replace(public.best_lead_field(l.id, 'contact_title'), '[\r\n]+', ' ', 'g')), 120);
+    insert into public.email_prospects (workspace_id, campaign_id, lead_id, company_name, contact_name, contact_title,
+                                        email, email_source, email_source_ref)
+    values (c.workspace_id, c.id, l.id, v_name, nullif(v_contact, ''), nullif(v_title, ''), e.email, 'lead', left(e.ref, 2000))
+    returning status into v_status;
+    if v_status = 'active' then
+      v_added := v_added + 1;
+    else
+      v_other := v_other + 1;
+    end if;
+  end loop;
+
+  -- D6: a lead added after the approval goes out with the approved text (no new examples, no new approval).
+  -- The result keeps 0021's keys.
+  if v_added > 0 then
+    perform public.queue_approved_sequence(c.id);
+  end if;
+
+  return jsonb_build_object('added', v_added, 'no_email', v_no_email, 'blocked', v_blocked,
+                            'in_other_campaign', v_other, 'suppressed', v_suppressed, 'already', v_already);
+end;
+$$;
+
+-- ---------------------------------------------------------------- agent life cycle
+-- 0020's guard_agent with the e-mail agent rule added (nothing removed). Not security definer: is_client_role() reads
+-- current_user. An e-mail agent goes draft -> paused by a client once its campaign has a sequence; running/paused only
+-- through set_email_agent_running (definer).
+create or replace function public.guard_agent()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_running integer;
+begin
+  if tg_op = 'INSERT' then
+    new.status := 'draft';
+    new.created_by := auth.uid();
+    new.created_at := now();
+    new.updated_at := now();
+    new.archived_at := null;
+    new.next_run_at := null;
+    new.paused_reason := null;
+    return new;
+  end if;
+
+  if old.archived_at is not null then
+    raise exception 'A4: an archived agent cannot change' using errcode = '23514';
+  end if;
+  if new.archived_at is distinct from old.archived_at then
+    if old.status = 'running' then
+      raise exception 'A8: pause the agent before archiving it' using errcode = '23514';
+    end if;
+    new.archived_at := now();
+  end if;
+
+  if public.is_client_role() then
+    if new.status is distinct from old.status then
+      if not (
+        (old.type <> 'call' and old.status = 'draft' and new.status = 'paused'
+          and exists (
+            select 1 from public.research_runs r
+             where r.setup_agent_id = new.id and r.status = 'plan' and r.plan is not null
+          ))
+        or (old.type = 'call' and old.status = 'draft' and new.status = 'paused'
+          and public.call_agent_config_ok(new.config, new.workspace_id))
+        or (old.type = 'email' and old.status = 'draft' and new.status = 'paused'
+          and exists (
+            select 1 from public.email_sequences s
+              join public.email_campaigns c on c.id = s.campaign_id
+             where c.agent_id = new.id
+          ))
+        or (old.type = 'hunter' and old.status = 'paused' and new.status = 'running')
+        or (old.type = 'call' and old.status = 'paused' and new.status = 'running'
+          and public.call_agent_config_ok(new.config, new.workspace_id))
+        or (old.type in ('hunter', 'call') and old.status = 'running' and new.status = 'paused')
+      ) then
+        raise exception 'A3: an agent leaves draft only when its setup research has a plan (a call agent: a valid config; an e-mail agent: a sequence); then only Ligar and Pausar' using errcode = '23514';
+      end if;
+    end if;
+    if old.status <> 'draft' and (
+      new.config is distinct from old.config or new.schedule is distinct from old.schedule
+    ) then
+      raise exception 'A6: config and schedule are frozen once the agent left draft' using errcode = '23514';
+    end if;
+  end if;
+
+  if new.status = 'running' and old.status is distinct from 'running' then
+    if new.type = 'hunter' then
+      perform pg_advisory_xact_lock(hashtextextended('hunter:' || new.workspace_id::text, 0));
+      select count(*) into v_running
+        from public.agents a
+       where a.workspace_id = new.workspace_id and a.type = 'hunter' and a.status = 'running'
+         and a.archived_at is null and a.id <> new.id;
+      if v_running >= 3 then
+        raise exception 'A7: at most 3 hunters can be running in a workspace' using errcode = '23514';
+      end if;
+    end if;
+    if old.status = 'paused' then
+      new.next_run_at := coalesce(old.next_run_at, now());
+      new.paused_reason := null;
+    end if;
+  end if;
+
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+-- Ligar (p_on) / Pausar an e-mail agent: owner or sdr. Ligar needs the approved version, at least one mailbox and a
+-- complete sender profile; it sets the agent running and its campaign active (the send mode is not touched: real
+-- sending stays set_campaign_send_mode, owner + C12). Pausar sets both paused, so the clock stops picking the campaign.
+create or replace function public.set_email_agent_running(p_agent uuid, p_on boolean)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  a record;
+  c record;
+begin
+  select * into a from public.agents where id = p_agent;
+  if a.id is null or auth.uid() is null or not public.is_workspace_sender(a.workspace_id) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  if a.type <> 'email' or p_on is null then
+    raise exception 'only an e-mail agent, on or off' using errcode = '22023';
+  end if;
+  if a.archived_at is not null then
+    raise exception 'A4: an archived agent cannot change' using errcode = '55000';
+  end if;
+  -- campaign first (the save/approve lock order), then the agent
+  select * into c from public.email_campaigns where agent_id = a.id for update;
+  select * into a from public.agents where id = p_agent for update;
+  if c.id is null or c.status = 'archived' then
+    raise exception 'this agent has no open campaign' using errcode = '55000';
+  end if;
+  if p_on then
+    if not exists (select 1 from public.email_sequences s where s.campaign_id = c.id and s.status = 'approved') then
+      raise exception 'J1: the owner approves the sequence first' using errcode = '55000';
+    end if;
+    if not exists (select 1 from public.campaign_mailboxes cm where cm.campaign_id = c.id) then
+      raise exception 'the campaign needs at least one mailbox' using errcode = '55000';
+    end if;
+    if not public.sender_profile_complete(a.workspace_id) then
+      raise exception 'the sender profile (name, legal name, postal address) is incomplete' using errcode = '55000';
+    end if;
+    update public.agents set status = 'running' where id = a.id and status <> 'running';
+    update public.email_campaigns set status = 'active' where id = c.id and status <> 'active';
+  else
+    update public.agents set status = 'paused' where id = a.id and status = 'running';
+    update public.email_campaigns set status = 'paused' where id = c.id and status = 'active';
+  end if;
+end;
+$$;
+
+-- ---------------------------------------------------------------- AI task (0014 list + email_sequence)
+alter table public.ai_calls drop constraint if exists ai_calls_task;
+alter table public.ai_calls add constraint ai_calls_task check (
+  task in ('research_questions', 'research_plan', 'research_discover', 'research_collect', 'research_verify',
+           'research_second_pass', 'classify', 'email_draft', 'email_classify', 'email_reply_draft',
+           'email_closer_brief', 'qualify_light', 'qualify_deep', 'qualify_places', 'profile_learn', 'email_sequence')
+);
+
+revoke all on function public.queue_approved_sequence(uuid) from public, anon, authenticated;
+revoke all on function public.approve_email_sequence(uuid, text) from public, anon, authenticated;
+grant execute on function public.approve_email_sequence(uuid, text) to authenticated;
+revoke all on function public.add_leads_to_campaign(uuid, uuid[]) from public, anon;
+grant execute on function public.add_leads_to_campaign(uuid, uuid[]) to authenticated;
+revoke all on function public.guard_agent() from public, anon, authenticated;
+revoke all on function public.set_email_agent_running(uuid, boolean) from public, anon, authenticated;
+grant execute on function public.set_email_agent_running(uuid, boolean) to authenticated;
