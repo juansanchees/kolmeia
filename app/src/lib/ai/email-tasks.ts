@@ -1,6 +1,8 @@
 import "server-only";
-import { bodyProblem, stripLinks, stripReplyPrefix, subjectProblem } from "@/lib/email/compose";
+import { z } from "zod";
+import { bodyProblem, hasLink, stripLinks, stripReplyPrefix, subjectProblem } from "@/lib/email/compose";
 import type { ReplyClass } from "@/lib/email/types";
+import { stepProblems, type SequenceStep } from "@/lib/email/template";
 import { sanitizeUrl } from "@/lib/safe-url";
 import {
   briefSchema,
@@ -12,9 +14,11 @@ import {
   type DraftOut,
   type ReplyDraftOut,
 } from "./email-schemas";
+import { AiError } from "./errors";
 import { runTask, type AiContext, type TaskDef, type TaskResult } from "./gateway";
 import { MODELS } from "./models";
 import * as P from "./prompts/email";
+import * as SEQ from "./prompts/email-sequence";
 
 // One typed function per E-mail AI task, all through the gateway (caps R16, ledger R17, validation R15).
 // Everything returned here is a proposal: drafts start as status 'draft' and need a human approval (R1, R13).
@@ -138,4 +142,41 @@ const briefDef: TaskDef<P.BriefInput, BriefOut, BriefResult> = {
 
 export function writeCloserBrief(ctx: AiContext, input: P.BriefInput): Promise<TaskResult<BriefResult>> {
   return runTask(ctx, briefDef, input);
+}
+
+// ---------------------------------------------------------------- sequence template (Sonnet, one call per click)
+export type SequenceDraft = { steps: SequenceStep[]; model: string; promptVersion: string };
+
+const sequenceSchema = z.object({ steps: z.array(z.object({ step: z.number(), subject: z.string(), body: z.string() })) });
+
+/** One template for many companies (D2): the model gets audience data only, never one lead; no web tools. */
+export const sequenceDef: TaskDef<SEQ.SequenceInput, z.infer<typeof sequenceSchema>, SequenceDraft> = {
+  task: "email_sequence",
+  model: MODELS.sonnet,
+  promptVersion: SEQ.PROMPT_VERSION,
+  system: SEQ.SYSTEM,
+  schema: sequenceSchema,
+  effort: "medium",
+  maxTokens: 6_000,
+  reserveUsd: 0.05,
+  buildUser: SEQ.buildUser,
+  normalize: (p, input) => {
+    const steps: SequenceStep[] = [];
+    for (const step of [1, 2, 3] as const) {
+      if (step > input.steps) break;
+      const raw = p.steps.find((s) => s.step === step);
+      // A link is dropped, not trimmed: the owner approves exactly what the model wrote (R12).
+      if (!raw || hasLink(raw.subject) || hasLink(raw.body)) continue;
+      const clean = cleanDraftEmail(raw.subject, raw.body);
+      if (!clean) continue;
+      const s: SequenceStep = { step, ...clean };
+      if (stepProblems(s).length === 0) steps.push(s);
+    }
+    if (steps.length < input.steps) throw new AiError("invalid_output", `only ${steps.length} of ${input.steps} steps were valid`);
+    return { steps, model: MODELS.sonnet, promptVersion: SEQ.PROMPT_VERSION };
+  },
+};
+
+export function writeSequence(ctx: AiContext, input: SEQ.SequenceInput): Promise<TaskResult<SequenceDraft>> {
+  return runTask(ctx, sequenceDef, input);
 }

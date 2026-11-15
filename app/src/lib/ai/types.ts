@@ -10,6 +10,7 @@ export type AiTask =
   | "research_second_pass"
   | "classify"
   | "email_draft"
+  | "email_sequence"
   | "email_classify"
   | "email_reply_draft"
   | "email_closer_brief"
