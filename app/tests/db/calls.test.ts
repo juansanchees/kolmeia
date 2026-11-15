@@ -176,7 +176,7 @@ describe("0020 part B call log", () => {
     const l = await leadRow(lead);
     expect(l).toMatchObject({ status: "lost", do_not_call: true });
     expect(l.do_not_call_at).not.toBeNull();
-    expect((await db.admin("select status, stop_reason from public.email_prospects where id = $1", [prospect]))[0]).toEqual({ status: "stopped", stop_reason: "asked_to_stop" });
+    expect((await db.admin("select status, stop_reason from public.email_prospects where id = $1", [prospect]))[0]).toEqual({ status: "stopped", stop_reason: "do_not_call" });   // 0022: the lead's C2 trigger stops it first
     expect((await db.admin("select status, cancel_reason from public.email_messages where id = $1", [msg]))[0]).toEqual({ status: "cancelled", cancel_reason: "do_not_call" });
 
     // the next day, even back to "new" by hand: never listed, never added
