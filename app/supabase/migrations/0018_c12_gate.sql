@@ -154,9 +154,11 @@ begin
   update public.email_prospects p
      set status = 'active'
    where p.campaign_id = c.id and p.status = 'done'
-     and not exists (
+     and exists (   -- only a prospect that still has an unsent sequence row; a finished one stays done
        select 1 from public.email_messages s
-        where s.prospect_id = p.id and s.kind = 'sequence' and s.step = 3 and s.status = 'sent'
+        where s.prospect_id = p.id and s.kind = 'sequence'
+          and (s.status in ('draft', 'approved', 'rejected', 'sending')
+               or (s.status = 'cancelled' and s.cancel_reason = 'sequence_edited'))
      );
 
   update public.email_messages x

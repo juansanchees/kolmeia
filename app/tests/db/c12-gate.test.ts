@@ -124,3 +124,35 @@ describe("0018 the real-send claim refuses without C12 (defence in depth)", () =
     expect((await claim(s.campaign)).outcome).toBe("claimed");
   });
 });
+
+describe("0018 going real again does not revive a finished prospect (M1)", () => {
+  test("a sequence sent for real, then real -> rehearsal -> real: the prospect stays done and its C3 lock stays released; one with an unsent step comes back", async () => {
+    const OWNER = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+    await db.addUser(OWNER);
+    const [w] = await db.query<{ id: string }>(as(OWNER), "select public.create_workspace('Revive gate') as id");
+    await db.query(as(OWNER), "insert into public.sender_profiles (workspace_id, legal_name, postal_address, sender_name) values ($1,'Revive Corp','4 Main St, Millbury, MA 01527','Juan Sanches')", [w.id]);
+    await approveAllC12(db, w.id, OWNER);
+    const s = await readyCampaign("c12m1", w.id, OWNER);
+    const [p] = s.prospects;
+    await db.admin("update public.email_campaigns set send_mode = 'real' where id = $1", [s.campaign]);
+    // a 2-step sequence, both steps sent for real: the prospect is finished (0023) and its lock is gone
+    const lead = (await db.admin<{ id: string }>("insert into public.leads (workspace_id, origin_kind) values ($1,'import') returning id", [w.id]))[0].id;
+    await db.admin("update public.email_prospects set lead_id = $2 where id = $1", [p, lead]);
+    await db.admin("update public.email_messages set status = 'sent', sent_at = now() - interval '3 days', send_mode = 'real' where id = $1", [s.messages[0]]);
+    await db.admin("insert into public.email_messages (workspace_id, campaign_id, prospect_id, kind, step, subject, body, status, sent_at, send_mode) values ($1,$2,$3,'sequence',2,'Follow up','Hi Pat, any news?','sent', now() - interval '1 day','real')", [w.id, s.campaign, p]);
+    await db.admin("update public.email_messages set status = 'sent', sent_at = now() - interval '1 day', send_mode = 'real', approved_by = $2, approved_at = now(), approved_to = 'x@y.example', to_address = 'x@y.example' where prospect_id = $1 and step = 2", [p, OWNER]);
+    await db.admin("update public.email_prospects set status = 'done' where id = $1", [p]);
+    expect(await db.admin("select 1 from public.lead_campaign_locks where prospect_id = $1", [p])).toHaveLength(0);
+
+    await db.query(as(OWNER), "select public.set_campaign_send_mode($1,'dry_run')", [s.campaign]);
+    await db.query(as(OWNER), "select public.set_campaign_send_mode($1,'real')", [s.campaign]);
+    expect((await db.admin<{ status: string }>("select status from public.email_prospects where id = $1", [p]))[0].status).toBe("done");
+    expect(await db.admin("select 1 from public.lead_campaign_locks where prospect_id = $1", [p])).toHaveLength(0);
+
+    // a done prospect that still has an unsent step 2 does come back
+    await db.admin("update public.email_messages set status = 'draft', sent_at = null, send_mode = null where prospect_id = $1 and step = 2", [p]);
+    await db.query(as(OWNER), "select public.set_campaign_send_mode($1,'dry_run')", [s.campaign]);
+    await db.query(as(OWNER), "select public.set_campaign_send_mode($1,'real')", [s.campaign]);
+    expect((await db.admin<{ status: string }>("select status from public.email_prospects where id = $1", [p]))[0].status).toBe("active");
+  });
+});

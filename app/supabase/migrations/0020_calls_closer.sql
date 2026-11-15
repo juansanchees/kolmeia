@@ -542,6 +542,15 @@ begin
     update public.leads
        set status = v_new, do_not_call = true, do_not_call_at = coalesce(do_not_call_at, now()), updated_at = now()
      where id = p_lead;
+    -- lock order: messages (by id) before prospects, as the claim core and the 0022 trigger do (no deadlock)
+    perform 1
+      from public.email_messages m
+     where m.prospect_id in (
+             select x.id from public.email_prospects x
+               join public.research_candidates c on c.id = x.candidate_id
+              where c.lead_id = p_lead and x.workspace_id = v_ws and x.status = 'active')
+     order by m.id
+       for update;
     for p in
       select x.id
         from public.email_prospects x

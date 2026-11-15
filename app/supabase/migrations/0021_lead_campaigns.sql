@@ -40,7 +40,8 @@ alter table public.email_prospects
 alter table public.email_prospects drop constraint if exists email_prospects_stop_reason;
 alter table public.email_prospects
   add constraint email_prospects_stop_reason check (
-    stop_reason in ('unsubscribed', 'bounced', 'suppressed', 'asked_to_stop', 'replied', 'in_other_campaign', 'lead_discarded', 'do_not_call')
+    stop_reason in ('unsubscribed', 'bounced', 'suppressed', 'asked_to_stop', 'replied', 'in_other_campaign',
+                    'lead_discarded', 'do_not_call', 'lead_status')
   );
 
 -- R18: no invented addresses. A research address carries its source URL, a lead address its field source; anything typed is 'manual'.
@@ -207,6 +208,13 @@ begin
   if new.status in ('done', 'archived') and old.status not in ('done', 'archived') then
     delete from public.lead_campaign_locks where campaign_id = new.id;
   elsif old.status in ('done', 'archived') and new.status not in ('done', 'archived') then
+    -- lock order: messages (by id) before prospects, as the claim core and the 0022 trigger do (no deadlock)
+    perform 1
+      from public.email_messages m
+     where m.prospect_id in (select x.id from public.email_prospects x
+                              where x.campaign_id = new.id and x.status = 'active' and x.lead_id is not null)
+     order by m.id
+       for update;
     for p in
       select x.id, x.lead_id, x.workspace_id
         from public.email_prospects x

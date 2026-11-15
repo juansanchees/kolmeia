@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { TestDb, anon, as, openGates, UUID_A, UUID_B, UUID_C } from "./helpers";
+import { readFileSync } from "node:fs";
+import { MIGRATION_PATHS, TestDb, anon, as, openGates, UUID_A, UUID_B, UUID_C } from "./helpers";
 import { CIPHER, createOwner } from "./scheduler-seed";
 
 // Migration 0021 (F4 Task 2): leads go into campaigns with a sourced address (R18), one active campaign per lead (C3),
@@ -246,5 +247,18 @@ describe("0021 leads into campaigns", () => {
     expect(await prospectOf(camp, lead)).toMatchObject({ status: "active", email: "office@oldco.example", email_source: "research" });
     expect((await lockOf(lead)).campaign_id).toBe(camp);
     expect(await leadStatus(lead)).toBe("in_campaign");
+  });
+});
+
+describe("0021 is re-runnable after 0022 (I1)", () => {
+  test("a prospect stopped with 'lead_status' (0022) survives re-running 0021", async () => {
+    const lead = await leadWithEmail("rerun@rerun.example");
+    const camp = await newCampaign("rerun");
+    await db.query(as(UUID_A), "select public.add_leads_to_campaign($1,$2::uuid[])", [camp, [lead]]);
+    await db.admin("update public.leads set status = 'won' where id = $1", [lead]);
+    await db.admin("update public.email_prospects set status = 'stopped', stop_reason = 'lead_status' where lead_id = $1", [lead]);
+    const file = MIGRATION_PATHS.find((f) => f.endsWith("0021_lead_campaigns.sql"))!;
+    await db.pg.exec(readFileSync(file, "utf8")); // must not raise 23514
+    expect(await db.admin("select stop_reason from public.email_prospects where lead_id = $1", [lead])).toEqual([{ stop_reason: "lead_status" }]);
   });
 });
