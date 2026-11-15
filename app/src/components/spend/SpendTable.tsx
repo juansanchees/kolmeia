@@ -69,14 +69,31 @@ export function SourceSpend({ rows }: { rows: SourceRow[] }) {
       ) : (
         <ul className="m-0 flex list-none flex-col border border-line bg-surface p-0">
           {rows.map((r) => (
-            <li key={`${r.provider}:${r.kind}`} className="flex items-center justify-between gap-3 border-b border-line px-3.5 py-3 last:border-b-0">
-              <span className="text-sm font-semibold">
-                {(S.sources.provider as Record<string, string>)[r.provider] ?? r.provider} · {(S.sources.kind as Record<string, string>)[r.kind] ?? r.kind}
-              </span>
-              <span className="flex items-center gap-3">
-                <Badge tone="cold">{r.runs}</Badge>
-                <span className="font-mono text-sm">US$ {money(r.usd)}</span>
-              </span>
+            <li key={`${r.provider}:${r.kind}`} className="border-b border-line last:border-b-0">
+              <details>
+                <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 px-3.5 py-3">
+                  <span className="text-sm font-semibold">{r.label}</span>
+                  <span className="flex items-center gap-3">
+                    <Badge tone="cold">{r.runs}</Badge>
+                    <span className="font-mono text-sm">US$ {money(r.usd)}</span>
+                  </span>
+                </summary>
+                {r.leads.length > 0 && (
+                  <div className="flex flex-col gap-1 border-t border-line bg-ground px-3.5 py-3">
+                    <span className="font-mono text-xs text-muted">{S.leadsOf}</span>
+                    <ul className="m-0 flex list-none flex-col gap-1 p-0">
+                      {r.leads.map((l) => (
+                        <li key={l.id} className="flex justify-between gap-3 text-[13px]">
+                          <Link href={`/leads/${l.id}`} className="min-w-0 truncate text-blue underline underline-offset-4">
+                            {l.name}
+                          </Link>
+                          <span className="font-mono">US$ {money(l.usd)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </details>
             </li>
           ))}
         </ul>

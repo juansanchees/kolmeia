@@ -27,6 +27,8 @@ export interface QualifierTickStore {
   addFields(tickId: string, leadId: string, rows: FieldIn[]): Promise<number>;
   refute(tickId: string, leadId: string, ids: string[]): Promise<void>;
   stepDone(tickId: string, leadId: string, step: QualifierStep, outcome: StepOutcome, next: QualifierStep | "done", doneReason: DoneReason | null): Promise<void>;
+  /** P2b: put the lead in the workspace's open contact run. False = nothing asked (no Apify connection, over the day's cap, or answered lately). */
+  requestContacts(tickId: string, leadId: string, url: string): Promise<boolean>;
   release(tickId: string, leadId: string): Promise<void>;
   /** The tick must hold a lead of the workspace: call it BEFORE release (it frees this tick's locks there). */
   pause(tickId: string, workspaceId: string, reason: QualifierPauseReason): Promise<void>;
@@ -87,6 +89,9 @@ export function rpcQualifierStore(rpc: RpcFn): QualifierTickStore {
     },
     async stepDone(tickId, leadId, step, outcome, next, doneReason) {
       await rpc("qualifier_step_done", { p_tick: tickId, p_lead: leadId, p_step: step, p_outcome: outcome, p_next: next, p_done_reason: doneReason });
+    },
+    async requestContacts(tickId, leadId, url) {
+      return (await rpc("qualifier_request_contacts", { p_tick: tickId, p_lead: leadId, p_url: url })) === true;
     },
     async release(tickId, leadId) {
       await rpc("qualifier_release", { p_tick: tickId, p_lead: leadId });

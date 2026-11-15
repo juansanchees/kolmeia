@@ -31,14 +31,14 @@ describe("qualifyLead free cascade", () => {
     expect(by("address")).toBeTruthy();
     expect(by("website")).toMatchObject({ value: SITE, status: "confirmed" });
     expect(store.log.some((l) => l[0] === "reservePlaces")).toBe(false);
-    expect(steps(store)).toEqual(["p2:ok:p3:", "p3:skipped:p4:", "p4:no_ai:p5:", "p5:no_ai:done:complete"]);
-    expect(r.steps).toBe(4);
+    expect(steps(store)).toEqual(["p2:ok:p2b:", "p2b:skipped:p3:", "p3:skipped:p4:", "p4:no_ai:p5:", "p5:no_ai:done:complete"]);
+    expect(r.steps).toBe(5);
   });
 
   test("P2 is skipped without a site and when phone, e-mail and address are already confirmed", async () => {
     const a = fakeQualifierStore([]);
     await qualifyLead(snapshot({ nextStep: "p2" }), deps(a));
-    expect(steps(a)[0]).toBe("p2:no_site:p3:");
+    expect(steps(a)[0]).toBe("p2:no_site:p2b:");
     const http = fakeHttp({ [SITE]: PAGE });
     const b = fakeQualifierStore([]);
     const s = snapshot({
@@ -51,7 +51,7 @@ describe("qualifyLead free cascade", () => {
       ],
     });
     await qualifyLead(s, deps(b, http));
-    expect(steps(b)[0]).toBe("p2:skipped:p3:");
+    expect(steps(b)[0]).toBe("p2:skipped:p2b:");
     expect(http.calls).toEqual([]);
   });
 
@@ -60,7 +60,7 @@ describe("qualifyLead free cascade", () => {
     const http = fakeHttp({ [SITE]: { status: 403 } });
     const r = await qualifyLead(snapshot({ nextStep: "p2", fields: [field({ field: "website", value: SITE })] }), deps(store, http));
     expect(r.result).toBe("done");
-    expect(steps(store)[0]).toBe("p2:site_blocked:p3:");
+    expect(steps(store)[0]).toBe("p2:site_blocked:p2b:");
     expect(steps(store).at(-1)).toBe("p5:no_ai:done:complete");
     expect(store.log.some((l) => l[0] === "refute")).toBe(false);
   });
@@ -76,7 +76,7 @@ describe("qualifyLead free cascade", () => {
     // a phone keeps it alive
     const alive = fakeQualifierStore([]);
     await qualifyLead(snapshot({ nextStep: "p2", fields: [web, field({ field: "phone", value: "5085550100" })] }), deps(alive, http));
-    expect(steps(alive)[0]).toBe("p2:site_down:p3:");
+    expect(steps(alive)[0]).toBe("p2:site_down:p2b:");
   });
 
   test("I-3: a down site is not dead while another non-refuted site is left: it re-queues to p2 and the other gets read", async () => {
@@ -97,16 +97,16 @@ describe("qualifyLead free cascade", () => {
     // a site that was not refuted (it came from the site itself) never loops
     const own = fakeQualifierStore([]);
     await qualifyLead(snapshot({ nextStep: "p2", fields: [field({ field: "website", value: SITE, source: "site" }), second] }), deps(own, http));
-    expect(steps(own)[0]).toBe("p2:site_down:p3:");
+    expect(steps(own)[0]).toBe("p2:site_down:p2b:");
   });
 
   test("m-7: what P2 wrote counts for the level P3 sees", async () => {
     const store = fakeQualifierStore([]);
     await qualifyLead(snapshot({ nextStep: "p2", level: 0, fields: [field({ field: "website", value: SITE })] }), deps(store));
-    expect(steps(store)[1]).toBe("p3:skipped:p4:");
+    expect(steps(store)[2]).toBe("p3:skipped:p4:");
     const blocked = fakeQualifierStore([]);
     await qualifyLead(snapshot({ nextStep: "p2", level: 0, fields: [field({ field: "website", value: SITE })] }), deps(blocked, fakeHttp({ [SITE]: { status: 403 } })));
-    expect(steps(blocked)[1]).toBe("p3:places_off:p4:");
+    expect(steps(blocked)[2]).toBe("p3:places_off:p4:");
   });
 
   test("m-4/m-5: a value over 1000 characters is skipped, not cut; excerpts are cut on whole characters", async () => {
@@ -232,7 +232,7 @@ describe("P3 Places", () => {
     const dead = fakeQualifierStore([]);
     const r = await qualifyLead(snapshot({ nextStep: "p2", fields: [web], best: NAME_ONLY }), deps(dead, http, { places: places(null).client }));
     expect(r.result).toBe("done");
-    expect(steps(dead)).toEqual(["p2:site_down:p3:", "p3:ok:done:dead"]);
+    expect(steps(dead)).toEqual(["p2:site_down:p2b:", "p2b:skipped:p3:", "p3:ok:done:dead"]);
     const plain = fakeQualifierStore([]);
     await qualifyLead(snapshot({ nextStep: "p3", best: NAME_ONLY }), deps(plain, undefined, { places: places(null).client }));
     expect(steps(plain)[0]).toBe("p3:ok:p4:");
@@ -284,7 +284,7 @@ describe("P4 IA leve", () => {
     const store = fakeQualifierStore([], { ledger: l.ledger });
     const r = await qualifyLead(snapshot({ nextStep: "p2", fields: [withSite()] }), deps(store, fakeHttp({ [SITE]: LIGHT }), { transport: t }));
     expect(r.result).toBe("done");
-    expect(steps(store).slice(0, 3)).toEqual(["p2:ok:p3:", "p3:places_off:p4:", "p4:ok:p5:"]);
+    expect(steps(store).slice(0, 4)).toEqual(["p2:ok:p2b:", "p2b:skipped:p3:", "p3:places_off:p4:", "p4:ok:p5:"]);
     const ai = added(store).filter((a) => a.source === "ai");
     expect(ai.find((a) => a.field === "contact_name")).toMatchObject({ value: "Pat Doe", status: "unverified", source_ref: SITE });
     expect(ai.find((a) => a.field === "contact_title")).toMatchObject({ value: "President" });
@@ -303,14 +303,14 @@ describe("P4 IA leve", () => {
   test("P4 without AI says no_ai", async () => {
     const store = fakeQualifierStore([]);
     await qualifyLead(snapshot({ nextStep: "p2", fields: [withSite()] }), deps(store, fakeHttp({ [SITE]: LIGHT })));
-    expect(steps(store)[2]).toBe("p4:no_ai:p5:");
+    expect(steps(store)[3]).toBe("p4:no_ai:p5:");
   });
 
   test("P4: qualifier_daily pauses the lead with nothing written for the step; lead_cap ends the lead", async () => {
     const daily = fakeQualifierStore([], { ledger: aiLedger(new AiError("qualifier_daily")).ledger });
     const r = await qualifyLead(snapshot({ nextStep: "p2", fields: [withSite()] }), deps(daily, fakeHttp({ [SITE]: LIGHT }), { transport: model([]) }));
     expect(r).toMatchObject({ result: "paused", pauseReason: "daily_cap" });
-    expect(steps(daily)).toEqual(["p2:ok:p3:", "p3:places_off:p4:"]);
+    expect(steps(daily)).toEqual(["p2:ok:p2b:", "p2b:skipped:p3:", "p3:places_off:p4:"]);
     const lead = fakeQualifierStore([], { ledger: aiLedger(new AiError("lead_cap")).ledger });
     const r2 = await qualifyLead(snapshot({ nextStep: "p2", fields: [withSite()] }), deps(lead, fakeHttp({ [SITE]: LIGHT }), { transport: model([]) }));
     expect(r2.result).toBe("done");
@@ -422,7 +422,7 @@ describe("review fixes (T6)", () => {
     const st = fakeQualifierStore([], { ledger: okLedger() });
     const p = places(HIT);
     await qualifyLead(snapshot({ nextStep: "p4", level: 0, best: NAME_ONLY, fields: [web] }), deps(st, fakeHttp({ [SITE]: PAGE }), { transport: t, places: p.client }));
-    expect(steps(st).slice(0, 3)).toEqual(["p2:ok:p3:", "p3:skipped:p4:", "p4:ok:p5:"]);
+    expect(steps(st).slice(0, 4)).toEqual(["p2:ok:p2b:", "p2b:skipped:p3:", "p3:skipped:p4:", "p4:ok:p5:"]);
     expect(p.calls).toEqual([]);
     expect(t.callsFor("qualify_light")).toHaveLength(1);
   });
@@ -628,5 +628,66 @@ describe("P5 IA forte", () => {
     await qualifyLead(snapshot({ ...base }), { ...deps(st, undefined, { transport: t }), now: () => Date.UTC(2026, 10, 15, 3, 0, 0) });
     expect(t.calls[0].user).toContain("2026-11-14");
     expect(t.calls[0].user).not.toContain("2026-11-15");
+  });
+});
+
+describe("P2b contatos (Apify, F3d-2)", () => {
+  const NO_EMAIL = htmlPage(`<h1>Acme HVAC</h1><a href="tel:+1-508-555-0142">Call</a>`);
+  const asked = (st: { log: unknown[][] }) => st.log.filter((l) => l[0] === "requestContacts").map((l) => [l[1], l[2]]);
+
+  test("P2b asks for contacts only when P2 found no e-mail", async () => {
+    // P2 read the site and found an e-mail: nothing to ask
+    const withEmail = fakeQualifierStore([], { contacts: true });
+    await qualifyLead(snapshot({ nextStep: "p2", fields: [field({ field: "website", value: SITE })] }), deps(withEmail));
+    expect(asked(withEmail)).toEqual([]);
+    expect(steps(withEmail)[1]).toBe("p2b:skipped:p3:");
+    // P2 read the site, no e-mail on it: the lead is put in a contact run, and the cascade does not wait for it
+    const none = fakeQualifierStore([], { contacts: true });
+    const r = await qualifyLead(snapshot({ nextStep: "p2", fields: [field({ field: "website", value: SITE })] }), deps(none, fakeHttp({ [SITE]: NO_EMAIL })));
+    expect(asked(none)).toEqual([["lead-1", SITE]]);
+    expect(steps(none).slice(0, 3)).toEqual(["p2:ok:p2b:", "p2b:queued:p3:", "p3:places_off:p4:"]);
+    expect(r.result).toBe("done");
+    // a blocked site is asked too; with no Apify connection or no room the step says no_source and goes on
+    const blocked = fakeQualifierStore([], { contacts: false });
+    await qualifyLead(snapshot({ nextStep: "p2", fields: [field({ field: "website", value: SITE })] }), deps(blocked, fakeHttp({ [SITE]: { status: 403 } })));
+    expect(asked(blocked)).toEqual([["lead-1", SITE]]);
+    expect(steps(blocked).slice(0, 2)).toEqual(["p2:site_blocked:p2b:", "p2b:no_source:p3:"]);
+  });
+
+  test("P2b is skipped for a site that is down, robots or not HTML, no site, and an e-mail that is not refuted; a refuted one does not count", async () => {
+    const run = async (http: ReturnType<typeof fakeHttp>, fields = [field({ field: "website", value: SITE })], nextStep: "p2" | "p2b" = "p2", notes: Record<string, string> = {}) => {
+      const st = fakeQualifierStore([], { contacts: true });
+      await qualifyLead(snapshot({ nextStep, fields, notes }), deps(st, http));
+      return st;
+    };
+    expect(asked(await run(fakeHttp({ [SITE]: { status: 404 } }), [field({ field: "website", value: SITE }), field({ field: "phone", value: "5085550100" })]))).toEqual([]);
+    expect(asked(await run(fakeHttp({ [SITE]: { headers: { "content-type": "application/pdf" } } })))).toEqual([]);
+    expect(asked(await run(fakeHttp({}), []))).toEqual([]);
+    const own = field({ field: "email", value: "old@acme-hvac.test" });
+    expect(asked(await run(fakeHttp({ [SITE]: NO_EMAIL }), [field({ field: "website", value: SITE }), own]))).toEqual([]);
+    expect(asked(await run(fakeHttp({ [SITE]: NO_EMAIL }), [field({ field: "website", value: SITE }), { ...own, status: "refuted" }]))).toHaveLength(1);
+  });
+
+  test("a resume at p2b uses the queue's note for P2: ok asks, a down site does not", async () => {
+    const web = [field({ field: "website", value: SITE })];
+    const a = fakeQualifierStore([], { contacts: true });
+    await qualifyLead(snapshot({ nextStep: "p2b", fields: web, notes: { p2: "ok" } }), deps(a));
+    expect(asked(a)).toEqual([["lead-1", SITE]]);
+    expect(steps(a)[0]).toBe("p2b:queued:p3:");
+    const b = fakeQualifierStore([], { contacts: true });
+    await qualifyLead(snapshot({ nextStep: "p2b", fields: web, notes: { p2: "site_down" } }), deps(b));
+    expect(asked(b)).toEqual([]);
+    expect(steps(b)[0]).toBe("p2b:skipped:p3:");
+  });
+
+  test("a failing request counts as a step error and stays on p2b; the third in a row skips it", async () => {
+    const st = fakeQualifierStore([], { contacts: true, failOn: { requestContacts: new Error("rpc_down") } });
+    const s = snapshot({ nextStep: "p2b", fields: [field({ field: "website", value: SITE })], notes: { p2: "ok" } });
+    const r = await qualifyLead(s, deps(st));
+    expect(r).toMatchObject({ result: "requeued", errored: true });
+    expect(steps(st)).toEqual(["p2b:error:p2b:"]);
+    const third = fakeQualifierStore([], { contacts: true, failOn: { requestContacts: new Error("rpc_down") } });
+    await qualifyLead({ ...s, failStep: "p2b", failStreak: 2 }, deps(third));
+    expect(steps(third)[0]).toBe("p2b:error:p3:");
   });
 });

@@ -41,7 +41,7 @@ function run(o: Partial<SourceRunRow> & { id: string }): SourceRunRow {
 }
 
 type Log = { fn: string; args: unknown[] }[];
-function fakeStore(work: { start?: SourceRunRow[]; poll?: SourceRunRow[] }, o: { busy?: boolean; importError?: (runId: string) => unknown; failOn?: string; failError?: () => unknown; startedError?: (runId: string) => unknown } = {}) {
+function fakeStore(work: { start?: SourceRunRow[]; poll?: SourceRunRow[] }, o: { contactLeads?: { leadId: string; startUrl: string }[]; contactsError?: () => unknown; busy?: boolean; importError?: (runId: string) => unknown; failOn?: string; failError?: () => unknown; startedError?: (runId: string) => unknown } = {}) {
   const log: Log = [];
   const rec = (fn: string, ...args: unknown[]) => log.push({ fn, args });
   const store: SourceTickStore = {
@@ -76,6 +76,16 @@ function fakeStore(work: { start?: SourceRunRow[]; poll?: SourceRunRow[] }, o: {
       const e = o.importError?.(id);
       if (e) throw e;
       return { new: rows.length, merged: 0 };
+    },
+    async contactLeads(_t, id) {
+      rec("contactLeads", id);
+      return o.contactLeads ?? [];
+    },
+    async addContacts(_t, id, rows, found, cost) {
+      rec("addContacts", id, rows, found, cost);
+      const e = o.contactsError?.();
+      if (e) throw e;
+      return rows.length;
     },
   };
   return { store, log, of: (fn: string) => log.filter((l) => l.fn === fn) };
@@ -334,5 +344,85 @@ describe("runSourceTick", () => {
     const old = fakeStore({ poll: [run({ id: "R1", external_run_id: "AR1", dataset_id: "DS1", started_at: new Date(NOW - 31 * 60_000).toISOString() })] });
     expect((await runSourceTick({ store: old.store, http: http(), now: () => NOW })).failed).toBe(1);
     expect(old.of("failed")[0].args).toEqual(["R1", "stale", null]);
+  });
+});
+
+describe("contact runs (P2b)", () => {
+  const CONTACT = "vdrmota~contact-info-scraper";
+  const leads = [
+    { leadId: "L1", startUrl: "https://acme.example.com/" },
+    { leadId: "L2", startUrl: "https://www.bravo.example.org/home" },
+  ];
+  const contact = (o: Partial<SourceRunRow> = {}) => run({ id: "C1", kind: "contact", query: { label: "Contatos" }, max_results: 10, reserve_usd: 0.5, label: "Contatos", ...o });
+
+  test("a queued contact run starts the contact scraper on its leads' sites, with the reserve as the charge cap", async () => {
+    const f = fakeStore({ start: [contact()] }, { contactLeads: leads });
+    const http = fakeHttp({ [`POST ${A}/acts/${CONTACT}/runs`]: { status: 201, json: { data: { id: "AC1", defaultDatasetId: "DC1" } } } });
+    const r = await runSourceTick({ store: f.store, http, now: () => NOW });
+    expect(r).toEqual({ outcome: "ok", started: 1, polled: 0, imported: 0, failed: 0 });
+    expect(http.calls[0].url).toContain("maxTotalChargeUsd=0.5");
+    expect(http.calls[0].body).toMatchObject({
+      startUrls: [{ url: "https://acme.example.com/" }, { url: "https://www.bravo.example.org/home" }],
+      maxDepth: 1,
+      sameDomain: true,
+      mergeContacts: true,
+      proxyConfig: { useApifyProxy: true },
+    });
+    expect(f.of("started")[0].args).toEqual(["C1", "AC1", "DC1"]);
+  });
+
+  test("a contact run without leads fails no_leads at zero and never calls Apify", async () => {
+    const f = fakeStore({ start: [contact()] }, { contactLeads: [] });
+    const http = fakeHttp({});
+    const r = await runSourceTick({ store: f.store, http, now: () => NOW });
+    expect(r).toMatchObject({ failed: 1, started: 0 });
+    expect(f.of("failed")[0].args).toEqual(["C1", "no_leads", 0]);
+    expect(http.calls).toHaveLength(0);
+  });
+
+  const done = (usage?: number) =>
+    fakeHttp({
+      [`GET ${A}/actor-runs/AC1`]: { status: 200, json: { data: { status: "SUCCEEDED", ...(usage === undefined ? {} : { usageTotalUsd: usage }) } } },
+      [`GET ${A}/datasets/DC1/items`]: {
+        status: 200,
+        json: [
+          { url: "https://acme.example.com/contact", originalStartUrl: "https://acme.example.com/", emails: ["Info@acme.example.com", "x@domain.com"], phones: ["+1 508 555 0100"] },
+          { url: "https://www.bravo.example.org/about", originalStartUrl: "https://www.bravo.example.org/home", emails: ["hi@bravo.example.org", "other@stranger.example.net"] },
+        ],
+      },
+    });
+  const polling = () => contact({ external_run_id: "AC1", dataset_id: "DC1", started_at: new Date(NOW - 60_000).toISOString() });
+
+  test("a finished contact run stores the kept e-mails per lead and settles at the cost Apify reports, else the reserve", async () => {
+    const a = fakeStore({ poll: [polling()] }, { contactLeads: leads });
+    const r = await runSourceTick({ store: a.store, http: done(0.07), now: () => NOW });
+    expect(r).toMatchObject({ polled: 1, imported: 1, failed: 0 });
+    expect(a.of("addContacts")[0].args).toEqual([
+      "C1",
+      [
+        { leadId: "L1", value: "info@acme.example.com", url: "https://acme.example.com/contact" },
+        { leadId: "L2", value: "hi@bravo.example.org", url: "https://www.bravo.example.org/about" },
+        // read on the lead's own page: kept even though its domain is another (a mailbox the site itself shows)
+        { leadId: "L2", value: "other@stranger.example.net", url: "https://www.bravo.example.org/about" },
+      ],
+      2,
+      0.07,
+    ]);
+    expect(a.of("import")).toHaveLength(0);
+    const b = fakeStore({ poll: [polling()] }, { contactLeads: leads });
+    await runSourceTick({ store: b.store, http: done(), now: () => NOW });
+    expect(b.of("addContacts")[0].args[3]).toBe(0.5);
+  });
+
+  test("a refused store (22023) fails the contact run once as import_refused; a failed Apify run settles like Maps", async () => {
+    const a = fakeStore({ poll: [polling()] }, { contactLeads: leads, contactsError: () => Object.assign(new Error("x"), { code: "22023" }) });
+    const r = await runSourceTick({ store: a.store, http: done(0.07), now: () => NOW });
+    expect(r).toMatchObject({ imported: 0, failed: 1 });
+    expect(a.of("failed")[0].args).toEqual(["C1", "import_refused", 0.07]);
+    const b = fakeStore({ poll: [polling()] }, { contactLeads: leads });
+    const http = fakeHttp({ [`GET ${A}/actor-runs/AC1`]: { status: 200, json: { data: { status: "FAILED", usageTotalUsd: 0.2 } } } });
+    await runSourceTick({ store: b.store, http, now: () => NOW });
+    expect(b.of("failed")[0].args).toEqual(["C1", "failed", 0.2]);
+    expect(b.of("addContacts")).toHaveLength(0);
   });
 });

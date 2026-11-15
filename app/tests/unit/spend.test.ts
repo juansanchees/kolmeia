@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 const { loadSourceRuns, loadWorkspaceToday } = await import("@/lib/spend/queries");
-import { agentLabel, periodStart, sourceRows, spendRows, spendTotal, stepLabel, type SpendCall } from "@/lib/spend/view";
+import { agentLabel, grandTotal, periodStart, sourceLabel, sourceRows, spendRows, spendTotal, stepLabel, type SpendCall } from "@/lib/spend/view";
 
 const base: SpendCall = {
   id: "c0", run_id: null, lead_id: null, task: "qualify_light", model: "claude-haiku-5-5",
@@ -90,6 +90,41 @@ describe("F3c-2 spend view", () => {
   });
 });
 
+
+describe("Gastos shows the paid sources (F3d-2)", () => {
+  const call = (id: string, cost: number, o: Partial<SpendCall> = {}): SpendCall => ({
+    id, run_id: null, lead_id: null, task: "qualify_light", model: "m", input_tokens: 1, output_tokens: 1, web_searches: 0, web_fetches: 0,
+    cost_usd: cost, reserve_usd: 0, status: "ok", created_at: "2026-11-14T15:00:00Z", ...o,
+  });
+
+  test("Gastos shows Fontes by source and totals match ai_calls + source_runs", () => {
+    expect(sourceLabel("apify", "maps")).toBe("Apify Maps");
+    expect(sourceLabel("apollo", "apollo")).toBe("Apollo");
+    expect(sourceLabel("apify", "contact")).toBe("Apify contatos");
+    const calls = [call("a", 0.25), call("b", 0.1, { status: "pending", reserve_usd: 0.4 })];
+    const runs = [
+      { id: "r1", provider: "apify", kind: "maps", status: "imported", cost_usd: 0.3, reserve_usd: 0.5, leads: [] },
+      { id: "r2", provider: "apollo", kind: "apollo", status: "imported", cost_usd: 0, reserve_usd: 0, leads: [] },
+      { id: "r3", provider: "apify", kind: "contact", status: "imported", cost_usd: 0.12, reserve_usd: 0.5, leads: [{ id: "L1", name: "Acme" }, { id: "L2", name: "Bravo" }] },
+      { id: "r4", provider: "apify", kind: "contact", status: "running", cost_usd: null, reserve_usd: 0.5, leads: [{ id: "L1", name: "Acme" }] },
+      { id: "r5", provider: "apify", kind: "contact", status: "refused", cost_usd: null, reserve_usd: 0.5, leads: [] },
+    ];
+    const rows = sourceRows(runs);
+    expect(rows.map((r) => [r.label, r.runs, Number(r.usd.toFixed(2))])).toEqual([
+      ["Apify contatos", 3, 0.62],
+      ["Apify Maps", 1, 0.3],
+      ["Apollo", 1, 0],
+    ]);
+    // the contact run's cost is split over its leads, and a lead keeps what every run spent on it
+    const contact = rows.find((r) => r.kind === "contact")!;
+    expect(contact.leads.map((l) => [l.name, Number(l.usd.toFixed(2))])).toEqual([["Acme", 0.56], ["Bravo", 0.06]]);
+    expect(rows.find((r) => r.kind === "maps")!.leads).toEqual([]);
+    // the grand total is the AI ledger plus every source run (a pending call at its reserve, an open run at its reserve)
+    expect(spendTotal(calls)).toBeCloseTo(0.65, 6);
+    expect(grandTotal(calls, runs)).toBeCloseTo(0.65 + 0.92, 6);
+    expect(grandTotal(calls, runs)).toBeCloseTo(spendTotal(calls) + rows.reduce((s, r) => s + r.usd, 0), 6);
+  });
+});
 
 describe("M-4 spend queries read past PostgREST's 1000-row page", () => {
   // a query builder that answers .range() pages from a list, like PostgREST (max 1000 per request)

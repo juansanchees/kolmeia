@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { inChunks } from "@/lib/leads/queries";
+import { t } from "@/messages/pt";
 import { periodStart, type SourceRun, type SpendCall, type SpendPeriod } from "./view";
 
 const PAGE = 1000;
@@ -58,15 +59,21 @@ export async function loadSpend(
   const agentName = new Map(agents.map((a) => [a.id, a.name]));
   const runAgent = new Map<string, string | null>(runs.map((r) => [r.id, r.agent_id ? (agentName.get(r.agent_id) ?? null) : null]));
 
-  const leadIds = [...new Set(calls.map((c) => c.lead_id).filter((x): x is string => Boolean(x)))];
+  const leads = await leadNames(db, calls.map((c) => c.lead_id));
+  return { calls, runAgent, leads, truncated };
+}
+
+/** The best (confirmed first) non-refuted name of each lead. */
+async function leadNames(db: SupabaseClient, ids: (string | null)[]): Promise<Map<string, string>> {
+  const leadIds = [...new Set(ids.filter((x): x is string => Boolean(x)))];
   const fields = await inChunks<{ lead_id: string; value: string; status: string }>(
     leadIds,
     (c) => db.from("lead_fields").select("lead_id, value, status").eq("field", "name").neq("status", "refuted").in("lead_id", c).limit(1000),
     "spend leads",
   );
-  const leads = new Map<string, string>();
-  for (const f of fields) if (!leads.has(f.lead_id) || f.status === "confirmed") leads.set(f.lead_id, f.value);
-  return { calls, runAgent, leads, truncated };
+  const names = new Map<string, string>();
+  for (const f of fields) if (!names.has(f.lead_id) || f.status === "confirmed") names.set(f.lead_id, f.value);
+  return names;
 }
 
 /** Every row of a query, a PostgREST page (1000) at a time and never more than SPEND_MAX; `page` must order by a stable key. */
@@ -82,18 +89,29 @@ async function allRows<T>(label: string, page: (from: number, to: number) => Pro
   return out;
 }
 
-/** F3d's paid sources in the period (source_runs; RLS: owner/sdr only). */
+/** F3d's paid sources in the period (source_runs; RLS: owner/sdr only), with the leads each contact run covered (source_run_leads). */
 export async function loadSourceRuns(db: SupabaseClient, ws: string, p: SpendPeriod, now: Date = new Date()): Promise<SourceRun[]> {
   const since = periodStart(p, now).toISOString();
   const rows = await allRows<Record<string, unknown>>("loadSourceRuns", (from, to) =>
     db.from("source_runs").select("id, provider, kind, status, cost_usd, reserve_usd").eq("workspace_id", ws).gte("created_at", since).order("id", { ascending: true }).range(from, to),
   );
+  const contactIds = rows.filter((r) => r.kind === "contact").map((r) => String(r.id));
+  const links = await inChunks<{ run_id: string; lead_id: string }>(
+    contactIds,
+    (c) => db.from("source_run_leads").select("run_id, lead_id").in("run_id", c).limit(1000),
+    "spend source leads",
+  );
+  const names = await leadNames(db, links.map((l) => l.lead_id));
+  const byRun = new Map<string, { id: string; name: string }[]>();
+  for (const l of links) byRun.set(l.run_id, [...(byRun.get(l.run_id) ?? []), { id: l.lead_id, name: names.get(l.lead_id) ?? t.spend.unknownLead }]);
   return rows.map((r) => ({
+    id: String(r.id),
     provider: r.provider as string,
     kind: r.kind as string,
     status: r.status as string,
     cost_usd: r.cost_usd === null || r.cost_usd === undefined ? null : num(r.cost_usd),
     reserve_usd: num(r.reserve_usd),
+    leads: byRun.get(String(r.id)) ?? [],
   }));
 }
 

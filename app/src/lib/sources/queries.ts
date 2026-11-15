@@ -26,9 +26,9 @@ export async function connectedSources(db: SupabaseClient, ws: string): Promise<
 
 const RUN_COLS = "id, kind, query, status, error, found, dropped, cost_usd, reserve_usd, import_id, created_at";
 
-/** The workspace's last 50 runs, newest first. */
+/** The workspace's last 50 searches, newest first. Contact runs (the Qualificador's P2b) are not searches: they show in Gastos. */
 export async function listRuns(db: SupabaseClient, ws: string): Promise<RunView[]> {
-  const { data, error } = await db.from("source_runs").select(RUN_COLS).eq("workspace_id", ws).order("created_at", { ascending: false }).limit(50);
+  const { data, error } = await db.from("source_runs").select(RUN_COLS).eq("workspace_id", ws).in("kind", ["maps", "apollo"]).order("created_at", { ascending: false }).limit(50);
   if (error || !data) return [];
   return (data as Record<string, unknown>[]).map((r) => ({
     id: String(r.id),

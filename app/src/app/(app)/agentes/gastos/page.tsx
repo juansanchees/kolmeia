@@ -4,7 +4,7 @@ import { QualifierCapForm } from "@/components/qualifier/QualifierCapForm";
 import { TakeOverButton } from "@/components/qualifier/TakeOverButton";
 import { SourceSpend, SpendTable, money } from "@/components/spend/SpendTable";
 import { loadSourceRuns, loadSpend, loadWorkspaceToday } from "@/lib/spend/queries";
-import { sourceRows, spendRows, spendTotal, type SpendBy, type SpendPeriod } from "@/lib/spend/view";
+import { grandTotal, sourceRows, spendRows, spendTotal, type SpendBy, type SpendPeriod } from "@/lib/spend/view";
 import type { QualifierStatus } from "@/lib/qualifier/view";
 import { createClient } from "@/lib/supabase/server";
 import { requireSender } from "@/lib/workspace";
@@ -90,6 +90,7 @@ export default async function GastosPage({ searchParams }: { searchParams: Promi
       {spend.truncated && <Notice tone="warn">{S.truncated}</Notice>}
       <SourceSpend rows={src} />
       <p className="text-sm font-semibold">{fill(S.sourcesTotal, { usd: money(src.reduce((s, r) => s + r.usd, 0)) })}</p>
+      <p className="text-sm font-semibold">{fill(S.grandTotal, { usd: money(grandTotal(spend.calls, sources)) })}</p>
     </div>
   );
 }

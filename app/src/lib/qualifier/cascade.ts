@@ -11,7 +11,7 @@ import { factsToFields, fieldKey, liveFields, liveLevel, siteField } from "./sit
 import type { QualifierTickStore } from "./store";
 import type { DoneReason, FieldIn, FieldRow, LeadSnapshot, PlaceHit, PlacesClient, QualifierPauseReason, QualifierStep, StepOutcome } from "./types";
 
-// One lead through the cascade, cheapest step first, in one call: P1 juntar, P2 site, P3 Places, P4 IA leve, P5 IA
+// One lead through the cascade, cheapest step first, in one call: P1 juntar, P2 site, P2b contatos (Apify, queued and never waited for), P3 Places, P4 IA leve, P5 IA
 // forte. The pages P2 reads stay in memory for P4. Page text is untrusted data: nothing here follows it, it only
 // feeds `factsToFields`, which keeps what is literally written on the page. Errors are short codes, never messages.
 
@@ -66,7 +66,7 @@ function agreesWithLead(hit: PlaceHit, leadName: string, fields: FieldRow[]): bo
   return false;
 }
 
-const ORDER: QualifierStep[] = ["p1", "p2", "p3", "p4", "p5"];
+const ORDER: QualifierStep[] = ["p1", "p2", "p2b", "p3", "p4", "p5"];
 const MAX_STREAK = 3;
 /** Fields that count as a way to reach the company. */
 const REACH = new Set(["phone", "email"]);
@@ -105,6 +105,8 @@ export async function qualifyLead(s: LeadSnapshot, d: CascadeDeps): Promise<Casc
   let site: SiteRead | null = null;
   // P2 found the site down and there is no other site left to read
   let siteDown = false;
+  // how P2 ended (this pass, else the queue's note from an earlier one): P2b needs the free reader to have read the site
+  let p2Outcome: string | undefined = s.notes.p2;
   // what this lead and the Qualificador's day have spent, kept current inside the pass (the snapshot is from the claim)
   let leadSpent = s.spentUsd;
   let daySpent = s.settings.spentToday;
@@ -145,6 +147,15 @@ export async function qualifyLead(s: LeadSnapshot, d: CascadeDeps): Promise<Casc
           if (!reach() && !otherSite() && d.places === null) return { outcome: "site_down", done: "dead" };
         }
         return { outcome: read.outcome === "ok" ? "ok" : read.outcome };
+      }
+      case "p2b": {
+        // the free reader got through (or was only blocked) and found no e-mail: ask the contact scraper, without waiting for it
+        if (p2Outcome !== "ok" && p2Outcome !== "site_blocked") return { outcome: "skipped" };
+        if (fields.some((f) => f.field === "email" && f.status !== "refuted")) return { outcome: "skipped" };
+        const w = siteField({ ...s, fields });
+        const url = w ? sanitizeUrl(w.value) : null;
+        if (!url) return { outcome: "skipped" };
+        return { outcome: (await store.requestContacts(tickId, leadId, url)) ? "queued" : "no_source" };
       }
       case "p3": {
         if (resumedPastP3) return { outcome: "skipped" }; // Places already ran in an earlier pass: a resume at p2 must not pay again
@@ -313,6 +324,7 @@ export async function qualifyLead(s: LeadSnapshot, d: CascadeDeps): Promise<Casc
     let r: StepResult;
     try {
       r = await run(step);
+      if (step === "p2") p2Outcome = r.outcome;
     } catch (e) {
       if (isAuthError(e)) throw e;
       if (isAiError(e)) {

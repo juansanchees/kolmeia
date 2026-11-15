@@ -1,7 +1,9 @@
 import "server-only";
+import { hostOf } from "@/lib/safe-url";
 import { apifyClient, ApifyError } from "./apify";
 import { apolloClient, ApolloError, ApolloKeyError, ApolloPlanError, mapOrg } from "./apollo";
 import { openKey } from "./connections";
+import { CONTACT_ACTOR, CONTACT_MAX_ITEMS, contactInput, keepEmails } from "./contact";
 import { fetchHttpJson, SourceHttpError, type HttpJson } from "./http";
 import { MAPS_ACTOR, mapPlace, mapsInput } from "./maps";
 import type { SourceCounts, SourceRunRow, SourceTickStore } from "./store";
@@ -85,12 +87,27 @@ export async function runSourceTick(opts: { store: SourceTickStore; http?: HttpJ
     let key: string | null = null;
     try {
       key = openKey(run.workspace_id, run.provider, run.ciphertext);
-      if (run.kind === "maps") {
-        const q = run.query;
+      if (run.kind === "maps" || run.kind === "contact") {
         const client = apifyClient(key, http);
+        let actor: string;
+        let input: object;
+        if (run.kind === "maps") {
+          const q = run.query;
+          actor = MAPS_ACTOR;
+          input = mapsInput({ terms: strs(q.terms), location: String(q.location ?? ""), max: run.max_results });
+        } else {
+          // the sites the Qualificador asked about, read from the ledger (not from the run's own query)
+          const urls = (await store.contactLeads(tick, run.id)).map((l) => l.startUrl);
+          if (urls.length === 0) {
+            await fail(run, "no_leads", 0);
+            return;
+          }
+          actor = CONTACT_ACTOR;
+          input = contactInput(urls);
+        }
         let r: { runId: string; datasetId: string };
         try {
-          r = await client.start(MAPS_ACTOR, mapsInput({ terms: strs(q.terms), location: String(q.location ?? ""), max: run.max_results }), run.reserve_usd);
+          r = await client.start(actor, input, run.reserve_usd);
         } catch (e) {
           // only a definite refusal costs nothing; a timeout, network error, 5xx, 429 or unreadable answer may have started a billed run
           await fail(run, codeOf(e), isDefiniteRefusal(e) ? 0 : run.reserve_usd);
@@ -152,7 +169,7 @@ export async function runSourceTick(opts: { store: SourceTickStore; http?: HttpJ
   };
 
   const pollRun = async (run: SourceRunRow) => {
-    if (run.kind !== "maps") {
+    if (run.kind === "apollo") {
       // an Apollo run is finished inside its own tick; one still running was cut off by a crash
       await fail(run, "interrupted", 0);
       return;
@@ -169,6 +186,21 @@ export async function runSourceTick(opts: { store: SourceTickStore; http?: HttpJ
       counts.polled++;
       const st = await client.status(extId);
       if (st.status === "SUCCEEDED") {
+        if (run.kind === "contact") {
+          const items = await client.items(run.dataset_id, CONTACT_MAX_ITEMS);
+          const leads = (await store.contactLeads(tick, run.id)).flatMap((l) => {
+            const host = hostOf(l.startUrl);
+            return host ? [{ leadId: l.leadId, host }] : [];
+          });
+          try {
+            await store.addContacts(tick, run.id, keepEmails(items, leads), Math.min(10_000, items.length), clampUsd(st.usageUsd ?? run.reserve_usd));
+            counts.imported++;
+          } catch (e) {
+            if (!isAlreadyHandled(e)) throw e;
+            await fail(run, "import_refused", st.usageUsd ?? run.reserve_usd);
+          }
+          return;
+        }
         const items = await client.items(run.dataset_id, run.max_results);
         const rows: ImportRowIn[] = [];
         items.forEach((it) => {

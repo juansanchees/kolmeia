@@ -52,8 +52,10 @@ export function fakeQualifierStore(
   snapshots: LeadSnapshot[],
   o: {
     busy?: boolean;
+    /** What requestContacts answers (default false: no Apify connection). */
+    contacts?: boolean;
     merge?: number | ((lead: string) => number);
-    failOn?: Partial<Record<"merge" | "addFields" | "stepDone" | "claimNext" | "refute" | "reservePlaces", Error>>;
+    failOn?: Partial<Record<"merge" | "addFields" | "stepDone" | "claimNext" | "refute" | "reservePlaces" | "requestContacts", Error>>;
     ledger?: AiLedger;
   } = {},
 ): QualifierTickStore & { log: unknown[][] } {
@@ -88,6 +90,9 @@ export function fakeQualifierStore(
     },
     async stepDone(_t, lead, step, outcome, next, reason) {
       rec("stepDone", [lead, step, outcome, next, reason], undefined);
+    },
+    async requestContacts(_t, lead, url) {
+      return rec("requestContacts", [lead, url], o.contacts ?? false);
     },
     async release(_t, lead) {
       rec("release", [lead], undefined);

@@ -134,20 +134,58 @@ export function spendRows(calls: SpendCall[], by: SpendBy, names: Names): SpendR
   return rows.sort((a, b) => b.usd - a.usd);
 }
 
-/** F3d's paid sources (Apify, Apollo): source_runs.cost_usd, or the reserve while the run is still open. */
-export type SourceRun = { provider: string; kind: string; status: string; cost_usd: number | null; reserve_usd: number };
-export type SourceRow = { provider: string; kind: string; runs: number; usd: number };
+/**
+ * F3d's paid sources (Apify, Apollo): source_runs.cost_usd, or the reserve while the run is still open.
+ * A contact run (P2b) also lists the leads it covered (source_run_leads), so its cost can be seen per lead.
+ */
+export type SourceRun = {
+  id?: string;
+  provider: string;
+  kind: string;
+  status: string;
+  cost_usd: number | null;
+  reserve_usd: number;
+  leads?: { id: string; name: string }[];
+};
+export type SourceRow = { provider: string; kind: string; label: string; runs: number; usd: number; leads: { id: string; name: string; usd: number }[] };
+
+/** "Apify Maps", "Apollo" or "Apify contatos": the step the source shows as. */
+export function sourceLabel(provider: string, kind: string): string {
+  const own = S.sources.labels as Record<string, string>;
+  return Object.hasOwn(own, kind) ? own[kind] : `${(S.sources.provider as Record<string, string>)[provider] ?? provider}`;
+}
+
+/** What a run costs in the ledger: its cost once settled, its reserve while open, nothing if refused or never charged. */
+export function runUsd(r: SourceRun): number {
+  const open = r.status === "queued" || r.status === "running";
+  return r.cost_usd ?? (open ? r.reserve_usd : 0);
+}
 
 export function sourceRows(runs: SourceRun[]): SourceRow[] {
   const m = new Map<string, SourceRow>();
+  const perLead = new Map<string, Map<string, { id: string; name: string; usd: number }>>();
   for (const r of runs) {
-    const open = r.status === "queued" || r.status === "running";
-    const usd = r.cost_usd ?? (open ? r.reserve_usd : 0);
+    const usd = runUsd(r);
     const k = `${r.provider}:${r.kind}`;
-    const row = m.get(k) ?? { provider: r.provider, kind: r.kind, runs: 0, usd: 0 };
+    const row = m.get(k) ?? { provider: r.provider, kind: r.kind, label: sourceLabel(r.provider, r.kind), runs: 0, usd: 0, leads: [] };
     row.runs += 1;
     row.usd += usd;
     m.set(k, row);
+    if (r.leads?.length) {
+      const leads = perLead.get(k) ?? new Map();
+      for (const l of r.leads) {
+        const cur = leads.get(l.id) ?? { id: l.id, name: l.name, usd: 0 };
+        cur.usd += usd / r.leads.length;
+        leads.set(l.id, cur);
+      }
+      perLead.set(k, leads);
+    }
   }
+  for (const [k, leads] of perLead) m.get(k)!.leads = [...leads.values()].sort((a, b) => b.usd - a.usd || a.name.localeCompare(b.name));
   return [...m.values()].sort((a, b) => b.usd - a.usd);
+}
+
+/** Everything spent in the period: the AI ledger (ai_calls) plus every source run (source_runs). */
+export function grandTotal(calls: SpendCall[], runs: SourceRun[]): number {
+  return spendTotal(calls) + runs.reduce((s, r) => s + runUsd(r), 0);
 }

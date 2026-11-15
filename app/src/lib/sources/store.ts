@@ -33,6 +33,10 @@ export interface SourceTickStore {
   markStarted(tickId: string, runId: string, externalId: string, datasetId: string): Promise<void>;
   markFailed(tickId: string, runId: string, error: string, costUsd: number | null): Promise<void>;
   importRows(tickId: string, runId: string, rows: ImportRowIn[], found: number, dropped: number, costUsd: number | null): Promise<{ new: number; merged: number }>;
+  /** A contact run's leads and the site each one's scraper starts from (source_run_leads). */
+  contactLeads(tickId: string, runId: string): Promise<{ leadId: string; startUrl: string }[]>;
+  /** Stores a finished contact run's e-mails and settles the run (source_add_contacts); returns how many were new. */
+  addContacts(tickId: string, runId: string, rows: { leadId: string; value: string; url: string }[], found: number, costUsd: number | null): Promise<number>;
 }
 
 const isRow = (x: unknown): x is SourceRunRow =>
@@ -71,6 +75,23 @@ export function rpcSourceStore(rpc: RpcFn): SourceTickStore {
         merged?: number;
       } | null;
       return { new: r?.new ?? 0, merged: r?.merged ?? 0 };
+    },
+    async contactLeads(tickId, runId) {
+      const r = await rpc("source_contact_leads", { p_tick: tickId, p_run: runId });
+      return (Array.isArray(r) ? r : []).flatMap((x) => {
+        const o = x as { lead_id?: unknown; start_url?: unknown } | null;
+        return o && typeof o.lead_id === "string" && typeof o.start_url === "string" ? [{ leadId: o.lead_id, startUrl: o.start_url }] : [];
+      });
+    },
+    async addContacts(tickId, runId, list, found, costUsd) {
+      const n = await rpc("source_add_contacts", {
+        p_tick: tickId,
+        p_run: runId,
+        p_rows: list.map((x) => ({ lead_id: x.leadId, value: x.value, url: x.url })),
+        p_found: found,
+        p_cost: costUsd,
+      });
+      return typeof n === "number" ? n : 0;
     },
   };
 }

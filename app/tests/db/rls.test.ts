@@ -127,6 +127,8 @@ describe("proof that RLS is really enforced in PGlite", () => {
         // 0015 (learned profiles, run stamp, profile match: the three RPCs are for signed-in senders, the rest is internal)
         "propose_profile", "approve_profile", "reject_profile", "stamp_run_profile", "lead_matches_profile", "profile_filter_of",
         "refresh_profile_match", "refresh_profile_match_lead", "refresh_profile_match_one", "refresh_profile_match_candidate", "supersede_agent_profiles",
+        // 0016 (contact scraper: Qualificador asks, sources clock stores; token-gated, anon-only)
+        "qualifier_request_contacts", "source_contact_leads", "source_add_contacts",
       ].sort(),
     );
     for (const r of rows) expect(r.proconfig).toContain("search_path=\"\"");

@@ -1,4 +1,4 @@
-export const QUALIFIER_STEPS = ["p1", "p2", "p3", "p4", "p5"] as const;
+export const QUALIFIER_STEPS = ["p1", "p2", "p2b", "p3", "p4", "p5"] as const;
 export type QualifierStep = (typeof QUALIFIER_STEPS)[number];
 
 export type StepOutcome =
@@ -12,6 +12,8 @@ export type StepOutcome =
   | "places_off"
   | "closed"
   | "no_ai"
+  | "queued"
+  | "no_source"
   | "error"
   | "lead_cap"
   | "day_cap"
