@@ -12,6 +12,7 @@ export type ImportListItem = {
   new_count: number;
   merged_count: number;
   error_count: number;
+  use_as_training: boolean;
   created_at: string;
 };
 
@@ -64,7 +65,7 @@ export async function undoImport(db: SupabaseClient, importId: string): Promise<
 export async function listImports(db: SupabaseClient, ws: string): Promise<ImportListItem[]> {
   const { data, error } = await db
     .from("lead_imports")
-    .select("id, list_name, file_name, status, row_count, new_count, merged_count, error_count, created_at")
+    .select("id, list_name, file_name, status, row_count, new_count, merged_count, error_count, use_as_training, created_at")
     .eq("workspace_id", ws)
     .order("created_at", { ascending: false })
     .limit(100);

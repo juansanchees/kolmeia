@@ -271,3 +271,18 @@ describe("F3c-2 qualifier screens", () => {
     expect(read("src/components/leads/LeadsTable.tsx")).toContain("QualifyControls");
   });
 });
+
+describe("F3c-3 profile card", () => {
+  test("approving needs a click; nothing is applied from a page load", () => {
+    expect(read("src/app/(app)/leads/perfil/[id]/page.tsx")).not.toContain("approveProfileAction");
+    const card = read("src/components/profile/ProfileCard.tsx");
+    expect(card).toMatch(/const approve = \(\) =>[\s\S]*approveProfileAction\(/);
+    expect(card).toContain('onClick={approve}');
+    expect(card).not.toMatch(/useEffect[\s\S]*approveProfileAction/);
+  });
+  test("the training button shows the estimate", () => {
+    const src = read("src/components/profile/TrainButton.tsx");
+    expect(src).toContain("t.profile.train");
+    expect(src).toContain("estimateUsd");
+  });
+});

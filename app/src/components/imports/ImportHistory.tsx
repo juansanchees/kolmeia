@@ -2,14 +2,17 @@
 
 import { useState, useTransition } from "react";
 import { undoImportAction } from "@/app/(app)/leads/subir/actions";
+import Link from "next/link";
 import { btn } from "@/components/email/bits";
+import { TrainButton } from "@/components/profile/TrainButton";
 import { date } from "@/components/research/format";
 import type { ImportListItem } from "@/lib/imports/store";
 import { fill, t } from "@/messages/pt";
 
 const M = t.imports;
 
-export function ImportHistory({ items }: { items: ImportListItem[] }) {
+/** `profiles`: import id -> its newest learned profile; `trainEstimateUsd`: what one training call can cost at most. */
+export function ImportHistory({ items, profiles = {}, trainEstimateUsd = 0 }: { items: ImportListItem[]; profiles?: Record<string, string>; trainEstimateUsd?: number }) {
   const [pending, start] = useTransition();
   const [asking, setAsking] = useState<string | null>(null);
   const [undone, setUndone] = useState<Record<string, { deleted: number; kept: number }>>({});
@@ -45,6 +48,12 @@ export function ImportHistory({ items }: { items: ImportListItem[] }) {
                 <p className="m-0 text-[13px] text-muted">
                   {fill(M.historyCounts, { rows: i.row_count, new: i.new_count, merged: i.merged_count, errors: i.error_count })}
                 </p>
+                {i.use_as_training && status === "done" && (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <TrainButton importId={i.id} estimateUsd={trainEstimateUsd} />
+                    {profiles[i.id] && <Link href={`/leads/perfil/${profiles[i.id]}`} className={btn.link}>{t.profile.see}</Link>}
+                  </div>
+                )}
                 {result && <p role="status" className="m-0 text-[13px]">{fill(M.undoneCounts, result)}</p>}
                 {!result && status !== "undone" &&
                   (asking === i.id ? (

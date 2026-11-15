@@ -275,6 +275,7 @@ export function ImportWizard() {
             <Link href="/leads" className={`${btn.primary} no-underline`}>{M.seeLeads}</Link>
             <button type="button" onClick={reset} className={btn.ghost}>{M.another}</button>
           </div>
+          {training && importId && <Link href={`/leads/subir#import-${importId}`} className="text-sm text-blue underline underline-offset-4">{t.profile.see}</Link>}
           <Link href="/agentes" className="text-sm text-blue underline underline-offset-4">{t.qualifier.started}</Link>
         </div>
       )}

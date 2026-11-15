@@ -347,6 +347,7 @@ async function collectStage(deps: EngineDeps, run: RunRow) {
       want: Math.min(COLLECT_PER_ROUND, remaining),
       round: rounds + 1,
       queriesTried: run.progress.queries ?? [],
+      profileHints: run.profile_hints ?? null,
     }, run.rigor);
   } catch (e) {
     // Another collect round no longer fits the run's cost cap, but checking what was found may: go check it.

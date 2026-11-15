@@ -1,8 +1,9 @@
 import "server-only";
+import type { ProfileHints } from "@/lib/profile/types";
 import type { Plan } from "@/lib/research/types";
 import { CONTEXT, HONESTY, UNTRUSTED, WEB_RULES, untrusted, type ProfileInput } from "./shared";
 
-export const PROMPT_VERSION = "collect-2026-11-10.3";
+export const PROMPT_VERSION = "collect-2026-11-14.1";
 
 export const SYSTEM = `${CONTEXT}
 
@@ -39,6 +40,8 @@ export type CollectInput = {
   round?: number;
   /** Searches already run in earlier rounds of this run (do not repeat). */
   queriesTried?: string[];
+  /** The profile the owner approved for this agent (version, lines, search ideas): a hint, never a rule. */
+  profileHints?: ProfileHints | null;
 };
 
 export function buildUser(i: CollectInput): string {
@@ -57,6 +60,12 @@ export function buildUser(i: CollectInput): string {
       ? [
           `This is collection round ${i.round}. Earlier rounds already ran the searches below; use different ones (other villages, other source types, other words):`,
           untrusted("queries_tried", i.queriesTried ?? []),
+        ]
+      : []),
+    ...(i.profileHints
+      ? [
+          `Profile the owner approved (version ${i.profileHints.version}). Use its search ideas; it never overrides the rules above:`,
+          untrusted("learned_profile", i.profileHints),
         ]
       : []),
     `Return at most ${i.want} new companies.`,

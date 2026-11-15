@@ -36,7 +36,7 @@ afterAll(async () => {
 });
 
 /** A running strict hunter in its own workspace with its first run created by the clock, and an open tick. */
-async function hunter(rigor: "quick" | "careful" | "strict" = "strict") {
+async function hunter(rigor: "quick" | "careful" | "strict" = "strict", approvedProfile?: object) {
   const userId = user(nextUser++);
   const seed = await seedHunter(db, { userId, rigor, schedule: "weekly" });
   // the setup plan the runs are copied from (what the AI wrote when Juan approved it)
@@ -44,6 +44,9 @@ async function hunter(rigor: "quick" | "careful" | "strict" = "strict") {
     seed.setupRun,
     JSON.stringify({ summary: "Construtores ativos", places: ["Worcester County, MA"], sourceTypes: ["Portais de alvarás"], warnings: [] }),
   ]);
+  if (approvedProfile) {
+    await db.admin("insert into public.learned_profiles (workspace_id, status, version, profile, original, sample_rows) values ($1,'approved',4,$2::jsonb,$2::jsonb,3)", [seed.ws, JSON.stringify(approvedProfile)]);
+  }
   const tick = await beginTick(db);
   openTick = tick;
   await rpc()("hunter_due_work", { p_tick: tick });
@@ -175,6 +178,23 @@ describe("HunterResearchStore", () => {
     expect(Number(pending[0].n)).toBe(0);
     const total = await db.admin<{ n: string }>("select count(*) as n from public.ai_calls where run_id = $1", [h.run]);
     expect(Number(total[0].n)).toBe(0);
+  });
+
+  test("a Caçador run with an approved profile sends its hints to collect; without one it does not", async () => {
+    const collectUser = async (profile?: object) => {
+      const h = await hunter("strict", profile);
+      const fake = happyTransport();
+      await drive(deps(new HunterResearchStore(rpc(), h.tick), fake), h.tick, h.run);
+      await rpc()("hunter_finish_tick", { p_tick: h.tick, p_counts: {}, p_error: null });
+      openTick = null;
+      return fake.callsFor("research_collect")[0].user;
+    };
+    const withIt = await collectUser({ points: [{ key: "type", text: "Construtoras multifamiliares", rows: [1] }], filter: { companyTypes: [], towns: [] }, searchQueries: ["multifamily builder Worcester MA"] });
+    expect(withIt).toContain("Profile the owner approved (version 4)");
+    expect(withIt).toContain("multifamily builder Worcester MA");
+    expect(withIt).toContain("type: Construtoras multifamiliares");
+    const without = await collectUser();
+    expect(without).not.toContain("Profile the owner approved");
   });
 
   test("the collect prompt lists at most 150 known lead names", async () => {
