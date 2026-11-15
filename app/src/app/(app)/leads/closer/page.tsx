@@ -13,6 +13,7 @@ const C = M.closer;
 export default async function CloserPage() {
   const s = await emailSession();
   if (!s) return null;
+  // Read as the user: owner/sdr get every hand-off; a closer only those of leads assigned to her (RLS, 0017).
   const { data } = await s.supabase
     .from("email_prospects")
     .select(PROSPECT_COLUMNS)

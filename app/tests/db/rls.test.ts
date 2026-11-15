@@ -129,6 +129,8 @@ describe("proof that RLS is really enforced in PGlite", () => {
         "refresh_profile_match", "refresh_profile_match_lead", "refresh_profile_match_one", "refresh_profile_match_candidate", "supersede_agent_profiles",
         // 0016 (contact scraper: Qualificador asks, sources clock stores; token-gated, anon-only)
         "qualifier_request_contacts", "source_contact_leads", "source_add_contacts",
+        // 0017 (closer scope: a closer reads e-mail rows only of the leads assigned to her)
+        "prospect_visible_to_assignee", "message_visible_to_assignee",
       ].sort(),
     );
     for (const r of rows) expect(r.proconfig).toContain("search_path=\"\"");
