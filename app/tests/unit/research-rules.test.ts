@@ -124,11 +124,11 @@ describe("evidence rules [P1] [P9]", () => {
 
 describe("hook [G3]", () => {
   test("kept only with confirmed work and when it cites the job address", () => {
-    const h = "Saw your permit at 252 Menauhant Rd (~$1.8M) - who's doing the HVAC?";
-    expect(normalizeHook(h, "252 Menauhant Rd, Falmouth MA", "ok")).toBe(h);
-    expect(normalizeHook(h, "252 Menauhant Rd, Falmouth MA", "unknown")).toBeNull();
+    const h = "Saw your permit at 12 Example Rd (~$1.8M) - who's doing the HVAC?";
+    expect(normalizeHook(h, "12 Example Rd, Falmouth MA", "ok")).toBe(h);
+    expect(normalizeHook(h, "12 Example Rd, Falmouth MA", "unknown")).toBeNull();
     expect(normalizeHook(h, null, "ok")).toBeNull();
-    expect(normalizeHook("Who does your HVAC?", "252 Menauhant Rd", "ok")).toBeNull();
+    expect(normalizeHook("Who does your HVAC?", "12 Example Rd", "ok")).toBeNull();
   });
 });
 

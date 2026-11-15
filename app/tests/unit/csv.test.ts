@@ -6,35 +6,35 @@ export function candidate(over: Partial<CandidateRow> = {}): CandidateRow {
   return {
     id: "c1",
     run_id: "r1",
-    name: "Clancy Construction, Inc.",
-    name_key: "clancy construction",
+    name: "Harbor Test Construction, Inc.",
+    name_key: "harbor test construction",
     city: "Falmouth",
     state: "MA",
     region: "Cape & Islands",
-    website: "https://www.clancyconstruction.example/",
+    website: "https://www.harbortestconstruction.example/",
     phone: "+1 508-555-0199",
-    public_email: "ana@clancy.example",
+    public_email: "ana@harbortest.example",
     email_type: "named",
     company_type: "builder",
     size_note: null,
     temperature: "very_hot",
     approach: "call",
-    ask_for_name: "Greg Clancy",
+    ask_for_name: "Greg Tester",
     ask_for_title: "Owner",
     name_confidence: "high",
-    name_source_url: "https://www.clancyconstruction.example/about",
+    name_source_url: "https://www.harbortestconstruction.example/about",
     name_note: "Requerente do alvará, mesmo tel.",
     permit_count: 38,
     total_value_usd: 7330624,
     last_permit_date: "2026-11-03",
-    biggest_job_address: "252 Menauhant Rd, Falmouth MA",
+    biggest_job_address: "12 Example Rd, Falmouth MA",
     biggest_job_value_usd: 1824500,
     biggest_job_type: "RESI.",
     biggest_job_description: "Construct a new 2-story dwelling",
     signal_match: "Falmouth permits (match: name)",
     google_rating: 4.5,
     review_count: 15,
-    hook: "Saw your Falmouth permit at 252 Menauhant Rd (~$1.8M) - who's doing the HVAC?",
+    hook: "Saw your Falmouth permit at 12 Example Rd (~$1.8M) - who's doing the HVAC?",
     supplier_portal_url: null,
     notes: null,
     user_decision: "keep",
@@ -44,10 +44,10 @@ export function candidate(over: Partial<CandidateRow> = {}): CandidateRow {
     entry_path: "signal",
     found_at_url: "https://permits.falmouth.example/report",
     found_at_title: "Falmouth permits",
-    found_at_excerpt: "Clancy Construction, applicant",
+    found_at_excerpt: "Harbor Test Construction, applicant",
     found_at_seen_at: "2026-11-10T00:00:00.000Z",
-    phone_source_url: "https://www.clancyconstruction.example/contact",
-    email_source_url: "https://www.clancyconstruction.example/contact",
+    phone_source_url: "https://www.harbortestconstruction.example/contact",
+    email_source_url: "https://www.harbortestconstruction.example/contact",
     rating_source_url: null,
     ...over,
   };
@@ -89,7 +89,7 @@ describe("CSV export", () => {
 
   test("row values: labels in Portuguese, raw numbers, unknown is empty", () => {
     const row = toCsv([candidate({ permit_count: null })]).slice(1).split("\r\n")[1];
-    expect(row.startsWith('"Clancy Construction, Inc.",Greg Clancy,Owner,alta,Muito quente,')).toBe(true);
+    expect(row.startsWith('"Harbor Test Construction, Inc.",Greg Tester,Owner,alta,Muito quente,')).toBe(true);
     expect(row).toContain(",7330624,2026-11-03,");
     expect(row).toContain("Falmouth,Cape & Islands,,7330624");
   });

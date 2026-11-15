@@ -248,7 +248,7 @@ describe("normalizers (P2: unclear -> null, never a guess)", () => {
   test("phones and emails", () => {
     expect(cleanPhone("+1 508-555-0199 <script>")).toBe("+1 508-555-0199");
     expect(cleanPhone("call us")).toBeNull();
-    expect(cleanEmail("Ana@Clancy.example")).toBe("ana@clancy.example");
+    expect(cleanEmail("Ana@HarborTest.example")).toBe("ana@harbortest.example");
     expect(cleanEmail("not an email")).toBeNull();
   });
   test("sources: LinkedIn and unsafe URLs dropped, empty URL kept as null", () => {
