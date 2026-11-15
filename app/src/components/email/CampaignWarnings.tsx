@@ -6,13 +6,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Warning strip at the top of Campanhas. Server component, read-only queries as the logged-in user (RLS). */
 export async function CampaignWarnings({ db, workspaceId }: { db: SupabaseClient; workspaceId: string }) {
-  const [mailboxes, campaigns, prospects, sent, c12, sender] = await Promise.all([
+  const [mailboxes, campaigns, prospects, sent, c12, sender, links] = await Promise.all([
     loadMailboxes(db, workspaceId),
-    db.from("email_campaigns").select("id, name, status, send_mode, agent_id, mailbox_id").eq("workspace_id", workspaceId).neq("status", "archived"),
+    db.from("email_campaigns").select("id, name, status, send_mode, agent_id").eq("workspace_id", workspaceId).neq("status", "archived"),
     db.from("email_prospects").select("campaign_id, status, stop_reason").eq("workspace_id", workspaceId).limit(5000),
     db.from("email_messages").select("campaign_id").eq("workspace_id", workspaceId).eq("kind", "sequence").eq("status", "sent").limit(5000),
     db.from("c12_approvals").select("item").eq("workspace_id", workspaceId),
     loadSender(db, workspaceId),
+    db.from("campaign_mailboxes").select("campaign_id").eq("workspace_id", workspaceId),
   ]);
   const count = (rows: { campaign_id: string }[] | null) => {
     const out: Record<string, number> = {};
@@ -21,12 +22,13 @@ export async function CampaignWarnings({ db, workspaceId }: { db: SupabaseClient
   };
   const ps = (prospects.data ?? []) as { campaign_id: string; status: string; stop_reason: string | null }[];
   const sentBy = count(sent.data as { campaign_id: string }[] | null);
+  const linksBy = count(links.data as { campaign_id: string }[] | null);
   const bouncedBy = count(ps.filter((p) => p.stop_reason === "bounced"));
   const done = new Set(((c12.data ?? []) as { item: string }[]).map((r) => r.item));
 
   const warnings = campaignWarnings({
     mailboxes,
-    campaigns: ((campaigns.data ?? []) as { id: string; name: string; status: string; send_mode: string; agent_id: string | null; mailbox_id: string | null }[]).map((c) => ({ ...c, sent: sentBy[c.id] ?? 0, bounced: bouncedBy[c.id] ?? 0 })),
+    campaigns: ((campaigns.data ?? []) as { id: string; name: string; status: string; send_mode: string; agent_id: string | null }[]).map((c) => ({ ...c, sent: sentBy[c.id] ?? 0, bounced: bouncedBy[c.id] ?? 0, mailbox_count: linksBy[c.id] ?? 0 })),
     sentToday: Object.fromEntries(mailboxes.map((m) => [m.id, m.usage?.real ?? 0])),
     prospectsByCampaign: count(ps.filter((p) => p.status === "active")),
     sender,

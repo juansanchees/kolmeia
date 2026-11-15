@@ -13,7 +13,7 @@ export type CampaignWarning = {
 export type WarningsInput = {
   mailboxes: { id: string; email: string; status: "unverified" | "ok" | "error"; health_status: "ok" | "paused_bounce"; daily_limit: number }[];
   /** sent / bounced = real sequence mails sent and prospects stopped by a bounce, per campaign. */
-  campaigns: { id: string; name: string; status: string; send_mode: string; sent: number; bounced: number; agent_id?: string | null; mailbox_id?: string | null }[];
+  campaigns: { id: string; name: string; status: string; send_mode: string; sent: number; bounced: number; agent_id?: string | null; mailbox_count?: number }[];
   /** Real mails sent today, by mailbox id. */
   sentToday: Record<string, number>;
   /** Active prospects, by campaign id. */
@@ -42,7 +42,7 @@ export function campaignWarnings(i: WarningsInput): CampaignWarning[] {
     ...(!i.gateOpen && active.length > 0 ? [box("rehearsal_only", W.rehearsal_only)] : []),
     ...(senderComplete(i.sender) ? [] : [box("sender_profile_incomplete", W.sender_profile_incomplete)]),
     ...active
-      .filter((c) => c.agent_id && !c.mailbox_id)
+      .filter((c) => c.agent_id && (c.mailbox_count ?? 0) === 0)
       .map((c) => ({ kind: "agent_campaign_no_mailbox" as const, text: fill(W.agent_campaign_no_mailbox, { name: c.name }), href: `/campanhas/${c.id}` })),
   ];
 }

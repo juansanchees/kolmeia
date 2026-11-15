@@ -36,10 +36,10 @@ describe("warnings", () => {
     expect(kinds({ sender: { legal_name: "X Corp", postal_address: "", sender_name: "Juan" } })).toEqual(["sender_profile_incomplete"]);
   });
   test("running agent campaign without a mailbox", () => {
-    expect(kinds({ campaigns: [{ ...campaign, agent_id: "a1", mailbox_id: null }] })).toEqual(["agent_campaign_no_mailbox"]);
-    expect(kinds({ campaigns: [{ ...campaign, agent_id: "a1", mailbox_id: "m1" }] })).toEqual([]);
-    expect(kinds({ campaigns: [{ ...campaign, mailbox_id: null }] })).toEqual([]);
-    expect(kinds({ campaigns: [{ ...campaign, status: "draft", agent_id: "a1", mailbox_id: null }], prospectsByCampaign: {} })).toEqual([]);
+    expect(kinds({ campaigns: [{ ...campaign, agent_id: "a1", mailbox_count: 0 }] })).toEqual(["agent_campaign_no_mailbox"]);
+    expect(kinds({ campaigns: [{ ...campaign, agent_id: "a1", mailbox_count: 2 }] })).toEqual([]);
+    expect(kinds({ campaigns: [{ ...campaign, mailbox_count: 0 }] })).toEqual([]);
+    expect(kinds({ campaigns: [{ ...campaign, status: "draft", agent_id: "a1", mailbox_count: 0 }], prospectsByCampaign: {} })).toEqual([]);
   });
   test("ordered by kind, each with text and href", () => {
     const w = campaignWarnings({
