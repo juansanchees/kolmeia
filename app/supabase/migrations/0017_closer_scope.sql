@@ -109,3 +109,59 @@ create policy suppressions_select on public.suppressions
 drop policy if exists suppressions_insert on public.suppressions;
 create policy suppressions_insert on public.suppressions
   for insert to authenticated with check (public.is_workspace_sender(workspace_id));
+
+-- ---------------------------------------------------------------- removed members read nothing
+-- leads.owner_id survives when a closer leaves the workspace. The assignee checks of 0009 (leads_select,
+-- candidate/check visibility) and 0011 (lead_visible_to_assignee) now also require the caller to still be a member.
+-- Bodies copied from 0009/0011 with only the membership check added.
+drop policy if exists leads_select on public.leads;
+create policy leads_select on public.leads
+  for select to authenticated
+  using (public.is_workspace_sender(workspace_id) or (owner_id = auth.uid() and public.is_workspace_member(workspace_id)));
+
+create or replace function public.candidate_visible_to_assignee(p_candidate uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+      from public.research_candidates c
+      join public.leads l on l.id = c.lead_id and l.workspace_id = c.workspace_id
+     where c.id = p_candidate and l.owner_id = auth.uid()
+       and public.is_workspace_member(c.workspace_id)
+  );
+$$;
+
+create or replace function public.check_visible_to_assignee(p_check uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+      from public.research_checks k
+      join public.research_candidates c on c.id = k.candidate_id
+      join public.leads l on l.id = c.lead_id and l.workspace_id = c.workspace_id
+     where k.id = p_check and l.owner_id = auth.uid()
+       and public.is_workspace_member(c.workspace_id)
+  );
+$$;
+
+create or replace function public.lead_visible_to_assignee(p_lead uuid, p_ws uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.leads l
+     where l.id = p_lead and l.workspace_id = p_ws and l.owner_id = auth.uid()
+       and public.is_workspace_member(p_ws)
+  );
+$$;

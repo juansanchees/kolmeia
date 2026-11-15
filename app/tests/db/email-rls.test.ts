@@ -333,8 +333,8 @@ describe("secrets and forged columns [R14] [R8]", () => {
     expect((await db.try(as(UUID_A), "update public.mailboxes set daily_limit = 50 where id = $1", [ids.mbA])).error).toBeUndefined();
   });
 
-  test("closers read but cannot send, approve or edit", async () => {
-    expect((await db.query(as(UUID_D), "select id from public.email_messages where id = $1", [ids.msg1A])).length).toBe(1);
+  test("closers cannot read unassigned messages, send, approve or edit", async () => {
+    expect((await db.query(as(UUID_D), "select id from public.email_messages where id = $1", [ids.msg1A])).length).toBe(0);
     expect((await db.try(as(UUID_D), "select public.set_email_approval(array[$1]::uuid[], public.test_versions(array[$1]::uuid[]), 'approve')", [ids.msg2A])).error?.message).toMatch(/not allowed/);
     expect((await db.try(as(UUID_D), "select public.claim_next_email($1, gen_random_uuid())", [ids.campA])).error?.message).toMatch(/not allowed/);
     expect(await db.query(as(UUID_D), "update public.email_messages set subject = 'x' where id = $1 returning id", [ids.msg2A])).toHaveLength(0);
@@ -1031,7 +1031,7 @@ describe("[R2][R8][R14] the send log is append-only and client-read-only", () =>
     await expect(db.admin("update public.email_send_log set result = 'sent' where id = $1", [row.id])).rejects.toThrow(/append-only/);
     await expect(db.admin("delete from public.email_send_log where id = $1", [row.id])).rejects.toThrow(/append-only/);
     expect(await db.query(as(UUID_B), "select id from public.email_send_log where workspace_id = $1", [wsA])).toHaveLength(0);
-    expect((await db.query(as(UUID_D), "select id from public.email_send_log where workspace_id = $1", [wsA])).length).toBeGreaterThan(0);
+    expect(await db.query(as(UUID_D), "select id from public.email_send_log where workspace_id = $1", [wsA])).toHaveLength(0);
   });
 });
 

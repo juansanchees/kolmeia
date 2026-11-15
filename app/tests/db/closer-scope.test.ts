@@ -22,6 +22,7 @@ let ws2: string;
 type Rows = { prospect: string; message: string; reply: string; approval: string; sendLog: string };
 const seeded: Record<string, Rows> = {};
 const infra: Record<string, string> = {};
+const candidates: Record<string, string> = {};
 
 async function one<T = Record<string, unknown>>(user: string, sql: string, params: unknown[] = []): Promise<T> {
   return (await db.query<T>(as(user), sql, params))[0];
@@ -60,6 +61,12 @@ async function seedWorkspace(owner: string, ws: string, keys: string[]): Promise
     );
     await db.query(as(owner), "update public.research_candidates set user_decision = 'keep', verified_at = now() where id = $1", [c.id]);
     cands[k] = c.id;
+    candidates[k] = c.id;
+    // proof the closer may read for her own lead (0009 J2): one check with its evidence
+    await db.query(as(owner), "select public.add_research_check($1,'exists_active',1,'ok','ativa',$2::jsonb)", [
+      c.id,
+      JSON.stringify([{ url: "https://acme.example/contact", title: "Contact", excerpt: "Active" }]),
+    ]);
   }
   const list = await one<{ create_research_list: string }>(owner, "select public.create_research_list($1,'Lista')", [run.id]);
   await db.query(as(owner), "insert into public.sender_profiles (workspace_id, legal_name, postal_address, sender_name) values ($1,'Acme HVAC Corp','1 Main St, Millbury, MA 01527','Pat Sender')", [ws]);
@@ -108,6 +115,7 @@ beforeAll(async () => {
   await db.admin("update public.leads set owner_id = $1 where id = $2", [CLOSER_A, l1.toA]);
   await db.admin("update public.leads set owner_id = $1 where id = $2", [CLOSER_B, l1.toB]);
   await db.admin("update public.leads set owner_id = $1 where id = $2", [CLOSER_2, l2.other]);
+  await db.admin("insert into public.lead_fields (workspace_id, lead_id, field, value, source) values ($1,$2,'note','call after 3pm','import')", [ws1, l1.toB]);
 });
 
 afterAll(async () => {
@@ -150,9 +158,14 @@ describe("0017 closer scope: e-mail rows", () => {
     });
   }
 
-  test("a closer removed from the workspace loses her leads' e-mail rows", async () => {
+  test("a closer removed from the workspace reads nothing, though owner_id still names her", async () => {
+    const LEAD_TABLES = ["leads", "lead_fields", "research_candidates", "research_checks", "research_evidence"];
+    const count = async (t: string) => (await db.query(as(CLOSER_B), `select 1 from public.${t}`)).length;
+    for (const t of LEAD_TABLES) expect(await count(t), `${t} before removal`).toBeGreaterThan(0);
+    expect(await db.query(as(CLOSER_B), "select id from public.research_candidates")).toEqual([{ id: candidates.toB }]);
     await db.admin("delete from public.workspace_members where workspace_id = $1 and user_id = $2", [ws1, CLOSER_B]);
     try {
+      for (const t of LEAD_TABLES) expect(await count(t), t).toBe(0);
       for (const [table] of SCOPED) expect(await ids(CLOSER_B, table), table).toEqual([]);
     } finally {
       await db.admin("insert into public.workspace_members (workspace_id, user_id, role) values ($1,$2,'closer')", [ws1, CLOSER_B]);

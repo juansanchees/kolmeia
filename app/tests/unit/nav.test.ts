@@ -79,6 +79,10 @@ describe("F3d fontes conectadas nav", () => {
     expect(settingsTabsFor("closer").map((i) => i.href)).not.toContain("/configuracoes/fontes");
     expect(read("src/app/(app)/configuracoes/layout.tsx")).toContain("settingsTabsFor(");
   });
+  test("the closer sees only Empresa in settings; owner and sdr see every tab", () => {
+    expect(settingsTabsFor("closer").map((i) => i.href)).toEqual(["/configuracoes/empresa"]);
+    for (const role of ["owner", "sdr"] as const) expect(settingsTabsFor(role)).toEqual(SETTINGS_TABS);
+  });
   test("the page is not found for a closer and read-only for the sdr", () => {
     const page = read("src/app/(app)/configuracoes/fontes/page.tsx");
     expect(page).toContain("isSender(workspace.role)");

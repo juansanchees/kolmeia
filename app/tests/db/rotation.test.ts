@@ -36,11 +36,11 @@ async function send(camp: string): Promise<{ outcome: string; id?: string; from?
 }
 
 describe("0007 campaign_mailboxes and the sticky column", () => {
-  test("RLS forced; members read; senders attach and detach; a closer cannot; another workspace's mailbox is refused (g)", async () => {
+  test("RLS forced; senders read; senders attach and detach; a closer cannot; another workspace's mailbox is refused (g)", async () => {
     const s = await seedCampaign(db, ws, "t1");
     expect((await db.admin("select relrowsecurity, relforcerowsecurity from pg_class where oid = 'public.campaign_mailboxes'::regclass"))[0]).toEqual({ relrowsecurity: true, relforcerowsecurity: true });
     expect(await listOf(s.campaign)).toEqual([s.mailbox]);
-    expect(await db.query(as(UUID_C), "select mailbox_id from public.campaign_mailboxes where campaign_id = $1", [s.campaign])).toHaveLength(1);
+    expect(await db.query(as(UUID_C), "select mailbox_id from public.campaign_mailboxes where campaign_id = $1", [s.campaign])).toHaveLength(0);
     expect(await db.query(as(UUID_B), "select mailbox_id from public.campaign_mailboxes where campaign_id = $1", [s.campaign])).toHaveLength(0);
     const b = await addCampaignMailbox(db, ws, s.campaign, "t1b");
     expect(await listOf(s.campaign)).toEqual([s.mailbox, b.mailbox]);
@@ -81,9 +81,9 @@ describe("0007 campaign_mailboxes and the sticky column", () => {
     expect(await firstOf(s.campaign)).toBeNull();
   });
 
-  test("email_prospects.mailbox_id: readable by members, not writable by clients, set null when the mailbox is deleted", async () => {
+  test("email_prospects.mailbox_id: readable by senders, not writable by clients, set null when the mailbox is deleted", async () => {
     const s = await seedCampaign(db, ws, "t4");
-    expect(await db.query(as(UUID_C), "select mailbox_id from public.email_prospects where id = $1", [s.prospects[0]])).toEqual([{ mailbox_id: null }]);
+    expect(await db.query(as(UUID_A), "select mailbox_id from public.email_prospects where id = $1", [s.prospects[0]])).toEqual([{ mailbox_id: null }]);
     expect((await db.try(as(UUID_A), "update public.email_prospects set mailbox_id = $2 where id = $1", [s.prospects[0], s.mailbox])).error?.message).toMatch(/permission denied/);
     await db.admin("update public.email_prospects set mailbox_id = $2 where id = $1", [s.prospects[0], s.mailbox]);
     await db.query(as(UUID_A), "delete from public.mailboxes where id = $1", [s.mailbox]);
