@@ -912,3 +912,31 @@ end;
 $$;
 revoke all on function public.create_email_agent_campaign(uuid, text, uuid) from public, anon, authenticated;
 grant execute on function public.create_email_agent_campaign(uuid, text, uuid) to authenticated;
+
+-- ---------------------------------------------------------------- campaign delays (clients lost the column grant)
+-- Owner/sdr change the delays of a campaign WITHOUT a sequence (the 0003 screen). A campaign with a sequence takes its
+-- delays from the approved version (save_sequence_draft writes them). Same ranges as the table checks.
+create or replace function public.set_campaign_delays(p_campaign uuid, p_step2 integer, p_step3 integer)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  c record;
+begin
+  select * into c from public.email_campaigns where id = p_campaign for update;
+  if c.id is null or auth.uid() is null or not public.is_workspace_sender(c.workspace_id) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  if p_step2 is null or p_step3 is null or p_step2 not between 1 and 30 or p_step3 not between 2 and 60 or p_step3 <= p_step2 then
+    raise exception 'step 2 waits 1-30 days, step 3 waits 2-60 days and after step 2' using errcode = '22023';
+  end if;
+  if exists (select 1 from public.email_sequences s where s.campaign_id = c.id) then
+    raise exception 'delays come from the approved sequence' using errcode = '55000';
+  end if;
+  update public.email_campaigns set step2_delay_days = p_step2, step3_delay_days = p_step3 where id = c.id;
+end;
+$$;
+revoke all on function public.set_campaign_delays(uuid, integer, integer) from public, anon, authenticated;
+grant execute on function public.set_campaign_delays(uuid, integer, integer) to authenticated;

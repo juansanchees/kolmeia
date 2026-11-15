@@ -595,3 +595,27 @@ describe("0023 part 2 fixes: owner-only sequence text, no revived rows, Ligar on
     expect((await db.try(as(UUID_A), "insert into public.email_campaigns (workspace_id, name, agent_id) values ($1,'x',$2)", [ws, agent])).error?.message).toMatch(/permission denied/);
   });
 });
+
+describe("0023 set_campaign_delays", () => {
+  test("a sender changes a plain campaign's delays; sequence campaigns, the closer and bad values are refused", async () => {
+    const plain = await newCampaign("delays-plain");
+    const setDelays = (camp: string, d2: number | null, d3: number | null, user = UUID_A) =>
+      tryCommit(db, as(user), "select public.set_campaign_delays($1,$2,$3)", [camp, d2, d3]);
+    expect((await setDelays(plain, 2, 5, SDR)).error).toBeUndefined();
+    expect(await db.admin("select step2_delay_days, step3_delay_days from public.email_campaigns where id = $1", [plain]))
+      .toEqual([{ step2_delay_days: 2, step3_delay_days: 5 }]);
+    for (const [d2, d3] of [[0, 5], [31, 40], [3, 61], [5, 5], [6, 5], [null, 5], [3, null]] as const) {
+      expect(code((await setDelays(plain, d2, d3)).error), `${d2} ${d3}`).toBe("22023");
+    }
+    for (const user of [UUID_C, UUID_B]) expect(code((await setDelays(plain, 3, 7, user)).error), user).toBe("42501");
+    expect(code((await setDelays(gen(), 3, 7)).error)).toBe("42501");
+    // a campaign with a sequence takes its delays from the approved version
+    const seqCamp = await newCampaign("delays-seq");
+    await saved(seqCamp);
+    const r = await setDelays(seqCamp, 2, 5);
+    expect(code(r.error)).toBe("55000");
+    expect(r.error?.message).toMatch(/delays come from the approved sequence/);
+    expect(await db.admin("select step2_delay_days, step3_delay_days from public.email_campaigns where id = $1", [plain]))
+      .toEqual([{ step2_delay_days: 2, step3_delay_days: 5 }]);
+  });
+});
