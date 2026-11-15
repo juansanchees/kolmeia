@@ -73,7 +73,7 @@ export type SendSummary = {
   cancelled: number;
 };
 
-const STOPPED = new Set(["suppressed", "unsubscribed", "bounced", "asked_to_stop"]);
+const STOPPED = new Set(["suppressed", "unsubscribed", "bounced", "asked_to_stop", "in_other_campaign", "lead_discarded", "do_not_call", "lead_status"]);
 
 export function summarize(messages: MessageRow[], prospects: ProspectRow[], now = Date.now()): SendSummary {
   const active = new Map(prospects.map((p) => [p.id, p]));

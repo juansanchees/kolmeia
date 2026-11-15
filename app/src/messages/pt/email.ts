@@ -140,7 +140,7 @@ export const email = {
     skip: "Pular",
     unskip: "Voltar",
     prospectStatus: { active: "na sequência", skipped: "pulada", replied: "respondeu", stopped: "parada", done: "sequência completa", handed_off: "com a closer" },
-    stopReason: { unsubscribed: "descadastrou", bounced: "e-mail voltou", suppressed: "bloqueada", asked_to_stop: "pediu para parar", replied: "respondeu" },
+    stopReason: { unsubscribed: "descadastrou", bounced: "e-mail voltou", suppressed: "bloqueada", asked_to_stop: "pediu para parar", replied: "respondeu", in_other_campaign: "já em outra campanha", lead_discarded: "lead descartado", do_not_call: "não contatar", lead_status: "lead com a closer ou encerrado" },
     emailErrors: { invalid: "E-mail inválido.", generic: "Não foi possível salvar." },
     emailReset: "Salvo. Os e-mails aprovados desta empresa voltaram para rascunho: aprove de novo para o endereço novo.",
     suggested: "A pesquisa viu {email}, mas nenhuma prova mostra esse endereço. Confira antes de usar.",

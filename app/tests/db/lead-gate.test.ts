@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { TestDb, anonWithToken, as, openGates, setSchedulerToken, UUID_A } from "./helpers";
+import { t } from "@/messages/pt";
+import { TestDb, ageEmailClaims, anonWithToken, as, openGates, setSchedulerToken, UUID_A } from "./helpers";
 import { CIPHER, TOKEN, createOwner } from "./scheduler-seed";
 
 // Migration 0022 (F4 Task 3, C2): the lead's status is the truth. A lead that is discarded, marked do_not_call or moved
@@ -147,6 +148,46 @@ describe("0022 the lead status is the truth (C2)", () => {
     expect((await messages(s.messages)).map((m) => m.status)).toEqual(["cancelled", "cancelled"]);
     expect(await lock(s.lead)).toHaveLength(0);
     expect((await click(s.camp)).outcome).toBe("nothing_due");
+  });
+
+  test("a person's answer to a lead who wrote to us still goes when the lead is with the closer or won, never when do_not_call or discarded", async () => {
+    /** The lead's step 1 is rehearsed, the lead replies, a person approves an answer. Returns the answer's id. */
+    async function answered(label: string): Promise<{ lead: string; camp: string; answer: string }> {
+      const s = await leadInCampaign(label);
+      const c = await click(s.camp);
+      await db.query(as(UUID_A), "select public.finish_email_send($1,$2,'dry_run',null)", [c.message_id, HOLDER]);
+      const mb = (await db.admin<{ mailbox_id: string }>("select mailbox_id from public.email_campaigns where id = $1", [s.camp]))[0].mailbox_id;
+      const reply = (await db.query<{ r: string }>(as(UUID_A), "select public.record_email_reply($1,$2,$3,$4,'Re: Quick question','Sounds good',$5,now(),'reply',null) as r",
+        [s.prospect, mb, c.message_id, `pat@${label}.example`, `<r-${label}@x.example>`]))[0].r;
+      const answer = (await db.query<{ id: string }>(as(UUID_A), "insert into public.email_messages (workspace_id, campaign_id, prospect_id, kind, reply_to_id, subject, body) values ($1,$2,$3,'reply',$4,'Re: Quick question','Hi, sure.') returning id",
+        [ws, s.camp, s.prospect, reply]))[0].id;
+      await db.query(as(UUID_A), "select public.set_email_approval(array[$1]::uuid[], public.test_versions(array[$1]::uuid[]), 'approve')", [answer]);
+      return { lead: s.lead, camp: s.camp, answer };
+    }
+    const won = await answered("c2-reply-won");
+    const closer = await answered("c2-reply-closer");
+    const dnc = await answered("c2-reply-dnc");
+    const gone = await answered("c2-reply-gone");
+    await ageEmailClaims(db, 3600);   // past each mailbox's gap
+    await db.query(as(UUID_A), "select public.set_lead_status($1,'won')", [won.lead]);
+    await db.admin("update public.leads set status = 'with_closer' where id = $1", [closer.lead]);
+    await db.admin("update public.leads set do_not_call = true where id = $1", [dnc.lead]);
+    await db.admin("update public.leads set status = 'discarded' where id = $1", [gone.lead]);
+    expect(await click(won.camp)).toEqual({ outcome: "claimed", message_id: won.answer });
+    expect(await click(closer.camp)).toEqual({ outcome: "claimed", message_id: closer.answer });
+    expect((await click(dnc.camp)).outcome).toBe("nothing_due");
+    expect((await click(gone.camp)).outcome).toBe("nothing_due");
+    expect(await messages([dnc.answer, gone.answer])).toEqual([
+      { status: "cancelled", cancel_reason: "do_not_call" },
+      { status: "cancelled", cancel_reason: "lead_discarded" },
+    ]);
+  });
+
+  test("every stop reason the database allows has a label on the campaign page", async () => {
+    const def = (await db.admin<{ d: string }>("select pg_get_constraintdef(oid) as d from pg_constraint where conname = 'email_prospects_stop_reason'"))[0].d;
+    const reasons = [...def.matchAll(/'([a-z_]+)'::text/g)].map((m) => m[1]);
+    expect(reasons).toEqual(expect.arrayContaining(["lead_discarded", "do_not_call", "lead_status", "in_other_campaign"]));
+    for (const r of reasons) expect(t.email.campaign.stopReason).toHaveProperty(r);
   });
 
   test("a lead with no blocks sends as before, by click and by clock", async () => {

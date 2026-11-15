@@ -8,7 +8,8 @@
 --     in claim_next_email with the C12 check, which stays as it is). Changes: (1) the campaign row is taken FOR SHARE
 --     first, so a claim and set_campaign_send_mode ("go real", FOR UPDATE) never interleave (E3 review, 40P01);
 --     (2) the R3 sweep also cancels waiting messages of blocked leads and stops their prospects; (3) the candidate
---     select skips blocked leads. Outcome codes unchanged.
+--     select skips blocked leads. Answers to replies are not cold outreach: blocked only for do_not_call / discarded
+--     (lead_blocks_message). Outcome codes unchanged.
 -- Depends on 0001-0021. Re-runnable.
 
 -- ---------------------------------------------------------------- stop reason
@@ -42,6 +43,20 @@ as $$
   select coalesce(p_lead, (select k.lead_id from public.research_candidates k where k.id = p_candidate and k.workspace_id = p_ws));
 $$;
 revoke all on function public.prospect_lead(uuid, uuid, uuid) from public, anon, authenticated;
+
+-- Whether a message of this kind may not go to the lead. Sequence steps (cold outreach): every lead_blocks_email status.
+-- A person's answer to a lead who wrote to us (kind 'reply'): only do_not_call and discarded; a lead with the closer,
+-- in a meeting, won or lost still gets the answer. Internal (plain, no grant).
+create or replace function public.lead_blocks_message(p_lead uuid, p_kind text)
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+  select public.lead_blocks_email(p_lead)
+     and (p_kind is distinct from 'reply' or public.lead_stop_reason(p_lead) in ('do_not_call', 'lead_discarded'));
+$$;
+revoke all on function public.lead_blocks_message(uuid, text) from public, anon, authenticated;
 
 -- ---------------------------------------------------------------- C2 trigger
 -- Definer: whoever changes the lead (sdr, closer, log_call, an import) must stop prospects they may not write.
@@ -261,7 +276,7 @@ begin
       from public.email_messages x
       join public.email_prospects p on p.id = x.prospect_id
      where x.campaign_id = c.id and x.status in ('draft', 'approved', 'rejected')
-       and public.lead_blocks_email(public.prospect_lead(p.lead_id, p.candidate_id, p.workspace_id))
+       and public.lead_blocks_message(public.prospect_lead(p.lead_id, p.candidate_id, p.workspace_id), x.kind)
   ), stop_b as (
     update public.email_prospects p
        set status = 'stopped', stop_reason = coalesce(p.stop_reason, bl.reason)
@@ -290,7 +305,7 @@ begin
      and p.email is not null                                                                 -- R18
      and not public.is_suppressed(c.workspace_id, p.email)                                   -- R3
      and not public.is_suppressed(c.workspace_id, x.approved_to)
-     and not public.lead_blocks_email(public.prospect_lead(p.lead_id, p.candidate_id, p.workspace_id))   -- C2 (0022)
+     and not public.lead_blocks_message(public.prospect_lead(p.lead_id, p.candidate_id, p.workspace_id), x.kind)   -- C2 (0022)
      and (
        (p_message is null and v_seq_open and c.status = 'active' and x.kind = 'sequence' and p.status = 'active' and (
           x.step = 1 or exists (
