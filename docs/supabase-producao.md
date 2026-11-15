@@ -279,3 +279,16 @@ Resultado do teste (backup do dev de 15/11, container `supabase/postgres:17.12` 
 | `92-checks` | limpo; envio real travado (`clock_real` 0, C12 0, campanhas em ensaio) |
 
 Limites do teste: a imagem local tem um `auth` mais antigo, então o teste criou as colunas que faltavam. Com isso, o login no app restaurado não foi testado. O teste de verdade do login é o do prod (seção 4/smoke).
+
+### 8b. Backup diário do PROD (ativo desde 15/11/2026)
+
+| Item | Como está |
+|---|---|
+| Script | `~/kolmeia-backups/bin/kolmeia-backup-prod.sh`, fora do repo. Usa o `pg_dump` do Homebrew (`libpq`), sem Docker |
+| Quando | todo dia às 03:00, pelo launchd (`~/Library/LaunchAgents/com.kolmeia.backup-prod.plist`). Se o Mac estiver dormindo nessa hora, roda quando ele acordar |
+| Senha | no Keychain do macOS (serviço `kolmeia-prod-db`, conta `kolmeia-prod`). Nunca em arquivo, `.env` ou log. Depois de trocar a senha do banco, rodar de novo `security add-generic-password -a kolmeia-prod -s kolmeia-prod-db -T /usr/bin/security -U -w` |
+| Onde | `~/kolmeia-backups/prod/<data-hora>/`. Pastas 700, arquivos 600, disco com FileVault. Conteúdo: `public.dump`, `auth.sql`, `cron.sql`, `baseline.json` e `SHA256SUMS` |
+| Retenção | os 14 backups mais novos; os mais antigos são apagados pelo próprio script |
+| Falha | aviso na tela do Mac e uma linha `FALHOU` em `~/kolmeia-backups/prod/backup.log` |
+| Teste de restauração | `zsh ~/kolmeia-backups/bin/kolmeia-restore-test.sh <pasta>` cria um container descartável, restaura pelo caminho certo (seção 8), compara com o `baseline.json`, revalida FK/CHECK, testa o acesso e apaga o container. Passou em 15/11 com 50/50 tabelas e 731 leads |
+| Limite | backup só no Mac; se o disco morrer, os backups vão junto. Uma cópia fora do Mac seria outro serviço, que o Juan precisa aprovar antes. O plano Pro do Supabase também faz backup diário (pago) |
