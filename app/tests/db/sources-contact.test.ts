@@ -168,7 +168,7 @@ describe("0016 contact scraper", () => {
     const f = await db.admin<{ value: string; source: string; status: string; source_ref: string }>("select value, source, status, source_ref from public.lead_fields where lead_id = $1 and field = 'email'", [a]);
     expect(f).toEqual([{ value: "info@acme.example.com", source: "apify_contact", status: "confirmed", source_ref: "https://acme.example.com/contact" }]);
     const q = await db.admin<{ lead_id: string; next_step: string; done_reason: string | null }>("select lead_id, next_step, done_reason from public.qualifier_queue where lead_id = any($1::uuid[])", [[a, b]]);
-    expect(q.find((x) => x.lead_id === a)).toMatchObject({ next_step: "p1", done_reason: null }); // re-queued (K-4)
+    expect(q.find((x) => x.lead_id === a)).toMatchObject({ next_step: "p5", done_reason: null }); // re-queued (K-4) at p5: P2-P4 are not paid again
     expect(q.find((x) => x.lead_id === b)).toMatchObject({ next_step: "done", done_reason: "dead" }); // dead stays dead
     const [after] = await runs();
     expect([after.status, Number(after.cost_usd)]).toEqual(["imported", 0.12]);

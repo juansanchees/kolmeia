@@ -8,12 +8,17 @@
 --   Fix:   two marks on the queue row, ordered by its row lock instead of the clock. qualifier_claim_next clears them
 --          (it holds the row lock; a concurrent writer waits or is skipped), the import trigger sets data_since_claim,
 --          request_qualification sets request_since_claim. step_done re-opens on either; only a request keeps the deep step.
+--   Bug 3: an apify_contact e-mail (the P2b contact scraper's answer, usually after the lead is done) re-queued at p1, so
+--          P2 re-read the site and P4 paid the light AI again. A contact e-mail alone now resumes at p5 (no pages
+--          needed; the deep step, when eligible, sees the new e-mail). Any other imported value still resumes at p1:
+--          import_since_claim marks that kind during a claim.
 --   Redefines (verbatim copies plus the marked changes): qualifier_claim_next (0014), request_qualification (0014),
 --   requeue_lead_on_import (0016), qualifier_step_done (0016). Same signatures and grants; no new function.
 -- Depends on 0001-0016. Re-runnable.
 
 alter table public.qualifier_queue add column if not exists data_since_claim boolean not null default false;
 alter table public.qualifier_queue add column if not exists request_since_claim boolean not null default false;
+alter table public.qualifier_queue add column if not exists import_since_claim boolean not null default false;
 
 -- ---------------------------------------------------------------- claim: clears both marks
 create or replace function public.qualifier_claim_next(p_tick uuid)
@@ -50,7 +55,7 @@ begin
     return null;
   end if;
   update public.qualifier_queue q set locked_by = p_tick, locked_until = (select t.lease_until from public.qualifier_ticks t where t.id = p_tick), claimed_at = now(),
-         data_since_claim = false, request_since_claim = false where q.lead_id = v_lead;
+         data_since_claim = false, request_since_claim = false, import_since_claim = false where q.lead_id = v_lead;
 
   select jsonb_build_object(
     'lead_id', q.lead_id,
@@ -95,11 +100,14 @@ set search_path = ''
 as $$
 begin
   update public.qualifier_queue q
-     set next_step = 'p1', done_reason = null, fail_step = null, fail_streak = 0,
+     set next_step = case when new.source = 'apify_contact' then 'p5' else 'p1' end, -- 0019: a contact e-mail skips P2-P4
+         done_reason = null, fail_step = null, fail_streak = 0,
          enqueued_at = now(), locked_by = null, locked_until = null
    where q.lead_id = new.lead_id and q.next_step = 'done' and q.done_reason is distinct from 'dead';
-  -- whatever the lead's state: a claim that is open now did not see this value (the claim resets the mark)
-  update public.qualifier_queue q set data_since_claim = true where q.lead_id = new.lead_id;
+  -- whatever the lead's state: a claim that is open now did not see this value (the claim resets the marks)
+  update public.qualifier_queue q
+     set data_since_claim = true, import_since_claim = q.import_since_claim or new.source <> 'apify_contact'
+   where q.lead_id = new.lead_id;
   return null;
 end;
 $$;
@@ -161,13 +169,15 @@ begin
   -- it for the free steps, and so does a manual request made while it was claimed. "While claimed" is the marks the
   -- claim cleared and the import trigger / request_qualification set afterwards, never a timestamp comparison. Only a
   -- request made during the claim keeps manual_at and deep_requested: data alone never pays for the deep step again
-  -- (the profile's auto deep step still applies, as for a finished lead re-queued by an import). A dead lead stays dead.
+  -- (the profile's auto deep step still applies, as for a finished lead re-queued by an import). Only contact e-mails
+  -- (apify_contact) during the claim resume at p5, so P4 is not paid again; anything else resumes at p1. A dead lead stays dead.
   if p_next = 'done' and p_done_reason <> 'dead' and exists (
        select 1 from public.qualifier_queue z
         where z.lead_id = p_lead and z.claimed_at is not null and (z.data_since_claim or z.request_since_claim)) then
     update public.qualifier_queue q
        set notes = q.notes || jsonb_build_object(p_step, p_outcome), last_step_at = now(), fail_streak = 0, fail_step = null,
-           next_step = 'p1', done_reason = null, enqueued_at = now(), locked_by = null, locked_until = null, claimed_at = null,
+           next_step = case when q.import_since_claim or q.request_since_claim then 'p1' else 'p5' end,
+           done_reason = null, enqueued_at = now(), locked_by = null, locked_until = null, claimed_at = null,
            manual_at = case when q.request_since_claim then q.manual_at else null end,
            deep_requested = q.request_since_claim and q.deep_requested
      where q.lead_id = p_lead;

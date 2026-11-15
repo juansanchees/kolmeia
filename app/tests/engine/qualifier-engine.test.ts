@@ -134,4 +134,43 @@ describe("Qualificador deep step on the real path", () => {
     const calls = await db.admin("select 1 from public.ai_calls where lead_id = $1 and task = 'qualify_deep'", [lead]);
     expect(calls).toHaveLength(1);
   });
+
+  test("a contact e-mail for a finished lead resumes at p5: no second site read, no second P4 charge, and the deep step runs when eligible", async () => {
+    // the site shows a phone but no e-mail and no address: P2 would read it again on a full pass
+    const site = "https://gamma-hvac.test/";
+    const page = htmlPage(`<h1>Gamma HVAC</h1><p>Call <a href="tel:+15085550143">508-555-0143</a></p>`);
+    const { ws, lead } = await seedQualifierLead(db, { fields: [{ field: "website", value: site }, { field: "name", value: "Gamma HVAC" }] });
+    const ai = new FakeTransport({
+      qualify_light: () => ({ json: { company_type: "builder", city: "", state: "", size_note: "", address: "", contacts: [] } }),
+      qualify_deep: () => ({ json: deepAnswer() }),
+    });
+    // what each claim handed the cascade
+    const store = rpcQualifierStore(pgRpc(db, TOKEN));
+    const claimNext = store.claimNext.bind(store);
+    const claims: Awaited<ReturnType<typeof claimNext>>[] = [];
+    store.claimNext = async (tick) => {
+      const l = await claimNext(tick);
+      if (l) claims.push(l);
+      return l;
+    };
+    const run = () => runQualifierTick({ store, transport: ai, http: fakeHttp({ [site]: page }), sleep: async () => undefined });
+    expect(await run()).toMatchObject({ outcome: "ok", failed: 0 });
+    const tasks = async () => (await db.admin<{ task: string }>("select task from public.ai_calls where lead_id = $1 order by created_at, id", [lead])).map((c) => c.task);
+    expect(await tasks()).toEqual(["qualify_light"]);
+    // the contact scraper answers later (P2b), and the lead now matches the profile with auto deep on
+    await db.admin(
+      "insert into public.lead_fields (workspace_id, lead_id, field, value, source, source_ref, status) values ($1,$2,'email','office@gamma-hvac.test','apify_contact','https://gamma-hvac.test/contact','confirmed')",
+      [ws, lead],
+    );
+    await db.admin("update public.qualifier_queue set profile_match = true where lead_id = $1", [lead]);
+    expect(await run()).toMatchObject({ outcome: "ok", failed: 0 });
+    expect(await tasks()).toEqual(["qualify_light", "qualify_deep"]);
+    // the p5 resume was handed the new e-mail with the lead's values
+    expect(claims.at(-1)).toMatchObject({ nextStep: "p5" });
+    expect(claims.at(-1)!.fields.some((f) => f.source === "apify_contact" && f.value === "office@gamma-hvac.test")).toBe(true);
+    const steps = await db.admin<{ step: string }>("select step from public.qualifier_step_log where lead_id = $1 and step in ('p2', 'p4')", [lead]);
+    expect(steps.map((x) => x.step).sort()).toEqual(["p2", "p4"]);
+    const [q2] = await db.admin<{ next_step: string; done_reason: string }>("select next_step, done_reason from public.qualifier_queue where lead_id = $1", [lead]);
+    expect(q2).toEqual({ next_step: "done", done_reason: "complete" });
+  });
 });

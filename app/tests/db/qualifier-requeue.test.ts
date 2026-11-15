@@ -107,4 +107,29 @@ describe("0019 qualifier re-queue", () => {
     expect((await finishDeep(tick, lead)).error).toBeUndefined();
     expect(await queue(lead)).toEqual({ next_step: "p1", done_reason: null, manual: true, deep: true });
   });
+
+  test("a contact e-mail found during the claim resumes at p5; an import alongside it resumes at p1", async () => {
+    const contact = (ws: string, lead: string) =>
+      db.admin("insert into public.lead_fields (workspace_id, lead_id, field, value, source, source_ref, status) values ($1,$2,'email','info@acme.example','apify_contact','https://acme.example/contact','confirmed')", [ws, lead]);
+    const a = await seedQualifierLead(db);
+    let tick = await beginQualifierTick(db);
+    expect((await claim(tick))!.lead_id).toBe(a.lead);
+    await contact(a.ws, a.lead);
+    expect((await finishDeep(tick, a.lead)).error).toBeUndefined();
+    expect((await queue(a.lead)).next_step).toBe("p5");
+    // a finished lead the contact scraper answers later: the import trigger also resumes it at p5
+    await db.admin("update public.qualifier_queue set next_step = 'done', done_reason = 'complete', locked_by = null, locked_until = null where lead_id = $1", [a.lead]);
+    await db.admin("insert into public.lead_fields (workspace_id, lead_id, field, value, source, source_ref, status) values ($1,$2,'email','sales@acme.example','apify_contact','https://acme.example/sales','confirmed')", [a.ws, a.lead]);
+    expect(await queue(a.lead)).toMatchObject({ next_step: "p5", done_reason: null });
+    await db.admin("update public.qualifier_ticks set finished_at = now() where finished_at is null");
+    await db.admin("delete from public.leads where id = $1", [a.lead]);
+
+    const b = await seedQualifierLead(db);
+    tick = await beginQualifierTick(db);
+    expect((await claim(tick))!.lead_id).toBe(b.lead);
+    await contact(b.ws, b.lead);
+    await importField(b.ws, b.lead, "late-list-3");
+    expect((await finishDeep(tick, b.lead)).error).toBeUndefined();
+    expect((await queue(b.lead)).next_step).toBe("p1");
+  });
 });
