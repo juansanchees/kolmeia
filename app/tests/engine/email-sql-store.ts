@@ -149,6 +149,9 @@ export class SqlEmailStore implements EmailStore {
   async claimTest(mailboxId: string, to: string): Promise<TestClaim> {
     return (await this.one<{ r: TestClaim }>("select public.claim_test_email($1,$2) as r", [mailboxId, to]))!.r;
   }
+  async sendingPaused(ws: string) {
+    return (await this.one<{ sending_paused: boolean }>("select sending_paused from public.workspace_settings where workspace_id = $1", [ws]))?.sending_paused ?? false;
+  }
   async finishTest(logId: string, ok: boolean, error: string | null) {
     await this.q("select public.finish_test_email($1,$2,$3)", [logId, ok, error]);
   }

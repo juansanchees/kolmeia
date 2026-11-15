@@ -46,7 +46,7 @@ export type NewReply = {
   bouncedAddress: string | null;
 };
 
-export type TestClaim = { outcome: "claimed" | "test_limit"; log_id?: string; wait_until?: string };
+export type TestClaim = { outcome: "claimed" | "test_limit" | "sending_paused"; log_id?: string; wait_until?: string };
 
 /** The columns of a campaign that the send path reads. */
 export type SendCampaign = Pick<CampaignRow, "id" | "workspace_id" | "status" | "send_mode" | "mailbox_id">;
@@ -74,6 +74,8 @@ export interface SendStore {
   getMessage(messageId: string): Promise<SendMessage | null>;
   claimNext(campaignId: string, holder: string, messageId?: string | null): Promise<ClaimResult>;
   finishSend(messageId: string, holder: string, result: "sent" | "dry_run" | "failed", error: string | null): Promise<void>;
+  /** E4 (0024): the workspace's emergency stop, read again right before SMTP. Unreadable = stopped (fail closed). */
+  sendingPaused(workspaceId: string): Promise<boolean>;
 }
 
 export interface EmailStore extends AiLedger {
@@ -108,5 +110,7 @@ export interface EmailStore extends AiLedger {
   /** "Enviar teste para mim": logged under mode 'test', at most 5 per address per 24 h. */
   claimTest(mailboxId: string, to: string): Promise<TestClaim>;
   finishTest(logId: string, ok: boolean, error: string | null): Promise<void>;
+  /** E4 (0024): the workspace's emergency stop, read again right before SMTP. Unreadable = stopped (fail closed). */
+  sendingPaused(workspaceId: string): Promise<boolean>;
   listProspectReplies(prospectId: string): Promise<ReplyRow[]>;
 }

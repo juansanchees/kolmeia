@@ -9,7 +9,8 @@
 --   * Emergency stop: workspace_settings.sending_paused. Any sender (owner or sdr) turns it on; only an owner turns it
 --     off. While on, claim_next_email_core answers 'sending_paused' before anything else: no claim of any kind (click,
 --     a chosen approved message, an answer to a reply, the clock; rehearsal and real). The test-to-self of a mailbox
---     (claim_test_email, D8) is not a campaign send and is not stopped.
+--     (claim_test_email, D8) is stopped too: re-created from 0003 with the same check, answering 'sending_paused'.
+--     The engine reads the switch again right before SMTP (a claim taken just before the stop is not sent).
 --   * claim_next_email_core: re-created from the 0022 body (campaign FOR SHARE first, C2 sweep/select, E3 rotation,
 --     outcome codes) with three changes: (1) after the campaign row, a shared advisory lock on the workspace's stop
 --     switch and the 'sending_paused' check (set_sending_paused takes the same lock exclusively, so pressing stop waits
@@ -202,6 +203,50 @@ end;
 $$;
 revoke all on function public.set_sending_paused(uuid, boolean) from public, anon;
 grant execute on function public.set_sending_paused(uuid, boolean) to authenticated;
+
+-- ---------------------------------------------------------------- the test to self (0003 body + the stop)
+-- "Enviar teste para mim": at most 5 per sending address per rolling 24 h, logged under its own mode ('test',
+-- not counted in the prospect limit). Returns {outcome: claimed | test_limit | sending_paused, log_id?, wait_until?}.
+-- 0024: the stop is checked before the address lock (same order as the claim: stop lock, then address lock).
+create or replace function public.claim_test_email(p_mailbox uuid, p_to text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  b record;
+  v_oldest timestamptz;
+  v_id uuid;
+begin
+  if auth.uid() is null then
+    raise exception 'not authenticated' using errcode = '28000';
+  end if;
+  select * into b from public.mailboxes where id = p_mailbox;
+  if b.id is null or not public.is_workspace_sender(b.workspace_id) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  if not public.is_email_address(lower(btrim(coalesce(p_to, '')))) then
+    raise exception 'invalid address' using errcode = '22023';
+  end if;
+  perform pg_advisory_xact_lock_shared(hashtextextended('email-sending-paused:' || b.workspace_id::text, 0));
+  if coalesce((select s.sending_paused from public.workspace_settings s where s.workspace_id = b.workspace_id), false) then
+    return jsonb_build_object('outcome', 'sending_paused');
+  end if;
+  perform pg_advisory_xact_lock(hashtextextended('email-address:' || b.email, 0));
+  if public.address_claims_since(b.email, 'test', now() - interval '24 hours') >= 5 then
+    select min(l.claimed_at) into v_oldest from public.email_send_log l
+     where l.mailbox_address = b.email and l.mode = 'test' and l.claimed_at > now() - interval '24 hours';
+    return jsonb_build_object('outcome', 'test_limit', 'wait_until', v_oldest + interval '24 hours');
+  end if;
+  insert into public.email_send_log (workspace_id, mailbox_address, mode, to_address, claimed_by, holder)
+  values (b.workspace_id, b.email, 'test', lower(btrim(p_to)), auth.uid(), gen_random_uuid())
+  returning id into v_id;
+  return jsonb_build_object('outcome', 'claimed', 'log_id', v_id);
+end;
+$$;
+revoke all on function public.claim_test_email(uuid, text) from public, anon;
+grant execute on function public.claim_test_email(uuid, text) to authenticated;
 
 -- ---------------------------------------------------------------- the screen's usage line (0003 body + the real limit)
 create or replace function public.mailbox_usage(p_mailbox uuid)

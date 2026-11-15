@@ -228,6 +228,12 @@ export class SupabaseEmailStore implements EmailStore {
     return data as TestClaim;
   }
 
+  async sendingPaused(workspaceId: string): Promise<boolean> {
+    const { data, error } = await this.db.from("workspace_settings").select("sending_paused").eq("workspace_id", workspaceId).maybeSingle();
+    if (error) return true; // fail closed: an unreadable switch never lets mail out
+    return (data as { sending_paused: boolean } | null)?.sending_paused ?? false;
+  }
+
   async finishTest(logId: string, ok: boolean, err: string | null): Promise<void> {
     const { error } = await this.db.rpc("finish_test_email", { p_log: logId, p_ok: ok, p_error: err });
     if (error) this.fail("finishTest", error);

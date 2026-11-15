@@ -94,6 +94,10 @@ export class SchedulerStore implements TickStore {
   async setMailboxVerified(): Promise<void> {
     throw new Error("no_mailbox_access");
   }
+  // E4: read only on the real path, which this store cannot reach (a real clock must implement it; fail closed).
+  async sendingPaused(): Promise<boolean> {
+    throw new Error("no_mailbox_access");
+  }
 }
 
 /** A store for one request: the anon key and the caller's token. Null when the database is not configured. */

@@ -156,6 +156,8 @@ export async function draftStep(deps: EmailDeps, campaignId: string, holder: str
 }
 
 // ---------------------------------------------------------------- 2. sending (one message per call)
+/** E4 (0024): the emergency stop's outcome / error code. */
+const SENDING_PAUSED = "sending_paused" as const;
 export type SendStepResult = {
   outcome: ClaimOutcome | "sent" | "dry_run" | "failed" | "not_found" | "no_public_origin";
   messageId?: string;
@@ -237,9 +239,16 @@ export async function sendStep(
     if (!mailbox) throw new Error("mailbox_gone");
     // the From was composed from the message; it must be the address of the mailbox whose credentials are about to be used
     if (mail.from.address.toLowerCase() !== mailbox.email.toLowerCase()) throw new Error("from_mismatch");
+    // E4: someone may have pressed "Parar todos os envios" after this claim; nothing leaves while it is on
+    if (await deps.store.sendingPaused(campaign.workspace_id)) throw new Error(SENDING_PAUSED);
     await deps.smtp.send(await creds(deps, mailbox), mail);
   } catch (e) {
-    const err = mailErrorText(e);
+    const err = e instanceof Error && e.message === SENDING_PAUSED ? SENDING_PAUSED : mailErrorText(e);
+    if (err === SENDING_PAUSED) {
+      // not sent: failed and retryable by a person (retry_failed_email), like an SMTP error before the send
+      await deps.store.finishSend(messageId, holder, "failed", SENDING_PAUSED);
+      return { outcome: SENDING_PAUSED, messageId };
+    }
     await deps.store.finishSend(messageId, holder, "failed", err);
     if (MAILBOX_STOP.has(err)) {
       if (mailboxId) await deps.store.setMailboxVerified(mailboxId, false, err).catch(() => undefined);
@@ -308,7 +317,12 @@ export async function sendTestToSelf(
     return { ok: false, error: e instanceof ComposeError ? e.code : "compose" };
   }
   const claim = await deps.store.claimTest(mailboxId, selfAddress);
-  if (claim.outcome !== "claimed" || !claim.log_id) return { ok: false, error: "test_limit", waitUntil: claim.wait_until };
+  if (claim.outcome !== "claimed" || !claim.log_id) return { ok: false, error: claim.outcome === "claimed" ? "test_limit" : claim.outcome, waitUntil: claim.wait_until };
+  // E4: stop pressed right after the claim
+  if (await deps.store.sendingPaused(mailbox.workspace_id).catch(() => true)) {
+    await deps.store.finishTest(claim.log_id, false, SENDING_PAUSED).catch(() => undefined);
+    return { ok: false, error: SENDING_PAUSED };
+  }
   try {
     await deps.smtp.send(await creds(deps, mailbox), mail);
   } catch (e) {

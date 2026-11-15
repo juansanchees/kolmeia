@@ -190,6 +190,11 @@ describe("0024 E4 emergency stop", () => {
     expect((await db.admin<{ status: string }>("select status from public.email_messages where id = any($1::uuid[])", [[...reh.messages, ...real.messages]])).map((m) => m.status))
       .toEqual(["approved", "approved", "approved"]);
 
+    // the test to self (D8) is a send too: refused, nothing logged
+    expect((await db.query<{ r: Claim }>(as(SDR), "select public.claim_test_email($1,'sdr@neair.example') as r", [reh.mailbox]))[0].r)
+      .toEqual({ outcome: "sending_paused" });
+    expect(await db.admin("select 1 from public.email_send_log where mode = 'test'")).toHaveLength(0);
+
     // only the owner turns it off (the sdr cannot; pressing stop again is harmless)
     expect((await db.try(as(SDR), "select public.set_sending_paused($1,false)", [ws])).error?.message).toMatch(/owner/);
     await db.query(as(SDR), "select public.set_sending_paused($1,true)", [ws]);
@@ -197,5 +202,6 @@ describe("0024 E4 emergency stop", () => {
     expect((await db.try(as(UUID_A), "update public.workspace_settings set sending_paused = false where workspace_id = $1", [ws])).error).toBeDefined();
     await db.query(as(UUID_A), "select public.set_sending_paused($1,false)", [ws]);
     expect((await claim(reh.campaign)).outcome).toBe("claimed");
+    expect((await db.query<{ r: Claim }>(as(SDR), "select public.claim_test_email($1,'sdr@neair.example') as r", [reh.mailbox]))[0].r.outcome).toBe("claimed");
   });
 });

@@ -45,6 +45,8 @@ function mailboxError(code: string | null | undefined, waitUntil?: string): stri
       return M.mailbox.errors[code];
     case "test_limit":
       return fill(M.mailbox.errors.test_limit, { time: timeOf(waitUntil) });
+    case "sending_paused":
+      return M.send.outcomes.sending_paused;
     default:
       return M.mailbox.errors.generic;
   }
