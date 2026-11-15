@@ -44,7 +44,7 @@ A IA é trocada por um cliente falso (`tests/engine/fake-ai.ts`): **nenhum teste
 
 ## O que o dono precisa fazer depois
 1. Criar um projeto Supabase **separado** para o produto (não o do site).
-2. Aplicar as migrações de `supabase/migrations/` em ordem, de `0001` a `0020` (SQL Editor, como o papel `postgres`; não há `0012` nesta pasta). A `0007_rotation.sql` tem que estar aplicada **antes** de publicar esta versão do app.
+2. Aplicar as migrações de `supabase/migrations/` em ordem, de `0001` a `0026` (SQL Editor, como o papel `postgres`; não há `0012` nesta pasta, e ela nunca é aplicada). A `0007_rotation.sql` tem que estar aplicada **antes** de publicar esta versão do app. Para a ordem do F4 (0018 a 0026), veja **F4: Agente E-mail > Ordem de publicação**.
 3. Em Authentication, **manter a confirmação de e-mail LIGADA** (desligada, o cadastro revela se um e-mail já existe).
 4. Colar as duas chaves públicas em `.env.local` (e na Vercel, quando houver deploy).
 5. Para a Pesquisa: criar uma chave na Console da Anthropic, ligar a busca na web para a organização, e colar em `ANTHROPIC_API_KEY` (só servidor; na Vercel, sem o prefixo `NEXT_PUBLIC_`).
@@ -198,7 +198,73 @@ Botão com `tel:` (o celular faz a ligação), resumo, prova e um toque no resul
 `won` e `discarded` nunca mudam. É a mesma tabela em `lead_status_after_call` (SQL) e `statusAfterCall` (`src/lib/calls/view.ts`).
 
 ### `do_not_call` e o envio de e-mail (F4)
-`leads.do_not_call` vale para **todos os canais**. Listas de ligação já o respeitam. **Os portões de envio do F4 (campanhas de e-mail) devem ler `leads.do_not_call` e nunca escrever para esse lead.** Isso ainda é trabalho do F4; hoje só existe o gancho `lead_in_active_campaign`. Observação: `not_interested` ainda não interrompe e-mails em andamento (F4 D5).
+`leads.do_not_call` vale para **todos os canais**. Listas de ligação já o respeitam. **Os portões de envio do F4 (campanhas de e-mail) devem ler `leads.do_not_call` e nunca escrever para esse lead.** O F4 já faz isso (veja a seção F4: Agente E-mail, trava C2).
 
 ### Funil
 **Leads > Funil** (dono e SDR): tabela de origem (agente, avulso ou lista importada) por status, com linha de total e coluna de descartados à parte. Só números, sem IA, a partir da mesma lista de LEADS.
+
+## F4: Agente E-mail
+
+### Fluxo
+| # | Passo | Quem |
+|---|---|---|
+| 1 | Criar o agente de e-mail (assistente ou galeria) e escolher os leads (só `new` e `call_list`) | dono ou SDR |
+| 2 | A IA escreve **uma** sequência-modelo com `{{first_name}}`, `{{company}}`, `{{city}}` (1 chamada, entra em Gastos) | IA |
+| 3 | O dono vê **3 exemplos já preenchidos, com o rodapé** (endereço físico e opt-out) | dono |
+| 4 | O dono aprova o **texto exato** que viu | só o dono |
+| 5 | Fila: cada lead entra com o modelo aprovado; lead adicionado depois usa o mesmo modelo | sistema |
+| 6 | Envio pelo relógio, dentro dos portões, rampa e limites | relógio |
+
+### Aprovação
+- **Só o dono aprova** (inclusive aprovação por mensagem de campanhas de sequência; SDR e closer recebem 42501).
+- A aprovação vale para um **resumo (digest sha256) dos exemplos renderizados**, do tom e dos intervalos. Se algo mudou entre ver e aprovar, a tela recarrega (erro 40001) e o dono revê.
+- Só aprova rascunho, e só a versão mais nova.
+- **Editar o texto cancela os rascunhos antigos** (`sequence_edited`) e volta tudo para aprovação.
+- Um lead fica em **uma campanha ativa só** (C3). Corpo máximo: 2000 caracteres.
+
+### Paradas automáticas
+| Trava | O que para | Por quê |
+|---|---|---|
+| C2 | `descartado` e `não contatar` (`do_not_call`) | nenhum e-mail, nem resposta pendente |
+| C3 | segunda campanha ativa do mesmo lead | prospect fica `stopped` / `in_other_campaign` |
+| D5 | `com a closer`, `reunião`, `ganho`, `perdido` | e-mail para; respostas aprovadas ainda saem (só `do_not_call` e `descartado` cancelam resposta) |
+
+### Rampa, pausa e parada de emergência
+| O quê | Regra |
+|---|---|
+| Rampa de aquecimento | 5 e-mails por dia por caixa, +3 por dia útil, até o limite da caixa (dias úteis em UTC) |
+| Pausa automática | caixa pausa com 3 ou mais bounces **e** 5% ou mais em 30 dias (DSN forjado não conta duas vezes) |
+| Parada de emergência | trava todas as caixas do espaço, inclusive "Enviar teste para mim" |
+| Teste de caixa e teste para mim | liberados com o portão fechado, só para o próprio endereço |
+
+### Os 4 cadeados do envio real pelo relógio
+O relógio só envia de verdade quando **os quatro** estão ligados. Um faltando = nenhum SMTP.
+| # | Cadeado | Quem liga |
+|---|---|---|
+| 1 | Checklist C12 completo (7 itens, na página da campanha) | Juan, com o login dele |
+| 2 | Chave do dono **"Relógio pode enviar de verdade"** (só liga com C12 pronto) | dono |
+| 3 | Variável de servidor cujo nome está em `src/lib/email/config.ts` (valor `1`; padrão desligado) | Juan, só na Vercel, quando disser |
+| 4 | `MAILBOX_ENC_KEY` presente no servidor | Juan |
+Além disso: caixa verificada e saudável, campanha em envio real e ativa, parada de emergência desligada.
+
+### Respostas
+O relógio lê as caixas **só por regras** (sem IA): resposta, bounce (DSN), pedido de saída. Citações e rodapés são ignorados; "parar" só vale na própria resposta. Resultado marcado como regra (`class_source = 'rule'`). Pedido de saída cria supressão; bounce conta para a pausa automática. Resposta automática (fora do escritório) **não** tem tratamento: a `0012_auto_reply` não foi restaurada (decisão pendente do Juan).
+
+### Checklist manual C12 (antes de qualquer envio real)
+- [ ] **Domínio de envio separado** de `neairhvac.com`, comprado em nome da empresa.
+- [ ] **2 a 3 caixas** pagas nesse domínio, conectadas em ⚙ Caixas, "Testar caixa" = ok.
+- [ ] **SPF, DKIM (2048 bits) e DMARC** (`p=none` no início, com e-mail de relatório). Conferir com `dig TXT <domínio>`, `dig TXT <seletor>._domainkey.<domínio>`, `dig TXT _dmarc.<domínio>` e um e-mail de teste mostrando `spf=pass dkim=pass dmarc=pass` no Gmail em **Mostrar original**.
+- [ ] **Aquecimento**: cada caixa com 2 semanas ou mais de tráfego real baixo antes da campanha (rampa ligada; sem pool de aquecimento).
+- [ ] **Endereço físico** real e razão social no perfil de remetente; rodapé visto num exemplo.
+- [ ] **Opt-out testado**: link e one-click criam supressão e o próximo envio ao endereço é recusado.
+- [ ] **30 a 50 e-mails por dia por caixa** (`daily_limit`) e limite da campanha definido.
+- [ ] **OK do dono da Air HVAC** na primeira campanha.
+- [ ] Juan registra o checklist no app (só ele).
+
+### Ordem de publicação (importante)
+1. Aplicar as migrações **0018 → 0026, em ordem**, no Supabase de desenvolvimento **ANTES** de publicar o app (SQL Editor, como `postgres`). `0016` e `0017` já estão aplicadas no dev desde 15/11.
+2. **`0021` nunca sem a `0022`** (a 0022 fecha a trava C2 para leads de prospects). Aplicar as duas juntas, em seguida.
+3. **Antes da 0021**, contar (só leitura) os perdedores do back-fill: leads com mais de um prospect ativo em campanhas abertas (via `candidate_id` > `research_candidates.lead_id`). O mais antigo fica com o lock; os outros viram `stopped` / `in_other_campaign`.
+4. Só depois publicar o app.
+5. **Nada envia de verdade até os 4 cadeados estarem ligados.** Depois do deploy, o envio continua em ensaio.
+6. `0012` nunca é aplicada; `0027` não existe.
