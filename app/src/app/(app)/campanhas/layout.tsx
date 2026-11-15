@@ -2,6 +2,7 @@ import { requireSender } from "@/lib/workspace";
 import { emailSession } from "@/lib/email/session";
 import { SubNav } from "@/components/SubNav";
 import { ActionButton } from "@/components/email/ActionButton";
+import { CampaignWarnings } from "@/components/email/CampaignWarnings";
 import { when } from "@/components/email/format";
 import { CAMPAIGN_TABS } from "@/lib/nav";
 import { setSendingPaused } from "./actions";
@@ -40,6 +41,7 @@ export default async function CampaignsLayout({ children }: { children: React.Re
             )}
           </div>
         )}
+        {s && <CampaignWarnings db={s.supabase} workspaceId={workspace.id} />}
         <SubNav label={t.email.nav.label} items={CAMPAIGN_TABS} />
       </div>
       {children}

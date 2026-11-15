@@ -13,6 +13,15 @@ export const email = {
     done: "Envios parados.",
     resumed: "Envios retomados.",
   },
+  warnings: {
+    label: "Avisos das campanhas",
+    mailbox_error: "A caixa {email} não está conectada. Teste a conexão em Caixa de envio.",
+    mailbox_paused: "A caixa {email} foi pausada por devoluções. Só o dono libera.",
+    no_leads: "A campanha {name} está ativa, mas não tem nenhuma empresa na sequência.",
+    daily_limit: "A caixa {email} atingiu o limite de hoje. O resto sai amanhã.",
+    high_bounce: "Muitos e-mails voltaram na campanha {name}. Confira os endereços antes de continuar.",
+    rehearsal_only: "Envio real bloqueado: a lista de verificação C12 está incompleta. As campanhas só fazem ensaio.",
+  },
   nav: {
     label: "Seções de Campanhas",
     campaigns: "Campanhas",
