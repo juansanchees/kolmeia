@@ -286,14 +286,31 @@ describe("E1 scheduler: anon key and scheduler_* functions only, no logging, no 
     expect(rpcs.length).toBeGreaterThan(0);
     for (const name of rpcs) expect(name, name).toMatch(/^scheduler_[a-z_]+$/);
     expect(new Set(rpcs)).toEqual(
-      new Set(["scheduler_begin_run", "scheduler_due_work", "scheduler_finish_run", "scheduler_sender", "scheduler_campaign", "scheduler_prospect", "scheduler_message", "scheduler_claim_next_email", "scheduler_finish_email_send"]),
+      new Set(["scheduler_begin_run", "scheduler_due_work", "scheduler_finish_run", "scheduler_sender", "scheduler_campaign", "scheduler_prospect", "scheduler_message", "scheduler_claim_next_email", "scheduler_finish_email_send", "scheduler_sending_paused", "scheduler_mailbox_secret"]),
     );
     expect(text.match(/this\.db\.rpc\(/g)).toHaveLength(1); // the one generic helper; every call site names a scheduler_* function above
   });
-  test("the route and the store never touch the mailbox secret, the transports or the AI", () => {
+  test("the route and the store never touch the key, decryption, IMAP or the AI; the store reaches a secret only through scheduler_mailbox_secret (0025, D4)", () => {
     for (const f of [route, store, tick]) {
-      const text = readFileSync(f, "utf8");
+      // the two allowed mentions, removed before the check: the gated RPC name (store) and the one gated transport (route)
+      const text = readFileSync(f, "utf8").replace(/scheduler_mailbox_secret/g, "").replace(/real \? new GmailSmtp\(\) : new NoSendSmtp\(\)/g, "").replace(/import \{ GmailSmtp \} from "@\/lib\/email\/transport";/g, "");
       expect(text, f).not.toMatch(/mailbox_secret|getMailboxKey|MAILBOX_ENC_KEY|decryptSecret|GmailSmtp|GmailImap|imapflow|nodemailer|@\/lib\/ai\/|supabase-store|emailSession/);
+    }
+  });
+  test("guards: GmailSmtp is constructed only in src/lib/email/session.ts and the tick route behind realClockEnabled()", () => {
+    const builders = walk(path.join(root, "src")).filter((f) => /new GmailSmtp\(/.test(readFileSync(f, "utf8")));
+    expect(builders.map((f) => path.relative(root, f)).sort()).toEqual(["src/app/api/scheduler/tick/route.ts", "src/lib/email/session.ts"]);
+    const text = readFileSync(route, "utf8");
+    expect(text.match(/new GmailSmtp\(/g)).toHaveLength(1);
+    expect(text).toMatch(/const real = realClockEnabled\(\);/);
+    expect(text).toMatch(/const smtp = real \? new GmailSmtp\(\) : new NoSendSmtp\(\);/);
+    expect(text).toMatch(/createSchedulerStore\(m\[1\], real\)/);
+    // the switch is read in one place, and only the exact string "1" turns it on
+    const config = readFileSync(path.join(root, "src/lib/email/config.ts"), "utf8");
+    expect(config).toMatch(/SCHEDULER_REAL_SEND === "1"/);
+    for (const file of walk(path.join(root, "src"))) {
+      if (file === path.join(root, "src/lib/email/config.ts")) continue;
+      expect(readFileSync(file, "utf8"), file).not.toContain("SCHEDULER_REAL_SEND");
     }
   });
   test("R10 the clock never logs: no console in the route, the store or the tick", () => {

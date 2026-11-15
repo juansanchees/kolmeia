@@ -6,13 +6,20 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 const createSchedulerStore = vi.fn();
 const runTick = vi.fn();
 vi.mock("@/lib/email/scheduler-store", () => ({ createSchedulerStore: (...a: unknown[]) => createSchedulerStore(...a) }));
-vi.mock("@/lib/email/scheduler", () => ({ runTick: (...a: unknown[]) => runTick(...a) }));
+class FakeNoSend {}
+class FakeGmail {}
+vi.mock("@/lib/email/scheduler", () => ({ runTick: (...a: unknown[]) => runTick(...a), NoSendSmtp: FakeNoSend }));
+vi.mock("@/lib/email/transport", () => ({ GmailSmtp: FakeGmail }));
+// the server switch (0025, D4), stubbed: the variable itself is never set in tests
+const sw = { on: false };
+vi.mock("@/lib/email/config", () => ({ realClockEnabled: () => sw.on, configuredPublicOrigin: () => "https://app.example.com" }));
 
 const { POST } = await import("@/app/api/scheduler/tick/route");
 const TOKEN = "ab".repeat(32);
 const call = (headers: Record<string, string> = {}) => POST(new Request("https://app.example.com/api/scheduler/tick", { method: "POST", headers }));
 
 beforeEach(() => {
+  sw.on = false;
   createSchedulerStore.mockReset();
   runTick.mockReset();
 });
@@ -41,8 +48,18 @@ describe("POST /api/scheduler/tick", () => {
     runTick.mockResolvedValue({ runId: "run-1", outcome: "ok", campaigns: 2, sent: 1, failed: 0 });
     const res = await call({ authorization: `Bearer ${TOKEN}` });
     expect(res.status).toBe(200);
-    expect(createSchedulerStore).toHaveBeenCalledWith(TOKEN);
+    expect(createSchedulerStore).toHaveBeenCalledWith(TOKEN, false);
+    expect(runTick.mock.calls[0][0].smtp).toBeInstanceOf(FakeNoSend);
     expect(await res.json()).toEqual({ outcome: "ok", campaigns: 2, sent: 1, failed: 0 });
+  });
+
+  test("the switch on: a real store and the Gmail transport, from one read of the switch", async () => {
+    sw.on = true;
+    createSchedulerStore.mockReturnValue({});
+    runTick.mockResolvedValue({ runId: "run-1", outcome: "ok", campaigns: 1, sent: 1, failed: 0 });
+    expect((await call({ authorization: `Bearer ${TOKEN}` })).status).toBe(200);
+    expect(createSchedulerStore).toHaveBeenCalledWith(TOKEN, true);
+    expect(runTick.mock.calls[0][0].smtp).toBeInstanceOf(FakeGmail);
   });
 
   test("the database refusing the token is a 401", async () => {

@@ -1,10 +1,13 @@
-import { configuredPublicOrigin } from "@/lib/email/config";
-import { runTick } from "@/lib/email/scheduler";
+import { configuredPublicOrigin, realClockEnabled } from "@/lib/email/config";
+import { NoSendSmtp, runTick } from "@/lib/email/scheduler";
 import { createSchedulerStore } from "@/lib/email/scheduler-store";
+import { GmailSmtp } from "@/lib/email/transport";
 
 // The clock (E1). An external scheduler (pg_cron + pg_net) posts here every 5 minutes with
 // `Authorization: Bearer <64 hex chars>`. No session and no secret on this host: the token is forwarded to the
-// database, which checks its hash (scheduler_authorized). Rehearsal campaigns only, send only (see lib/email/scheduler.ts).
+// database, which checks its hash (scheduler_authorized). Send only (see lib/email/scheduler.ts).
+// Rehearsal only unless the server switch is on (realClockEnabled, off by default); even then the database sends real
+// mail only for a workspace whose C12 gate is open and whose emergency stop is off (0025, D4).
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
@@ -15,11 +18,15 @@ export async function POST(request: Request) {
   const m = BEARER.exec(request.headers.get("authorization") ?? "");
   if (!m) return Response.json({ error: "unauthorized" }, { status: 401 });
   try {
-    const store = createSchedulerStore(m[1]);
+    // the switch is read once: it decides both the store's mode and the transport
+    const real = realClockEnabled();
+    const store = createSchedulerStore(m[1], real);
     if (!store) return Response.json({ outcome: "error" }, { status: 500 });
-    // footer links of a rehearsal: the configured public origin, else this request's origin (nothing leaves)
+    const smtp = real ? new GmailSmtp() : new NoSendSmtp();
+    // footer links: real mail only with the configured public https origin (the engine refuses otherwise); a rehearsal
+    // falls back to this request's origin (nothing leaves)
     const origins = { publicOrigin: configuredPublicOrigin(), requestOrigin: new URL(request.url).origin };
-    const r = await runTick({ store, origins });
+    const r = await runTick({ store, origins, smtp });
     return Response.json({ outcome: r.outcome, campaigns: r.campaigns, sent: r.sent, failed: r.failed });
   } catch (e) {
     if (e instanceof Error && e.name === "SchedulerAuthError") return Response.json({ error: "unauthorized" }, { status: 401 });

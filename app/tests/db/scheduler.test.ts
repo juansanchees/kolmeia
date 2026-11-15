@@ -16,6 +16,11 @@ const ENTRY_POINTS: [string, unknown[]][] = [
   ["select public.scheduler_prospect($1,$2)", [ZERO, ZERO]],
   ["select public.scheduler_sender($1,$2)", [ZERO, ZERO]],
   ["select public.scheduler_finish_run($1,'{}'::jsonb,null)", [ZERO]],
+  // 0025 (D4)
+  ["select public.scheduler_due_work($1,true)", [ZERO]],
+  ["select public.scheduler_claim_next_email($1,$2,true)", [ZERO, ZERO]],
+  ["select public.scheduler_sending_paused($1,$2)", [ZERO, ZERO]],
+  ["select public.scheduler_mailbox_secret($1,$2)", [ZERO, ZERO]],
 ];
 
 let db: TestDb;
@@ -270,12 +275,16 @@ describe("rehearsal only, and only what the run holds", () => {
     expect(u).toMatchObject({ outcome: "claimed", message_id: m });
   });
 
-  test("no scheduler function can return the mailbox ciphertext", async () => {
+  test("no scheduler function except scheduler_mailbox_secret (0025, D4) can return the mailbox ciphertext", async () => {
     const fns = await db.admin<{ proname: string; prosrc: string; ret: string }>(
       "select proname, prosrc, pg_get_function_result(oid) as ret from pg_proc where pronamespace = 'public'::regnamespace and proname like 'scheduler\\_%'",
     );
-    expect(fns.length).toBeGreaterThanOrEqual(11);
+    expect(fns.length).toBeGreaterThanOrEqual(13);
+    expect(fns.map((f) => f.proname)).toContain("scheduler_mailbox_secret");
     for (const f of fns) {
+      expect(f.ret, f.proname).not.toBe("text");
+      // the one exception is gated on a real message this run holds, with the C12 gate open (tests/db/clock-real.test.ts)
+      if (f.proname === "scheduler_mailbox_secret") continue;
       expect(f.prosrc, f.proname).not.toMatch(/ciphertext|mailbox_secret|public\.mailboxes/i);
       expect(["jsonb", "void", "boolean"], f.proname).toContain(f.ret);
     }

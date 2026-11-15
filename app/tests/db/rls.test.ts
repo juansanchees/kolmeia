@@ -153,6 +153,8 @@ describe("proof that RLS is really enforced in PGlite", () => {
         "approve_email_sequence", "set_email_agent_running", "create_email_agent_campaign", "set_campaign_delays",
         // 0024 (E4 mailbox health: bounce pause, owner clears it, emergency stop)
         "pause_mailbox_on_bounces", "clear_mailbox_pause", "set_sending_paused",
+        // 0025 (D4: the clock reads the stop switch and, for a real message it holds behind the C12 gate, one mailbox secret)
+        "scheduler_sending_paused", "scheduler_mailbox_secret",
       ].sort(),
     );
     for (const r of rows) expect(r.proconfig).toContain("search_path=\"\"");

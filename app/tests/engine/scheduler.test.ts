@@ -227,10 +227,10 @@ describe("heartbeat on success and on error; nothing sensitive in it", () => {
     expect((await admin<{ lease_run: string | null }>("select lease_run from public.scheduler_state"))[0].lease_run).toBeNull();
   });
 
-  test("the scheduler store refuses every mailbox call and refuses a claim whose holder is not the run", async () => {
+  test("the scheduler store (switch off) refuses every mailbox call and refuses a claim whose holder is not the run", async () => {
     const st = newStore();
-    await expect(st.getMailbox()).rejects.toThrow("no_mailbox_access");
-    await expect(st.getMailboxSecret()).rejects.toThrow("no_mailbox_access");
+    await expect(st.getMailbox(randomUUID())).rejects.toThrow("no_mailbox_access");
+    await expect(st.getMailboxSecret(randomUUID())).rejects.toThrow("no_mailbox_access");
     await expect(st.setMailboxVerified()).rejects.toThrow("no_mailbox_access");
     await st.beginRun();
     await expect(st.claimNext(randomUUID(), randomUUID())).rejects.toThrow("holder_is_not_the_run");

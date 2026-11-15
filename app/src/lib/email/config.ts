@@ -47,3 +47,12 @@ export function hasMailboxKey(): boolean {
 export function configuredPublicOrigin(): string | null {
   return envSchema.shape.APP_PUBLIC_ORIGIN.parse(process.env.APP_PUBLIC_ORIGIN) ?? null;
 }
+
+/**
+ * The server half of the clock's real-send lock (D4, F4 Task 11): on only when SCHEDULER_REAL_SEND is exactly "1".
+ * Absent by default; only the owner sets it, in the deployment, when he says so. The other half is in the database
+ * (C12 gate open and the emergency stop off, 0025). `source` exists so tests never have to set the variable.
+ */
+export function realClockEnabled(source: Record<string, string | undefined> = process.env): boolean {
+  return source.SCHEDULER_REAL_SEND === "1";
+}
