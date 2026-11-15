@@ -484,3 +484,114 @@ describe("0023 part 2: owner approves once (J1), the queue, Ligar/Pausar", () =>
     for (const t of ["qualify_deep", "profile_learn", "email_draft"]) expect(def[0].d).toContain(t);
   });
 });
+
+// ---------------------------------------------------------------- 0023 part 2 review fixes
+describe("0023 part 2 fixes: owner-only sequence text, no revived rows, Ligar only, approved delays", () => {
+  const claimOne = async (camp: string) => {
+    const holder = gen();
+    const c = (await db.query<{ r: { outcome: string; message_id: string } }>(as(UUID_A), "select public.claim_next_email($1,$2) as r", [camp, holder]))[0].r;
+    expect(c.outcome).toBe("claimed");
+    await db.query(as(UUID_A), "select public.finish_email_send($1,$2,'dry_run',null)", [c.message_id, holder]);
+    return c.message_id;
+  };
+  const setApproval = (ids: string[], action: string, user = UUID_A) =>
+    tryCommit(db, as(user), "select public.set_email_approval($1::uuid[], public.test_versions($1::uuid[]), $2)", [ids, action]);
+
+  test("an sdr cannot approve a sequence message one by one; the owner can", async () => {
+    const camp = await newCampaign("fix-sdr");
+    await db.query(as(UUID_A), "select public.add_leads_to_campaign($1,$2::uuid[])", [camp, [await newLead("Fix Sdr", "pat@fixsdr.example", "Pat Doe", null)]]);
+    const seq = await saved(camp);
+    await approve(seq, (await preview(seq)).digest);
+    const step1 = (await messagesOf(camp)).find((m) => m.step === 1) as Msg;
+    // the sdr edits the approved text: back to draft; approving it again is the owner's
+    await db.query(as(SDR), "update public.email_messages set body = 'Hi Pat, edited by the sdr.' where id = $1", [step1.id]);
+    expect((await messagesOf(camp)).find((m) => m.id === step1.id)?.status).toBe("draft");
+    const r = await setApproval([step1.id], "approve", SDR);
+    expect(code(r.error)).toBe("42501");
+    expect(r.error?.message).toMatch(/J1: only the owner approves sequence messages/);
+    expect((await setApproval([step1.id], "approve")).error).toBeUndefined();
+    expect((await messagesOf(camp)).find((m) => m.id === step1.id)).toMatchObject({ status: "approved", approved_by: UUID_A, body: "Hi Pat, edited by the sdr." });
+  });
+
+  test("the queue never revives a row the owner rejected", async () => {
+    const camp = await newCampaign("fix-reject");
+    await db.query(as(UUID_A), "select public.add_leads_to_campaign($1,$2::uuid[])", [camp, [await newLead("Rej One", "pat@rej1.example", "Pat Doe", null)]]);
+    const seq = await saved(camp);
+    await approve(seq, (await preview(seq)).digest);
+    const step2 = (await messagesOf(camp)).find((m) => m.step === 2) as Msg;
+    expect((await setApproval([step2.id], "reject")).error).toBeUndefined();
+    // a later lead is queued; the rejected row stays rejected, with no owner stamp
+    await db.query(as(SDR), "select public.add_leads_to_campaign($1,$2::uuid[])", [camp, [await newLead("Rej Two", "ann@rej2.example", "Ann Lee", null)]]);
+    const msgs = await messagesOf(camp);
+    expect(msgs.find((m) => m.id === step2.id)).toMatchObject({ status: "rejected", approved_by: null });
+    expect(msgs.filter((m) => m.status === "approved")).toHaveLength(3);
+  });
+
+  test("Pausar cannot be undone by hand: a client cannot activate an agent's campaign", async () => {
+    const { agent, camp } = await emailAgent("fix-activate");
+    await db.query(as(UUID_A), "select public.add_leads_to_campaign($1,$2::uuid[])", [camp, [await newLead("Act One", "pat@act1.example", "Pat Doe", null)]]);
+    const seq = await saved(camp);
+    await approve(seq, (await preview(seq)).digest);
+    expect((await tryCommit(db, as(UUID_A), "select public.set_email_agent_running($1,true)", [agent])).error).toBeUndefined();
+    expect((await tryCommit(db, as(UUID_A), "select public.set_email_agent_running($1,false)", [agent])).error).toBeUndefined();
+    for (const user of [UUID_A, SDR]) {
+      const r = await db.try(as(user), "update public.email_campaigns set status = 'active' where id = $1", [camp]);
+      expect(code(r.error), user).toBe("42501");
+    }
+    // a client may still pause it, and a campaign without an agent keeps the 0003 rule
+    expect((await db.try(as(SDR), "update public.email_campaigns set status = 'done' where id = $1", [camp])).error).toBeUndefined();
+    const plain = await newCampaign("fix-plain");
+    expect((await db.try(as(SDR), "update public.email_campaigns set status = 'active' where id = $1", [plain])).error).toBeUndefined();
+    await tryCommit(db, as(UUID_A), "select public.set_email_agent_running($1,false)", [agent]);
+  });
+
+  test("the approved delays are used; a client cannot change the campaign's delays", async () => {
+    const camp = await newCampaign("fix-delays");
+    await db.query(as(UUID_A), "select public.add_leads_to_campaign($1,$2::uuid[])", [camp, [await newLead("Del One", "pat@del1.example", "Pat Doe", null)]]);
+    for (const user of [UUID_A, SDR]) {
+      expect((await db.try(as(user), "update public.email_campaigns set step2_delay_days = 1, step3_delay_days = 2 where id = $1", [camp])).error?.message).toMatch(/permission denied/);
+    }
+    const seq = await saved(camp, STEPS, [5, 9]);
+    await approve(seq, (await preview(seq)).digest);
+    // even if the campaign row drifted (only the database can write it now), the approved version's delay wins
+    await db.admin("update public.email_campaigns set step2_delay_days = 1, step3_delay_days = 2, status = 'active' where id = $1", [camp]);
+    await claimOne(camp);
+    const ok = await db.admin<{ ok: boolean }>(
+      "select m.due_at = public.add_business_days(f.sent_at, 5) as ok from public.email_messages m join public.email_messages f on f.prospect_id = m.prospect_id and f.step = 1 where m.campaign_id = $1 and m.step = 2",
+      [camp]);
+    expect(ok).toEqual([{ ok: true }]);
+  });
+
+  test("a 1-step sequence ends the prospect after its step", async () => {
+    const camp = await newCampaign("fix-one-step");
+    const lead = await newLead("One Step", "pat@onestep.example", "Pat Doe", null);
+    await db.query(as(UUID_A), "select public.add_leads_to_campaign($1,$2::uuid[])", [camp, [lead]]);
+    const seq = await saved(camp, STEPS.slice(0, 1));
+    await approve(seq, (await preview(seq)).digest);
+    await db.admin("update public.email_campaigns set status = 'active' where id = $1", [camp]);
+    await claimOne(camp);
+    expect(await db.admin("select status from public.email_prospects where lead_id = $1", [lead])).toEqual([{ status: "done" }]);
+  });
+
+  test("create_email_agent_campaign: one rehearsal campaign per e-mail agent, owner or sdr of its workspace", async () => {
+    const agent = (await db.query<{ id: string }>(as(UUID_A), "insert into public.agents (workspace_id, type, name) values ($1,'email','Create') returning id", [ws]))[0].id;
+    const create = (user: string, a = agent, name = "Agent camp", list: string | null = null) =>
+      tryCommit<{ id: string }>(db, as(user), "select public.create_email_agent_campaign($1,$2,$3) as id", [a, name, list]);
+    // the closer and another workspace's owner cannot; a non-email agent cannot have one
+    for (const user of [UUID_C, UUID_B]) expect(code((await create(user)).error), user).toBe("42501");
+    const hunter = (await db.query<{ id: string }>(as(UUID_A), "insert into public.agents (workspace_id, type, name) values ($1,'hunter','h2') returning id", [ws]))[0].id;
+    expect(code((await create(UUID_A, hunter)).error)).toBe("22023");
+    expect(code((await create(UUID_A, agent, "  ")).error)).toBe("22023");
+    // a list that is not a research list of this workspace is refused
+    expect(code((await create(UUID_A, agent, "x", gen())).error)).toBe("42501");
+    // the sdr creates it: draft, rehearsal, linked to the agent
+    const r = await create(SDR);
+    expect(r.error).toBeUndefined();
+    const id = r.rows?.[0].id as string;
+    expect(await db.admin("select workspace_id, agent_id, status, send_mode, name, created_by from public.email_campaigns where id = $1", [id]))
+      .toEqual([{ workspace_id: ws, agent_id: agent, status: "draft", send_mode: "dry_run", name: "Agent camp", created_by: SDR }]);
+    // a second campaign is refused; a client still cannot write agent_id itself
+    expect(code((await create(UUID_A)).error)).toBe("55000");
+    expect((await db.try(as(UUID_A), "insert into public.email_campaigns (workspace_id, name, agent_id) values ($1,'x',$2)", [ws, agent])).error?.message).toMatch(/permission denied/);
+  });
+});
