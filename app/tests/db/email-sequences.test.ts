@@ -81,6 +81,8 @@ describe("0023 versioned sequences", () => {
       [{ step: 1, subject: "Hi", body: "Hi {{ first_name }}" }],
       [{ step: 1, subject: "  ", body: "Hi" }],
       [{ step: 1, subject: "Hi", body: " " }],
+      [{ step: 1, subject: "Hi", body: "\n\t \u00a0\u3000" }],
+      [{ step: 1, subject: "\u00a0", body: "Hi" }],
       [{ step: 1, subject: "x".repeat(151), body: "Hi" }],
       [{ step: 1, subject: "Hi", body: "x".repeat(2001) }],
       [{ step: 1, subject: "Two\nlines", body: "Hi" }],
@@ -93,14 +95,17 @@ describe("0023 versioned sequences", () => {
       const r = await save(camp, steps);
       expect(code(r.error), JSON.stringify(steps).slice(0, 80)).toBe("22023");
     }
-    const tone = await db.try(as(UUID_A), "select public.save_sequence_draft($1,$2::jsonb,'pushy',3,7,null,null,false)", [camp, JSON.stringify(STEPS)]);
-    expect(tone.error).toBeDefined();
+    // tone, delays and model are checked up front (22023), not left to the table constraints
+    for (const [tone, d2, d3, model] of [["pushy", 3, 7, null], ["direct", 0, 7, null], ["direct", 3, 61, null], ["direct", 7, 7, null], ["direct", null, 2, null], ["direct", 3, 7, "m".repeat(61)]] as const) {
+      const r = await db.try(as(UUID_A), "select public.save_sequence_draft($1,$2::jsonb,$3,$4,$5,$6,null,false)", [camp, JSON.stringify(STEPS), tone, d2, d3, model]);
+      expect(code(r.error), `${tone} ${d2} ${d3}`).toBe("22023");
+    }
     expect(await db.admin("select 1 from public.email_sequences where campaign_id = $1", [camp])).toHaveLength(0);
     // the limits themselves are fine
     expect((await save(camp, [{ step: 1, subject: "x".repeat(150), body: "y".repeat(2000) }])).error).toBeUndefined();
   });
 
-  test("a new draft supersedes the approved version and puts unsent messages back to draft", async () => {
+  test("a new draft supersedes the approved version and cancels unsent messages of the old text", async () => {
     const camp = await newCampaign("seq-supersede");
     await db.query(as(UUID_A), "select public.add_leads_to_campaign($1,$2::uuid[])", [camp, [
       await newLead("Sup One", "pat@sup1.example", "Pat Doe", "Worcester"),
@@ -128,10 +133,16 @@ describe("0023 versioned sequences", () => {
     const m = await db.admin<{ id: string; status: string; approved_by: string | null; approved_at: string | null; approved_to: string | null; approved_digest: string | null }>(
       "select id, status, approved_by, approved_at, approved_to, approved_digest from public.email_messages where id = any($1::uuid[])", [[ma, mb, mc]]);
     const by = Object.fromEntries(m.map((r) => [r.id, r]));
-    expect(by[ma]).toMatchObject({ status: "draft", approved_by: null, approved_at: null, approved_to: null, approved_digest: null });
+    expect(by[ma]).toMatchObject({ status: "cancelled", approved_by: null, approved_at: null, approved_to: null, approved_digest: null });
     expect(by[mb].status).toBe("sent");
-    expect(by[mc].status).toBe("draft");
+    expect(by[mc].status).toBe("cancelled");
     expect(await db.admin("select user_id from public.email_approvals where message_id = $1 and action = 'unapprove'", [ma])).toEqual([{ user_id: UUID_A }]);
+    expect(await db.admin("select 1 from public.email_approvals where message_id = $1 and action = 'unapprove'", [mc])).toHaveLength(0);
+    // the old text can never be approved again, one by one
+    const again = await db.query<{ r: { done: number; skipped: number } }>(as(UUID_A),
+      "select public.set_email_approval(array[$1,$2]::uuid[], public.test_versions(array[$1,$2]::uuid[]), 'approve') as r", [ma, mc]);
+    expect(again[0].r).toMatchObject({ done: 0, skipped: 2 });
+    expect((await db.admin<{ status: string }>("select status from public.email_messages where id = any($1::uuid[])", [[ma, mc]])).map((r) => r.status)).toEqual(["cancelled", "cancelled"]);
     expect(await db.admin("select step2_delay_days, step3_delay_days from public.email_campaigns where id = $1", [camp]))
       .toEqual([{ step2_delay_days: 4, step3_delay_days: 9 }]);
 
@@ -162,7 +173,7 @@ describe("0023 versioned sequences", () => {
     const a = await preview(seq);
     const b = await preview(seq);
     expect(b).toEqual(a);
-    expect(a.digest).toMatch(/^[0-9a-f]{32}$/);
+    expect(a.digest).toMatch(/^[0-9a-f]{64}$/);
     expect(a.examples.map((e) => [e.company, e.to])).toEqual([
       ["Prev One", "pat@prev1.example"], ["Prev Two", "info@prev2.example"], ["Prev Three", "lee@prev3.example"],
     ]);
@@ -172,15 +183,32 @@ describe("0023 versioned sequences", () => {
     ]);
     expect(a.examples[1].steps[0]).toEqual({ step: 1, subject: "Quick question, there", body: "Hi there, who handles HVAC for Prev Two in your area?" });
     expect(a.examples[2].steps[0].body).toBe("Hi there, who handles HVAC for Prev Three in Boston?");
-    // the digest covers the steps and the example leads: other text or other leads give another digest
-    const ids = a.examples.map((e) => e.prospect_id);
-    const expected = await db.admin<{ d: string }>("select md5(s.steps::text || array_to_string($2::uuid[], ',')) as d from public.email_sequences s where s.id = $1", [seq, ids]);
+    // the digest covers what the screen showed (rendered examples), the tone and the delays
+    const expected = await db.admin<{ d: string }>(
+      "select encode(sha256(convert_to(jsonb_build_object('examples', $2::jsonb, 'tone', s.tone, 'step2', s.step2_delay_days, 'step3', s.step3_delay_days)::text, 'UTF8')), 'hex') as d from public.email_sequences s where s.id = $1",
+      [seq, JSON.stringify(a.examples)]);
     expect(a.digest).toBe(expected[0].d);
+    // a contact name changed after the preview changes the rendered text, so the digest differs
+    await db.query(as(UUID_A), "update public.email_prospects set contact_name = 'Bob Roe' where id = $1", [a.examples[0].prospect_id]);
+    const renamed = await preview(seq);
+    expect(renamed.examples[0].steps[0].subject).toBe("Quick question, Bob");
+    expect(renamed.digest).not.toBe(a.digest);
     const other = await saved(camp, [{ step: 1, subject: "Other", body: "Hi {{first_name}} in {{city}}" }]);
     expect((await preview(other)).digest).not.toBe(a.digest);
     await db.admin("update public.email_prospects set status = 'skipped' where lead_id = $1", [leads[0]]);
     const after = await preview(other);
     expect(after.examples.map((e) => e.company)).toEqual(["Prev Two", "Prev Three", "Prev Four"]);
+  });
+
+  test("a lead whose rendered body would pass 2000 characters is skipped in the preview", async () => {
+    const camp = await newCampaign("seq-long");
+    const short = await newLead("Short Co", "a@short.example", "Ann Lee", null);
+    const long = await newLead("L".repeat(200), "b@long.example", "Bea Lee", null);
+    await db.query(as(UUID_A), "select public.add_leads_to_campaign($1,$2::uuid[])", [camp, [short, long]]);
+    const body = "x".repeat(1900) + " {{company}}"; // 1912 as saved; 1906 + 200 = 2106 for the long company
+    const seq = await saved(camp, [{ step: 1, subject: "Hi", body }]);
+    const p = await preview(seq);
+    expect(p.examples.map((e) => e.company)).toEqual(["Short Co"]);
   });
 
   test("clients cannot write sequences; a closer and another workspace cannot preview", async () => {
@@ -198,7 +226,7 @@ describe("0023 versioned sequences", () => {
     }
     // owner and sdr read and preview; the sdr can save a draft
     expect(await db.query(as(SDR), "select id from public.email_sequences where id = $1", [seq])).toHaveLength(1);
-    expect((await preview(seq, SDR)).digest).toMatch(/^[0-9a-f]{32}$/);
+    expect((await preview(seq, SDR)).digest).toMatch(/^[0-9a-f]{64}$/);
     expect((await save(camp, STEPS, SDR)).error).toBeUndefined();
     // the closer and another workspace's owner see nothing and can do nothing
     for (const user of [UUID_C, UUID_B]) {

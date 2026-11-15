@@ -59,6 +59,12 @@ describe("F4 sequence writer", () => {
     expect(stepProblems({ ...ok, body: "see https://x.test" })).toContain("body:link");
     expect(stepProblems({ ...ok, subject: "Re: hello" })).toContain("subject:deceptive");
     expect(stepProblems({ ...ok, body: "Hi {{name}}" })).toContain("template:unknown_var");
+    // sequence bodies stop at 2000 (SEQUENCE_BODY_MAX, same as save_sequence_draft); whitespace only is empty
+    expect(stepProblems({ ...ok, body: "y".repeat(2000) })).toEqual([]);
+    expect(stepProblems({ ...ok, body: "y".repeat(2001) })).toEqual(["body:too_long"]);
+    expect(stepProblems({ ...ok, body: "\n\t \u00a0\u3000" })).toEqual(["body:empty"]);
+    // the preview never reads prototype keys
+    expect(renderTemplate("{{constructor}} {{__proto__}}", { contact_name: null, company: "A", city: null })).toBe("{{constructor}} {{__proto__}}");
   });
 
   const seq = (patch: (steps: { step: number; subject: string; body: string }[]) => void, asked: 1 | 2 | 3 = 3) => {

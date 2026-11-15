@@ -8,6 +8,9 @@ export type TemplateVar = (typeof TEMPLATE_VARS)[number];
 
 export type SequenceStep = { step: 1 | 2 | 3; subject: string; body: string };
 
+/** Sequence bodies stop at 2000 characters (save_sequence_draft and email_step_ok in SQL); replies keep BODY_MAX. */
+export const SEQUENCE_BODY_MAX = 2000;
+
 const PLACEHOLDER = /\{\{([a-z_]+)\}\}/g;
 
 /** Any "{{" or "}}" that is not exactly one of the allowed placeholders is invalid (no spaces, no other names). */
@@ -22,7 +25,7 @@ export function stepProblems(s: SequenceStep): string[] {
   const sp = subjectProblem(s.subject);
   if (sp) out.push(`subject:${sp}`);
   if (hasLink(s.subject)) out.push("subject:link");
-  const bp = bodyProblem(s.body);
+  const bp = bodyProblem(s.body) ?? (s.body.trim().length > SEQUENCE_BODY_MAX ? "too_long" : null);
   if (bp) out.push(`body:${bp}`);
   if (templateProblem(s.subject) || templateProblem(s.body)) out.push("template:unknown_var");
   return out;
@@ -43,5 +46,5 @@ export function renderTemplate(text: string, vars: TemplateVars): string {
     company: vars.company,
     city: vars.city?.trim() || "your area",
   };
-  return text.replace(PLACEHOLDER, (m, name: string) => (name in values ? values[name as TemplateVar] : m));
+  return text.replace(PLACEHOLDER, (m, name: string) => (Object.hasOwn(values, name) ? values[name as TemplateVar] : m));
 }

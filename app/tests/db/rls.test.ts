@@ -146,9 +146,11 @@ describe("proof that RLS is really enforced in PGlite", () => {
         "guard_prospect_lead", "sync_lead_lock", "sync_campaign_locks", "add_leads_to_campaign",
         // 0022 (C2: the lead's status stops its campaigns; lead_stop_reason / prospect_lead / claim_next_email_core are NOT definer)
         "stop_email_on_lead_block",
-        // 0023 part 1 (sequences: owner/sdr save a version and preview it; render_email_template / prospect_template_vars /
+        // 0023 part 1 (sequences: owner/sdr save a version and preview it; render_email_template / js_trim / prospect_template_vars /
         // email_step_ok / render_sequence_for are NOT definer)
         "save_sequence_draft", "preview_sequence",
+        // 0024 (E4 mailbox health: bounce pause, owner clears it, emergency stop)
+        "pause_mailbox_on_bounces", "clear_mailbox_pause", "set_sending_paused",
       ].sort(),
     );
     for (const r of rows) expect(r.proconfig).toContain("search_path=\"\"");

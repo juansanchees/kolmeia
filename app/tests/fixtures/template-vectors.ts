@@ -22,6 +22,8 @@ export const TEMPLATE_VECTORS: TemplateVector[] = [
   // Unicode and tab separators: JS and Postgres must agree on what a first word is.
   { text: "Hi {{first_name}},", contact_name: "\tPat\tDoe", company: "Acme", city: null, out: "Hi Pat," },
   { text: "Hi {{first_name}},", contact_name: "\u00a0Pat Doe", company: "Acme", city: null, out: "Hi Pat," },
+  { text: "Hi {{first_name}},", contact_name: "Pat\u3000Doe", company: "Acme", city: null, out: "Hi Pat," },
+  { text: "Hi {{first_name}} in {{city}}", contact_name: "Ana\u2003Lu", company: "Acme", city: "\u00a0Salem\u3000", out: "Hi Ana in Salem" },
   // A title, an initial or an e-mail is not a first name.
   { text: "Hi {{first_name}},", contact_name: "Dr. Pat Doe", company: "Acme", city: null, out: "Hi there," },
   { text: "Hi {{first_name}},", contact_name: "info@acme.com", company: "Acme", city: null, out: "Hi there," },

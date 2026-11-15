@@ -5,9 +5,10 @@
 --     written only by the definer functions.
 --   * ONE renderer (D2): render_email_template() fills {{first_name}}, {{company}}, {{city}} in one pass; any other
 --     "{{" / "}}" is 22023. The TS renderTemplate (editor preview) is pinned to it by tests/fixtures/template-vectors.ts.
---   * save_sequence_draft(): owner/sdr save a new version (R4, R12, sizes, known placeholders); the previous versions
---     are superseded and the campaign's unsent sequence messages go back to draft (R1: approvals are dropped and logged).
---   * preview_sequence(): the same 3 real leads every time, their rendered steps and a digest of what was shown (J1).
+--   * save_sequence_draft(): owner/sdr save a new version (R4, R12, body <= 2000, known placeholders); the previous versions
+--     are superseded and the campaign's unsent sequence messages are cancelled (R1: approvals dropped and logged).
+--   * preview_sequence(): the same 3 real leads every time, their rendered steps and a sha256 digest of what was shown
+--     (rendered examples, tone, delays) for J1.
 --     A lead whose own values would add a link (or break R4/sizes) is skipped, never shown or queued.
 -- Depends on 0001-0022. Re-runnable.
 
@@ -58,6 +59,17 @@ create policy email_sequences_select on public.email_sequences
   for select to authenticated using (public.is_workspace_sender(workspace_id));
 
 -- ---------------------------------------------------------------- the one renderer (D2)
+-- JavaScript's trim(): every character of \s (Unicode spaces and line ends) at both ends. Pure; granted because the
+-- client-callable renderer uses it.
+create or replace function public.js_trim(p text)
+returns text
+language sql
+immutable
+set search_path = ''
+as $$
+  select regexp_replace(p, '^[\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+|[\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+$', '', 'g');
+$$;
+
 -- Whitespace exactly as JavaScript's trim() and \s see it, so SQL and the TS preview agree on the first word.
 -- {{first_name}} = first word of contact_name, else "there" (also for a title, an initial or an e-mail: "." or "@");
 -- {{company}} = company as given; {{city}} = trimmed city, else "your area". One pass: values are never expanded again.
@@ -68,7 +80,7 @@ immutable
 set search_path = ''
 as $$
 declare
-  ws constant text := '[\t\n\v\f\r    -     　﻿]';
+  ws constant text := '[\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]';
   v_parts text[];
   v_names text[];
   v_name text;
@@ -89,11 +101,11 @@ begin
   end if;
 
   v_first := (regexp_split_to_array(
-    regexp_replace(coalesce(p_vars ->> 'contact_name', ''), '^' || ws || '+|' || ws || '+$', '', 'g'), ws || '+'))[1];
+    public.js_trim(coalesce(p_vars ->> 'contact_name', '')), ws || '+'))[1];
   if coalesce(v_first, '') = '' or v_first ~ '[@.]' then
     v_first := 'there';
   end if;
-  v_city := regexp_replace(coalesce(p_vars ->> 'city', ''), '^' || ws || '+|' || ws || '+$', '', 'g');
+  v_city := public.js_trim(coalesce(p_vars ->> 'city', ''));
   if v_city = '' then
     v_city := 'your area';
   end if;
@@ -127,19 +139,20 @@ as $$
    where p.id = p_prospect;
 $$;
 
--- A step as it can be stored on email_messages (R4 subject, R12 no links, sizes). Internal (plain, no grant).
-create or replace function public.email_step_ok(p_subject text, p_body text, p_body_max integer)
+-- A sequence step that may be saved, shown or queued (R4 subject, R12 no links, subject 1-150, body 1-2000 after a
+-- JavaScript trim; same as stepProblems / SEQUENCE_BODY_MAX in template.ts). Internal (plain, no grant).
+create or replace function public.email_step_ok(p_subject text, p_body text)
 returns boolean
 language sql
 immutable
 set search_path = ''
 as $$
   select p_subject is not null and p_body is not null
-     and char_length(btrim(p_subject)) between 1 and 150
+     and char_length(public.js_trim(p_subject)) between 1 and 150
      and p_subject !~ '[\r\n]'
      and p_subject !~* '^\s*[\[(]?\s*(re|fw|fwd|aw|tr|sv|vs)\s*(\[\d+\])?\s*[:\])]'
      and p_subject !~* '(https?://|www\.)'
-     and char_length(btrim(p_body)) between 1 and p_body_max
+     and char_length(public.js_trim(p_body)) between 1 and 2000
      and p_body !~* '(https?://|www\.)';
 $$;
 
@@ -161,7 +174,7 @@ begin
   for s in select x from jsonb_array_elements(p_steps) x loop
     v_subject := public.render_email_template(s ->> 'subject', v_vars);
     v_body := public.render_email_template(s ->> 'body', v_vars);
-    if not public.email_step_ok(v_subject, v_body, 5000) then
+    if not public.email_step_ok(v_subject, v_body) then
       return null;
     end if;
     v_out := v_out || jsonb_build_array(jsonb_build_object('step', (s ->> 'step')::integer, 'subject', v_subject, 'body', v_body));
@@ -190,6 +203,16 @@ begin
   if c.id is null or auth.uid() is null or not public.is_workspace_sender(c.workspace_id) then
     raise exception 'not allowed' using errcode = '42501';
   end if;
+  if p_tone is null or p_tone not in ('direct', 'friendly', 'consultive') then
+    raise exception 'tone must be direct, friendly or consultive' using errcode = '22023';
+  end if;
+  if p_step2 not between 1 and 30 or p_step3 not between 2 and 60
+     or coalesce(p_step3, c.step3_delay_days) <= coalesce(p_step2, c.step2_delay_days) then
+    raise exception 'step 2 waits 1-30 days, step 3 waits 2-60 days and after step 2' using errcode = '22023';
+  end if;
+  if char_length(p_ai_model) > 60 or char_length(p_prompt_version) > 40 then
+    raise exception 'ai_model up to 60 and prompt_version up to 40 characters' using errcode = '22023';
+  end if;
   if p_steps is null or jsonb_typeof(p_steps) <> 'array' or jsonb_array_length(p_steps) not between 1 and 3 then
     raise exception 'a sequence has 1 to 3 steps' using errcode = '22023';
   end if;
@@ -199,7 +222,7 @@ begin
        or jsonb_typeof(s -> 'subject') is distinct from 'string' or jsonb_typeof(s -> 'body') is distinct from 'string' then
       raise exception 'step % must be {step: %, subject, body}', i, i using errcode = '22023';
     end if;
-    if not public.email_step_ok(s ->> 'subject', s ->> 'body', 2000) then
+    if not public.email_step_ok(s ->> 'subject', s ->> 'body') then
       raise exception 'step %: subject 1-150 on one line without "Re:"/"Fwd:", body 1-2000, no links (R4, R12)', i using errcode = '22023';
     end if;
     -- only {{first_name}}, {{company}}, {{city}} (22023 from the renderer otherwise)
@@ -216,13 +239,15 @@ begin
           p_ai_model, p_prompt_version, coalesce(p_human_edited, false), auth.uid())
   returning id into v_id;
 
-  -- R1: nothing unsent keeps an approval given to older text
+  -- R1: unsent messages of older text are cancelled, so that text can never be approved again (the approval of the
+  -- new version re-writes them from it); dropped approvals are logged
   with prev as (
     select m.id, m.status from public.email_messages m
-     where m.campaign_id = c.id and m.kind = 'sequence' and m.status in ('approved', 'rejected')
+     where m.campaign_id = c.id and m.kind = 'sequence' and m.status in ('draft', 'approved', 'rejected')
   ), upd as (
     update public.email_messages m
-       set status = 'draft', approved_by = null, approved_at = null, approved_to = null, approved_digest = null
+       set status = 'cancelled', cancel_reason = 'sequence_edited',
+           approved_by = null, approved_at = null, approved_to = null, approved_digest = null
       from prev
      where m.id = prev.id
     returning m.id, m.workspace_id, prev.status as was
@@ -268,14 +293,20 @@ begin
     v_ids := v_ids || p.id;
     exit when cardinality(v_ids) = 3;
   end loop;
-  return jsonb_build_object('digest', md5(q.steps::text || array_to_string(v_ids, ',')), 'examples', v_examples);
+  -- J1: the digest covers what the screen showed (rendered examples with their leads and addresses), the tone and delays
+  return jsonb_build_object(
+    'digest', encode(sha256(convert_to(jsonb_build_object('examples', v_examples, 'tone', q.tone, 'step2', q.step2_delay_days,
+                                                          'step3', q.step3_delay_days)::text, 'UTF8')), 'hex'),
+    'examples', v_examples);
 end;
 $$;
 
 revoke all on function public.render_email_template(text, jsonb) from public, anon;
 grant execute on function public.render_email_template(text, jsonb) to authenticated;
 revoke all on function public.prospect_template_vars(uuid) from public, anon, authenticated;
-revoke all on function public.email_step_ok(text, text, integer) from public, anon, authenticated;
+revoke all on function public.js_trim(text) from public, anon;
+grant execute on function public.js_trim(text) to authenticated;
+revoke all on function public.email_step_ok(text, text) from public, anon, authenticated;
 revoke all on function public.render_sequence_for(jsonb, uuid) from public, anon, authenticated;
 revoke all on function public.save_sequence_draft(uuid, jsonb, text, integer, integer, text, text, boolean) from public, anon, authenticated;
 grant execute on function public.save_sequence_draft(uuid, jsonb, text, integer, integer, text, text, boolean) to authenticated;
