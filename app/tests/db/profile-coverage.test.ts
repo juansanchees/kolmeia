@@ -75,7 +75,7 @@ describe("0015 learned profiles", () => {
     const importing = (await db.admin<{ id: string }>("insert into public.lead_imports (workspace_id, file_name, list_name, use_as_training) values ($1,'x.csv','x',true) returning id", [a.ws]))[0].id;
     expect(code((await propose(a.owner, importing)).error)).toBe("22023");
     // a non-object profile is refused
-    expect((await propose(a.owner, a.importId, [1, 2])).error).toBeDefined();
+    expect(code((await propose(a.owner, a.importId, [1, 2])).error)).toBe("22023");
     // a closer cannot propose
     const closer = randomUUID();
     await db.addUser(closer);
@@ -121,7 +121,7 @@ describe("0015 learned profiles", () => {
     expect((await approve(a.owner, p3, null, hunter.agent)).rows?.[0].v).toBe(3);
     expect(await status(p2)).toEqual({ status: "approved", version: 2 });
     // a second approve of the same row fails and keeps its version
-    expect((await approve(a.owner, p3)).error).toBeDefined();
+    expect(code((await approve(a.owner, p3)).error)).toBe("22023");
     expect(await status(p3)).toEqual({ status: "approved", version: 3 });
     // reject: only from proposed, never applies; an unknown key is 22023; a closer, 42501
     const p4 = await proposeOk(a.owner, a.importId);
@@ -134,8 +134,8 @@ describe("0015 learned profiles", () => {
     expect(code((await tryCommit(db, as(closer), "select public.reject_profile($1)", [p4])).error)).toBe("42501");
     await db.query(as(a.owner), "select public.reject_profile($1)", [p4]);
     expect(await status(p4)).toEqual({ status: "rejected", version: null });
-    expect((await approve(a.owner, p4)).error).toBeDefined();
-    expect((await tryCommit(db, as(a.owner), "select public.reject_profile($1)", [p3])).error).toBeDefined();
+    expect(code((await approve(a.owner, p4)).error)).toBe("22023");
+    expect(code((await tryCommit(db, as(a.owner), "select public.reject_profile($1)", [p3])).error)).toBe("22023");
     // p_agent must be a hunter of the workspace
     const other = await seedHunter(db, { userId: randomUUID() });
     const p5 = await proposeOk(a.owner, a.importId);
@@ -268,8 +268,9 @@ describe("0015 coverage marks", () => {
     expect(await db.query(as(sdr), "select id from public.coverage_marks")).toHaveLength(2);
     // created_by cannot be forged, a future date and bad text are refused
     expect((await db.try(as(a.owner), "insert into public.coverage_marks (workspace_id, town, county, searched_at, created_by) values ($1,'X','Y','2026-01-01',$2)", [a.ws, sdr])).error?.message).toMatch(/permission denied/);
-    expect((await ins(a.owner, a.ws, "Boston", "Suffolk", "2999-01-01")).error).toBeDefined();
-    expect((await ins(a.owner, a.ws, "", "Suffolk")).error).toBeDefined();
+    expect((await ins(a.owner, a.ws, "Boston", "Suffolk", "2999-01-01")).error?.message).toMatch(/coverage_marks_searched_at/);
+    expect((await ins(a.owner, a.ws, "Boston", "Suffolk", "1999-01-01")).error?.message).toMatch(/coverage_marks_searched_at/);
+    expect((await ins(a.owner, a.ws, "", "Suffolk")).error?.message).toMatch(/coverage_marks_town/);
     // remove: the closer and another workspace delete nothing; sender does
     await db.query(as(closer), "delete from public.coverage_marks where id = $1", [m1.rows![0].id]);
     await db.query(as(other.owner), "delete from public.coverage_marks where id = $1", [m1.rows![0].id]);
@@ -280,5 +281,81 @@ describe("0015 coverage marks", () => {
     // no update at all
     const m3 = await ins(a.owner, a.ws);
     expect((await db.try(as(a.owner), "update public.coverage_marks set note = 'x' where id = $1", [m3.rows![0].id])).error?.message).toMatch(/permission denied/);
+  });
+});
+
+describe("0015 review fixes", () => {
+  test("I1 a refuted city or company type stops matching, an un-refuted one matches again; a candidate's type refreshes the lead", async () => {
+    const a = await seedTraining();
+    const p1 = await proposeOk(a.owner, a.importId, profile({ filter: { companyTypes: [], towns: ["Worcester"] } }));
+    await approve(a.owner, p1);
+    const lead = (await db.admin<{ id: string }>("insert into public.leads (workspace_id, origin_kind) values ($1,'import') returning id", [a.ws]))[0].id;
+    await db.admin("insert into public.lead_fields (workspace_id, lead_id, field, value, source, source_ref) values ($1,$2,'city','Worcester','research','c1')", [a.ws, lead]);
+    const match = async () => (await db.admin<{ profile_match: boolean }>("select profile_match from public.qualifier_queue where lead_id = $1", [lead]))[0].profile_match;
+    expect(await match()).toBe(true);
+    await db.admin("update public.lead_fields set status = 'refuted' where lead_id = $1 and field = 'city'", [lead]);
+    expect(await match()).toBe(false);
+    await db.admin("update public.lead_fields set status = 'confirmed' where lead_id = $1 and field = 'city'", [lead]);
+    expect(await match()).toBe(true);
+    await db.admin("delete from public.lead_fields where lead_id = $1 and field = 'city'", [lead]);
+    expect(await match()).toBe(false);
+    // type + town filter: the candidate's type counts, and relinking / retyping refreshes this one lead
+    const p2 = await proposeOk(a.owner, a.importId);
+    await approve(a.owner, p2);
+    await db.admin("insert into public.lead_fields (workspace_id, lead_id, field, value, source, source_ref) values ($1,$2,'city','Worcester','import','c2')", [a.ws, lead]);
+    expect(await match()).toBe(false);
+    const run = (await db.query<{ id: string }>(as(a.owner), "insert into public.research_runs (workspace_id, title, request_text, region_text, rigor) values ($1,'t','pedido','Worcester, MA','careful') returning id", [a.ws]))[0].id;
+    const cand = (await db.admin<{ id: string }>("insert into public.research_candidates (workspace_id, run_id, name, name_key, company_type) values ($1,$2,'Delta Obras','delta obras','other') returning id", [a.ws, run]))[0].id;
+    await db.admin("update public.research_candidates set lead_id = $2 where id = $1", [cand, lead]);
+    expect(await match()).toBe(false);
+    await db.admin("update public.research_candidates set company_type = 'builder' where id = $1", [cand]);
+    expect(await match()).toBe(true);
+    await db.admin("update public.research_candidates set lead_id = null where id = $1", [cand]);
+    expect(await match()).toBe(false);
+  });
+
+  test("I2 deleting a Caçador supersedes its own profiles, so they never become all-hunters profiles", async () => {
+    const owner = randomUUID();
+    const h = await seedHunter(db, { userId: owner });
+    const { importId } = await seedImport(db, owner, h.ws, [row(1, "Eta Obras LLC", { city: "Worcester" })]);
+    await db.admin("update public.lead_imports set use_as_training = true where id = $1", [importId]);
+    const all = await proposeOk(owner, importId, profile({ filter: { companyTypes: [], towns: ["Boston"] } }));
+    await approve(owner, all);
+    const mine = await proposeOk(owner, importId, profile({ filter: { companyTypes: [], towns: ["Worcester"] } }));
+    await approve(owner, mine, null, h.agent);
+    const lead = (await db.admin<{ lead_id: string }>("select lead_id from public.lead_import_rows where import_id = $1", [importId]))[0].lead_id;
+    expect((await db.admin<{ profile_match: boolean }>("select profile_match from public.qualifier_queue where lead_id = $1", [lead]))[0].profile_match).toBe(true);
+    await db.admin("delete from public.agents where id = $1", [h.agent]);
+    expect(await status(mine)).toEqual({ status: "superseded", version: 2 });
+    expect((await db.admin<{ agent_id: string | null }>("select agent_id from public.learned_profiles where id = $1", [mine]))[0].agent_id).toBeNull();
+    expect(await status(all)).toEqual({ status: "approved", version: 1 });
+    // the newest approved profile is the all-hunters one again: Worcester no longer matches
+    expect((await db.admin<{ profile_match: boolean }>("select profile_match from public.qualifier_queue where lead_id = $1", [lead]))[0].profile_match).toBe(false);
+  });
+
+  test("I3 the profile shape is validated in SQL: points, filter, queries (22023)", async () => {
+    const a = await seedTraining();
+    const bad: [string, unknown][] = [
+      ["points not an array", { ...profile(), points: "junk" }],
+      ["13 points", { ...profile(), points: Array.from({ length: 13 }, () => ({ key: "type", text: "x", rows: [1] })) }],
+      ["unknown key", { ...profile(), points: [{ key: "mystery", text: "x", rows: [1] }] }],
+      ["text too long", { ...profile(), points: [{ key: "type", text: "x".repeat(201), rows: [1] }] }],
+      ["no rows", { ...profile(), points: [{ key: "type", text: "x", rows: [] }] }],
+      ["rows not integers", { ...profile(), points: [{ key: "type", text: "x", rows: ["1"] }] }],
+      ["bad company type", { ...profile(), filter: { companyTypes: ["plumber"], towns: [] } }],
+      ["towns not an array", { ...profile(), filter: { companyTypes: [], towns: "Boston" } }],
+      ["61 towns", { ...profile(), filter: { companyTypes: [], towns: Array.from({ length: 61 }, (_, i) => `T${i}`) } }],
+      ["query not a string", { ...profile(), searchQueries: [{ x: 1 }] }],
+      ["9 queries", { ...profile(), searchQueries: Array.from({ length: 9 }, () => "q") }],
+      ["blocked network query", { ...profile(), searchQueries: ["site:linked" + "in.com/company builders"] }],
+      ["missing filter", { points: [], searchQueries: [] }],
+    ];
+    for (const [name, p] of bad) expect(code((await propose(a.owner, a.importId, p)).error), name).toBe("22023");
+    // an edit that breaks the shape is refused and the proposal stays proposed
+    const id = await proposeOk(a.owner, a.importId);
+    expect(code((await approve(a.owner, id, { searchQueries: [{ x: 1 }, "ok"] })).error)).toBe("22023");
+    expect(code((await approve(a.owner, id, { filter: { towns: "Boston" } })).error)).toBe("22023");
+    expect(await status(id)).toEqual({ status: "proposed", version: null });
+    expect((await approve(a.owner, id, { searchQueries: ["ok"] })).error).toBeUndefined();
   });
 });

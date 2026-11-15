@@ -96,12 +96,10 @@ begin
   ) then
     return false;
   end if;
+  -- the town reads lead_fields only: a verified candidate's city is copied there (0014), so a refuted city stays refuted
   if cardinality(v_towns) > 0 and not exists (
     select 1 from public.lead_fields f
      where f.lead_id = p_lead and f.field = 'city' and f.status <> 'refuted' and public.profile_town_key(f.value) = any (v_towns)
-    union all
-    select 1 from public.research_candidates c
-     where c.lead_id = p_lead and c.city is not null and public.profile_town_key(c.city) = any (v_towns)
   ) then
     return false;
   end if;
@@ -145,20 +143,39 @@ begin
 end;
 $$;
 
--- Recompute one lead when a city or company type arrives.
+-- Recompute one lead (cheap: one lead, indexed lookups). M3: the filter is the newest approved profile of ANY target,
+-- while a run's stamp prefers the agent-specific one. Both are by design (plan K-7 / K-11).
+create or replace function public.refresh_profile_match_one(p_lead uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_ws uuid;
+  v_filter jsonb;
+  v_match boolean;
+begin
+  select q.workspace_id into v_ws from public.qualifier_queue q where q.lead_id = p_lead;
+  if not found then
+    return;
+  end if;
+  v_filter := public.profile_filter_of(v_ws);
+  v_match := v_filter is not null and public.lead_matches_profile(p_lead, v_filter);
+  update public.qualifier_queue q set profile_match = v_match
+   where q.lead_id = p_lead and q.profile_match is distinct from v_match;
+end;
+$$;
+
+-- lead_fields: a city or company type arrives, is refuted/un-refuted, changes or goes away.
 create or replace function public.refresh_profile_match_lead()
 returns trigger
 language plpgsql
 security definer
 set search_path = ''
 as $$
-declare
-  v_filter jsonb := public.profile_filter_of(new.workspace_id);
-  v_match boolean;
 begin
-  v_match := v_filter is not null and public.lead_matches_profile(new.lead_id, v_filter);
-  update public.qualifier_queue q set profile_match = v_match
-   where q.lead_id = new.lead_id and q.profile_match is distinct from v_match;
+  perform public.refresh_profile_match_one(coalesce(new.lead_id, old.lead_id));
   return null;
 end;
 $$;
@@ -169,6 +186,131 @@ create trigger refresh_profile_match_lead
   for each row
   when (new.field in ('city', 'company_type'))
   execute function public.refresh_profile_match_lead();
+drop trigger if exists refresh_profile_match_lead_upd on public.lead_fields;
+create trigger refresh_profile_match_lead_upd
+  after update of status, value, field on public.lead_fields
+  for each row
+  when (new.field in ('city', 'company_type') or old.field in ('city', 'company_type'))
+  execute function public.refresh_profile_match_lead();
+drop trigger if exists refresh_profile_match_lead_del on public.lead_fields;
+create trigger refresh_profile_match_lead_del
+  after delete on public.lead_fields
+  for each row
+  when (old.field in ('city', 'company_type'))
+  execute function public.refresh_profile_match_lead();
+
+-- research_candidates: the company type (read from the candidate) or the link to the lead changes.
+create or replace function public.refresh_profile_match_candidate()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if old.lead_id is not null then
+    perform public.refresh_profile_match_one(old.lead_id);
+  end if;
+  if new.lead_id is not null and new.lead_id is distinct from old.lead_id then
+    perform public.refresh_profile_match_one(new.lead_id);
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists refresh_profile_match_candidate on public.research_candidates;
+create trigger refresh_profile_match_candidate
+  after update of company_type, lead_id on public.research_candidates
+  for each row
+  when (new.company_type is distinct from old.company_type or new.lead_id is distinct from old.lead_id)
+  execute function public.refresh_profile_match_candidate();
+
+-- I3: the shape of a profile (K-7). The RPCs are callable by any sender, so SQL checks what the app's zod checks.
+create or replace function public.learned_profile_valid(p_profile jsonb)
+returns boolean
+language plpgsql
+immutable
+set search_path = ''
+as $$
+declare
+  pt jsonb;
+  r jsonb;
+  e jsonb;
+begin
+  if p_profile is null or jsonb_typeof(p_profile) is distinct from 'object' then
+    return false;
+  end if;
+  -- points
+  if jsonb_typeof(p_profile -> 'points') is distinct from 'array' or jsonb_array_length(p_profile -> 'points') > 12 then
+    return false;
+  end if;
+  for pt in select x from jsonb_array_elements(p_profile -> 'points') x loop
+    if jsonb_typeof(pt) is distinct from 'object'
+       or jsonb_typeof(pt -> 'key') is distinct from 'string'
+       or (pt ->> 'key') not in ('type', 'size', 'region', 'projects', 'signals', 'where_to_find')
+       or jsonb_typeof(pt -> 'text') is distinct from 'string'
+       or char_length(pt ->> 'text') not between 1 and 200
+       or jsonb_typeof(pt -> 'rows') is distinct from 'array'
+       or jsonb_array_length(pt -> 'rows') not between 1 and 20 then
+      return false;
+    end if;
+    for r in select x from jsonb_array_elements(pt -> 'rows') x loop
+      if jsonb_typeof(r) is distinct from 'number' or (r #>> '{}') !~ '^[0-9]{1,4}$' or (r #>> '{}')::integer not between 1 and 5001 then
+        return false;
+      end if;
+    end loop;
+  end loop;
+  -- filter
+  if jsonb_typeof(p_profile -> 'filter') is distinct from 'object'
+     or jsonb_typeof(p_profile -> 'filter' -> 'companyTypes') is distinct from 'array'
+     or jsonb_typeof(p_profile -> 'filter' -> 'towns') is distinct from 'array'
+     or jsonb_array_length(p_profile -> 'filter' -> 'towns') > 60 then
+    return false;
+  end if;
+  for e in select x from jsonb_array_elements(p_profile -> 'filter' -> 'companyTypes') x loop
+    if jsonb_typeof(e) is distinct from 'string' or (e #>> '{}') not in ('builder', 'developer', 'property_manager', 'other') then
+      return false;
+    end if;
+  end loop;
+  for e in select x from jsonb_array_elements(p_profile -> 'filter' -> 'towns') x loop
+    if jsonb_typeof(e) is distinct from 'string' or char_length(e #>> '{}') not between 1 and 60 then
+      return false;
+    end if;
+  end loop;
+  -- searchQueries: strings, none naming the blocked social network
+  if jsonb_typeof(p_profile -> 'searchQueries') is distinct from 'array' or jsonb_array_length(p_profile -> 'searchQueries') > 8 then
+    return false;
+  end if;
+  for e in select x from jsonb_array_elements(p_profile -> 'searchQueries') x loop
+    if jsonb_typeof(e) is distinct from 'string' or char_length(e #>> '{}') not between 1 and 120 or (e #>> '{}') ~* 'linked\s*in|lnkd' then
+      return false;
+    end if;
+  end loop;
+  return true;
+end;
+$$;
+
+-- I2: a deleted Caçador takes its agent-specific profiles with it (they would become all-hunters profiles through
+-- on delete set null). Superseded keeps the history and applies to nobody.
+create or replace function public.supersede_agent_profiles()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  update public.learned_profiles p set status = 'superseded'
+   where p.agent_id = old.id and p.status in ('approved', 'proposed');
+  if found then
+    perform public.refresh_profile_match(old.workspace_id);
+  end if;
+  return old;
+end;
+$$;
+
+drop trigger if exists zz_supersede_agent_profiles on public.agents;
+create trigger zz_supersede_agent_profiles
+  before delete on public.agents
+  for each row execute function public.supersede_agent_profiles();
 
 -- ---------------------------------------------------------------- RPCs (authenticated senders)
 create or replace function public.propose_profile(p_import uuid, p_profile jsonb, p_sample_rows integer)
@@ -191,7 +333,7 @@ begin
   if not v_imp.use_as_training or v_imp.status <> 'done' then
     raise exception 'the list is not a finished training list' using errcode = '22023';
   end if;
-  if p_profile is null or jsonb_typeof(p_profile) <> 'object' or p_sample_rows is null or p_sample_rows < 0 then
+  if not public.learned_profile_valid(p_profile) or p_sample_rows is null or p_sample_rows < 0 then
     raise exception 'invalid profile' using errcode = '22023';
   end if;
   insert into public.learned_profiles (workspace_id, import_id, profile, original, sample_rows, created_by)
@@ -235,6 +377,9 @@ begin
   select * into p from public.learned_profiles x where x.id = p_profile for update;
   if p.status <> 'proposed' then
     raise exception 'profile is %', p.status using errcode = '22023';
+  end if;
+  if p_edited is not null and not public.learned_profile_valid(p.profile || p_edited) then
+    raise exception 'invalid edit' using errcode = '22023';
   end if;
   select coalesce(max(x.version), 0) + 1 into v_version from public.learned_profiles x where x.workspace_id = p.workspace_id;
   update public.learned_profiles x
@@ -349,7 +494,7 @@ create table if not exists public.coverage_marks (
   created_at timestamptz not null default now()
 );
 alter table public.coverage_marks drop constraint if exists coverage_marks_searched_at;
-alter table public.coverage_marks add constraint coverage_marks_searched_at check (searched_at <= current_date);
+alter table public.coverage_marks add constraint coverage_marks_searched_at check (searched_at between date '2020-01-01' and current_date);
 create index if not exists coverage_marks_ws_idx on public.coverage_marks (workspace_id, searched_at desc);
 
 create or replace function public.stamp_coverage_mark()
@@ -404,6 +549,10 @@ revoke all on function public.lead_matches_profile(uuid, jsonb) from public, ano
 revoke all on function public.profile_filter_of(uuid) from public, anon, authenticated;
 revoke all on function public.refresh_profile_match(uuid) from public, anon, authenticated;
 revoke all on function public.refresh_profile_match_lead() from public, anon, authenticated;
+revoke all on function public.refresh_profile_match_one(uuid) from public, anon, authenticated;
+revoke all on function public.refresh_profile_match_candidate() from public, anon, authenticated;
+revoke all on function public.learned_profile_valid(jsonb) from public, anon, authenticated;
+revoke all on function public.supersede_agent_profiles() from public, anon, authenticated;
 revoke all on function public.stamp_run_profile() from public, anon, authenticated;
 revoke all on function public.stamp_coverage_mark() from public, anon, authenticated;
 revoke all on function public.propose_profile(uuid, jsonb, integer) from public, anon;
