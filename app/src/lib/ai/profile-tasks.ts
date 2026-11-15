@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { townOf } from "@/lib/coverage/region";
+import { PROFILE_ROWS_BUDGET_CHARS, PROFILE_SAMPLE_MAX, sampleRows } from "@/lib/profile/sample";
 import { POINT_KEYS, type LearnedProfile } from "@/lib/profile/types";
 import { COMPANY_TYPES } from "@/lib/research/types";
 import { reserveFor, runTask, type AiContext, type TaskDef, type TaskResult } from "./gateway";
@@ -28,7 +29,7 @@ const MAX_TOWNS = 60;
 const MAX_QUERIES = 8;
 const MAX_QUERY = 120;
 // Social-network queries are dropped; the pattern avoids spelling the name (a repo guard keeps it out of src).
-const SOCIAL = /linked\s*in|lnkd/i;
+export const SOCIAL = /linked[\s_.-]*in|lnkd/i;
 
 export const profileDef: TaskDef<ProfileLearnInput, Parsed, LearnedProfile> = {
   task: "profile_learn",
@@ -55,7 +56,9 @@ export const profileDef: TaskDef<ProfileLearnInput, Parsed, LearnedProfile> = {
 };
 
 export function learnProfile(ctx: AiContext, input: ProfileLearnInput): Promise<TaskResult<LearnedProfile>> {
-  return runTask(ctx, profileDef, input);
+  // What is sent is what can be cited: fit the rows to the wrapper first, in the same stratified order as the sample.
+  const rows = sampleRows(input.rows, PROFILE_SAMPLE_MAX, PROFILE_ROWS_BUDGET_CHARS);
+  return runTask(ctx, profileDef, { ...input, rows });
 }
 
 /** What the "Treinar" button shows; equals what the call reserves. */

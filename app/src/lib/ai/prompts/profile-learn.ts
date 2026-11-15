@@ -1,4 +1,5 @@
 import "server-only";
+import { ROW_HEADER, rowLine } from "@/lib/profile/sample";
 import type { TrainingRow } from "@/lib/profile/types";
 import { CONTEXT, UNTRUSTED, untrusted } from "./shared";
 
@@ -21,8 +22,8 @@ export type ProfileLearnInput = { listName: string; rows: TrainingRow[] };
 export function buildUser(i: ProfileLearnInput): string {
   return [
     "Name of the list:",
-    untrusted("list_name", i.listName),
+    untrusted("list_name", i.listName.slice(0, 120)),
     "Rows of the list (each has a row number; cite these numbers):",
-    untrusted("list_rows", i.rows),
+    untrusted("list_rows", [ROW_HEADER, ...i.rows.map(rowLine)].join("\n")),
   ].join("\n");
 }

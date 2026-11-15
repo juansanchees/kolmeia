@@ -9,7 +9,11 @@ export function sessionLedger(db: SupabaseClient): AiLedger {
     throw new Error("use_reserve");
   };
   return {
-    reserve: (r) => reserveAiCallRpc(db, r),
+    reserve: async (r) => {
+      const id = await reserveAiCallRpc(db, r);
+      if (!id) throw new Error("reserveAiCall: no ledger id"); // never lets the gateway fall back to record()
+      return id;
+    },
     settle: (id, row) => settleAiCallRpc(db, id, row),
     record: no,
     dailyCapUsd: no,
