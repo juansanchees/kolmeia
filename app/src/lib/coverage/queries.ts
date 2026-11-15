@@ -48,6 +48,7 @@ export async function loadCoverage(db: SupabaseClient, ws: string, now: Date = n
       .eq("workspace_id", ws)
       .not("started_at", "is", null)
       .is("setup_agent_id", null)
+      .not("status", "in", "(failed,cancelled)")
       .order("started_at", { ascending: false })
       .limit(RUNS_MAX),
     db

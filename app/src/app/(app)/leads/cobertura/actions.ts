@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { MA_TOWNS } from "@/lib/coverage/ma-towns";
 import { townOf } from "@/lib/coverage/region";
+import { isMarkDate } from "@/lib/coverage/view";
 import type { FormState } from "@/lib/form-state";
 import { createClient } from "@/lib/supabase/server";
 import { requireSender } from "@/lib/workspace";
@@ -21,7 +22,7 @@ export async function addMarkAction(form: FormData): Promise<FormState> {
   if (!town) fieldErrors.town = E.town;
   const date = String(form.get("date") ?? "").trim();
   const today = new Date().toISOString().slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date)) || date > today || date < "2020-01-01") fieldErrors.date = E.date;
+  if (!isMarkDate(date, today)) fieldErrors.date = E.date;
   const note = String(form.get("note") ?? "").trim();
   if (note.length > 200) fieldErrors.note = E.note;
   if (!town || Object.keys(fieldErrors).length > 0) return { status: "error", fieldErrors };

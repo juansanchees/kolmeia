@@ -57,3 +57,23 @@ describe("coverage table", () => {
     expect(huntHref("West Springfield")).toBe("/agentes/novo?regiao=West%20Springfield%2C%20MA");
   });
 });
+
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { isMarkDate } from "@/lib/coverage/view";
+
+describe("review fixes", () => {
+  it("impossible dates are rejected, real ones in range pass", () => {
+    expect(isMarkDate("2026-02-30", "2026-11-14")).toBe(false);
+    expect(isMarkDate("2026-13-01", "2026-11-14")).toBe(false);
+    expect(isMarkDate("2025-02-29", "2026-11-14")).toBe(false);
+    expect(isMarkDate("2024-02-29", "2026-11-14")).toBe(true);
+    expect(isMarkDate("2026-11-14", "2026-11-14")).toBe(true);
+    expect(isMarkDate("2026-11-15", "2026-11-14")).toBe(false);
+    expect(isMarkDate("2019-12-31", "2026-11-14")).toBe(false);
+    expect(readFileSync(join(process.cwd(), "src/app/(app)/leads/cobertura/actions.ts"), "utf8")).toContain("isMarkDate(");
+  });
+  it("failed and cancelled runs do not cover", () => {
+    expect(readFileSync(join(process.cwd(), "src/lib/coverage/queries.ts"), "utf8")).toMatch(/\.not\("status", "in", "\(failed,cancelled\)"\)/);
+  });
+});
