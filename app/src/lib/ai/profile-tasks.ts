@@ -25,6 +25,15 @@ type Parsed = z.infer<typeof profileSchema>;
 const MAX_POINTS = 12;
 const MAX_TEXT = 200;
 const MAX_ROWS = 20;
+
+/** Cap at `max` chars: cut at the last space and add "…" so no word is left half-written. */
+export function cutAtWord(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const head = text.slice(0, max - 1);
+  const at = head.lastIndexOf(" ");
+  const cut = at > 0 ? head.slice(0, at) : head;
+  return `${cut.replace(/[\s,;:.\-–—]+$/, "")}…`;
+}
 const MAX_TOWNS = 60;
 const MAX_QUERIES = 8;
 const MAX_QUERY = 120;
@@ -45,7 +54,7 @@ export const profileDef: TaskDef<ProfileLearnInput, Parsed, LearnedProfile> = {
     const points: LearnedProfile["points"] = [];
     for (const pt of p.points) {
       const rows = [...new Set(pt.rows.filter((n) => Number.isInteger(n) && sample.has(n)))].slice(0, MAX_ROWS);
-      const text = pt.text.replace(/\s+/g, " ").trim().slice(0, MAX_TEXT);
+      const text = cutAtWord(pt.text.replace(/\s+/g, " ").trim(), MAX_TEXT);
       if (rows.length && text) points.push({ key: pt.key, text, rows });
       if (points.length >= MAX_POINTS) break;
     }

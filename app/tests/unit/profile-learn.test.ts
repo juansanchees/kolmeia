@@ -6,6 +6,7 @@ import { FakeTransport } from "../engine/fake-ai";
 
 vi.mock("server-only", () => ({}));
 const { learnProfile, profileDef, profileEstimateUsd } = await import("@/lib/ai/profile-tasks");
+const { cutAtWord } = await import("@/lib/ai/profile-tasks");
 const { reserveFor } = await import("@/lib/ai/gateway");
 const { MODELS } = await import("@/lib/ai/models");
 const { UNTRUSTED } = await import("@/lib/ai/prompts/shared");
@@ -49,7 +50,7 @@ describe("profile_learn", () => {
   test("prompt asks for Portuguese point texts and English search queries", () => {
     expect(profileDef.system).toMatch(/text of every point is written in Brazilian Portuguese/);
     expect(profileDef.system).toMatch(/search_queries: keep them in English/);
-    expect(profileDef.promptVersion).toBe("profile-learn-2026-11-15.1");
+    expect(profileDef.promptVersion).toBe("profile-learn-2026-11-15.2");
   });
 
   test("sampleRows keeps every city, at most 200 rows, the same way every time", () => {
@@ -181,5 +182,22 @@ describe("profile_learn", () => {
     expect(reserved).toHaveLength(1);
     expect(reserved[0].reserveUsd).toBe(profileEstimateUsd());
     expect(profileEstimateUsd()).toBe(reserveFor(profileDef));
+  });
+});
+
+describe("cutAtWord", () => {
+  test("long Portuguese text is cut at a word with an ellipsis", () => {
+    const long = "Quase todas as empresas são pequenas construtoras familiares, mas poucas são grandes, como a Suffolk Exemplo (linhas 49 e 50), com obras em Quincy, Medford e Somerville ao longo do ano inteiro e muito mais texto ainda aqui.";
+    const out = cutAtWord(long, 200);
+    expect(out.length).toBeLessThanOrEqual(200);
+    expect(out.endsWith("…")).toBe(true);
+    expect(long.startsWith(out.slice(0, -1))).toBe(true);
+    expect(long[out.length - 1]).toBe(" ");
+  });
+  test("short text is unchanged", () => {
+    expect(cutAtWord("Texto curto.", 200)).toBe("Texto curto.");
+  });
+  test("no whitespace: hard cut", () => {
+    expect(cutAtWord("a".repeat(300), 200)).toBe("a".repeat(199) + "…");
   });
 });
