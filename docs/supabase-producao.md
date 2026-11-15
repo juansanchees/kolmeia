@@ -200,21 +200,38 @@ Envio real continua exigindo os 4 cadeados (C12 completo, chave do dono, `SCHEDU
 
 ## 5. Dados
 
-| Decisão | Padrão |
+**Decidido (15/11/2026, Juan): o prod NÃO começa vazio.** Os dados reais do dev vão para o prod. O workspace fictício de teste, os segredos e os logs do relógio ficam de fora.
+
+| Vai para o prod | Fica de fora |
 |---|---|
-| Começar **vazio**, sem copiar leads do dev | sim, padrão |
-| Copiar dados do dev | só se o Juan decidir. Aí: dump só de tabelas escolhidas, rever RLS/`workspace_id`/`owner_id` (ids de usuário do dev não existem no prod) e rodar as pré-checagens 3 e 4 da seção 2 (?) |
-| Seeds | o schema não depende de seed para subir (? confirmar tabelas com linhas iniciais: `scheduler_state`, `ai_limits`, `workspace_settings`) |
+| Workspace real e seu dono: `auth.users` + `auth.identities` com o mesmo id, para manter os vínculos | Workspace "TESTE relógio (fictício)", com tudo dele e o usuário fictício. Hoje todo e-mail, caixa, supressão e campanha do dev é desse workspace |
+| Leads, `lead_fields`, importações, pesquisas, agentes, qualificador e sua fila/log, perfis, `ai_calls`, `ai_access`, `ai_limits`, `source_runs` | `source_connections` (token do Apify cifrado: cadastrar de novo no prod, já rotacionado) e `mailboxes` (senha de caixa cifrada) |
+| | `scheduler_state` (o prod tem token próprio, passo 90), `*_ticks`, `scheduler_runs`, `workspace_invites` |
+
+Linhas iniciais criadas pelas migrações: `scheduler_state` (1) e `ai_limits` (1). Os dados trocam `ai_limits` pela linha do dev; `scheduler_state` fica a do prod.
+
+Como gerar e aplicar (testado por inteiro num banco local igual ao prod):
+1. Rodar o backup (seção 8) e restaurá-lo num container descartável.
+2. No container, rodar `.superpowers/prod/transfer-build.sql`, que apaga o que fica de fora.
+3. Fazer o `pg_dump --data-only` do container e guardar em `~/kolmeia-backups/<data>/transfer/`. Esse arquivo tem dados reais e nunca entra no git.
+4. Rodar `zsh kolmeia-prod-setup.sh <ref> <pooler-host>` (fica na pasta acima do repo). O script pede a senha sem mostrar e para se o banco não estiver vazio. Ele aplica a seção 1, as migrações, os passos 89/90/91 (grants, token, relógios **desligados**), o usuário e os dados (`session_replication_role = replica`, uma transação), e roda as checagens (92, contagens e acesso).
 
 ## 6. Rollback
 
 | Situação | Ação |
 |---|---|
 | Algo errado no app novo | na Vercel, voltar as 2 `NEXT_PUBLIC_*` para o dev e redeploy (o dev segue intacto). Ou "Promote" do deploy anterior |
+| **Voltar ao dev depois da troca de 15/11/2026** | Fazer na ordem: (1) prod: `select cron.alter_job(jobid, active := false) from cron.job;`; (2) dev: o mesmo com `active := true`; (3) `vercel --global-config ~/.vercel-kolmeia rollback kolmeia-g4k7mxbqq-kolmeia-team.vercel.app`. Esse deploy já tem as chaves do dev embutidas. Num redeploy depois disso, voltar antes as 2 `NEXT_PUBLIC_*` para o dev (a chave anon do dev está no painel do dev). O que foi criado no prod depois da troca não existe no dev |
 | Cron fazendo bobagem | `select cron.unschedule('kolmeia-hunter'); select cron.unschedule('kolmeia-tick');` + `token_sha256 = null` (falha fechada) |
 | Migração falhou no meio | anotar o arquivo e o erro exato; não editar migração já aplicada; corrigir com migração nova numerada. Projeto ainda vazio: pode recriar o projeto do zero |
 | Vazou token/chave | token do relógio: bloco "ROTATE THE TOKEN" do `scheduler_cron.sql`; `MAILBOX_ENC_KEY`: gerar nova, `MAILBOX_ENC_KEY_PREVIOUS` = antiga, reconectar caixas, esvaziar a antiga; `ANTHROPIC_API_KEY`: revogar na Console |
 | Envio real saiu sem querer | parada de emergência no app, remover `SCHEDULER_REAL_SEND`, desligar a chave do dono, `unschedule` |
+
+## 6b. Plano Free: pausa por inatividade
+
+- Doc oficial (supabase.com/docs/guides/platform/free-project-pausing): o projeto pausa depois de 7 dias de pouca "user database activity". O dono recebe um e-mail de aviso cerca de 1 semana antes. "Resume project" devolve dados e configurações em até 1 ano.
+- **Não está comprovado** que o pg_cron/pg_net conta como atividade. A doc não define "user". Não contar com os relógios para manter o projeto ativo.
+- O que conta, segundo a doc: abrir o projeto no painel e chamadas de API do app. Até decidir: deixar o e-mail de aviso chegar ao Juan e responder abrindo o painel. Se for usar o app todo dia, o uso real basta. Só o plano Pro nunca pausa (decisão do Juan, é pago).
 
 ## 7. Checklist final (marcar no dia)
 
@@ -226,3 +243,39 @@ Envio real continua exigindo os 4 cadeados (C12 completo, chave do dono, `SCHEDU
 - [ ] Vercel: variáveis certas, `SCHEDULER_REAL_SEND` ausente, redeploy feito
 - [ ] Jobs: hunter a cada minuto, e-mail `*/5` só ensaio; ticks verdes
 - [ ] Smoke tests ok
+
+## 8. Backup e recuperação (testado em 15/11/2026)
+
+**Backup:** `zsh kolmeia-backup-dev.sh`, na pasta acima do repo. Para o prod, trocar `REF` e `HOST` no script. Ele pede a senha do banco sem mostrá-la e roda o `pg_dump` 17 no Docker pelo session pooler. Gera em `~/kolmeia-backups/<data-hora>/` (pasta 700, fora do git):
+- `public.dump`: estrutura e dados do app;
+- `auth_cron.sql`: `auth.users`, `auth.identities` e `cron.job`, com nomes de coluna;
+- `schema.sql`: só a estrutura, para comparar.
+
+Logo depois, rodar `.superpowers/prod/baseline.sql` no banco de origem. Ele dá a impressão digital: linhas por tabela e contagem + md5 de funções, políticas, constraints, índices, gatilhos, RLS e grants.
+
+**Não restaurar o `public.dump` inteiro.** Testado: o Supabase dá grants padrão a `anon` e `authenticated` em todo objeto novo, e o dump não revoga. O resultado foi `anon` com ALL nas 51 tabelas e EXECUTE em 228 funções. O RLS ainda filtra as linhas, mas é uma brecha.
+
+**Recuperação certa (testada):** sempre num projeto novo e vazio, nunca por cima do dev ou do prod.
+1. Estrutura pelas migrações do repo, no mesmo commit do backup: seção 1, migrações em ordem sem 0012, depois 89 (grants), 90 (token novo, porque o Vault não está no dump) e 91 (relógios desligados).
+2. Usuários: as linhas `INSERT INTO auth.*` do `auth_cron.sql`. Os jobs não: o 91 recria os jobs, desligados.
+3. Dados: `pg_restore --data-only -L <lista sem scheduler_state>`. Antes, apagar a linha inicial de `ai_limits`. Carregar via `psql` com `set session_replication_role = replica;` no início e tudo em uma transação (`-1`), sem gatilhos, que somariam custo em dobro. O `PGOPTIONS` é recusado para o `postgres`; o `SET` na sessão funciona.
+4. Conferir:
+   - `baseline.sql`: linhas iguais às do backup (os `*_ticks` e `scheduler_runs` crescem a cada minuto no dev; diferença pequena ali é normal);
+   - `92-checks.sql`;
+   - `restore-verify.sql`: revalida todas as FK e CHECK, testa dono, closer fictícia e anon, e termina em ROLLBACK.
+5. Com tudo certo: trocar a Vercel (seção 4) e ligar os relógios (`cron.alter_job(..., active := true)`).
+
+Resultado do teste (backup do dev de 15/11, container `supabase/postgres:17.12` descartável):
+
+| Checagem | Resultado |
+|---|---|
+| Linhas por tabela (51) | iguais ao backup (731 leads, 7001 `lead_fields`) |
+| Funções, políticas, constraints, índices, gatilhos | md5 iguais ao dev (287/86/478/132/62) |
+| RLS forçado | 51/51 |
+| Grants de funções | md5 igual ao dev, depois do passo 89 |
+| Grants de tabelas para `service_role` | diferem só na imagem local (padrão dela). Conferir no projeto real |
+| Integridade | 410 FK/CHECK revalidadas sem erro |
+| Acesso | dono vê 731; closer vê só os 2 leads entregues e nenhuma campanha ou caixa; edição de lead alheio negada; anon negado |
+| `92-checks` | limpo; envio real travado (`clock_real` 0, C12 0, campanhas em ensaio) |
+
+Limites do teste: a imagem local tem um `auth` mais antigo, então o teste criou as colunas que faltavam. Com isso, o login no app restaurado não foi testado. O teste de verdade do login é o do prod (seção 4/smoke).
