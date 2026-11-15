@@ -61,3 +61,11 @@ export async function agentCallStats(db: SupabaseClient, agentId: string, now: D
   const calls = (await callsOf(db, [...new Set(items.map((i) => i.lead_id))])).filter((c) => nyDay(new Date(c.called_at)) === today);
   return callAgentMetrics(items, calls);
 }
+
+/** Size of today's list per call agent (RLS decides which rows are visible). */
+export async function listSizesToday(db: SupabaseClient, now: Date = new Date()): Promise<Record<string, number>> {
+  const { data } = await db.from("call_list_items").select("agent_id").eq("list_date", nyDay(now)).limit(5000);
+  const out: Record<string, number> = {};
+  for (const r of (data ?? []) as { agent_id: string }[]) out[r.agent_id] = (out[r.agent_id] ?? 0) + 1;
+  return out;
+}

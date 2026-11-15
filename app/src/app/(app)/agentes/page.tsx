@@ -5,6 +5,7 @@ import { hasPlaces } from "@/lib/qualifier/places-config";
 import { createClient } from "@/lib/supabase/server";
 import { SupabaseAgentStore } from "@/lib/agents/store";
 import type { AgentRow } from "@/lib/agents/types";
+import { listSizesToday } from "@/lib/calls/list-queries";
 import { AgentList } from "@/components/agents/AgentList";
 import { Notice } from "@/components/email/bits";
 import { QualifierCard } from "@/components/qualifier/QualifierCard";
@@ -18,6 +19,7 @@ export default async function AgentsPage() {
   const ai = hasAi();
   const supabase = await createClient();
   let agents: AgentRow[] = [];
+  let listSizes: Record<string, number> = {};
   let runs: RunListItem[] = [];
   let qualifier: QualifierStatus | null = null;
   let qualifierFailed = false;
@@ -26,6 +28,7 @@ export default async function AgentsPage() {
     qualifier = (q as QualifierStatus | null) ?? null;
     qualifierFailed = Boolean(qErr) || !qualifier;
     agents = await new SupabaseAgentStore(supabase).listAgents(workspace.id);
+    if (agents.some((a) => a.type === "call")) listSizes = await listSizesToday(supabase);
     const { data } = await supabase
       .from("research_runs")
       .select("id, title, status, is_partial, created_at")
@@ -51,7 +54,7 @@ export default async function AgentsPage() {
             </Link>
           </p>
         ) : (
-          <AgentList agents={agents} />
+          <AgentList agents={agents} listSizes={listSizes} />
         )}
       </section>
       <section aria-labelledby="one-off" className="flex flex-col gap-4">

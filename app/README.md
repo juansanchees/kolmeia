@@ -150,3 +150,46 @@ Todas respondem com redirecionamento permanente (308), e a query string é manti
 | `/email/campanhas/:id` | `/campanhas/:id` |
 | `/email/campanhas/:id/revisar` | `/campanhas/:id/revisar` |
 | `/email/respostas` | `/campanhas/respostas` |
+
+## F5: closer, ligação e Funil
+
+### Ordem de publicação (importante)
+**Aplique as migrações `0016` a `0020` no Supabase ANTES de publicar o app.** `LEAD_COLUMNS` (`src/lib/leads/types.ts`) seleciona colunas novas de `leads` (`handed_off_at`, `handed_off_by`, `closer_brief`, `do_not_call`, `do_not_call_at`); com o app novo e o banco antigo, a lista de leads falha. Ordem: 0016, 0017, 0018, 0019, 0020 (SQL Editor, como `postgres`), depois o deploy.
+
+### Papéis
+| Papel | Vê | Faz |
+|---|---|---|
+| owner | tudo | tudo, mais Equipe (convidar a closer) |
+| sdr | Agentes, Leads, Campanhas, Funil | passa lead pra closer, agente Ligação, liga |
+| closer | só LEADS (Todos, Com a closer, Ligar) | vê só os leads atribuídos a ela, liga, marca ganho/perdido |
+
+### Convidar a closer (Configurações > Equipe, só o dono)
+1. Dono informa nome e e-mail da closer e clica em convidar: o app gera um **link** (`/convite/<token>`). A Kolmeia **não envia e-mail**; o dono copia o link e manda ele mesmo.
+2. A closer abre o link, cria a conta **com o mesmo e-mail do convite** e confirma o e-mail que o **Supabase** manda (é o e-mail de confirmação do cadastro, não da Kolmeia).
+3. Ela abre o link de novo e clica **Entrar na equipe**. Cai em LEADS, sem leads, só com o menu LEADS. Conta que já tem espaço próprio não aceita convite.
+
+### Passar pra closer
+No lead, **Passar pra closer**: escolher a closer e escrever o próximo passo. O resumo (quem é, o que disse, próximo passo, prova) é montado **sem IA**. O lead vira `with_closer` (ou continua `meeting`), recebe a closer como responsável e aparece só para ela e em **Com a closer**. Ganho e perdido são marcados à mão (com confirmação) pelo sender ou pela closer atribuída.
+
+### Agente Ligação e lista do dia
+- **Agentes > Novo agente > Ligação** (3 perguntas: quais empresas, quantas por dia, quem liga). Nasce pausado; **Ligar** liga e **Pausar** desliga. Não é discador nem voz de IA.
+- Regras da lista (`build_call_list`): só lead `new` ou `call_list`, com telefone válido, nível mínimo e temperaturas do filtro, `do_not_call = false`, que **não está com outra pessoa** (nunca tira lead de quem já pegou), no máximo `per_day` por dia (dia de Nova York), sem repetir no mesmo dia. Montar a lista atribui o lead a quem liga. Dono/SDR podem **pôr na lista** um lead à mão (não conta no limite).
+- A lista do dia fica em **Leads > Ligar**; o agente mostra "{n} na lista" em Agentes.
+
+### Tela de ligação
+Botão com `tel:` (o celular faz a ligação), resumo, prova e um toque no resultado, depois **Salvar e próximo**. **Sem gravação, sem SMS** (em Massachusetts gravar exige o consentimento de todas as partes; SMS frio é proibido). **Só empresas (B2B)**: número residencial exige checar a lista nacional Do Not Call antes, e a Kolmeia ainda não faz essa consulta. Meta: menos de 1 minuto por registro (conferir à mão).
+
+### Resultado da ligação e status
+| Resultado | Status do lead |
+|---|---|
+| `meeting_booked` | `meeting` |
+| `not_interested` | `lost` |
+| `do_not_call` | `lost` e bloqueado para sempre (`do_not_call = true`) |
+| `no_answer`, `voicemail`, `gatekeeper`, `talked`, `wrong_number` | `new` vira `call_list`; os demais não mudam |
+`won` e `discarded` nunca mudam. É a mesma tabela em `lead_status_after_call` (SQL) e `statusAfterCall` (`src/lib/calls/view.ts`).
+
+### `do_not_call` e o envio de e-mail (F4)
+`leads.do_not_call` vale para **todos os canais**. Listas de ligação já o respeitam. **Os portões de envio do F4 (campanhas de e-mail) devem ler `leads.do_not_call` e nunca escrever para esse lead.** Isso ainda é trabalho do F4; hoje só existe o gancho `lead_in_active_campaign`. Observação: `not_interested` ainda não interrompe e-mails em andamento (F4 D5).
+
+### Funil
+**Leads > Funil** (dono e SDR): tabela de origem (agente, avulso ou lista importada) por status, com linha de total e coluna de descartados à parte. Só números, sem IA, a partir da mesma lista de LEADS.
