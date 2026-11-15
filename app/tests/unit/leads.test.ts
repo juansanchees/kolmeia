@@ -23,6 +23,7 @@ function item(best: Partial<CandidateRow>, o: { status?: LeadStatus; agent?: str
     id: `l${n}`, workspace_id: "w", best_candidate_id: `c${n}`, status: o.status ?? "new",
     origin_kind: o.agent ? "agent" : "one_off", origin_agent_id: o.agent ?? null, origin_run_id: "r1", origin_import_id: null, owner_id: null,
     first_seen_at: "2026-11-01T00:00:00Z", last_seen_at: "2026-11-01T00:00:00Z", level: o.level ?? 0, level_note: null,
+    handed_off_at: null, handed_off_by: null, closer_brief: null, do_not_call: false, do_not_call_at: null,
   };
   const b = cand({ id: `c${n}`, ...best });
   return { lead, best: b, display: displayOf(b, []), agentName: o.agentName ?? null, importName: null, proofOk: o.proofOk ?? 0 };
@@ -37,6 +38,7 @@ function importOnly(fields: LeadFieldRow[], o: { importName?: string | null } = 
   const lead: LeadRow = {
     id: `l${n}`, workspace_id: "w", best_candidate_id: null, status: "new", origin_kind: "import", origin_agent_id: null, origin_run_id: null,
     origin_import_id: "imp1", owner_id: null, first_seen_at: "2026-11-01T00:00:00Z", last_seen_at: "2026-11-01T00:00:00Z", level: 0, level_note: null,
+    handed_off_at: null, handed_off_by: null, closer_brief: null, do_not_call: false, do_not_call_at: null,
   };
   return { lead, best: null, display: displayOf(null, fields), agentName: null, importName: o.importName === undefined ? "Lista Teste" : o.importName, proofOk: 0 };
 }

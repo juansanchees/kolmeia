@@ -81,7 +81,8 @@ describe("F3d fontes conectadas nav", () => {
   });
   test("the closer sees only Empresa in settings; owner and sdr see every tab", () => {
     expect(settingsTabsFor("closer").map((i) => i.href)).toEqual(["/configuracoes/empresa"]);
-    for (const role of ["owner", "sdr"] as const) expect(settingsTabsFor(role)).toEqual(SETTINGS_TABS);
+    expect(settingsTabsFor("sdr")).toEqual(SETTINGS_TABS);
+    expect(settingsTabsFor("owner")).toEqual([...SETTINGS_TABS, { href: "/configuracoes/equipe", label: "Equipe" }]);
   });
   test("the page is not found for a closer and read-only for the sdr", () => {
     const page = read("src/app/(app)/configuracoes/fontes/page.tsx");

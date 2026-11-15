@@ -19,9 +19,10 @@ export const SETTINGS_TABS: readonly NavItem[] = [
   { href: "/configuracoes/fontes", label: t.settings.nav.sources },
 ];
 
-/** The closer sees only Empresa: mailboxes, blocked list and Fontes conectadas are for owner and sdr (RLS, 0017). */
+/** The closer sees only Empresa: mailboxes, blocked list and Fontes conectadas are for owner and sdr (RLS, 0017). Equipe is for the owner only (0020). */
 export function settingsTabsFor(role: Role): readonly NavItem[] {
-  return role === "closer" ? SETTINGS_TABS.filter((i) => i.href === "/configuracoes/empresa") : SETTINGS_TABS;
+  if (role === "closer") return SETTINGS_TABS.filter((i) => i.href === "/configuracoes/empresa");
+  return role === "owner" ? [...SETTINGS_TABS, { href: "/configuracoes/equipe", label: t.team.tab }] : SETTINGS_TABS;
 }
 
 export const LEADS_TABS: readonly NavItem[] = [

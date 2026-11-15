@@ -133,6 +133,10 @@ describe("proof that RLS is really enforced in PGlite", () => {
         "prospect_visible_to_assignee", "message_visible_to_assignee",
         // 0018 (C12 checklist: owner-only approval; c12_ready is NOT definer)
         "approve_c12_item",
+        // 0020 part A (closer invites by link, people list, hand-off, won/lost; is_workspace_closer and
+        // release_member_leads have no client grant)
+        "is_workspace_closer", "create_workspace_invite", "revoke_workspace_invite", "invite_preview", "accept_workspace_invite",
+        "list_workspace_people", "release_member_leads", "hand_off_lead", "set_lead_status",
       ].sort(),
     );
     for (const r of rows) expect(r.proconfig).toContain("search_path=\"\"");

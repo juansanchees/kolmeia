@@ -16,7 +16,7 @@ const SUPABASE_BOOTSTRAP = `
   create role service_role nologin noinherit bypassrls;
 
   create schema auth;
-  create table auth.users (id uuid primary key);
+  create table auth.users (id uuid primary key, email text);
   create function auth.uid() returns uuid
     language sql stable
     as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
@@ -55,8 +55,8 @@ export class TestDb {
   }
 
   /** A signed-up user. `ai` also puts them on the AI allowlist (public.ai_access, 0004), as the operator would. */
-  async addUser(id: string, ai = true): Promise<void> {
-    await this.admin("insert into auth.users (id) values ($1)", [id]);
+  async addUser(id: string, ai = true, email?: string): Promise<void> {
+    await this.admin("insert into auth.users (id, email) values ($1, $2)", [id, email ?? null]);
     if (ai) await this.grantAi(id);
   }
 

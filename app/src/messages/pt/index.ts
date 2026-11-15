@@ -13,8 +13,10 @@ import { qualifier } from "./qualifier";
 import { research } from "./research";
 import { sources } from "./sources";
 import { spend } from "./spend";
+import { handoff } from "./handoff";
+import { team } from "./team";
 
-export const pt = { ...common, ...areas, leads, agents, ai, research, email, imports, sources, qualifier, spend, profile, coverage } as const;
+export const pt = { ...common, ...areas, leads, agents, ai, research, email, imports, sources, qualifier, spend, profile, coverage, team, handoff } as const;
 
 export type Messages = typeof pt;
 export const t = pt;
