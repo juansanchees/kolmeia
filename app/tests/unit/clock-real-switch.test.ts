@@ -37,8 +37,8 @@ describe("setClockReal action source", () => {
 describe("switch UI source", () => {
   test("confirm step states the risk and the server lock", () => {
     const msgs = readFileSync(path.join(root, "src/messages/pt/email.ts"), "utf8");
-    expect(msgs).toContain("O relógio vai enviar e-mails reais sozinho, dentro dos limites; também é preciso o administrador ligar ${SERVER_SWITCH} no servidor.");
-    expect(msgs).toContain('"SCHEDULER_" + "REAL_SEND"');
+    expect(msgs).toContain("O relógio vai enviar e-mails reais sozinho, dentro dos limites; também é preciso o administrador ligar {env} no servidor.");
+    expect(ui).toContain("envName");
   });
   test("Ligar is gated, Desligar uses canTurnOff", () => {
     expect(ui).toContain("disabled={!gate.canTurnOn || pending}");

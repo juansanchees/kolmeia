@@ -20,7 +20,7 @@ export function clockRealGate({ approved, total, isOwner, enabled }: { approved:
 }
 
 /** C12 (0018): the owner approves each item by hand with a note; everyone else sees the status only. */
-export function C12Checklist({ campaignId, approvals, isOwner, clock, userId }: { campaignId: string; approvals: C12Approval[]; isOwner: boolean; clock: ClockReal; userId: string }) {
+export function C12Checklist({ campaignId, approvals, isOwner, clock, userId, envName }: { campaignId: string; approvals: C12Approval[]; isOwner: boolean; clock: ClockReal; userId: string; envName: string }) {
   const done = new Map(approvals.map((a) => [a.item, a]));
   const count = ITEMS.filter((i) => done.has(i)).length;
   return (
@@ -46,12 +46,12 @@ export function C12Checklist({ campaignId, approvals, isOwner, clock, userId }: 
           </li>
         ))}
       </ul>
-      <ClockRealSwitch campaignId={campaignId} missing={ITEMS.length - count} total={ITEMS.length} isOwner={isOwner} clock={clock} userId={userId} />
+      <ClockRealSwitch campaignId={campaignId} missing={ITEMS.length - count} total={ITEMS.length} isOwner={isOwner} clock={clock} userId={userId} envName={envName} />
     </Card>
   );
 }
 
-function ClockRealSwitch({ campaignId, missing, total, isOwner, clock, userId }: { campaignId: string; missing: number; total: number; isOwner: boolean; clock: ClockReal; userId: string }) {
+function ClockRealSwitch({ campaignId, missing, total, isOwner, clock, userId, envName }: { campaignId: string; missing: number; total: number; isOwner: boolean; clock: ClockReal; userId: string; envName: string }) {
   const C = M.clock;
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
@@ -77,12 +77,12 @@ function ClockRealSwitch({ campaignId, missing, total, isOwner, clock, userId }:
         <Badge tone={clock.enabled ? "ok" : "warn"}>{clock.enabled ? C.on : C.off}</Badge>
       </div>
       <p className="m-0 break-words text-[13px] text-muted">{state}</p>
-      <p className="m-0 break-words text-[13px] text-muted">{C.serverNote}</p>
+      <p className="m-0 break-words text-[13px] text-muted">{fill(C.serverNote, { env: envName })}</p>
       {!isOwner && <p className="m-0 text-[13px] text-muted">{C.viewOnly}</p>}
       {isOwner && !clock.enabled && gate.missing > 0 && <Notice tone="warn">{fill(C.needsC12, { n: gate.missing })}</Notice>}
       {isOwner && confirming && (
         <Notice tone="warn">
-          <strong>{C.confirmTitle}</strong> {C.confirmBody}
+          <strong>{C.confirmTitle}</strong> {fill(C.confirmBody, { env: envName })}
         </Notice>
       )}
       {isOwner && (

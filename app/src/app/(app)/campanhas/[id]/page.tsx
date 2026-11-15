@@ -9,6 +9,7 @@ import { emailSession } from "@/lib/email/session";
 import { CAMPAIGN_COLUMNS, MESSAGE_COLUMNS, PROSPECT_COLUMNS, type CampaignRow, type MessageRow, type ProspectRow } from "@/lib/email/types";
 import { confirmSuggestedEmail, retryMessage, setCampaignStatus, setProspectSkipped, setSendMode, writeTemplateDrafts } from "../actions";
 import { ActionButton } from "@/components/email/ActionButton";
+import { REAL_SEND_ENV_NAME } from "@/lib/email/config";
 import { C12Checklist, type C12Approval } from "@/components/email/C12Checklist";
 import { Badge, Card, CardTitle, Label, NextStep, Notice } from "@/components/email/bits";
 import { DraftDriver, SendDriver } from "@/components/email/Drivers";
@@ -216,7 +217,7 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
         </Card>
       </div>
 
-      {s.canSend && <C12Checklist campaignId={id} approvals={c12} isOwner={s.workspace.role === "owner"} clock={clock} userId={s.user.id} />}
+      {s.canSend && <C12Checklist campaignId={id} approvals={c12} isOwner={s.workspace.role === "owner"} clock={clock} userId={s.user.id} envName={REAL_SEND_ENV_NAME} />}
 
       <Card aria-labelledby="pros-title">
         <CardTitle id="pros-title">

@@ -1,9 +1,6 @@
 // Strings of the E-mail area (Portuguese UI; the e-mails themselves are written in English).
 import { ai as aiMessages } from "./ai";
 
-// Name shown to the owner only (text); built in two parts so the guard "the name lives only in config.ts" keeps meaning "nothing reads or sets it".
-const SERVER_SWITCH = "SCHEDULER_" + "REAL_SEND";
-
 export const email = {
   title: "Campanhas de e-mail",
   stop: {
@@ -254,11 +251,11 @@ export const email = {
       you: "você",
       other: "outro dono",
       needsC12: "Para ligar, os 7 itens do checklist acima precisam estar aprovados (faltam {n}).",
-      serverNote: `Também é preciso o administrador ligar ${SERVER_SWITCH} no servidor.`,
+      serverNote: "Também é preciso o administrador ligar {env} no servidor.",
       turnOn: "Ligar",
       turnOff: "Desligar",
       confirmTitle: "Ligar o envio real pelo relógio?",
-      confirmBody: `O relógio vai enviar e-mails reais sozinho, dentro dos limites; também é preciso o administrador ligar ${SERVER_SWITCH} no servidor.`,
+      confirmBody: "O relógio vai enviar e-mails reais sozinho, dentro dos limites; também é preciso o administrador ligar {env} no servidor.",
       confirmYes: "Sim, ligar",
       cancel: "Cancelar",
       viewOnly: "Só o dono liga ou desliga.",
