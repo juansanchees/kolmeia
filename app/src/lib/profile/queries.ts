@@ -80,3 +80,10 @@ export async function profileBaseline(db: SupabaseClient, p: ProfileRow, agentId
   const all: Dedupable[] = rows.map((r) => ({ name: r.data.name ?? "", website: r.data.website ?? null, phone: r.data.phone ?? null }));
   return baselineReport({ found: cands, all, hot: [], schedule: agent.schedule as Schedule });
 }
+
+/** Id of the newest still-proposed profile of an import (training twice would pay for a second, redundant proposal). */
+export async function openProposalId(db: SupabaseClient, importId: string): Promise<string | null> {
+  const { data, error } = await db.from("learned_profiles").select("id").eq("import_id", importId).eq("status", "proposed").order("created_at", { ascending: false }).limit(1);
+  if (error) throw new Error(`openProposalId: ${error.message}`);
+  return ((data ?? [])[0] as { id: string } | undefined)?.id ?? null;
+}

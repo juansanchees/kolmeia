@@ -7,6 +7,7 @@ import { defaultTransport } from "@/lib/ai/gateway";
 import { isAiError, type AiErrorCode } from "@/lib/ai/errors";
 import { learnProfile, SOCIAL } from "@/lib/ai/profile-tasks";
 import { sessionLedger } from "@/lib/ai/session-ledger";
+import { openProposalId } from "@/lib/profile/queries";
 import { sampleRows } from "@/lib/profile/sample";
 import { POINT_KEYS, type LearnedProfile, type TrainingRow } from "@/lib/profile/types";
 import { COMPANY_TYPES } from "@/lib/research/types";
@@ -57,6 +58,9 @@ export async function trainProfileAction(importId: string): Promise<{ ok: true; 
   if (!db) return { ok: false, error: E.failed };
   const { data: imp } = await db.from("lead_imports").select("id, list_name, status, use_as_training").eq("id", importId).eq("workspace_id", workspace.id).maybeSingle();
   if (!imp || !imp.use_as_training || imp.status !== "done") return { ok: false, error: E.notTraining };
+
+  const open = await openProposalId(db, importId).catch(() => null);
+  if (open) return { ok: true, profileId: open };
 
   const rows: TrainingRow[] = [];
   for (let from = 0; ; from += PAGE) {

@@ -16,3 +16,6 @@ export function cardLines(p: LearnedProfile): { key: PointKey; label: string; te
     p.points.filter((pt) => pt.key === key).map((pt) => ({ key, label: t.profile.keys[key], text: pt.text, cite: citeRows(pt.rows) })),
   );
 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const isUuid = (s: string): boolean => UUID_RE.test(s);
