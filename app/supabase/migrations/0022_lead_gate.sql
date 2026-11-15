@@ -2,8 +2,10 @@
 --   * A lead that must not get e-mail (lead_blocks_email of 0021: discarded, do_not_call, and D5 with_closer, meeting,
 --     won, lost) stops every campaign it is in: its prospects in active|skipped|done -> stopped, their waiting steps
 --     cancelled. stop_reason / cancel_reason: 'do_not_call', 'lead_discarded', else 'lead_status' (D5).
---     The prospects are found by email_prospects.lead_id AND through the research candidate (older rows, or a candidate
---     linked to a lead after the import). Forward only: un-discarding the lead restarts nothing.
+--     The prospects are found by email_prospects.lead_id, else through the research candidate (older rows, or a
+--     candidate linked to a lead after the import). Waiting messages are locked before prospects (the claim's order).
+--     do_not_call / discarded also cancel a person's waiting answers (kind 'reply') at once. Forward only:
+--     un-discarding the lead restarts nothing.
 --   * claim_next_email_core (click and clock share it): re-created from the 0007 body (the newest; 0018 only wraps it
 --     in claim_next_email with the C12 check, which stays as it is). Changes: (1) the campaign row is taken FOR SHARE
 --     first, so a claim and set_campaign_send_mode ("go real", FOR UPDATE) never interleave (E3 review, 40P01);
@@ -68,25 +70,42 @@ set search_path = ''
 as $$
 declare
   v_reason text;
-  p record;
+  v_prospects uuid[];
+  p uuid;
 begin
   if not public.lead_blocks_email(new.id) then
     return null;
   end if;
   v_reason := public.lead_stop_reason(new.id);
+  -- every prospect of the lead: its own lead_id, else its research candidate's lead (older rows, late links)
+  select array_agg(x.id order by x.id) into v_prospects
+    from public.email_prospects x
+    left join public.research_candidates k on k.id = x.candidate_id and k.workspace_id = x.workspace_id
+   where x.workspace_id = new.workspace_id
+     and coalesce(x.lead_id, k.lead_id) = new.id;
+  if v_prospects is null then
+    return null;
+  end if;
+  -- lock order as in the claim: waiting messages first (by id), then prospects (by id)
+  perform 1 from public.email_messages m
+    where m.prospect_id = any (v_prospects) and m.status in ('draft', 'approved', 'rejected')
+    order by m.id
+      for update;
   for p in
-    select x.id
-      from public.email_prospects x
-      left join public.research_candidates k on k.id = x.candidate_id and k.workspace_id = x.workspace_id
-     where x.workspace_id = new.workspace_id
-       and (x.lead_id = new.id or k.lead_id = new.id)
-       and x.status in ('active', 'skipped', 'done')
+    select x.id from public.email_prospects x
+     where x.id = any (v_prospects) and x.status in ('active', 'skipped', 'done')
      order by x.id
-       for update of x
+       for update
   loop
-    update public.email_prospects set status = 'stopped', stop_reason = v_reason where id = p.id;
-    perform public.cancel_pending_steps(p.id, v_reason);
+    update public.email_prospects set status = 'stopped', stop_reason = v_reason where id = p;
+    perform public.cancel_pending_steps(p, v_reason);
   end loop;
+  -- do_not_call / discarded: a person's waiting answer to the lead is cancelled too (lead_blocks_message)
+  if v_reason in ('do_not_call', 'lead_discarded') then
+    update public.email_messages m
+       set status = 'cancelled', cancel_reason = v_reason, updated_at = now()
+     where m.prospect_id = any (v_prospects) and m.kind = 'reply' and m.status in ('draft', 'approved', 'rejected');
+  end if;
   return null;
 end;
 $$;

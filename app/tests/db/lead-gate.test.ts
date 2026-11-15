@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { t } from "@/messages/pt";
-import { TestDb, ageEmailClaims, anonWithToken, as, openGates, setSchedulerToken, UUID_A } from "./helpers";
+import { TestDb, ageEmailClaims, anonWithToken, as, openGates, setSchedulerToken, UUID_A, UUID_C } from "./helpers";
 import { CIPHER, TOKEN, createOwner } from "./scheduler-seed";
 
 // Migration 0022 (F4 Task 3, C2): the lead's status is the truth. A lead that is discarded, marked do_not_call or moved
@@ -140,6 +140,21 @@ describe("0022 the lead status is the truth (C2)", () => {
     ]);
   });
 
+  test("hand_off_lead (sdr passes the lead to the closer) stops its sequence through the trigger", async () => {
+    await db.addUser(UUID_C);
+    await db.admin("insert into public.workspace_members (workspace_id, user_id, role) values ($1,$2,'closer') on conflict do nothing", [ws, UUID_C]);
+    const s = await leadInCampaign("c2-handoff", [1, 2]);
+    const brief = JSON.stringify({ who: "Pat Doe, facilities manager", what_they_said: "Wants a quote", next_step: "Call Tuesday", evidence_urls: ["https://c2-handoff.example/contact"], model: "manual" });
+    await db.query(as(UUID_A), "select public.hand_off_lead($1,$2,$3::jsonb)", [s.lead, UUID_C, brief]);
+    expect(await prospect(s.prospect)).toEqual({ status: "stopped", stop_reason: "lead_status" });
+    expect(await messages(s.messages)).toEqual([
+      { status: "cancelled", cancel_reason: "lead_status" },
+      { status: "cancelled", cancel_reason: "lead_status" },
+    ]);
+    expect(await lock(s.lead)).toHaveLength(0);
+    expect((await click(s.camp)).outcome).toBe("nothing_due");
+  });
+
   test("un-discarding a lead does not restart anything", async () => {
     const s = await leadInCampaign("c2-undo", [1, 2]);
     await db.admin("update public.leads set status = 'discarded' where id = $1", [s.lead]);
@@ -173,6 +188,13 @@ describe("0022 the lead status is the truth (C2)", () => {
     await db.admin("update public.leads set status = 'with_closer' where id = $1", [closer.lead]);
     await db.admin("update public.leads set do_not_call = true where id = $1", [dnc.lead]);
     await db.admin("update public.leads set status = 'discarded' where id = $1", [gone.lead]);
+    // the trigger cancels the answers of do_not_call / discarded leads at once (before any claim); the others wait
+    expect(await messages([won.answer, closer.answer, dnc.answer, gone.answer])).toEqual([
+      { status: "approved", cancel_reason: null },
+      { status: "approved", cancel_reason: null },
+      { status: "cancelled", cancel_reason: "do_not_call" },
+      { status: "cancelled", cancel_reason: "lead_discarded" },
+    ]);
     expect(await click(won.camp)).toEqual({ outcome: "claimed", message_id: won.answer });
     expect(await click(closer.camp)).toEqual({ outcome: "claimed", message_id: closer.answer });
     expect((await click(dnc.camp)).outcome).toBe("nothing_due");
