@@ -12,7 +12,7 @@ import {
   setMailboxLimit,
   setProspectEmail,
 } from "@/app/(app)/campanhas/actions";
-import { idle } from "@/lib/form-state";
+import { idle, type FormState } from "@/lib/form-state";
 import type { MailboxRow, SenderProfile } from "@/lib/email/types";
 import { Field } from "@/components/ui";
 import { fill, t } from "@/messages/pt";
@@ -111,11 +111,13 @@ export function MailboxLimitForm({ mailboxId, limit }: { mailboxId: string; limi
 // ---------------------------------------------------------------- new campaign
 export function NewCampaignForm({ lists, mailboxes }: { lists: { id: string; name: string }[]; mailboxes: { id: string; email: string }[] }) {
   const [state, action, pending] = useActionState(createCampaign, idle);
+  const [listId, setListId] = useState(lists[0]?.id ?? "");
   const [name, setName] = useState(lists[0]?.name ?? "");
+  const [mailboxId, setMailboxId] = useState(mailboxes[0]?.id ?? "");
   return (
     <form action={action} className="flex flex-col gap-4" noValidate>
       <Field label={M.campaigns.list} htmlFor="list_id">
-        <select id="list_id" name="list_id" className={input} defaultValue={lists[0]?.id} onChange={(e) => setName(lists.find((l) => l.id === e.target.value)?.name ?? name)}>
+        <select id="list_id" name="list_id" className={input} value={listId} onChange={(e) => { setListId(e.target.value); setName(lists.find((l) => l.id === e.target.value)?.name ?? name); }}>
           {lists.map((l) => (
             <option key={l.id} value={l.id}>
               {l.name}
@@ -127,7 +129,7 @@ export function NewCampaignForm({ lists, mailboxes }: { lists: { id: string; nam
         <input id="camp_name" name="name" className={input} value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
       </Field>
       <Field label={M.campaigns.mailbox} htmlFor="mailbox_id">
-        <select id="mailbox_id" name="mailbox_id" className={input} defaultValue={mailboxes[0]?.id}>
+        <select id="mailbox_id" name="mailbox_id" className={input} value={mailboxId} onChange={(e) => setMailboxId(e.target.value)}>
           {mailboxes.map((m) => (
             <option key={m.id} value={m.id}>
               {m.email}
@@ -263,21 +265,26 @@ export function CampaignMailboxesForm({
 
 // ---------------------------------------------------------------- suppressions
 export function SuppressionForm() {
-  const [state, action, pending] = useActionState(addSuppression, idle);
+  const [fields, setFields] = useState({ value: "", reason: "manual", note: "" });
+  const [state, action, pending] = useActionState(async (prev: FormState, fd: FormData) => {
+    const r = await addSuppression(prev, fd);
+    if (r.status === "success") setFields((f) => ({ ...f, value: "", note: "" }));
+    return r;
+  }, idle);
   const e = state.fieldErrors ?? {};
   return (
     <form action={action} className="flex flex-col gap-4" noValidate>
       <Field label={M.blocked.value} htmlFor="sup_value" hint={M.blocked.valueHint} error={e.value}>
-        <input id="sup_value" name="value" className={input} maxLength={254} autoComplete="off" aria-invalid={Boolean(e.value)} />
+        <input id="sup_value" name="value" className={input} maxLength={254} autoComplete="off" value={fields.value} onChange={(ev) => setFields({ ...fields, value: ev.target.value })} aria-invalid={Boolean(e.value)} />
       </Field>
       <Field label={M.blocked.reason} htmlFor="sup_reason">
-        <select id="sup_reason" name="reason" className={input} defaultValue="manual">
+        <select id="sup_reason" name="reason" className={input} value={fields.reason} onChange={(ev) => setFields({ ...fields, reason: ev.target.value })}>
           <option value="manual">{M.blocked.reasons.manual}</option>
           <option value="asked_to_stop">{M.blocked.reasons.asked_to_stop}</option>
         </select>
       </Field>
       <Field label={M.blocked.note} htmlFor="sup_note">
-        <input id="sup_note" name="note" className={input} maxLength={300} />
+        <input id="sup_note" name="note" className={input} maxLength={300} value={fields.note} onChange={(ev) => setFields({ ...fields, note: ev.target.value })} />
       </Field>
       <FormMessage status={state.status} message={state.message} />
       <div>

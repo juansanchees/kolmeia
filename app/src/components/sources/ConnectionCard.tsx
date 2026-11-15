@@ -27,13 +27,18 @@ function Result({ r }: { r: SourceResult | null }) {
 }
 
 function KeyForm({ provider, connected }: { provider: P; connected: boolean }) {
-  const [state, action, pending] = useActionState(saveSourceKey, null);
+  const [key, setKey] = useState("");
+  const [state, action, pending] = useActionState(async (prev: SourceResult | null, fd: FormData) => {
+    const r = await saveSourceKey(prev, fd);
+    if (r && "ok" in r) setKey(""); // clear the secret only after a successful save
+    return r;
+  }, null);
   const id = `key-${provider}`;
   return (
     <form action={action} className="flex flex-col gap-3" autoComplete="off" noValidate>
       <input type="hidden" name="provider" value={provider} />
       <Field label={S.keyLabel} htmlFor={id}>
-        <input id={id} name="key" type="password" autoComplete="new-password" spellCheck={false} className={input} placeholder={S.keyPlaceholder} />
+        <input id={id} name="key" type="password" autoComplete="new-password" spellCheck={false} className={input} placeholder={S.keyPlaceholder} value={key} onChange={(e) => setKey(e.target.value)} />
       </Field>
       <Result r={state} />
       <div>
@@ -47,6 +52,7 @@ function KeyForm({ provider, connected }: { provider: P; connected: boolean }) {
 
 function CapForm({ provider, cap }: { provider: P; cap: number }) {
   const [state, action, pending] = useActionState(saveSourceCap, null);
+  const [value, setValue] = useState(String(cap));
   const id = `cap-${provider}`;
   return (
     <form action={action} className="flex flex-wrap items-end gap-2" noValidate>
@@ -61,7 +67,8 @@ function CapForm({ provider, cap }: { provider: P; cap: number }) {
           min={provider === "apify" ? 0.5 : 1}
           max={provider === "apify" ? 50 : 200}
           step={provider === "apify" ? 0.5 : 1}
-          defaultValue={cap}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
           className={`${input} w-28`}
           aria-describedby={`${id}-hint`}
         />
