@@ -176,8 +176,12 @@ describe("scheduler_mailbox_secret", () => {
     const fns = await admin<{ proname: string; prosrc: string }>(
       "select proname, prosrc from pg_proc where pronamespace = 'public'::regnamespace and proname like 'scheduler\\_%'",
     );
-    expect(fns.filter((f) => /ciphertext|mailbox_secret\(/i.test(f.prosrc)).map((f) => f.proname)).toEqual(["scheduler_mailbox_secret"]);
-    expect(fns.filter((f) => /public\.mailboxes/i.test(f.prosrc)).map((f) => f.proname).sort()).toEqual(["scheduler_mailbox_failed", "scheduler_mailbox_secret"]);
+    // 0026 (E5) adds the reply side: scheduler_imap_secret (a mailbox listed for replies in this run, same locks) and the
+    // functions that list, read the sent references of, or record for such a mailbox (tests/db/clock-replies.test.ts)
+    expect(fns.filter((f) => /ciphertext|mailbox_secret\(/i.test(f.prosrc)).map((f) => f.proname).sort()).toEqual(["scheduler_imap_secret", "scheduler_mailbox_secret"]);
+    expect(fns.filter((f) => /public\.mailboxes/i.test(f.prosrc)).map((f) => f.proname).sort()).toEqual([
+      "scheduler_imap_secret", "scheduler_mailbox_failed", "scheduler_mailbox_secret", "scheduler_record_reply", "scheduler_reply_mailboxes", "scheduler_reply_sent_refs",
+    ]);
     const grants = await admin<{ proname: string; anon: boolean; authed: boolean }>(
       "select proname, has_function_privilege('anon', oid, 'execute') as anon, has_function_privilege('authenticated', oid, 'execute') as authed from pg_proc where pronamespace = 'public'::regnamespace and proname in ('scheduler_mailbox_secret','scheduler_mailbox_failed','scheduler_sending_paused','scheduler_due_work','scheduler_claim_next_email')",
     );

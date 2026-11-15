@@ -1,9 +1,11 @@
 import "server-only";
+import { clockReplies, type ReplyStore } from "./clock-replies";
 import { sendStep, type Origins } from "./engine";
 import type { TickStore } from "./scheduler-store";
-import type { SmtpTransport } from "./transport";
+import type { ImapTransport, SmtpTransport } from "./transport";
 
-// The clock (E1): one bounded tick, called by an external scheduler with no user session. SEND ONLY. No AI calls, no replies.
+// The clock (E1): one bounded tick, called by an external scheduler with no user session. No AI calls.
+// It sends, then (0026, E5, real mode only) reads replies of at most 5 mailboxes with rules only (clock-replies.ts).
 // Rehearsal by default: the store asks the database for dry_run work only, and the route passes NoSendSmtp (always throws).
 // Real mail (0025, D4) needs BOTH locks: the server switch (the route builds a real store and the Gmail transport only
 // when realClockEnabled()) AND, in the database, the workspace's C12 gate open with the emergency stop off. The engine
@@ -15,6 +17,8 @@ export const TICK_MAX_SENDS = 10;
 export const TICK_BUDGET_MS = 40_000;
 /** Real mode: no new item after 30 s; one send takes at most 20 s of SMTP (CLOCK_SMTP_TIMEOUTS), inside maxDuration 60. */
 export const TICK_REAL_BUDGET_MS = 30_000;
+/** E5: the reply phase starts only if the sends ended before this (its own budget, CLOCK_REPLY_BUDGET_MS, then applies). */
+export const TICK_REPLY_START_MS = 25_000;
 
 const CODE = /^[a-z0-9_:]{1,60}$/;
 
@@ -28,7 +32,7 @@ export class NoSendSmtp implements SmtpTransport {
   }
 }
 
-export type TickResult = { runId: string; outcome: "ok" | "error" | "busy"; campaigns: number; sent: number; failed: number };
+export type TickResult = { runId: string; outcome: "ok" | "error" | "busy"; campaigns: number; sent: number; failed: number; replies: number };
 
 /** A short, safe code for the heartbeat; anything else becomes the fallback. */
 function codeOf(e: unknown, fallback: string): string {
@@ -42,13 +46,15 @@ function codeOf(e: unknown, fallback: string): string {
  * A failure of the clock itself is recorded and rethrown.
  * `smtp`: the route passes NoSendSmtp, or the Gmail transport only behind realClockEnabled(); tests pass a spy.
  * `key`: test seam only (production decrypts with the configured MAILBOX key ring, lazily, inside the engine).
+ * `imap` (E5): the route passes the clock's IMAP reader only behind the real switch; null/absent = no reply phase.
  */
 export async function runTick(opts: {
-  store: TickStore;
+  store: TickStore | (TickStore & ReplyStore);
   origins: Origins;
   now?: () => number;
   budgetMs?: number;
   smtp?: SmtpTransport;
+  imap?: ImapTransport | null;
   key?: Buffer;
 }): Promise<TickResult> {
   const { store, origins } = opts;
@@ -56,13 +62,14 @@ export async function runTick(opts: {
   const budgetMs = opts.budgetMs ?? TICK_BUDGET_MS;
   const smtp = opts.smtp ?? new NoSendSmtp();
   const begin = await store.beginRun();
-  if (begin.busy) return { runId: begin.runId, outcome: "busy", campaigns: 0, sent: 0, failed: 0 };
+  if (begin.busy) return { runId: begin.runId, outcome: "busy", campaigns: 0, sent: 0, failed: 0, replies: 0 };
   const runId = begin.runId;
   const started = now();
   let campaigns = 0;
   let sent = 0;
   let failed = 0;
   let attempts = 0;
+  let replies = 0;
   let firstError: string | null = null;
   const finish = () => store.finishRun(runId, { campaigns, sent, failed }, firstError);
 
@@ -93,11 +100,18 @@ export async function runTick(opts: {
         firstError ??= codeOf(e, "step_error");
       }
     }
+    // E5: replies after the sends, only with an IMAP reader (real switch) and a store that can list reply mailboxes
+    if (opts.imap && "replyMailboxes" in store && now() - started < TICK_REPLY_START_MS) {
+      const r = await clockReplies(store, opts.imap, now, { key: opts.key });
+      replies = r.recorded;
+      failed += r.failed;
+      if (r.error) firstError ??= codeOf(r.error, "reply_error");
+    }
   } catch (e) {
     firstError ??= codeOf(e, "tick_error");
     await finish().catch(() => undefined);
     throw e;
   }
   await finish();
-  return { runId, outcome: firstError ? "error" : "ok", campaigns, sent, failed };
+  return { runId, outcome: firstError ? "error" : "ok", campaigns, sent, failed, replies };
 }

@@ -22,6 +22,11 @@ const ENTRY_POINTS: [string, unknown[]][] = [
   ["select public.scheduler_sending_paused($1,$2)", [ZERO, ZERO]],
   ["select public.scheduler_mailbox_secret($1,$2)", [ZERO, ZERO]],
   ["select public.scheduler_mailbox_failed($1,$2,'auth_failed')", [ZERO, ZERO]],
+  // 0026 (E5)
+  ["select public.scheduler_reply_mailboxes($1)", [ZERO]],
+  ["select public.scheduler_imap_secret($1,$2)", [ZERO, ZERO]],
+  ["select public.scheduler_reply_sent_refs($1,$2,now())", [ZERO, ZERO]],
+  ["select public.scheduler_record_reply($1,$2,$3,null,'a@b.example','s','b','<x@y.example>',now(),'reply',null)", [ZERO, ZERO, ZERO]],
 ];
 
 let db: TestDb;
@@ -276,7 +281,7 @@ describe("rehearsal only, and only what the run holds", () => {
     expect(u).toMatchObject({ outcome: "claimed", message_id: m });
   });
 
-  test("no scheduler function except scheduler_mailbox_secret (0025, D4) can return the mailbox ciphertext", async () => {
+  test("no scheduler function except scheduler_mailbox_secret (0025, D4) and scheduler_imap_secret (0026, E5) can return the mailbox ciphertext", async () => {
     const fns = await db.admin<{ proname: string; prosrc: string; ret: string }>(
       "select proname, prosrc, pg_get_function_result(oid) as ret from pg_proc where pronamespace = 'public'::regnamespace and proname like 'scheduler\\_%'",
     );
@@ -286,9 +291,12 @@ describe("rehearsal only, and only what the run holds", () => {
       expect(f.ret, f.proname).not.toBe("text");
       // the one exception is gated on a real message this run holds, with the C12 gate open (tests/db/clock-real.test.ts)
       if (f.proname === "scheduler_mailbox_secret") continue;
-      // marks a broken mailbox 'error'; never reads the secret
-      if (f.proname === "scheduler_mailbox_failed") {
-        expect(f.prosrc).not.toMatch(/ciphertext|mailbox_secret\(/i);
+      // 0026 (E5): the same, for a mailbox listed for replies in this very run behind the same locks (tests/db/clock-replies.test.ts)
+      if (f.proname === "scheduler_imap_secret") continue;
+      // mark a broken mailbox 'error' / list and stamp the mailboxes the clock may read / record a reply: never read the secret
+      if (["scheduler_mailbox_failed", "scheduler_reply_mailboxes", "scheduler_reply_sent_refs", "scheduler_record_reply"].includes(f.proname)) {
+        expect(f.prosrc, f.proname).not.toMatch(/ciphertext|mailbox_secret\(/i);
+        expect(["jsonb", "void", "uuid"], f.proname).toContain(f.ret);
         continue;
       }
       expect(f.prosrc, f.proname).not.toMatch(/ciphertext|mailbox_secret|public\.mailboxes/i);

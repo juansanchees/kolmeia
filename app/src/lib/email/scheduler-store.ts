@@ -1,6 +1,8 @@
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { env } from "@/lib/env";
+import type { ClockReply, ReplyMailbox, ReplyStore } from "./clock-replies";
+import type { SentRef } from "./replies";
 import type { SendCampaign, SendMailbox, SendMessage, SendProspect, SendStore } from "./store";
 import type { ClaimResult, SenderProfile } from "./types";
 
@@ -11,6 +13,8 @@ import type { ClaimResult, SenderProfile } from "./types";
 // for real work, and the database answers only while the workspace's C12 gate is open and the stop is off. The mailbox
 // ciphertext comes from scheduler_mailbox_secret, for the one message this run holds, and is held in memory only until
 // the engine decrypts it (never logged, never returned to anyone).
+// Replies (0026, E5): only a real store asks for reply mailboxes; the database lists a mailbox only behind the same locks
+// and answers its secret, its sent references and the recording only for a mailbox listed in this run.
 // Errors carry a short code only, never a database message (R10).
 
 /** The database refused the token (clock off, wrong token). */
@@ -27,7 +31,7 @@ export type TickStore = SendStore & {
   finishRun(runId: string, counts: { campaigns: number; sent: number; failed: number }, error: string | null): Promise<void>;
 };
 
-export class SchedulerStore implements TickStore {
+export class SchedulerStore implements TickStore, ReplyStore {
   private run: string | null = null;
   /** The message this run claimed last (the only one whose mailbox may be read). */
   private claimed: string | null = null;
@@ -37,6 +41,8 @@ export class SchedulerStore implements TickStore {
   private lastMailbox: { messageId: string; mailboxId: string } | null = null;
   /** Ciphertext of the claimed message's mailbox, between getMailbox and getMailboxSecret. */
   private secret: { mailboxId: string; ciphertext: string } | null = null;
+  /** Mailboxes the database listed for replies in this run (the only ones the reply calls may name). */
+  private replyListed = new Set<string>();
 
   /** `real`: the server switch (realClockEnabled). False = rehearsal only, whatever the database would allow. */
   constructor(
@@ -81,6 +87,7 @@ export class SchedulerStore implements TickStore {
     this.claimedWorkspace = null;
     this.secret = null;
     this.lastMailbox = null;
+    this.replyListed.clear();
   }
 
   // ---- SendStore
@@ -161,6 +168,55 @@ export class SchedulerStore implements TickStore {
     } catch {
       return true;
     }
+  }
+
+  // ---- Replies (0026, E5): real mode only; every call names a mailbox the database listed in this run.
+  async replyMailboxes(): Promise<ReplyMailbox[]> {
+    this.replyListed.clear();
+    if (!this.real) return []; // rehearsal: the clock reads no mailbox, it does not even ask
+    const r = await this.rpc<{ mailboxes: ReplyMailbox[] }>("scheduler_reply_mailboxes", { p_run: this.runId() });
+    const list = Array.isArray(r?.mailboxes) ? r.mailboxes : [];
+    for (const m of list) this.replyListed.add(m.id);
+    return list;
+  }
+  private listedReply(mailboxId: string): void {
+    if (!this.real || !this.replyListed.has(mailboxId)) throw new Error("no_mailbox_access");
+  }
+  async replyMailboxSecret(mailboxId: string): Promise<string> {
+    this.listedReply(mailboxId);
+    const r = await this.rpc<{ id: string; ciphertext: string }>("scheduler_imap_secret", { p_run: this.runId(), p_mailbox: mailboxId });
+    if (!r || r.id !== mailboxId || typeof r.ciphertext !== "string") throw new Error("mailbox_refused");
+    return r.ciphertext;
+  }
+  async replySentRefs(mailboxId: string, since: Date): Promise<SentRef[]> {
+    this.listedReply(mailboxId);
+    const r = await this.rpc<{ message_id: string; prospect_id: string; rfc_message_id: string; to_address: string; sent_at: string }[]>(
+      "scheduler_reply_sent_refs",
+      { p_run: this.runId(), p_mailbox: mailboxId, p_since: since.toISOString() },
+    );
+    return (Array.isArray(r) ? r : []).map((x) => ({ messageRowId: x.message_id, prospectId: x.prospect_id, rfcMessageId: x.rfc_message_id, toAddress: x.to_address, sentAt: x.sent_at }));
+  }
+  recordClockReply(r: ClockReply): Promise<string | null> {
+    this.listedReply(r.mailboxId);
+    return this.rpc<string>("scheduler_record_reply", {
+      p_run: this.runId(),
+      p_prospect: r.prospectId,
+      p_mailbox: r.mailboxId,
+      p_message: r.messageRowId,
+      p_from: r.from,
+      p_subject: r.subject,
+      p_body: r.body,
+      p_rfc_id: r.rfcMessageId,
+      p_received_at: r.receivedAt.toISOString(),
+      p_kind: r.kind,
+      p_bounced: r.bouncedAddress,
+      p_rule_class: r.ruleClass,
+    });
+  }
+  /** A listed reply mailbox whose login failed: marked 'error' so the clock stops logging in (a person re-tests it). */
+  async replyMailboxFailed(mailboxId: string, code: string): Promise<void> {
+    this.listedReply(mailboxId);
+    await this.rpc("scheduler_mailbox_failed", { p_run: this.runId(), p_message: null, p_code: code, p_mailbox: mailboxId });
   }
 }
 

@@ -91,6 +91,8 @@ export class GmailSmtp implements SmtpTransport {
 }
 
 export class GmailImap implements ImapTransport {
+  constructor(private readonly timeouts: SmtpTimeouts = TIMEOUTS) {}
+
   async fetchSince(creds: MailCreds, since: Date, max: number): Promise<Incoming[]> {
     const client = new ImapFlow({
       host: GMAIL_IMAP.host,
@@ -98,9 +100,9 @@ export class GmailImap implements ImapTransport {
       secure: GMAIL_IMAP.secure,
       auth: { user: creds.user, pass: creds.pass },
       logger: false,
-      connectionTimeout: TIMEOUTS.connectionTimeout,
-      greetingTimeout: TIMEOUTS.greetingTimeout,
-      socketTimeout: TIMEOUTS.socketTimeout,
+      connectionTimeout: this.timeouts.connectionTimeout,
+      greetingTimeout: this.timeouts.greetingTimeout,
+      socketTimeout: this.timeouts.socketTimeout,
     });
     await client.connect();
     const out: Incoming[] = [];

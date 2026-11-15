@@ -13,6 +13,10 @@ class FakeGmail {
 const CLOCK = { connectionTimeout: 1, greetingTimeout: 1, socketTimeout: 1 };
 vi.mock("@/lib/email/scheduler", () => ({ runTick: (...a: unknown[]) => runTick(...a), NoSendSmtp: FakeNoSend, TICK_BUDGET_MS: 40_000, TICK_REAL_BUDGET_MS: 30_000 }));
 vi.mock("@/lib/email/transport", () => ({ GmailSmtp: FakeGmail, CLOCK_SMTP_TIMEOUTS: CLOCK }));
+// E5 (0026): the clock's IMAP comes only from clockImap(), behind the same switch
+class FakeImap {}
+const clockImap = vi.fn(() => new FakeImap());
+vi.mock("@/lib/email/clock-replies", () => ({ clockImap: () => clockImap() }));
 // the server switch (0025, D4) and the mailbox key, stubbed: the variables themselves are never set in tests
 const sw = { on: false, key: true };
 vi.mock("@/lib/email/config", () => ({ realClockEnabled: () => sw.on, hasMailboxKey: () => sw.key, configuredPublicOrigin: () => "https://app.example.com" }));
@@ -26,6 +30,7 @@ beforeEach(() => {
   sw.key = true;
   createSchedulerStore.mockReset();
   runTick.mockReset();
+  clockImap.mockClear();
 });
 
 describe("POST /api/scheduler/tick", () => {
@@ -54,6 +59,8 @@ describe("POST /api/scheduler/tick", () => {
     expect(res.status).toBe(200);
     expect(createSchedulerStore).toHaveBeenCalledWith(TOKEN, false);
     expect(runTick.mock.calls[0][0].smtp).toBeInstanceOf(FakeNoSend);
+    expect(runTick.mock.calls[0][0].imap).toBeNull(); // E5: no IMAP with the switch off
+    expect(clockImap).not.toHaveBeenCalled();
     expect(await res.json()).toEqual({ outcome: "ok", campaigns: 2, sent: 1, failed: 0 });
   });
 
@@ -66,6 +73,8 @@ describe("POST /api/scheduler/tick", () => {
     expect(runTick.mock.calls[0][0].smtp).toBeInstanceOf(FakeGmail);
     expect(runTick.mock.calls[0][0].smtp.timeouts).toBe(CLOCK); // short SMTP timeouts on the clock
     expect(runTick.mock.calls[0][0].budgetMs).toBe(30_000);
+    expect(runTick.mock.calls[0][0].imap).toBeInstanceOf(FakeImap); // E5: replies read behind the same switch
+    expect(clockImap).toHaveBeenCalledTimes(1);
   });
 
   test("the switch on but no mailbox key: treated as off (rehearsal store, no Gmail transport)", async () => {
@@ -77,6 +86,8 @@ describe("POST /api/scheduler/tick", () => {
     expect(createSchedulerStore).toHaveBeenCalledWith(TOKEN, false);
     expect(runTick.mock.calls[0][0].smtp).toBeInstanceOf(FakeNoSend);
     expect(runTick.mock.calls[0][0].budgetMs).toBe(40_000);
+    expect(runTick.mock.calls[0][0].imap).toBeNull(); // E5: no key, no IMAP
+    expect(clockImap).not.toHaveBeenCalled();
   });
 
   test("the database refusing the token is a 401", async () => {

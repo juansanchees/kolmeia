@@ -286,7 +286,9 @@ describe("E1 scheduler: anon key and scheduler_* functions only, no logging, no 
     expect(rpcs.length).toBeGreaterThan(0);
     for (const name of rpcs) expect(name, name).toMatch(/^scheduler_[a-z_]+$/);
     expect(new Set(rpcs)).toEqual(
-      new Set(["scheduler_begin_run", "scheduler_due_work", "scheduler_finish_run", "scheduler_sender", "scheduler_campaign", "scheduler_prospect", "scheduler_message", "scheduler_claim_next_email", "scheduler_finish_email_send", "scheduler_sending_paused", "scheduler_mailbox_secret", "scheduler_mailbox_failed"]),
+      new Set(["scheduler_begin_run", "scheduler_due_work", "scheduler_finish_run", "scheduler_sender", "scheduler_campaign", "scheduler_prospect", "scheduler_message", "scheduler_claim_next_email", "scheduler_finish_email_send", "scheduler_sending_paused", "scheduler_mailbox_secret", "scheduler_mailbox_failed",
+        // 0026 (E5: the clock reads replies behind the same locks)
+        "scheduler_reply_mailboxes", "scheduler_imap_secret", "scheduler_reply_sent_refs", "scheduler_record_reply"]),
     );
     expect(text.match(/this\.db\.rpc\(/g)).toHaveLength(1); // the one generic helper; every call site names a scheduler_* function above
   });
@@ -313,6 +315,16 @@ describe("E1 scheduler: anon key and scheduler_* functions only, no logging, no 
       if (file === path.join(root, "src/lib/email/config.ts")) continue;
       expect(readFileSync(file, "utf8"), file).not.toContain("SCHEDULER_REAL_SEND");
     }
+  });
+  test("guards: GmailImap is constructed only in session.ts and clock-replies.ts; the route gets it from clockImap() behind the same switch (0026, E5)", () => {
+    const builders = walk(path.join(root, "src")).filter((f) => /new GmailImap\(/.test(readFileSync(f, "utf8")));
+    expect(builders.map((f) => path.relative(root, f)).sort()).toEqual(["src/lib/email/clock-replies.ts", "src/lib/email/session.ts"]);
+    const text = readFileSync(route, "utf8");
+    expect(text.match(/clockImap\(\)/g)).toHaveLength(1);
+    expect(text).toMatch(/const imap = real \? clockImap\(\) : null;/);
+    // the clock's reply reader: rules only, no AI
+    const replies = readFileSync(path.join(root, "src/lib/email/clock-replies.ts"), "utf8");
+    expect(replies).not.toMatch(/@\/lib\/ai\/|classifyReply|classifyPending|console\./);
   });
   test("R10 the clock never logs: no console in the route, the store or the tick", () => {
     for (const f of [route, store, tick]) expect(readFileSync(f, "utf8"), f).not.toMatch(/console\./);

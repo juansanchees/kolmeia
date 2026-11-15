@@ -157,6 +157,9 @@ describe("proof that RLS is really enforced in PGlite", () => {
         "scheduler_sending_paused", "scheduler_mailbox_secret", "scheduler_mailbox_failed",
         // 0025 (D4: the owner's DB switch for the clock's real sending; clock_real_ready is NOT definer)
         "set_clock_real",
+        // 0026 (E5: the clock reads replies behind the same locks; record_email_reply_core / set_reply_class_core /
+        // clock_reply_mailbox_ok are NOT definer)
+        "scheduler_reply_mailboxes", "scheduler_imap_secret", "scheduler_reply_sent_refs", "scheduler_record_reply",
       ].sort(),
     );
     for (const r of rows) expect(r.proconfig).toContain("search_path=\"\"");
