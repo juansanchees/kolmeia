@@ -6,7 +6,7 @@ import { idle } from "@/lib/form-state";
 import { Button, Field, LinkButton, TextInput } from "@/components/ui";
 import { t } from "@/messages/pt";
 
-export function LoginForm() {
+export function LoginForm({ next = "/" }: { next?: string }) {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [state, action, pending] = useActionState(authenticate, idle);
   const signup = mode === "signup";
@@ -15,6 +15,7 @@ export function LoginForm() {
     <form action={action} className="flex flex-col gap-5 border border-line bg-surface p-6" noValidate>
       <h1 className="text-3xl">{signup ? t.login.signUpTitle : t.login.title}</h1>
       <input type="hidden" name="mode" value={mode} />
+      <input type="hidden" name="next" value={next} />
       <Field label={t.login.email} htmlFor="email">
         <TextInput id="email" name="email" type="email" autoComplete="email" required />
       </Field>
