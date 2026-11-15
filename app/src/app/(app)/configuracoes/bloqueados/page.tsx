@@ -1,3 +1,5 @@
+import { notFound } from "next/navigation";
+import { isSender } from "@/lib/roles";
 import { emailSession } from "@/lib/email/session";
 import type { SuppressionRow } from "@/lib/email/types";
 import { removeSuppression } from "@/app/(app)/campanhas/actions";
@@ -12,6 +14,7 @@ const B = t.email.blocked;
 export default async function BlockedPage() {
   const s = await emailSession();
   if (!s) return null;
+  if (!isSender(s.workspace.role)) notFound();
   const { data } = await s.supabase
     .from("suppressions")
     .select("id, kind, value, reason, note, created_at")

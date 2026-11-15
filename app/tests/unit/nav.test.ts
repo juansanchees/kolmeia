@@ -91,6 +91,15 @@ describe("F3d fontes conectadas nav", () => {
   });
 });
 
+describe("settings pages for senders only", () => {
+  test("Caixas and Bloqueados are not found for a closer", () => {
+    for (const n of ["caixas", "bloqueados"]) {
+      const page = read(`src/app/(app)/configuracoes/${n}/page.tsx`);
+      expect(page, n).toContain("if (!isSender(s.workspace.role)) notFound();");
+    }
+  });
+});
+
 describe("F2 roles", () => {
   test("J2 the closer's menu is LEADS only; owner and sdr see the 3 areas", () => {
     expect(areasFor("closer").map((i) => i.href)).toEqual(["/leads"]);

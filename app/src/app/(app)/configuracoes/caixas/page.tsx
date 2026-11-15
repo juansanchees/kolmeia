@@ -1,3 +1,5 @@
+import { notFound } from "next/navigation";
+import { isSender } from "@/lib/roles";
 import { hasMailboxKey } from "@/lib/email/config";
 import { senderComplete } from "@/lib/email/compose";
 import { loadMailboxes, loadSender } from "@/lib/email/queries";
@@ -15,6 +17,7 @@ const STATUS_TONE = { unverified: "cold", ok: "ok", error: "danger" } as const;
 export default async function MailboxPage() {
   const s = await emailSession();
   if (!s) return null;
+  if (!isSender(s.workspace.role)) notFound();
   const [sender, mailboxes] = await Promise.all([loadSender(s.supabase, s.workspace.id), loadMailboxes(s.supabase, s.workspace.id)]);
   const keyOk = hasMailboxKey();
   const isOwner = s.workspace.role === "owner";
