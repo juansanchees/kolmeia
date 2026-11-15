@@ -11,6 +11,7 @@ import { HandOffForm } from "@/components/leads/HandOffForm";
 import { StatusButtons } from "@/components/leads/StatusButtons";
 import { AddToCallList } from "@/components/leads/AddToCallList";
 import { AddToCampaign } from "@/components/leads/AddToCampaign";
+import type { CampaignChoice } from "@/lib/leads/campaign-note";
 import { displayOf, isStaleProof, originLabel } from "@/lib/leads/view";
 import { count, date, host, money, UNKNOWN } from "@/components/research/format";
 import { Hook, ProofList } from "@/components/research/proof";
@@ -51,7 +52,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   // Sender-only inputs of the hand-off and the call list (RLS keeps them from the closer anyway).
   let people: Person[] = [];
   let callAgents: { id: string; name: string }[] = [];
-  let campaigns: { id: string; name: string; status: string }[] = [];
+  let campaigns: CampaignChoice[] = [];
   let draft: ReturnType<typeof draftBrief> | null = null;
   if (sender && workspace && open) {
     const [peopleRes, agentsRes, callsRes, emailBrief, campaignsRes] = await Promise.all([
@@ -59,9 +60,14 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
       supabase.from("agents").select("id, name").eq("workspace_id", workspace.id).eq("type", "call").eq("status", "running").is("archived_at", null).order("name"),
       supabase.from("call_logs").select("notes").eq("lead_id", lead.id).eq("outcome", "talked").order("called_at", { ascending: false }).limit(1).maybeSingle(),
       emailBriefOf(supabase, lead.id),
-      supabase.from("email_campaigns").select("id, name, status").eq("workspace_id", workspace.id).neq("status", "archived").order("created_at", { ascending: false }),
+      supabase.from("email_campaigns").select("id, name, status, agent_id, send_mode").eq("workspace_id", workspace.id).neq("status", "archived").order("created_at", { ascending: false }),
     ]);
-    campaigns = (campaignsRes.data ?? []) as { id: string; name: string; status: string }[];
+    const rows = (campaignsRes.data ?? []) as { id: string; name: string; status: string; agent_id: string | null; send_mode: "dry_run" | "real" }[];
+    // which of them have an approved sequence: adding a lead there queues step 1 (D6)
+    const agentIds = rows.filter((c) => c.agent_id).map((c) => c.id);
+    const { data: seqs } = agentIds.length ? await supabase.from("email_sequences").select("campaign_id").eq("status", "approved").in("campaign_id", agentIds) : { data: [] };
+    const approvedIds = new Set(((seqs ?? []) as { campaign_id: string }[]).map((r) => r.campaign_id));
+    campaigns = rows.map((c) => ({ id: c.id, name: c.name, status: c.status, agentId: c.agent_id, approved: approvedIds.has(c.id), sendMode: c.send_mode }));
     people = (peopleRes.data ?? []) as Person[];
     callAgents = (agentsRes.data ?? []) as { id: string; name: string }[];
     const proofUrls = [

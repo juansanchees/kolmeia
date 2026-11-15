@@ -29,7 +29,9 @@ export function EmailAgentWizard({ mailboxes, hunters, ai, estimateUsd }: { mail
   const [step3, setStep3] = useState("7");
   const [picked, setPicked] = useState<string[]>([]);
   const [answer, setAnswer] = useState<{ key: string; counts?: LeadCounts; error?: string } | null>(null);
-  const [error, setError] = useState<{ message: string; agentId?: string } | null>(null);
+  const [error, setError] = useState<{ message: string; agentId?: string; draft?: Parameters<typeof createEmailAgentAction>[3] } | null>(null);
+  // after an AI failure the agent already exists with these choices: a retry reuses them, so the form is read only
+  const locked = Boolean(error?.agentId);
   const [pending, start] = useTransition();
 
   const filter: LeadFilterConfig = { statuses, agentId: agentId || null, temperature: temperature || null, approach: onlyEmail ? "email" : null };
@@ -69,9 +71,10 @@ export function EmailAgentWizard({ mailboxes, hunters, ai, estimateUsd }: { mail
         { filter, tone, steps, delays: { step2: steps === 1 ? 3 : d2, step3: steps === 3 ? d3 : Math.max(d2 + 1, 7) }, mailboxIds: picked },
         name,
         error?.agentId ?? null,
+        error?.draft ?? null,
       );
       if (r.ok) router.push(`/agentes/${r.agentId}`);
-      else setError({ message: r.error, agentId: r.agentId });
+      else setError({ message: r.error, agentId: r.agentId, draft: r.draft });
     });
   };
 
@@ -84,6 +87,7 @@ export function EmailAgentWizard({ mailboxes, hunters, ai, estimateUsd }: { mail
         <p className="mt-1 text-sm text-muted">{E.intro}</p>
       </div>
 
+      <fieldset disabled={locked} className="m-0 flex min-w-0 flex-col gap-5 border-0 p-0">
       <label className="flex flex-col gap-1 text-sm">
         <span className="font-mono text-xs text-muted">{E.name}</span>
         <input className={input} value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
@@ -207,6 +211,8 @@ export function EmailAgentWizard({ mailboxes, hunters, ai, estimateUsd }: { mail
         {counts && counts.withEmail === 0 && <p className="text-sm text-warn">{E.noLeads}</p>}
       </fieldset>
 
+      </fieldset>
+
       {error && (
         <p role="alert" className="bg-warn-soft px-3 py-2.5 text-sm text-warn">
           {error.message}{" "}
@@ -215,11 +221,12 @@ export function EmailAgentWizard({ mailboxes, hunters, ai, estimateUsd }: { mail
               {E.openAgent}
             </Link>
           )}
+          {locked && <span className="block">{E.retryLocked}</span>}
         </p>
       )}
       <div>
         <PrimaryButton type="submit" disabled={pending || !ready}>
-          {pending ? E.creating : E.create}
+          {pending ? E.creating : locked ? E.retry : E.create}
         </PrimaryButton>
       </div>
     </form>

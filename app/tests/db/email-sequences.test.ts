@@ -396,6 +396,24 @@ describe("0023 part 2: owner approves once (J1), the queue, Ligar/Pausar", () =>
     expect(msgs).toHaveLength(4);
   });
 
+  test("F4 UI review: an old version fails after a newer save; the sdr cannot approve; a late lead is queued approved (D6)", async () => {
+    const camp = await newCampaign("ui-review");
+    await db.query(as(UUID_A), "select public.add_leads_to_campaign($1,$2::uuid[])", [camp, [await newLead("Ui One", "pat@ui1.example", "Pat Doe", "Worcester")]]);
+    const v1 = await saved(camp);
+    const shown = await preview(v1);
+    expect(code((await approve(v1, shown.digest, SDR)).error)).toBe("42501");
+    const v2 = await saved(camp, [{ step: 1, subject: "Newer", body: "Hi {{first_name}}" }]);
+    // the screen still shows v1 with its own digest: the database refuses it (the action maps both to "changed")
+    expect(["55000", "40001"]).toContain(code((await approve(v1, shown.digest)).error));
+    expect((await approve(v2, (await preview(v2)).digest)).error).toBeUndefined();
+    // D6: this is why the lead page must say "enters the approved sequence"
+    const late = await newLead("Ui Two", "ann@ui2.example", "Ann Lee", "Salem");
+    await db.query(as(SDR), "select public.add_leads_to_campaign($1,$2::uuid[])", [camp, [late]]);
+    const mine = (await messagesOf(camp)).filter((m) => m.prospect_id !== shown.examples[0].prospect_id);
+    expect(mine.length).toBeGreaterThan(0);
+    expect(mine.every((m) => m.status === "approved")).toBe(true);
+  });
+
   test("a lead added after approval is queued from the approved version", async () => {
     const camp = await newCampaign("j1-late");
     const first = await newLead("Late One", "pat@late1.example", "Pat Doe", "Worcester");

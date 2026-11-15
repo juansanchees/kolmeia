@@ -82,7 +82,7 @@ describe("F4 E-mail agent creation through RPCs", () => {
     expect(a).toContain('rpc("create_email_agent_campaign"');
     expect(a).not.toMatch(/from\("email_campaigns"\)\s*\.insert/);
     expect(a).not.toContain("step2_delay_days");
-    expect(a).toContain("c.mailboxIds.filter");
+    expect(a).toContain("of c.mailboxIds)");
     expect(a).not.toContain("slice(1)");
   });
   test("only new and call_list leads are pickable", async () => {

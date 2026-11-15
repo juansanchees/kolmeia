@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { validDelays, type StepDelays } from "@/lib/email/schedule";
-import { LEAD_STATUSES, type LeadStatus } from "@/lib/leads/types";
+import type { LeadStatus } from "@/lib/leads/types";
 import { TEMPERATURES } from "@/lib/research/types";
 
 // Client-safe: the answers of the E-mail agent's creation chat (spec §6.3). Stored as agents.config.
@@ -18,7 +18,7 @@ export type LeadFilterConfig = { statuses: LeadStatus[]; agentId: string | null;
 export type EmailAgentConfig = { filter: LeadFilterConfig; tone: Tone; steps: 1 | 2 | 3; delays: StepDelays; mailboxIds: string[] };
 
 export const leadFilterSchema = z.object({
-  statuses: z.array(z.enum(LEAD_STATUSES)).min(1).max(LEAD_STATUSES.length),
+  statuses: z.array(z.enum(PICKABLE_STATUSES)).min(1).max(PICKABLE_STATUSES.length),
   agentId: z.string().uuid().nullable(),
   temperature: z.enum(TEMPERATURES).nullable(),
   approach: z.literal("email").nullable(),

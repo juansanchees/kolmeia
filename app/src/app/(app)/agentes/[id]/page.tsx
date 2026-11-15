@@ -82,6 +82,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
         metrics={view.metrics}
         sender={view.sender}
         c12Ready={view.c12Ready}
+        sendMode={view.campaign.send_mode}
         isOwner={workspace.role === "owner"}
         estimateUsd={reserveFor(sequenceDef)}
       />

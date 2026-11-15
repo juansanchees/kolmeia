@@ -48,6 +48,7 @@ const props = (over: Record<string, unknown> = {}) => ({
   metrics: emailAgentMetrics([], []),
   sender,
   c12Ready: false,
+  sendMode: "dry_run" as const,
   isOwner: true,
   estimateUsd: 0.1,
   ...over,

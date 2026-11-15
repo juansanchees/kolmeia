@@ -148,7 +148,8 @@ export async function approveSequenceAction(sequenceId: string, digest: string):
   const { error } = await db.rpc("approve_email_sequence", { p_sequence: sequenceId, p_digest: digest });
   if (error) {
     revalidatePath("/agentes", "layout");
-    if (error.code === "40001") return { status: "changed", message: E.changed };
+    // 40001: the text changed; 55000: another tab saved a newer version (only the newest draft is approvable)
+    if (error.code === "40001" || error.code === "55000") return { status: "changed", message: E.changed };
     if (error.code === "42501") return { status: "error", message: E.onlyOwner };
     return { status: "error", message: E.approveFailed };
   }

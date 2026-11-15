@@ -6,6 +6,7 @@ import { useState, useTransition } from "react";
 import { approveSequenceAction, rewriteSequenceAction, saveSequenceEditAction, setEmailAgentRunningAction, type EmailActionResult } from "@/app/(app)/agentes/[id]/email-actions";
 import { btn, Notice } from "@/components/email/bits";
 import { Pill } from "@/components/research/controls";
+import { approveBlock } from "@/lib/email-agent/gating";
 import { stepProblems } from "@/lib/email/template";
 import type { AgentRow } from "@/lib/agents/types";
 import type { SequenceRow } from "@/lib/email-agent/queries";
@@ -27,6 +28,8 @@ export type EmailAgentDetailProps = {
   metrics: EmailAgentMetrics;
   sender: SenderProfile | null;
   c12Ready: boolean;
+  /** The campaign's mode: rehearsal (dry_run) or real. */
+  sendMode: "dry_run" | "real";
   isOwner: boolean;
   /** Upper bound of the one AI call (its reservation), shown before the click. */
   estimateUsd: number;
@@ -42,7 +45,7 @@ export function EmailAgentDetail(props: EmailAgentDetailProps) {
   return <Inner key={props.sequence?.id ?? "none"} {...props} />;
 }
 
-function Inner({ agent, campaignId, sequence, preview, metrics, sender, c12Ready, isOwner, estimateUsd }: EmailAgentDetailProps) {
+function Inner({ agent, campaignId, sequence, preview, metrics, sender, c12Ready, sendMode, isOwner, estimateUsd }: EmailAgentDetailProps) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ tone: "ok" | "warn"; text: string } | null>(null);
@@ -55,6 +58,7 @@ function Inner({ agent, campaignId, sequence, preview, metrics, sender, c12Ready
   const delays = parseDelays(value);
   const valid = value.steps.length > 0 && value.steps.every((s) => stepProblems(s).length === 0) && (value.steps.length === 1 || delays !== null);
   const examples = preview?.examples ?? [];
+  const block = approveBlock({ approved, dirty, hasPreview: Boolean(preview), examples: examples.length, hasSender: Boolean(sender?.sender_name.trim() && sender.postal_address.trim()) });
 
   const run = (job: () => Promise<EmailActionResult>) =>
     start(async () => {
@@ -81,6 +85,10 @@ function Inner({ agent, campaignId, sequence, preview, metrics, sender, c12Ready
           <Pill tone={approved ? "ok" : "unknown"}>{approved ? D.status.approved : D.status.waiting}</Pill>
         </span>
       </div>
+
+      <p className="font-mono text-xs text-muted" data-send-mode={sendMode}>
+        {sendMode === "real" ? D.modeReal : D.modeDry}
+      </p>
 
       {!c12Ready && (
         <p role="status" className="bg-warn-soft px-3 py-2.5 text-sm font-semibold text-warn">
@@ -129,7 +137,11 @@ function Inner({ agent, campaignId, sequence, preview, metrics, sender, c12Ready
               {pending ? D.saving : D.save}
             </button>
           )}
-          <button type="button" className={btn.ghost} disabled={pending} onClick={() => run(() => rewriteSequenceAction(campaignId))}>
+          <button type="button" className={btn.ghost} disabled={pending} onClick={() => {
+            // an approved version is replaced: unsent mail of that text is cancelled and the owner approves again
+            if (approved && !window.confirm(D.rewriteConfirm)) return;
+            run(() => rewriteSequenceAction(campaignId));
+          }}>
             {pending ? D.rewriting : D.rewrite}
           </button>
         </div>
@@ -141,12 +153,13 @@ function Inner({ agent, campaignId, sequence, preview, metrics, sender, c12Ready
           <SequenceExamples examples={examples} sender={sender} rehearsalOnly={!c12Ready} />
           {isOwner ? (
             <div className="flex flex-col items-start gap-2">
-              <button type="button" className={btn.primary} disabled={pending || approved || dirty || examples.length === 0 || !preview} onClick={approve}>
+              <button type="button" className={btn.primary} disabled={pending || block !== null} onClick={approve}>
                 {pending ? D.approving : D.approve}
               </button>
               {approved && <p className="text-sm text-muted">{D.alreadyApproved}</p>}
-              {dirty && !approved && <p className="text-sm text-muted">{D.unsavedBlocksApprove}</p>}
-              {!dirty && !approved && examples.length === 0 && <p className="text-sm text-muted">{D.needsExamples}</p>}
+              {block === "dirty" && <p className="text-sm text-muted">{D.unsavedBlocksApprove}</p>}
+              {block === "examples" && <p className="text-sm text-muted">{D.needsExamples}</p>}
+              {block === "sender" && <p className="text-sm text-muted">{D.needsSender}</p>}
             </div>
           ) : (
             <p className="text-sm text-muted">{D.onlyOwner}</p>
