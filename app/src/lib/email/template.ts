@@ -1,7 +1,7 @@
 // Template rules for e-mail sequences (client-safe, pure). One template serves many companies (D2): only the three
 // merge fields below are allowed. The real renderer is SQL (render_email_template); renderTemplate here is for the
 // editor's live preview only and is pinned to SQL by tests/fixtures/template-vectors.ts.
-import { bodyProblem, subjectProblem } from "./compose";
+import { bodyProblem, hasLink, subjectProblem } from "./compose";
 
 export const TEMPLATE_VARS = ["first_name", "company", "city"] as const;
 export type TemplateVar = (typeof TEMPLATE_VARS)[number];
@@ -21,6 +21,7 @@ export function stepProblems(s: SequenceStep): string[] {
   const out: string[] = [];
   const sp = subjectProblem(s.subject);
   if (sp) out.push(`subject:${sp}`);
+  if (hasLink(s.subject)) out.push("subject:link");
   const bp = bodyProblem(s.body);
   if (bp) out.push(`body:${bp}`);
   if (templateProblem(s.subject) || templateProblem(s.body)) out.push("template:unknown_var");
@@ -29,10 +30,16 @@ export function stepProblems(s: SequenceStep): string[] {
 
 export type TemplateVars = { contact_name: string | null; company: string; city: string | null };
 
+// First word of the name; a title ("Dr."), an initial, or an e-mail-looking value gives "there".
+function firstName(name: string | null): string {
+  const w = name?.trim().split(/\s+/)[0] ?? "";
+  return !w || /[@.]/.test(w) ? "there" : w;
+}
+
 /** Preview only: first word of the contact name or "there"; the company; the city or "your area". */
 export function renderTemplate(text: string, vars: TemplateVars): string {
   const values: Record<TemplateVar, string> = {
-    first_name: vars.contact_name?.trim().split(/\s+/)[0] || "there",
+    first_name: firstName(vars.contact_name),
     company: vars.company,
     city: vars.city?.trim() || "your area",
   };

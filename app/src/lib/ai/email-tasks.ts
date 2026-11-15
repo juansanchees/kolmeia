@@ -165,8 +165,8 @@ export const sequenceDef: TaskDef<SEQ.SequenceInput, z.infer<typeof sequenceSche
     for (const step of [1, 2, 3] as const) {
       if (step > input.steps) break;
       const raw = p.steps.find((s) => s.step === step);
-      // A link is dropped, not trimmed: the owner approves exactly what the model wrote (R12).
-      if (!raw || hasLink(raw.subject) || hasLink(raw.body)) continue;
+      // A link in the subject drops the step; links in the body are stripped (R12, same as the draft writer).
+      if (!raw || hasLink(raw.subject)) continue;
       const clean = cleanDraftEmail(raw.subject, raw.body);
       if (!clean) continue;
       const s: SequenceStep = { step, ...clean };

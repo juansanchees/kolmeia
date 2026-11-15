@@ -304,9 +304,16 @@ export async function runTask<Input, Parsed, Out>(
     throw new AiError("invalid_output", errorText(e));
   }
 
-  await finish(res.usage, costUsd, "ok", null, durationMs);
   const meta = taskMeta(res, Boolean(def.web));
-  const data = def.normalize(parsed, input, meta);
+  let data: Out;
+  try {
+    data = def.normalize(parsed, input, meta);
+  } catch (e) {
+    // Tokens were billed; the ledger must say the output was unusable, not "ok". The error is rethrown unchanged.
+    await finish(res.usage, costUsd, "invalid_output", errorText(e), durationMs);
+    throw e;
+  }
+  await finish(res.usage, costUsd, "ok", null, durationMs);
   return { data, costUsd, usage: res.usage, droppedUrls: meta.dropped.count, ...(web ? { web: webReport(web, res, trimmed) } : {}) };
 }
 

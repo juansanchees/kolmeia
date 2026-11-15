@@ -4,7 +4,7 @@ import { UNTRUSTED, untrusted, type ProfileInput } from "./shared";
 
 // Prompt of the AI sequence writer of the E-mail agent (one Sonnet call per click, a template for MANY companies).
 // Changing any text here changes the prompt: bump PROMPT_VERSION (rule R19). The AI only proposes; the owner approves.
-export const PROMPT_VERSION = "email-sequence-2026-11-15.1";
+export const PROMPT_VERSION = "email-sequence-2026-11-15.2";
 
 export const SYSTEM = `${EMAIL_CONTEXT}
 
@@ -32,12 +32,14 @@ export type SequenceInput = {
   tone: "direct" | "friendly" | "consultive";
   steps: 1 | 2 | 3;
   delays: { step2: number; step3: number };
-  audience: { count: number; types: string[]; towns: string[]; sampleHooks: string[] };
+  audience: { count: number; types: string[]; towns: string[] };
 };
+
+const line = (s: string) => s.replace(/\s+/g, " ").trim().slice(0, 120);
 
 export function buildUser(i: SequenceInput): string {
   return [
-    `Our company: ${i.workspaceName}. Sender: ${i.senderName}. Tone: ${i.tone}. Write ${i.steps} step${i.steps === 1 ? "" : "s"}.` +
+    `Our company: ${line(i.workspaceName)}. Sender: ${line(i.senderName)}. Tone: ${i.tone}. Write ${i.steps} step${i.steps === 1 ? "" : "s"}.` +
       ` Step 2 goes ${i.delays.step2} business days after step 1; step 3 goes ${i.delays.step3} business days after step 1.`,
     "Our company profile:",
     untrusted("profile", i.profile ?? "(not filled in yet)"),
@@ -46,7 +48,6 @@ export function buildUser(i: SequenceInput): string {
       companies: i.audience.count,
       company_types: i.audience.types.slice(0, 10),
       towns: i.audience.towns.slice(0, 10),
-      sample_opening_hooks: i.audience.sampleHooks.slice(0, 5),
     }),
   ].join("\n");
 }

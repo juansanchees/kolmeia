@@ -74,6 +74,16 @@ describe("gateway", () => {
     expect(ledger.rows[0].costUsd).toBeCloseTo(estimateCostUsd(MODELS.haiku, USAGE));
   });
 
+  test("normalize throws -> the call is recorded once as invalid_output (cost kept) and the error is rethrown unchanged", async () => {
+    const ledger = new MemLedger();
+    const boom = new Error("too few steps");
+    const fake = new FakeTransport({ classify: () => ({ json: { answer: "x" } }) });
+    await expect(runTask(ctx(fake, ledger), { ...def, normalize: () => { throw boom; } }, { q: "x" })).rejects.toBe(boom);
+    expect(ledger.rows).toHaveLength(1);
+    expect(ledger.rows[0]).toMatchObject({ status: "invalid_output", error: "Error: too few steps" });
+    expect(ledger.rows[0].costUsd).toBeCloseTo(estimateCostUsd(MODELS.haiku, USAGE));
+  });
+
   test("not configured -> typed error, nothing recorded", async () => {
     const ledger = new MemLedger();
     await expect(runTask(ctx(null, ledger), def, { q: "x" })).rejects.toMatchObject({ code: "not_configured" });
