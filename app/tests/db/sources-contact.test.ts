@@ -110,13 +110,20 @@ describe("0016 contact scraper", () => {
     await hold(tick, a);
     await hold(tick, b);
     expect(await ask(tick, a)).toBe(true);
+    const run1 = (await db.admin<{ run_id: string }>("select run_id from public.source_run_leads where lead_id = $1", [a]))[0].run_id;
     await db.admin("update public.source_runs set start_claimed_at = now() where kind = 'contact'");
     expect(await ask(tick, b)).toBe(true);
     expect((await runs()).map((x) => x.n)).toEqual([1, 1]);
-    await db.admin("update public.source_runs set status = 'imported' where id = (select run_id from public.source_run_leads where lead_id = $1)", [a]);
+    await db.admin("update public.source_runs set status = 'imported' where id = $1", [run1]);
     expect(await ask(tick, a)).toBe(false);
-    await db.admin("update public.source_runs set status = 'failed' where id = (select run_id from public.source_run_leads where lead_id = $1)", [a]);
+    // a free failure (no cost: no_leads, a refusal, disconnected) may try again; a charged one (stale, start_unknown...) may not
+    await db.admin("update public.source_runs set status = 'failed', error = 'no_leads', cost_usd = 0 where id = $1", [run1]);
     expect(await ask(tick, a)).toBe(true);
+    await db.admin("delete from public.source_run_leads where lead_id = $1 and run_id <> $2", [a, run1]); // it joined the open run: take it out again
+    await db.admin("update public.source_runs set status = 'failed', error = 'stale', cost_usd = 0.5 where id = $1", [run1]);
+    expect(await ask(tick, a)).toBe(false);
+    await db.admin("update public.source_runs set created_at = now() - interval '31 days' where id = $1", [run1]);
+    expect(await ask(tick, a)).toBe(true); // 31 days later it may be asked again
   });
 
   test("p2b is a step: the queue, the log and step_done take it", async () => {
@@ -169,7 +176,7 @@ describe("0016 contact scraper", () => {
     expect(code((await tryCommit(db, clock, "select public.source_add_contacts($1,$2,'[]'::jsonb,0,0)", [st, run.id])).error)).toBe("22023");
   });
 
-  test("source_add_contacts refuses rows of other leads, bad e-mails and URLs, extra keys, other kinds; nothing is stored", async () => {
+  test("source_add_contacts skips and counts bad rows (other leads, bad e-mails and URLs, extra keys) and keeps the good ones; other kinds are refused", async () => {
     const { ws } = await seedSources(db, { apifyCap: 5 });
     const a = await addLead(ws);
     const stranger = await addLead(ws);
@@ -180,18 +187,24 @@ describe("0016 contact scraper", () => {
     const [run] = await runs();
     const st = await sourceTick();
     await db.query(clock, "select public.source_mark_started($1,$2,'runABC123','dsXYZ789')", [st, run.id]);
-    const bad = [
-      [{ lead_id: stranger, value: "x@acme.example.com", url: "https://acme.example.com/" }],
-      [{ lead_id: a, value: "not-an-email", url: "https://acme.example.com/" }],
-      [{ lead_id: a, value: "x@acme.example.com", url: "javascript:alert(1)" }],
-      [{ lead_id: a, value: "x@acme.example.com", url: "https://acme.example.com/", status: "confirmed" }],
-      [{ lead_id: "nope", value: "x@acme.example.com", url: "https://acme.example.com/" }],
+    const rows = [
+      { lead_id: a, value: "good@acme.example.com", url: "https://acme.example.com/" },
+      { lead_id: stranger, value: "x@acme.example.com", url: "https://acme.example.com/" },
+      { lead_id: a, value: "not-an-email", url: "https://acme.example.com/" },
+      { lead_id: a, value: "y@acme.example.com", url: "javascript:alert(1)" },
+      { lead_id: a, value: "z@acme.example.com", url: "https://acme.example.com/", status: "confirmed" },
+      { lead_id: "nope", value: "w@acme.example.com", url: "https://acme.example.com/" },
+      { lead_id: a, value: null, url: null },
+      "junk",
     ];
-    for (const rows of bad) {
-      expect(code((await tryCommit(db, clock, "select public.source_add_contacts($1,$2,$3::jsonb,1,0.1)", [st, run.id, JSON.stringify(rows)])).error), JSON.stringify(rows)).toBe("22023");
-    }
-    expect(await db.admin("select 1 from public.lead_fields where source = 'apify_contact'")).toHaveLength(0);
-    expect((await runs())[0].status).toBe("running");
+    const n = (await db.query<{ n: number }>(clock, "select public.source_add_contacts($1,$2,$3::jsonb,8,0.1) as n", [st, run.id, JSON.stringify(rows)]))[0].n;
+    expect(n).toBe(1);
+    expect((await db.admin<{ value: string }>("select value from public.lead_fields where source = 'apify_contact'")).map((x) => x.value)).toEqual(["good@acme.example.com"]);
+    const [r] = await db.admin<{ status: string; found: number; dropped: number }>("select status, found, dropped from public.source_runs where id = $1", [run.id]);
+    expect(r).toEqual({ status: "imported", found: 8, dropped: 7 });
+    // a payload that is not an array is still refused
+    await db.admin("update public.source_runs set status = 'running' where id = $1", [run.id]);
+    expect(code((await tryCommit(db, clock, "select public.source_add_contacts($1,$2,'{}'::jsonb,1,0.1)", [st, run.id])).error)).toBe("22023");
     // a Maps run is not a contact run
     const maps = (await db.admin<{ id: string }>("insert into public.source_runs (workspace_id, provider, kind, max_results, reserve_usd, status) values ($1,'apify','maps',10,0.5,'running') returning id", [ws]))[0].id;
     expect(code((await tryCommit(db, clock, "select public.source_add_contacts($1,$2,'[]'::jsonb,0,0)", [st, maps])).error)).toBe("22023");
@@ -201,6 +214,93 @@ describe("0016 contact scraper", () => {
     expect(q).toHaveLength(1);
     await db.admin("update public.source_runs set status = 'queued' where id = $1", [run.id]);
     expect(code((await tryCommit(db, clock, "select public.source_mark_started($1,$2,'','')", [st, run.id])).error)).toBe("22023");
+  });
+
+  test("a contact run settles at its reserve when the provider reports no cost, and at the reported cost otherwise", async () => {
+    const { ws } = await seedSources(db, { apifyCap: 5 });
+    const a = await addLead(ws);
+    const b = await addLead(ws);
+    const tick = await beginQualifierTick(db);
+    await hold(tick, a);
+    await ask(tick, a);
+    await db.admin("update public.qualifier_ticks set finished_at = now()");
+    const [r1] = await runs();
+    const st = await sourceTick();
+    await db.query(clock, "select public.source_mark_started($1,$2,'runABC123','dsXYZ789')", [st, r1.id]);
+    await db.query(clock, "select public.source_add_contacts($1,$2,'[]'::jsonb,0,null)", [st, r1.id]);
+    expect(Number((await runs())[0].cost_usd)).toBe(0.5);
+    await db.admin("update public.source_ticks set finished_at = now()");
+    // the same lead is answered now; another lead opens a new run that settles at what Apify charged
+    const t2 = await beginQualifierTick(db);
+    await hold(t2, b);
+    await ask(t2, b);
+    await db.admin("update public.qualifier_ticks set finished_at = now()");
+    const r2 = (await runs()).find((x) => x.status === "queued")!;
+    const st2 = await sourceTick();
+    await db.query(clock, "select public.source_mark_started($1,$2,'runABC124','dsXYZ790')", [st2, r2.id]);
+    await db.query(clock, "select public.source_add_contacts($1,$2,'[]'::jsonb,0,0.07)", [st2, r2.id]);
+    expect((await runs()).map((x) => Number(x.cost_usd))).toEqual([0.5, 0.07]);
+  });
+
+  test("two ticks asking for the same lead leave one row", async () => {
+    const { ws } = await seedSources(db, { apifyCap: 5 });
+    const a = await addLead(ws);
+    const t1 = await beginQualifierTick(db);
+    await hold(t1, a);
+    expect(await ask(t1, a)).toBe(true);
+    await db.admin("update public.qualifier_ticks set finished_at = now()");
+    const t2 = await beginQualifierTick(db);
+    await hold(t2, a);
+    expect(await ask(t2, a)).toBe(true);
+    expect(await db.admin("select 1 from public.source_run_leads")).toHaveLength(1);
+    expect(await runs()).toHaveLength(1);
+  });
+
+  test("source_next_work holds a contact run until it has 10 leads or is 10 minutes old, then claims it", async () => {
+    const { ws } = await seedSources(db, { apifyCap: 5 });
+    const tick = await beginQualifierTick(db);
+    const a = await addLead(ws);
+    await hold(tick, a);
+    await ask(tick, a);
+    await db.admin("update public.qualifier_ticks set finished_at = now()");
+    const startIds = async () => {
+      const st = await sourceTick();
+      const w = (await db.query<{ r: { start: { id: string; kind: string }[] } }>(clock, "select public.source_next_work($1) as r", [st]))[0].r;
+      await db.query(clock, "select public.source_finish_tick($1,'{}'::jsonb,null)", [st]);
+      return w.start.map((x) => x.id);
+    };
+    const [run] = await runs();
+    expect(await startIds()).toEqual([]); // 1 lead, just created: it waits for company
+    expect((await runs())[0].status).toBe("queued");
+    await db.admin("update public.source_runs set created_at = now() - interval '11 minutes' where id = $1", [run.id]);
+    expect(await startIds()).toEqual([run.id]); // old enough: claimed
+    // a full run is claimed at once
+    const t2 = await beginQualifierTick(db);
+    for (let i = 0; i < 10; i++) {
+      const l = await addLead(ws);
+      await hold(t2, l);
+      await ask(t2, l, `https://full${i}.example.com/`);
+    }
+    await db.admin("update public.qualifier_ticks set finished_at = now()");
+    const full = (await runs()).find((x) => x.n === 10)!;
+    expect(await startIds()).toEqual([full.id]);
+  });
+
+  test("source_next_work refuses a contact run that no longer fits the day's cap", async () => {
+    const { ws } = await seedSources(db, { apifyCap: 0.5 });
+    const a = await addLead(ws);
+    const tick = await beginQualifierTick(db);
+    await hold(tick, a);
+    expect(await ask(tick, a)).toBe(true);
+    await db.admin("update public.qualifier_ticks set finished_at = now()");
+    await db.admin("update public.source_runs set created_at = now() - interval '11 minutes' where kind = 'contact'");
+    await db.admin("insert into public.source_runs (workspace_id, provider, kind, max_results, reserve_usd, status, cost_usd) values ($1,'apify','maps',10,0.5,'imported',0.4)", [ws]);
+    const st = await sourceTick();
+    const w = (await db.query<{ r: { start: unknown[] } }>(clock, "select public.source_next_work($1) as r", [st]))[0].r;
+    expect(w.start).toEqual([]);
+    const [r] = await runs();
+    expect([r.status]).toEqual(["refused"]);
+    expect((await db.admin<{ error: string }>("select error from public.source_runs where kind = 'contact'"))[0].error).toBe("source_cap");
   });
 
   test("senders read their workspace's run leads; closers and strangers see none", async () => {

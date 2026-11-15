@@ -3,6 +3,7 @@ import { AiError, isAiError, type AiErrorCode } from "@/lib/ai/errors";
 import { lightQualify, verifyLead } from "@/lib/ai/qualify-tasks";
 import type { AiTransport } from "@/lib/ai/types";
 import { hostOf, sanitizeUrl } from "@/lib/safe-url";
+import { isDirectoryHost } from "@/lib/sources/contact";
 import { PLACES_CALL_USD } from "./places";
 import type { RawHttp } from "./site/net";
 import { cut } from "./site/extract";
@@ -154,7 +155,11 @@ export async function qualifyLead(s: LeadSnapshot, d: CascadeDeps): Promise<Casc
         if (fields.some((f) => f.field === "email" && f.status !== "refuted")) return { outcome: "skipped" };
         const w = siteField({ ...s, fields });
         const url = w ? sanitizeUrl(w.value) : null;
-        if (!url) return { outcome: "skipped" };
+        const host = url ? hostOf(url) : null;
+        // a social or directory page is not the company's own site: nothing worth a paid scrape
+        if (!url || !host || isDirectoryHost(host)) return { outcome: "skipped" };
+        // Known gap: a run refused when the sources clock starts it (cap, disconnected) leaves this step logged as "queued"
+        // and the lead is not asked again until a new pass; the lead itself is never blocked by it.
         return { outcome: (await store.requestContacts(tickId, leadId, url)) ? "queued" : "no_source" };
       }
       case "p3": {

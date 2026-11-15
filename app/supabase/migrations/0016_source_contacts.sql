@@ -117,7 +117,7 @@ $$;
 
 -- ---------------------------------------------------------------- Qualificador path: ask for contacts
 -- True = the lead is (now, or already) in an open contact run. False = nothing was asked: no Apify connection, the
--- day's cap has no room for a new run's 0.50 reserve, or the lead was already answered by a run in the last 30 days.
+-- day's cap has no room for a new run's 0.50 reserve, or the lead was already answered (or charged) in the last 30 days.
 -- Joins the workspace's oldest queued run that nobody has claimed and that has fewer than 10 leads; else opens one.
 create or replace function public.qualifier_request_contacts(p_tick uuid, p_lead uuid, p_url text)
 returns boolean
@@ -147,8 +147,11 @@ begin
               where l.lead_id = p_lead and r.kind = 'contact' and r.status in ('queued', 'running')) then
     return true;
   end if;
+  -- answered, or paid for and failed (stale, start_unknown, import_refused...), in the last 30 days: never pay twice.
+  -- Free failures (no_leads, a definite refusal, disconnected, refused at the cap) may try again.
   if exists (select 1 from public.source_run_leads l join public.source_runs r on r.id = l.run_id
-              where l.lead_id = p_lead and r.kind = 'contact' and r.status = 'imported' and r.created_at > now() - interval '30 days') then
+              where l.lead_id = p_lead and r.kind = 'contact' and r.created_at > now() - interval '30 days'
+                and (r.status = 'imported' or (r.status = 'failed' and coalesce(r.cost_usd, 0) > 0))) then
     return false;
   end if;
   select r.id into v_run
@@ -188,6 +191,93 @@ begin
 end;
 $$;
 
+-- 0013's source_next_work plus the contact batching window (a contact run is claimed at 10 leads or 10 minutes old).
+create or replace function public.source_next_work(p_tick uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v record;
+  v_ct text;
+  v_cap_usd numeric;
+  v_cap_calls integer;
+  v_over boolean;
+  v_start jsonb := '[]'::jsonb;
+  v_poll jsonb := '[]'::jsonb;
+  v_n int := 0;
+begin
+  perform public.source_assert_tick(p_tick);
+  -- a start claimed over 10 minutes ago never reported back (the tick died after Apify may have started it):
+  -- its fate is unknown, so it is failed and its reserve is charged; it is never started a second time
+  update public.source_runs
+     set status = 'failed', error = 'start_unknown', finished_at = now(), cost_usd = reserve_usd
+   where status = 'queued' and start_claimed_at is not null and start_claimed_at < now() - interval '10 minutes';
+  for v in
+    select r.* from public.source_runs r where r.status = 'queued' and r.start_claimed_at is null order by r.created_at, r.id
+  loop
+    exit when v_n >= 3;
+    perform pg_advisory_xact_lock(hashtext('source:' || v.workspace_id::text));
+    -- re-read under the lock: a client may have changed it meanwhile
+    if not exists (select 1 from public.source_runs r where r.id = v.id and r.status = 'queued' and r.start_claimed_at is null) then
+      continue;
+    end if;
+    -- a contact run waits for company: under 10 leads and younger than 10 minutes it is not started yet (the 0.50
+    -- minimum charge is shared by up to 10 leads). qualifier_request_contacts takes the same lock, so no lead joins
+    -- a run that is being claimed.
+    if v.kind = 'contact' and v.created_at > now() - interval '10 minutes'
+       and (select count(*) from public.source_run_leads l where l.run_id = v.id) < 10 then
+      continue;
+    end if;
+    select c.secret_ciphertext, c.daily_cap_usd, c.daily_calls into v_ct, v_cap_usd, v_cap_calls
+      from public.source_connections c where c.workspace_id = v.workspace_id and c.provider = v.provider;
+    if v_ct is null then
+      update public.source_runs set status = 'refused', error = 'disconnected', finished_at = now() where id = v.id;
+      continue;
+    end if;
+    -- the queued run already counts in today's total: over the cap only if the total up to this run (younger queued
+    -- runs left out, so the oldest keep their place) exceeds it
+    if v.provider = 'apify' then
+      v_over := public.source_spent_today(v.workspace_id) - coalesce((
+          select sum(x.reserve_usd) from public.source_runs x
+           where x.workspace_id = v.workspace_id and x.provider = 'apify' and x.status = 'queued' and x.created_at >= public.source_day_start() and (x.created_at, x.id) > (v.created_at, v.id)), 0)
+        > coalesce(v_cap_usd, 2.00);
+    else
+      v_over := public.source_calls_today(v.workspace_id) - (
+          select count(*) from public.source_runs x
+           where x.workspace_id = v.workspace_id and x.provider = 'apollo' and x.status = 'queued' and x.created_at >= public.source_day_start() and (x.created_at, x.id) > (v.created_at, v.id))
+        > coalesce(v_cap_calls, 20);
+    end if;
+    if v_over then
+      update public.source_runs set status = 'refused', error = 'source_cap', finished_at = now() where id = v.id;
+      continue;
+    end if;
+    v_n := v_n + 1;
+    update public.source_runs set start_claimed_at = now() where id = v.id;
+    v_start := v_start || jsonb_build_array(jsonb_build_object(
+      'id', v.id, 'workspace_id', v.workspace_id, 'provider', v.provider, 'kind', v.kind, 'query', v.query,
+      'max_results', v.max_results, 'reserve_usd', v.reserve_usd, 'external_run_id', v.external_run_id,
+      'dataset_id', v.dataset_id, 'started_at', v.started_at, 'label', v.query ->> 'label', 'ciphertext', v_ct));
+  end loop;
+
+  for v in
+    select r.* from public.source_runs r where r.status = 'running' order by r.started_at nulls first, r.id limit 10
+  loop
+    select c.secret_ciphertext into v_ct from public.source_connections c where c.workspace_id = v.workspace_id and c.provider = v.provider;
+    if v_ct is null then
+      update public.source_runs set status = 'failed', error = 'disconnected', finished_at = now(), cost_usd = coalesce(cost_usd, reserve_usd) where id = v.id;
+      continue;
+    end if;
+    v_poll := v_poll || jsonb_build_array(jsonb_build_object(
+      'id', v.id, 'workspace_id', v.workspace_id, 'provider', v.provider, 'kind', v.kind, 'query', v.query,
+      'max_results', v.max_results, 'reserve_usd', v.reserve_usd, 'external_run_id', v.external_run_id,
+      'dataset_id', v.dataset_id, 'started_at', v.started_at, 'label', v.query ->> 'label', 'ciphertext', v_ct));
+  end loop;
+  return jsonb_build_object('start', v_start, 'poll', v_poll);
+end;
+$$;
+
 -- 0013's source_mark_started: a contact run (Apify) needs its ids like a Maps run does.
 create or replace function public.source_mark_started(p_tick uuid, p_run uuid, p_external_id text, p_dataset text)
 returns void
@@ -218,7 +308,8 @@ end;
 $$;
 
 -- Stores a finished contact run's e-mails once and settles the run ('imported', cost = what Apify charged, else the
--- reserve). Rows are { lead_id, value, url }: each lead must belong to the run. The values are confirmed (they are on the
+-- reserve). Rows are { lead_id, value, url }: each lead must belong to the run; a row that is not (or is malformed)
+-- is skipped and counted in dropped, the rest is kept. The values are confirmed (they are on the
 -- lead's own site) and carry the page they were read on; a finished lead is re-queued by the lead_fields trigger.
 -- Only from running (else 22023): a second call cannot store twice. Returns the number of e-mails new to their lead.
 create or replace function public.source_add_contacts(p_tick uuid, p_run uuid, p_rows jsonb, p_found int, p_cost numeric)
@@ -235,6 +326,8 @@ declare
   v_i integer;
   v_value text;
   v_url text;
+  v_ok boolean;
+  v_skipped integer := 0;
 begin
   perform public.source_assert_tick(p_tick);
   select * into v_run from public.source_runs x where x.id = p_run for update;
@@ -246,22 +339,29 @@ begin
      or (p_cost is not null and (p_cost < 0 or p_cost > 1000)) then
     raise exception 'invalid rows' using errcode = '22023';
   end if;
+  -- one bad row must not cost the other leads of the run their e-mails: it is skipped and counted (dropped)
   for r in select e from jsonb_array_elements(p_rows) e loop
-    if jsonb_typeof(r) <> 'object' then
-      raise exception 'invalid rows' using errcode = '22023';
+    v_ok := jsonb_typeof(r) = 'object';
+    if v_ok then
+      for k in select jsonb_object_keys(r) loop
+        if k <> all (array['lead_id', 'value', 'url']) then
+          v_ok := false;
+        end if;
+      end loop;
     end if;
-    for k in select jsonb_object_keys(r) loop
-      if k <> all (array['lead_id', 'value', 'url']) then
-        raise exception 'invalid rows' using errcode = '22023';
-      end if;
-    end loop;
-    v_value := lower(btrim(r ->> 'value'));
-    v_url := btrim(r ->> 'url');
-    if (r ->> 'lead_id') is null or (r ->> 'lead_id') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-       or v_value is null or char_length(v_value) > 254 or v_value !~ '^[a-z0-9._%+-]{1,64}@[a-z0-9-]+(\.[a-z0-9-]+)+$'
-       or v_url is null or char_length(v_url) > 2000 or v_url !~* '^https?://[^/?#[:space:]]+' or v_url ~ '[[:space:]]'
-       or not exists (select 1 from public.source_run_leads l where l.run_id = p_run and l.lead_id = (r ->> 'lead_id')::uuid) then
-      raise exception 'invalid rows' using errcode = '22023';
+    if v_ok then
+      v_value := lower(btrim(r ->> 'value'));
+      v_url := btrim(r ->> 'url');
+      v_ok := (r ->> 'lead_id') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+          and v_value ~ '^[a-z0-9._%+-]{1,64}@[a-z0-9-]+(\.[a-z0-9-]+)+$' and char_length(v_value) <= 254
+          and char_length(v_url) <= 2000 and v_url ~* '^https?://[^/?#[:space:]]+' and v_url !~ '[[:space:]]';
+    end if;
+    if v_ok then
+      v_ok := exists (select 1 from public.source_run_leads l where l.run_id = p_run and l.lead_id = (r ->> 'lead_id')::uuid);
+    end if;
+    if v_ok is not true then
+      v_skipped := v_skipped + 1;
+      continue;
     end if;
     insert into public.lead_fields (workspace_id, lead_id, field, value, source, source_ref, status)
     values (v_run.workspace_id, (r ->> 'lead_id')::uuid, 'email', v_value, 'apify_contact', v_url, 'confirmed')
@@ -270,8 +370,9 @@ begin
     v_n := v_n + v_i;
   end loop;
   update public.source_runs
-     set status = 'imported', found = p_found, dropped = greatest(p_found - jsonb_array_length(p_rows), 0), finished_at = now(),
-         cost_usd = round(coalesce(p_cost, reserve_usd), 2)
+     set status = 'imported', found = p_found,
+         dropped = greatest(p_found - (jsonb_array_length(p_rows) - v_skipped), 0),
+         finished_at = now(), cost_usd = round(coalesce(p_cost, reserve_usd), 2)
    where id = p_run;
   return v_n;
 end;

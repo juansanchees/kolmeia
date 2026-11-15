@@ -41,13 +41,34 @@ function junk(email: string): boolean {
 const sameSite = (a: string, b: string) => a === b || a.endsWith(`.${b}`) || b.endsWith(`.${a}`);
 const rec = (v: unknown): Record<string, unknown> | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
 
+/** Mailboxes small contractors really use. Kept only when read on the lead's own page (never from a third party's). */
+const FREE_MAIL = new Set([
+  "gmail.com", "googlemail.com", "yahoo.com", "ymail.com", "outlook.com", "hotmail.com", "live.com", "msn.com",
+  "aol.com", "icloud.com", "me.com", "comcast.net", "verizon.net", "att.net",
+]);
+
+/** Social, review and directory sites: a lead whose "website" is one of these has no site of its own to scrape. */
+const DIRECTORY_HOSTS = ["facebook.com", "fb.com", "instagram.com", "yelp.com", "bbb.org", "houzz.com", "angi.com", "angieslist.com", "thumbtack.com", "nextdoor.com", "google.com", "goo.gl", "g.page", "business.site"];
+const BLOCKED_NETWORK = /linked[\s_.-]*in|lnkd/i;
+
+export function isDirectoryHost(host: string): boolean {
+  const h = host.toLowerCase().replace(/\.+$/, "");
+  return BLOCKED_NETWORK.test(h) || DIRECTORY_HOSTS.some((d) => h === d || h.endsWith(`.${d}`));
+}
+
 /**
- * The e-mails to store, per lead. An e-mail is kept when its domain is the lead's domain, or when it was read on a page
- * of the lead's own site (same host). Everything else is dropped.
+ * The e-mails to store, per lead. An e-mail is kept when its domain is the lead's domain, or when it is a free-mail
+ * address (gmail, yahoo...) read on a page of the lead's own site. Everything else is dropped: with mergeContacts and
+ * sameDomain nearly every item is a page of the lead's host, so "read on the own site" alone would also let through a web
+ * agency's footer, a manufacturer's rep or a directory's address. Leads that share one site all get its e-mails.
  */
 export function keepEmails(items: unknown[], leads: { leadId: string; host: string }[]): { leadId: string; value: string; url: string }[] {
   if (!Array.isArray(items)) return [];
-  const byHost = new Map(leads.map((l) => [l.host.toLowerCase().replace(/^www\./, ""), l.leadId]));
+  const byHost = new Map<string, string[]>();
+  for (const l of leads) {
+    const h = l.host.toLowerCase().replace(/^www\./, "");
+    byHost.set(h, [...(byHost.get(h) ?? []), l.leadId]);
+  }
   const out: { leadId: string; value: string; url: string }[] = [];
   const seen = new Set<string>();
   const count = new Map<string, number>();
@@ -56,23 +77,24 @@ export function keepEmails(items: unknown[], leads: { leadId: string; host: stri
     if (!it || !Array.isArray(it.emails)) continue;
     const start = typeof it.originalStartUrl === "string" ? hostOf(it.originalStartUrl) : null;
     const page = typeof it.url === "string" ? hostOf(it.url) : null;
-    const leadId = (start && byHost.get(start)) || (page && byHost.get(page)) || null;
-    if (!leadId) continue;
-    const leadHost = [...byHost.entries()].find(([, id]) => id === leadId)![0];
+    const siteHost = start && byHost.has(start) ? start : page && byHost.has(page) ? page : null;
+    if (!siteHost) continue;
     const pageUrl = typeof it.url === "string" ? sanitizeUrl(it.url) : null;
     if (!pageUrl) continue;
-    const onOwnPage = !!page && sameSite(page, leadHost);
+    const onOwnPage = !!page && sameSite(page, siteHost);
     for (const e of it.emails) {
       if (typeof e !== "string") continue;
       const email = e.trim().toLowerCase();
       if (email.length > 254 || !EMAIL.test(email) || junk(email)) continue;
       const domain = email.slice(email.lastIndexOf("@") + 1);
-      if (!onOwnPage && !sameSite(domain, leadHost)) continue;
-      const k = `${leadId}:${email}`;
-      if (seen.has(k) || (count.get(leadId) ?? 0) >= PER_LEAD) continue;
-      seen.add(k);
-      count.set(leadId, (count.get(leadId) ?? 0) + 1);
-      out.push({ leadId, value: email, url: pageUrl });
+      if (!sameSite(domain, siteHost) && !(onOwnPage && FREE_MAIL.has(domain))) continue;
+      for (const leadId of byHost.get(siteHost)!) {
+        const k = `${leadId}:${email}`;
+        if (seen.has(k) || (count.get(leadId) ?? 0) >= PER_LEAD) continue;
+        seen.add(k);
+        count.set(leadId, (count.get(leadId) ?? 0) + 1);
+        out.push({ leadId, value: email, url: pageUrl });
+      }
     }
   }
   return out;

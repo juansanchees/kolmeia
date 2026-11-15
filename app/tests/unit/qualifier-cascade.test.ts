@@ -680,6 +680,15 @@ describe("P2b contatos (Apify, F3d-2)", () => {
     expect(steps(b)[0]).toBe("p2b:skipped:p3:");
   });
 
+  test("P2b skips a lead whose site is a social or directory page", async () => {
+    for (const url of ["https://www.facebook.com/acmehvac", "https://www.yelp.com/biz/acme", "https://sites.google.com/view/acme"]) {
+      const st = fakeQualifierStore([], { contacts: true });
+      await qualifyLead(snapshot({ nextStep: "p2b", fields: [field({ field: "website", value: url })], notes: { p2: "ok" } }), deps(st));
+      expect(asked(st), url).toEqual([]);
+      expect(steps(st)[0]).toBe("p2b:skipped:p3:");
+    }
+  });
+
   test("a failing request counts as a step error and stays on p2b; the third in a row skips it", async () => {
     const st = fakeQualifierStore([], { contacts: true, failOn: { requestContacts: new Error("rpc_down") } });
     const s = snapshot({ nextStep: "p2b", fields: [field({ field: "website", value: SITE })], notes: { p2: "ok" } });

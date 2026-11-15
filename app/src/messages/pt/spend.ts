@@ -6,6 +6,7 @@ export const spend = {
   changeCap: "mudar teto",
   total: "Total no período: US$ {usd}",
   sourcesTotal: "Fontes pagas (Apify, Apollo): US$ {usd}",
+  partial: "(parcial)",
   grandTotal: "Total geral (IA + fontes pagas): US$ {usd}",
   by: { label: "Ver por", agent: "Agente", step: "Passo", model: "Modelo", lead: "Lead", day: "Dia" },
   period: { label: "Período", today: "Hoje", d7: "7 dias", d30: "30 dias" },

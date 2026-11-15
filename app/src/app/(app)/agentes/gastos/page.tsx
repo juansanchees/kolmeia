@@ -90,7 +90,7 @@ export default async function GastosPage({ searchParams }: { searchParams: Promi
       {spend.truncated && <Notice tone="warn">{S.truncated}</Notice>}
       <SourceSpend rows={src} />
       <p className="text-sm font-semibold">{fill(S.sourcesTotal, { usd: money(src.reduce((s, r) => s + r.usd, 0)) })}</p>
-      <p className="text-sm font-semibold">{fill(S.grandTotal, { usd: money(grandTotal(spend.calls, sources)) })}</p>
+      <p className="text-sm font-semibold">{fill(S.grandTotal, { usd: money(grandTotal(spend.calls, sources)) })}{spend.truncated ? ` ${S.partial}` : ""}</p>
     </div>
   );
 }

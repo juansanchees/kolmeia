@@ -387,7 +387,7 @@ describe("contact runs (P2b)", () => {
         status: 200,
         json: [
           { url: "https://acme.example.com/contact", originalStartUrl: "https://acme.example.com/", emails: ["Info@acme.example.com", "x@domain.com"], phones: ["+1 508 555 0100"] },
-          { url: "https://www.bravo.example.org/about", originalStartUrl: "https://www.bravo.example.org/home", emails: ["hi@bravo.example.org", "other@stranger.example.net"] },
+          { url: "https://www.bravo.example.org/about", originalStartUrl: "https://www.bravo.example.org/home", emails: ["hi@bravo.example.org", "owner@gmail.com", "site-by@webagency.example.net"] },
         ],
       },
     });
@@ -402,8 +402,8 @@ describe("contact runs (P2b)", () => {
       [
         { leadId: "L1", value: "info@acme.example.com", url: "https://acme.example.com/contact" },
         { leadId: "L2", value: "hi@bravo.example.org", url: "https://www.bravo.example.org/about" },
-        // read on the lead's own page: kept even though its domain is another (a mailbox the site itself shows)
-        { leadId: "L2", value: "other@stranger.example.net", url: "https://www.bravo.example.org/about" },
+        // free mail read on the lead's own page is kept; the web agency's address on the same page is not
+        { leadId: "L2", value: "owner@gmail.com", url: "https://www.bravo.example.org/about" },
       ],
       2,
       0.07,
