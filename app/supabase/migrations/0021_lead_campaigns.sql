@@ -1,5 +1,5 @@
 -- 0021 Leads into campaigns (F4 Task 2).
---   * email_prospects.lead_id: the lead a prospect belongs to (composite FK, 0011 pattern). Back-filled from the
+--   * email_prospects.lead_id: the lead a prospect belongs to (plain FK to leads; workspace match checked by guard_prospect_lead). Back-filled from the
 --     research candidate; new prospects with a candidate get it from the trigger (import_list_into_campaign unchanged).
 --   * R18 for lead addresses: email_source 'lead' carries email_source_ref = '<lead_fields.source>:<source_ref or field id>'.
 --     A refuted e-mail field is never used. A person typing an address makes it 'manual' (the lead source is dropped).
@@ -211,7 +211,7 @@ begin
       select x.id, x.lead_id, x.workspace_id
         from public.email_prospects x
        where x.campaign_id = new.id and x.status = 'active' and x.lead_id is not null
-       order by x.created_at, x.id
+       order by x.lead_id, x.id   -- same advisory-lock order as add_leads_to_campaign (no deadlock)
     loop
       perform pg_advisory_xact_lock(hashtextextended('lead-campaign:' || p.lead_id::text, 0));
       if exists (select 1 from public.lead_campaign_locks k where k.lead_id = p.lead_id and k.prospect_id <> p.id) then
@@ -233,7 +233,7 @@ create trigger guard_prospect_lead
   before insert or update of status, lead_id on public.email_prospects
   for each row execute function public.guard_prospect_lead();
 create trigger sync_lead_lock
-  after insert or update or delete on public.email_prospects
+  after insert or update of status, lead_id, campaign_id or delete on public.email_prospects
   for each row execute function public.sync_lead_lock();
 create trigger sync_campaign_locks
   after update of status on public.email_campaigns
