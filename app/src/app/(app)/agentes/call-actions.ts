@@ -27,7 +27,11 @@ export async function createCallAgentAction(input: { name: string; config: CallA
     .single();
   if (error || !data) return { ok: false, error: C.failed };
   const { error: upErr } = await db.from("agents").update({ status: "paused" }).eq("id", data.id).eq("status", "draft");
-  if (upErr) return { ok: false, error: C.failed };
+  if (upErr) {
+    // the insert always lands as draft; do not leave an orphan that a retry would duplicate (best effort)
+    await db.from("agents").delete().eq("id", data.id).eq("status", "draft");
+    return { ok: false, error: C.failed };
+  }
   revalidatePath("/agentes", "layout");
   return { ok: true, agentId: data.id as string };
 }

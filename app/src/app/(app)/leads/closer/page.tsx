@@ -28,8 +28,7 @@ export default async function CloserPage() {
   const rows = (data ?? []) as ProspectRow[];
 
   // Leads handed to a closer (F5): RLS limits the closer to hers; owner/sdr see all and who holds each one.
-  const withCloser = (await listLeads(s.supabase, s.workspace.id))
-    .filter((i) => (i.lead.status === "with_closer" || i.lead.status === "meeting") && i.lead.owner_id)
+  const withCloser = (await listLeads(s.supabase, s.workspace.id, { statuses: ["with_closer", "meeting"], ownerNotNull: true }))
     .sort((a, b) => (b.lead.handed_off_at ?? "").localeCompare(a.lead.handed_off_at ?? ""));
   let labels = new Map<string, string>();
   if (s.canSend) {

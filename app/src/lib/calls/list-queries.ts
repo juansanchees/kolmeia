@@ -3,16 +3,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { inChunks, listLeads } from "@/lib/leads/queries";
 import type { LeadListItem } from "@/lib/leads/types";
 import { CALL_LOG_COLUMNS, type CallListItemRow, type CallLogRow } from "./types";
+import { nyDay } from "./ny-day";
 import { callAgentMetrics } from "./view";
 
 const ITEM_COLUMNS = "id, workspace_id, agent_id, lead_id, caller_id, list_date, position, manual, created_at";
-const NY = "America/New_York";
-
-/** The New York calendar day (same as SQL call_day()), as yyyy-mm-dd. */
-export function nyDay(d: Date): string {
-  return d.toLocaleDateString("en-CA", { timeZone: NY });
-}
-
 export type TodayRow = { item: CallListItemRow; lead: LeadListItem; lastCall: CallLogRow | null; calledToday: boolean };
 
 /** Today's rows of call_list_items (RLS decides which: the caller's own, or every row for owner/sdr). */
@@ -39,7 +33,7 @@ export async function todayList(db: SupabaseClient, opts: { agentId?: string } =
   const items = await itemsOfToday(db, opts.agentId, today);
   if (items.length === 0) return [];
   const ids = [...new Set(items.map((i) => i.lead_id))];
-  const [leads, calls] = await Promise.all([listLeads(db, items[0].workspace_id), callsOf(db, ids)]);
+  const [leads, calls] = await Promise.all([listLeads(db, items[0].workspace_id, { ids }), callsOf(db, ids)]);
   const leadBy = new Map(leads.map((l) => [l.lead.id, l]));
   const lastBy = new Map<string, CallLogRow>();
   for (const c of calls) if (!lastBy.has(c.lead_id)) lastBy.set(c.lead_id, c);

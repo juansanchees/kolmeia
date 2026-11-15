@@ -32,6 +32,7 @@ export const calls = {
   proofTitle: "Prova",
   stale: "prova velha",
   noPhone: "Sem telefone válido.",
+  blockedShort: "Bloqueado: não ligar.",
   rawPhone: "Número",
   brief: "Resumo da passagem",
   blocked: "Este lead pediu para não ser ligado: bloqueado para sempre. Nenhuma lista nem campanha usa mais.",

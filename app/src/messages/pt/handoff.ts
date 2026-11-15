@@ -13,6 +13,8 @@ export const handoff = {
   lost: "Perdido",
   addToList: "Pôr na lista de ligação",
   failed: "Não deu certo. Tente de novo.",
+  leadClosed: "Este lead já está fechado.",
+  closerLeft: "Essa closer saiu da equipe. Escolha outra.",
   needNext: "Escreva o próximo passo.",
   pickCloser: "Escolha a closer.",
   noCallAgent: "Nenhum agente de ligação rodando.",

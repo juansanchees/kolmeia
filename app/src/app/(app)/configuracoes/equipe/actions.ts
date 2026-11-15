@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { configuredPublicOrigin } from "@/lib/email/config";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace, getUser } from "@/lib/workspace";
 import type { FormState } from "@/lib/form-state";
@@ -36,11 +37,14 @@ export async function createInviteAction(_prev: FormState, form: FormData): Prom
   if (error || typeof data !== "string") return { status: "error", message: t.team.generic };
 
   // The app sends no e-mail: the owner copies this link and sends it herself.
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
-  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  let origin = configuredPublicOrigin()?.replace(/\/+$/, "");
+  if (!origin) {
+    const h = await headers();
+    const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
+    origin = `${h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https")}://${host}`;
+  }
   revalidatePath("/configuracoes/equipe");
-  return { status: "success", link: `${proto}://${host}/convite/${data}` };
+  return { status: "success", link: `${origin}/convite/${data}` };
 }
 
 export async function revokeInviteAction(id: string): Promise<void> {

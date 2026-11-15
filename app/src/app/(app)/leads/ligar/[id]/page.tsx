@@ -30,7 +30,7 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
       <Link href="/leads/ligar" className="font-mono text-xs text-blue underline underline-offset-4">
         {t.calls.back}
       </Link>
-      <CallFacts detail={detail} phone={phone} now={new Date()} />
+      <CallFacts detail={detail} phone={phone} now={new Date()} blocked={blocked} />
       {blocked ? <Notice tone="warn" role="alert">{t.calls.blocked}</Notice> : <CallForm leadId={id} agentId={agentId} status={detail.lead.status} />}
       <CallHistory calls={calls} />
     </div>

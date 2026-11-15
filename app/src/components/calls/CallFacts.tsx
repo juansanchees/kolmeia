@@ -1,5 +1,6 @@
 import type { CandidateRow } from "@/lib/research/rows";
 import type { LeadDetail } from "@/lib/leads/types";
+import { sanitizeUrl } from "@/lib/safe-url";
 import { telHref } from "@/lib/calls/view";
 import { displayOf, isStaleProof } from "@/lib/leads/view";
 import { parseCloserBrief } from "@/lib/email/brief";
@@ -18,7 +19,8 @@ type Proof = { url: string; title: string; excerpt: string | null; seenAt: strin
 function proofs(candidates: LeadDetail["candidates"], checks: LeadDetail["checks"]): Proof[] {
   const out: Proof[] = [];
   const add = (p: Proof) => {
-    if (p.url && !out.some((o) => o.url === p.url)) out.push(p);
+    const url = sanitizeUrl(p.url);
+    if (url && !out.some((o) => o.url === url)) out.push({ ...p, url });
   };
   for (const c of candidates) if (c.found_at_url) add({ url: c.found_at_url, title: c.found_at_title ?? "", excerpt: c.found_at_excerpt ?? null, seenAt: c.found_at_seen_at ?? null });
   for (const k of checks) for (const e of k.evidence) add({ url: e.url, title: e.title ?? "", excerpt: e.excerpt ?? null, seenAt: e.seen_at ?? null });
@@ -26,11 +28,11 @@ function proofs(candidates: LeadDetail["candidates"], checks: LeadDetail["checks
 }
 
 /** What the caller needs before dialing: the number (tel: link and plain text), who to ask for, the hook, the proof. */
-export function CallFacts({ detail, phone, now }: { detail: LeadDetail; phone: string | null; now: Date }) {
+export function CallFacts({ detail, phone, now, blocked = false }: { detail: LeadDetail; phone: string | null; now: Date; blocked?: boolean }) {
   const { lead, candidates, checks, fields } = detail;
   const best: CandidateRow | null = candidates.find((c) => c.id === lead.best_candidate_id) ?? candidates[0] ?? null;
   const display = displayOf(best, fields);
-  const href = phone ? telHref(phone) : null;
+  const href = !blocked && phone ? telHref(phone) : null;
   const brief = parseCloserBrief(lead.closer_brief);
   return (
     <section className="flex flex-col gap-3.5 border border-line bg-surface p-4">
@@ -47,7 +49,7 @@ export function CallFacts({ detail, phone, now }: { detail: LeadDetail; phone: s
           {C.call}
         </a>
       ) : (
-        <Notice tone="warn">{C.noPhone}</Notice>
+        <Notice tone="warn">{blocked ? C.blockedShort : C.noPhone}</Notice>
       )}
       {phone && (
         <p className="text-[13px] text-muted">

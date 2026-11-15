@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { CALL_LOG_COLUMNS, type CallLogRow } from "./types";
 
-const ny = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+import { nyDay as ny } from "./ny-day";
 
 /** The calls of one lead, newest first, at most 50 (RLS decides what the user sees). */
 export async function callsOf(db: SupabaseClient, leadId: string): Promise<CallLogRow[]> {

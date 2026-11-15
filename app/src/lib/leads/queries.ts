@@ -77,20 +77,31 @@ export async function inLeadChunks<T>(ids: string[], run: (chunk: string[]) => P
 }
 
 /** Leads of a workspace with their best candidate. Runs as the user, so RLS decides what the closer sees. */
-export async function listLeads(db: SupabaseClient, workspaceId: string): Promise<LeadListItem[]> {
-  const leads: LeadRow[] = [];
-  for (let from = 0; from < LEADS_MAX; from += PAGE) {
-    const { data: page, error } = await db
-      .from("leads")
-      .select(LEAD_COLUMNS)
-      .eq("workspace_id", workspaceId)
-      .order("last_seen_at", { ascending: false })
-      .order("id", { ascending: true })
-      .range(from, Math.min(from + PAGE, LEADS_MAX) - 1);
-    if (error) throw new Error(`listLeads: ${error.message}`);
-    const rows = (page ?? []) as LeadRow[];
-    leads.push(...rows);
-    if (rows.length < PAGE) break;
+export type LeadFilter = { ids?: string[]; statuses?: LeadRow["status"][]; ownerNotNull?: boolean };
+
+export async function listLeads(db: SupabaseClient, workspaceId: string, filter: LeadFilter = {}): Promise<LeadListItem[]> {
+  let leads: LeadRow[] = [];
+  if (filter.ids) {
+    // a few known leads: no paging, only those ids (still the workspace's; RLS applies)
+    leads = await inChunks<LeadRow>(
+      filter.ids,
+      (c) => db.from("leads").select(LEAD_COLUMNS).eq("workspace_id", workspaceId).in("id", c) as never,
+      "listLeads ids",
+    );
+  } else {
+    for (let from = 0; from < LEADS_MAX; from += PAGE) {
+      let q = db.from("leads").select(LEAD_COLUMNS).eq("workspace_id", workspaceId);
+      if (filter.statuses) q = q.in("status", filter.statuses);
+      if (filter.ownerNotNull) q = q.not("owner_id", "is", null);
+      const { data: page, error } = await q
+        .order("last_seen_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(from, Math.min(from + PAGE, LEADS_MAX) - 1);
+      if (error) throw new Error(`listLeads: ${error.message}`);
+      const rows = (page ?? []) as LeadRow[];
+      leads.push(...rows);
+      if (rows.length < PAGE) break;
+    }
   }
   if (leads.length === 0) return [];
 

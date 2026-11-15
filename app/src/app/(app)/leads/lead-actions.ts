@@ -39,7 +39,7 @@ export async function handOffLeadAction(
     p_closer: parsedIds.data.closerId,
     p_brief: { ...b.data, evidence_urls: urls, model: "manual" },
   });
-  if (error) return fail(H.failed);
+  if (error) return fail(error.code === "55000" ? H.leadClosed : error.code === "22023" ? H.closerLeft : H.failed);
   revalidatePath("/leads", "layout");
   return ok(H.statusDone);
 }
