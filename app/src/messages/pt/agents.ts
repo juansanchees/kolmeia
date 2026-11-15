@@ -81,7 +81,7 @@ export const agents = {
     rigor: "Rigor",
     schedule: "Frequência",
     sources: "Fontes",
-    sourcesValue: "web_search, web_fetch (sem LinkedIn)",
+    sourcesValue: "web_search, web_fetch (sem redes sociais profissionais)",
     maxCost: "Custo máximo por execução",
     maxTime: "Tempo máximo",
     maxTimeValue: "até {minutes} min",

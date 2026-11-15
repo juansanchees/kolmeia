@@ -154,7 +154,7 @@ describe("R13: the AI has no tool that writes, sends or deletes", () => {
     // docs/mvp/fase-1-3-pesquisa.md).
     const types = [...text.matchAll(/type: "([a-z_]+_\d{8})"/g)].map((m) => m[1]).sort();
     expect(types).toEqual(["web_fetch_20250910", "web_search_20250305"]);
-    expect(text).toMatch(/BLOCKED_DOMAINS = \["linkedin\.com", "lnkd\.in"\]/);
+    expect(text).toMatch(/BLOCKED_DOMAINS = \[\.\.\.BLOCKED_NETWORK_HOSTS\]/);
     expect(text.match(/blocked_domains: BLOCKED_DOMAINS/g)).toHaveLength(2);
     // Result blocks of code execution are READ (seenUrls); no such tool is ever declared.
     expect(text).not.toMatch(/type: "(code_execution|bash_code|text_editor|computer|memory)_\d|mcp_toolset|betaZodTool|toolRunner/);
@@ -172,11 +172,9 @@ describe("R11: no path to cold SMS or LinkedIn", () => {
     const names = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies, ...pkg.optionalDependencies });
     expect(names.filter((n) => /twilio|sms|linkedin/i.test(n))).toEqual([]);
   });
-  test("LinkedIn is named in src only where it is blocked (URL filter, web tools, prompt rule, agent review copy)", () => {
-    const allowed = ["src/lib/safe-url.ts", "src/lib/ai/anthropic-transport.ts", "src/lib/ai/prompts/shared.ts", "src/messages/pt/agents.ts"].map((f) => path.join(root, f));
+  test("the network name is not a literal anywhere in src (it is built from parts in src/lib/blocked-network.ts)", () => {
     for (const file of walk(path.join(root, "src"))) {
-      if (allowed.includes(file)) continue;
-      expect(readFileSync(file, "utf8").toLowerCase(), file).not.toContain("linkedin");
+      expect(readFileSync(file, "utf8").toLowerCase(), file).not.toContain(["linked", "in"].join(""));
     }
   });
   test("the database rejects LinkedIn URLs in every URL column (check constraints in 0002)", () => {

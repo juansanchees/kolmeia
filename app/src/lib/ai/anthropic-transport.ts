@@ -1,12 +1,13 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { BLOCKED_NETWORK_HOSTS } from "@/lib/blocked-network";
 import { urlKey } from "@/lib/safe-url";
 import { AiTransportFailure } from "./errors";
 import { supportsServerFallback } from "./models";
 import { ZERO_USAGE, type AiRequest, type AiResponse, type AiStop, type AiTransport, type AiUsage } from "./types";
 
 /** Never read or cite these (rule R11). Applied to both web tools. */
-export const BLOCKED_DOMAINS = ["linkedin.com", "lnkd.in"];
+export const BLOCKED_DOMAINS = [...BLOCKED_NETWORK_HOSTS];
 
 /** Page text kept per fetch (finding 2: lowered from 20k so the worst case of a call stays sane). */
 export const WEB_FETCH_MAX_CONTENT_TOKENS = 8_000;
@@ -180,7 +181,7 @@ function errorText(e: unknown): string {
 
 /**
  * Real transport (official SDK). Streams every request, adaptive thinking, structured output through
- * output_config.format, server-side refusal fallback where the model supports it, LinkedIn blocked in both web tools,
+ * output_config.format, server-side refusal fallback where the model supports it, the blocked network excluded from both web tools,
  * pause_turn resumed (at most MAX_CONTINUATIONS_CEILING times) with a cache breakpoint and the same tools,
  * no SDK retries, one deadline for the whole call, and the URLs the web tools really returned (seenUrls).
  */

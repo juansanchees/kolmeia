@@ -1,14 +1,16 @@
 // URL hygiene for anything that came from the web or from an AI (rules R11 and R15).
-// Only http(s), no credentials, no IP-literal or internal hosts, no LinkedIn (never stored, never shown), bounded
+// Only http(s), no credentials, no IP-literal or internal hosts, no blocked professional network (never stored, never shown), bounded
 // length. The database applies the same rules (public.is_safe_url / public.url_host in 0004); the shared vector
 // list in tests/fixtures/url-vectors.ts keeps both sides in step.
 
+import { BLOCKED_NETWORK_HOSTS } from "@/lib/blocked-network";
+
 const MAX_URL = 2000;
-const BLOCKED_HOSTS = ["linkedin.com", "lnkd.in"];
+const BLOCKED_HOSTS = BLOCKED_NETWORK_HOSTS;
 /** Names that only resolve inside a private network. */
 const INTERNAL_SUFFIXES = ["localhost", "local", "internal", "localdomain", "lan", "home.arpa", "intranet", "corp"];
 
-/** Host as the URL parser sees it, lower-case, without trailing dots ("linkedin.com." is "linkedin.com"). */
+/** Host as the URL parser sees it, lower-case, without trailing dots ("example.com." is "example.com"). */
 function bareHost(u: URL): string {
   return u.hostname.toLowerCase().replace(/\.+$/, "");
 }
@@ -40,7 +42,7 @@ export function isIpOrInternalHost(host: string): boolean {
 
 /**
  * Returns a clean absolute http(s) URL, or null. Rejects javascript:, data:, ftp:, relative URLs, URLs with
- * embedded credentials, whitespace, IP-literal and internal hosts, and any LinkedIn host (trailing dots included).
+ * embedded credentials, whitespace, IP-literal and internal hosts, and any blocked-network host (trailing dots included).
  */
 export function sanitizeUrl(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
