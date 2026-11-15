@@ -37,7 +37,6 @@ export const agents = {
     call: "Lista do dia para a closer",
     aiCall: "Ligação por IA: em breve (desligada)",
     create: "Criar",
-    soon: "Em breve",
   },
   hunter: {
     q1: "De onde puxo os dados da sua empresa?",

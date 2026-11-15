@@ -122,9 +122,16 @@ describe("F2 roles", () => {
     expect([isSender("owner"), isSender("sdr"), isSender("closer")]).toEqual([true, true, false]);
   });
   test("J2 AGENTES and CAMPANHAS send the closer to LEADS", () => {
-    const SENDER_ONLY = ["src/app/(app)/campanhas/layout.tsx", "src/app/(app)/agentes/page.tsx", "src/app/(app)/agentes/novo/page.tsx", "src/app/(app)/agentes/[id]/page.tsx", "src/app/(app)/agentes/pesquisa/layout.tsx", "src/app/(app)/leads/subir/page.tsx"];
+    const SENDER_ONLY = ["src/app/(app)/campanhas/layout.tsx", "src/app/(app)/agentes/page.tsx", "src/app/(app)/agentes/novo/page.tsx", "src/app/(app)/agentes/novo/email/page.tsx", "src/app/(app)/agentes/[id]/page.tsx", "src/app/(app)/agentes/pesquisa/layout.tsx", "src/app/(app)/leads/subir/page.tsx"];
     for (const f of SENDER_ONLY) expect(read(f), f).toContain("requireSender()");
     expect(read("src/lib/workspace.ts")).toContain('redirect("/leads")');
+  });
+  test("the gallery's E-mail card opens the chat; the closer has no route", () => {
+    const g = read("src/components/agents/AgentGallery.tsx");
+    expect(g).toContain('href="/agentes/novo/email"');
+    expect(g).not.toContain("G.soon");
+    expect(read("src/app/(app)/agentes/novo/email/page.tsx")).toContain("requireSender()");
+    expect(read("src/app/(app)/agentes/novo/email/actions.ts")).toContain("requireSender()");
   });
   test("J2 the closer notice replaces the old read-only copy", () => {
     expect(read("src/messages/pt/email.ts")).not.toContain("readOnly");

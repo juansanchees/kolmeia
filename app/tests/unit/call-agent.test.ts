@@ -41,7 +41,7 @@ describe("F5 call agent (UI)", () => {
     const gallery = read("src/components/agents/AgentGallery.tsx");
     expect(gallery).toContain("CallAgentForm");
     expect(gallery).toContain("G.aiCall");
-    expect(gallery).toContain("G.soon");
+    expect(gallery).not.toContain("G.soon"); // the E-mail card is active since F4
     expect(t.agents.gallery.aiCall).toMatch(/em breve/i);
     // the Ligação card is no longer greyed out
     const callCard = gallery.slice(gallery.indexOf("t.agents.types.call"));

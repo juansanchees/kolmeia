@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { GhostButton } from "@/components/research/controls";
 import { t } from "@/messages/pt";
@@ -50,8 +51,10 @@ export function AgentGallery({ hasProfile, serviceArea, ai, defaultRegion = "", 
         <Card title={t.agents.types.hunter} text={G.hunter}>
           <GhostButton onClick={create}>{G.create}</GhostButton>
         </Card>
-        <Card title={t.agents.types.email} text={G.email} off>
-          <span className="font-mono text-xs">{G.soon}</span>
+        <Card title={t.agents.types.email} text={G.email}>
+          <Link href="/agentes/novo/email" className="inline-flex min-h-11 items-center border border-edge bg-surface px-4 text-[15px] font-medium text-ink hover:border-ink">
+            {G.create}
+          </Link>
         </Card>
         <Card title={t.agents.types.call} text={G.call}>
           <GhostButton onClick={() => setOpenCall(true)}>{G.create}</GhostButton>
