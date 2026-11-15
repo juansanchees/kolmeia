@@ -53,8 +53,13 @@ describe("region", () => {
     expect(w.length).toBeGreaterThan(1);
     expect(townsInRegion("Cape Cod").towns.slice().sort()).toEqual(inCounty("Barnstable").sort());
     expect(townsInRegion("condado de Norfolk").towns.slice().sort()).toEqual(inCounty("Norfolk").sort());
-    const ann = townsInRegion("Cape Ann").towns;
-    expect(ann.filter((t) => inCounty("Barnstable").includes(t))).toEqual([]);
+    expect(townsInRegion("Cape").towns).toHaveLength(15);
+    expect(townsInRegion("the Cape").towns).toHaveLength(15);
+    expect(townsInRegion("Cape Ann").towns).toEqual([]);
+    expect(townsInRegion("Gloucester, Cape Ann").towns).toEqual(["Gloucester"]);
+    expect(townsInRegion("Plymouth County").towns).toHaveLength(27);
+    expect(townsInRegion("Plymouth").towns).toEqual(["Plymouth"]);
+    expect(townsInRegion("Boston, MA").statewide).toBe(false);
   });
 
   it("statewide and outside MA", () => {
@@ -63,5 +68,23 @@ describe("region", () => {
     const r = townsInRegion("Boston, MA and Providence, RI");
     expect(r.towns).toEqual(["Boston"]);
     expect(r.outside).toBe(false);
+  });
+
+  it("a following non-MA state or another cape does not mark MA towns", () => {
+    for (const x of ["Plymouth, NH", "Springfield IL", "Salem, New Hampshire", "Washington, DC", "Providence, ri"]) {
+      expect(townsInRegion(x)).toMatchObject({ towns: [], outside: true });
+    }
+    for (const x of ["Cape Elizabeth, ME", "Cape May NJ"]) {
+      expect(townsInRegion(x)).toMatchObject({ towns: [], outside: true });
+    }
+    expect(townsInRegion("Salem, NH and Boston").towns).toEqual(["Boston"]);
+    expect(townsInRegion("Salem, MA").towns).toEqual(["Salem"]);
+  });
+
+  it("townOf accepts zip, Mass. and USA suffixes", () => {
+    expect(townOf("Boston, MA 02108")).toBe("Boston");
+    expect(townOf("Boston, Mass.")).toBe("Boston");
+    expect(townOf("Boston, MA 02108-1234, USA")).toBe("Boston");
+    expect(townOf("N. Andover")).toBeNull();
   });
 });
