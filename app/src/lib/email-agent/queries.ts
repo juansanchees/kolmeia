@@ -3,7 +3,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { listLeads } from "@/lib/leads/queries";
 import type { LeadListItem } from "@/lib/leads/types";
 import type { SequenceInput } from "@/lib/ai/prompts/email-sequence";
-import { MAX_LEADS, type LeadFilterConfig } from "./types";
+import { SupabaseAgentStore } from "@/lib/agents/store";
+import type { AgentRow } from "@/lib/agents/types";
+import { SupabaseEmailStore } from "@/lib/email/supabase-store";
+import { CAMPAIGN_COLUMNS, type CampaignRow, type SenderProfile } from "@/lib/email/types";
+import type { SequenceStep } from "@/lib/email/template";
+import { t } from "@/messages/pt";
+import { emailAgentMetrics, MAX_LEADS, type EmailAgentMetrics, type LeadFilterConfig, type SequencePreview, type Tone } from "./types";
 
 /** The leads a filter picks (as the user: RLS applies), newest first, at most 500. Ids go to add_leads_to_campaign. */
 export async function pickLeads(db: SupabaseClient, ws: string, filter: LeadFilterConfig): Promise<LeadListItem[]> {
@@ -40,5 +46,71 @@ export function audienceOf(items: LeadListItem[]): SequenceInput["audience"] {
     count: items.length,
     types: top(items.map((i) => (i.best?.company_type === "other" ? null : i.best?.company_type)), 10),
     towns: top(items.map((i) => i.display.city), 10),
+  };
+}
+
+export type SequenceRow = {
+  id: string;
+  version: number;
+  status: "draft" | "approved" | "superseded";
+  tone: Tone;
+  steps: SequenceStep[];
+  step2_delay_days: number | null;
+  step3_delay_days: number | null;
+  human_edited: boolean;
+  ai_model: string | null;
+  approved_at: string | null;
+};
+const SEQUENCE_COLUMNS = "id, version, status, tone, steps, step2_delay_days, step3_delay_days, human_edited, ai_model, approved_at";
+
+const PAGE = 1000;
+async function pageAll<T>(read: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await read(from, from + PAGE - 1);
+    if (error) throw new Error(`loadEmailAgent: ${error.message}`);
+    out.push(...(data ?? []));
+    if ((data ?? []).length < PAGE) return out;
+  }
+}
+
+export type EmailAgentView = {
+  agent: AgentRow;
+  campaign: CampaignRow;
+  sequence: SequenceRow | null;
+  preview: SequencePreview | null;
+  metrics: EmailAgentMetrics;
+  sender: SenderProfile | null;
+  /** C12: every item of the owner's checklist approved. While false, nothing leaves (rehearsal only). */
+  c12Ready: boolean;
+};
+
+/** Read only, as the user (RLS). The newest sequence version is the one on screen; its 3 examples come from preview_sequence. */
+export async function loadEmailAgent(db: SupabaseClient, agentId: string): Promise<EmailAgentView | null> {
+  const agent = await new SupabaseAgentStore(db).getAgent(agentId);
+  if (!agent || agent.type !== "email") return null;
+  const { data: campaign } = await db.from("email_campaigns").select(CAMPAIGN_COLUMNS).eq("agent_id", agentId).maybeSingle();
+  if (!campaign) return null;
+  const c = campaign as unknown as CampaignRow;
+
+  const { data: seq } = await db.from("email_sequences").select(SEQUENCE_COLUMNS).eq("campaign_id", c.id).order("version", { ascending: false }).limit(1).maybeSingle();
+  const sequence = (seq as SequenceRow | null) ?? null;
+
+  const [preview, messages, replies, sender, c12] = await Promise.all([
+    sequence ? db.rpc("preview_sequence", { p_sequence: sequence.id }) : Promise.resolve({ data: null }),
+    pageAll<{ status: string }>((from, to) => db.from("email_messages").select("status").eq("campaign_id", c.id).eq("kind", "sequence").order("id").range(from, to)),
+    pageAll<{ is_bounce: boolean; classification: string | null }>((from, to) => db.from("email_replies").select("is_bounce, classification").eq("campaign_id", c.id).order("id").range(from, to)),
+    new SupabaseEmailStore(db).getSender(c.workspace_id),
+    db.from("c12_approvals").select("item").eq("workspace_id", c.workspace_id),
+  ]);
+  const done = new Set(((c12.data ?? []) as { item: string }[]).map((r) => r.item));
+  return {
+    agent,
+    campaign: c,
+    sequence,
+    preview: (preview.data as SequencePreview | null) ?? null,
+    metrics: emailAgentMetrics(messages, replies),
+    sender,
+    c12Ready: Object.keys(t.email.c12.items).every((i) => done.has(i)),
   };
 }

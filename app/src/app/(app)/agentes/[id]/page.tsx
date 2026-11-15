@@ -17,6 +17,10 @@ import { RunDriver } from "@/components/research/RunDriver";
 import { AgentSources } from "@/components/sources/AgentSources";
 import { DEFAULT_AGENT_SOURCES } from "@/lib/sources/view";
 import { agentSourceSettings, connectedSources } from "@/lib/sources/queries";
+import { EmailAgentDetail } from "@/components/agents/EmailAgentDetail";
+import { loadEmailAgent } from "@/lib/email-agent/queries";
+import { reserveFor } from "@/lib/ai/gateway";
+import { sequenceDef } from "@/lib/ai/email-tasks";
 import { RestartButton } from "@/components/agents/RestartButton";
 import { t } from "@/messages/pt";
 
@@ -65,6 +69,23 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
       outcome: r.calledToday ? (r.lastCall?.outcome ?? null) : null,
     }));
     return <CallAgentDetail agent={agent} callerLabel={caller?.label ?? "?"} stats={stats} rows={rows} />;
+  }
+  if (agent.type === "email") {
+    const view = await loadEmailAgent(supabase, id);
+    if (!view) notFound();
+    return (
+      <EmailAgentDetail
+        agent={view.agent}
+        campaignId={view.campaign.id}
+        sequence={view.sequence}
+        preview={view.preview}
+        metrics={view.metrics}
+        sender={view.sender}
+        c12Ready={view.c12Ready}
+        isOwner={workspace.role === "owner"}
+        estimateUsd={reserveFor(sequenceDef)}
+      />
+    );
   }
   const run = await store.getSetupRun(id);
 

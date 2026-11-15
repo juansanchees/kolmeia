@@ -33,3 +33,22 @@ export const emailAgentConfigSchema = z.object({
 });
 
 export type LeadCounts = { total: number; withEmail: number; withoutEmail: number };
+
+/** What the agent page counts (spec §6.6). approved = queued and waiting for the clock. */
+export type EmailAgentMetrics = { drafts: number; approved: number; sent: number; replies: number; unsubscribed: number; bounced: number };
+
+/** Pure: message statuses and the campaign's inbound rows. A bounce is not a reply; an unsubscribe is a reply. */
+export function emailAgentMetrics(messages: { status: string }[], replies: { is_bounce: boolean; classification: string | null }[]): EmailAgentMetrics {
+  const m = (s: string) => messages.filter((x) => x.status === s).length;
+  return {
+    drafts: m("draft"),
+    approved: m("approved"),
+    sent: m("sent"),
+    replies: replies.filter((r) => !r.is_bounce).length,
+    unsubscribed: replies.filter((r) => !r.is_bounce && r.classification === "unsubscribe").length,
+    bounced: replies.filter((r) => r.is_bounce).length,
+  };
+}
+
+export type SequenceExample = { prospect_id: string; company: string; to: string; steps: { step: number; subject: string; body: string }[] };
+export type SequencePreview = { digest: string; examples: SequenceExample[] };
