@@ -30,12 +30,24 @@ describe("mapRow", () => {
   it("errors per row", () => {
     expect(asErr(mapRow(["x"], m("city"), 2)).error).toBe("empty");
     expect(asErr(mapRow(["Acme", "555-0199"], m("name", "phone"), 2)).error).toBe("phone");
-    expect(asErr(mapRow(["Acme", "a@b"], m("name", "email"), 2)).error).toBe("email");
     expect(asErr(mapRow(["Acme", "javascript:alert(1)"], m("name", "website"), 2)).error).toBe("website");
     expect(asErr(mapRow(["Acme", "https://linkedin.com/company/x"], m("name", "website"), 2)).error).toBe("website");
     expect(asErr(mapRow(["A".repeat(201)], m("name"), 2)).error).toBe("too_long");
     expect(asErr(mapRow(["Acme", "x".repeat(301)], m("name", "city"), 2)).error).toBe("too_long");
     expect(asRow(mapRow(["Acme", "acme.example"], m("name", "website"), 2)).website).toBe("https://acme.example/");
+  });
+
+  it("never loses a row over its e-mail cell", () => {
+    const r = (cell: string) => asRow(mapRow(["Acme", cell], m("name", "email"), 2));
+    expect(r("a@b").email).toBeUndefined();
+    expect(r("user@domain.com, jon@acme.example").email).toBe("jon@acme.example");
+    expect(r("user@domain.com; info@acme.example other@acme.example").email).toBe("info@acme.example");
+    expect(r(`${"0a".repeat(16)}@sentry-next.wixpress.com, ${"1b".repeat(16)}@sentry.io`).email).toBeUndefined();
+    expect(r(`${"0a".repeat(16)}@acme.example, ok@acme.example`).email).toBe("ok@acme.example");
+    expect(r("test@example.com, x@example.org").email).toBeUndefined();
+    expect(asRow(mapRow(["user@domain.com, kts@acme.example"], m("email"), 3)).website).toBe("https://acme.example");
+    expect(asErr(mapRow(["user@domain.com"], m("email"), 4)).error).toBe("empty");
+    expect(r("x@gmail.com, y@acme.example").email).toBe("x@gmail.com");
   });
 
   it("refuses a phone in scientific notation, even one with enough digits", () => {

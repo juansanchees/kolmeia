@@ -18,6 +18,25 @@ export const ERROR_DATA_CAP = 200;
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+const JUNK_DOMAINS = ["domain.com", "example.com", "example.org", "example.net", "sentry.io", "wixpress.com"];
+const isJunkEmail = (e: string) => {
+  const at = e.lastIndexOf("@");
+  const local = e.slice(0, at).toLowerCase();
+  const host = e.slice(at + 1).toLowerCase();
+  if (/^[0-9a-f]{32}$/.test(local)) return true;
+  if (host.includes("sentry")) return true;
+  return JUNK_DOMAINS.some((d) => host === d || host.endsWith(`.${d}`));
+};
+
+/** A scraped cell may hold several addresses (comma, semicolon, space) and placeholders: first plausible one, or null. Never a reason to lose the row. */
+export function pickEmail(cell: string): string | null {
+  for (const part of cell.split(/[\s,;]+/)) {
+    const e = trimU(part).replace(/^[<(]+|[>).]+$/g, "");
+    if (e && e.length <= 254 && EMAIL.test(e) && !isJunkEmail(e)) return e;
+  }
+  return null;
+}
+
 /** Trims ASCII and unicode spaces (NBSP, en/em spaces, zero-width space, ideographic space), as the server's [[:space:]] does. */
 const trimU = (s: string) => s.replace(/^[\s\u200b]+|[\s\u200b]+$/g, "");
 
@@ -43,12 +62,17 @@ export function mapRow(cells: string[], mapping: Mapping, row: number): ImportRo
 
   for (const f of Object.keys(v) as ImportField[]) {
     const cap = f === "name" ? IMPORT_CAPS.name : f === "note" ? IMPORT_CAPS.note : IMPORT_CAPS.field;
-    if (v[f]!.length > cap) return fail("too_long");
+    if (f !== "email" && v[f]!.length > cap) return fail("too_long");
+  }
+  // A bad e-mail never costs the lead: keep the row without it (the row fails only if nothing else is left).
+  if (v.email) {
+    const picked = pickEmail(v.email);
+    if (picked) v.email = picked;
+    else delete v.email;
   }
   if (!v.name && !v.website && !v.phone && !v.email) return fail("empty");
   // Excel shows long numbers as 5.09E+09: the digits are lost, so never guess a number from them.
   if (v.phone && (/^[\d.,]+e[+-]?\d+$/i.test(v.phone) || !phoneKey(v.phone))) return fail("phone");
-  if (v.email && (v.email.length > 254 || !EMAIL.test(v.email))) return fail("email");
   let website: string | null = null;
   if (v.website) {
     website = sanitizeUrl(/^[a-z][a-z0-9+.-]*:/i.test(v.website) ? v.website : `https://${v.website}`);
