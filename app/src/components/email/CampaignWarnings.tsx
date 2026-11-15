@@ -1,17 +1,18 @@
 import Link from "next/link";
-import { loadMailboxes } from "@/lib/email/queries";
+import { loadMailboxes, loadSender } from "@/lib/email/queries";
 import { campaignWarnings } from "@/lib/email/warnings";
 import { t } from "@/messages/pt";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Warning strip at the top of Campanhas. Server component, read-only queries as the logged-in user (RLS). */
 export async function CampaignWarnings({ db, workspaceId }: { db: SupabaseClient; workspaceId: string }) {
-  const [mailboxes, campaigns, prospects, sent, c12] = await Promise.all([
+  const [mailboxes, campaigns, prospects, sent, c12, sender] = await Promise.all([
     loadMailboxes(db, workspaceId),
-    db.from("email_campaigns").select("id, name, status, send_mode").eq("workspace_id", workspaceId).neq("status", "archived"),
+    db.from("email_campaigns").select("id, name, status, send_mode, agent_id, mailbox_id").eq("workspace_id", workspaceId).neq("status", "archived"),
     db.from("email_prospects").select("campaign_id, status, stop_reason").eq("workspace_id", workspaceId).limit(5000),
     db.from("email_messages").select("campaign_id").eq("workspace_id", workspaceId).eq("kind", "sequence").eq("status", "sent").limit(5000),
     db.from("c12_approvals").select("item").eq("workspace_id", workspaceId),
+    loadSender(db, workspaceId),
   ]);
   const count = (rows: { campaign_id: string }[] | null) => {
     const out: Record<string, number> = {};
@@ -25,9 +26,10 @@ export async function CampaignWarnings({ db, workspaceId }: { db: SupabaseClient
 
   const warnings = campaignWarnings({
     mailboxes,
-    campaigns: ((campaigns.data ?? []) as { id: string; name: string; status: string; send_mode: string }[]).map((c) => ({ ...c, sent: sentBy[c.id] ?? 0, bounced: bouncedBy[c.id] ?? 0 })),
+    campaigns: ((campaigns.data ?? []) as { id: string; name: string; status: string; send_mode: string; agent_id: string | null; mailbox_id: string | null }[]).map((c) => ({ ...c, sent: sentBy[c.id] ?? 0, bounced: bouncedBy[c.id] ?? 0 })),
     sentToday: Object.fromEntries(mailboxes.map((m) => [m.id, m.usage?.real ?? 0])),
     prospectsByCampaign: count(ps.filter((p) => p.status === "active")),
+    sender,
     gateOpen: Object.keys(t.email.c12.items).every((i) => done.has(i)),
   });
   if (warnings.length === 0) return null;

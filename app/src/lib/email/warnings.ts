@@ -1,9 +1,11 @@
+import { senderComplete } from "./compose";
+import type { SenderProfile } from "./types";
 import { fill, t } from "@/messages/pt";
 
 // Warning strip for Campanhas. Pure: the layout loads the rows, this decides what to say (read-only, no side effects).
 
 export type CampaignWarning = {
-  kind: "mailbox_error" | "mailbox_paused" | "no_leads" | "daily_limit" | "high_bounce" | "rehearsal_only";
+  kind: "mailbox_error" | "mailbox_paused" | "no_leads" | "daily_limit" | "high_bounce" | "rehearsal_only" | "sender_profile_incomplete" | "agent_campaign_no_mailbox";
   text: string;
   href: string;
 };
@@ -11,13 +13,15 @@ export type CampaignWarning = {
 export type WarningsInput = {
   mailboxes: { id: string; email: string; status: "unverified" | "ok" | "error"; health_status: "ok" | "paused_bounce"; daily_limit: number }[];
   /** sent / bounced = real sequence mails sent and prospects stopped by a bounce, per campaign. */
-  campaigns: { id: string; name: string; status: string; send_mode: string; sent: number; bounced: number }[];
+  campaigns: { id: string; name: string; status: string; send_mode: string; sent: number; bounced: number; agent_id?: string | null; mailbox_id?: string | null }[];
   /** Real mails sent today, by mailbox id. */
   sentToday: Record<string, number>;
   /** Active prospects, by campaign id. */
   prospectsByCampaign: Record<string, number>;
   /** C12 checklist complete (real sending allowed). */
   gateOpen: boolean;
+  /** CAN-SPAM sender profile (legal name, postal address, sender name). */
+  sender: SenderProfile | null;
 };
 
 const W = t.email.warnings;
@@ -36,5 +40,9 @@ export function campaignWarnings(i: WarningsInput): CampaignWarning[] {
       .filter((c) => c.bounced >= BOUNCE_MIN && c.bounced / Math.max(c.sent, 1) >= BOUNCE_RATE)
       .map((c) => ({ kind: "high_bounce" as const, text: fill(W.high_bounce, { name: c.name }), href: `/campanhas/${c.id}` })),
     ...(!i.gateOpen && active.length > 0 ? [box("rehearsal_only", W.rehearsal_only)] : []),
+    ...(senderComplete(i.sender) ? [] : [box("sender_profile_incomplete", W.sender_profile_incomplete)]),
+    ...active
+      .filter((c) => c.agent_id && !c.mailbox_id)
+      .map((c) => ({ kind: "agent_campaign_no_mailbox" as const, text: fill(W.agent_campaign_no_mailbox, { name: c.name }), href: `/campanhas/${c.id}` })),
   ];
 }

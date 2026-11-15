@@ -20,6 +20,8 @@ export const email = {
     no_leads: "A campanha {name} está ativa, mas não tem nenhuma empresa na sequência.",
     daily_limit: "A caixa {email} atingiu o limite de hoje. O resto sai amanhã.",
     high_bounce: "Muitos e-mails voltaram na campanha {name}. Confira os endereços antes de continuar.",
+    sender_profile_incomplete: "Falta nome, razão social ou endereço postal do remetente. Sem isso nenhum e-mail pode sair (exigência da lei CAN-SPAM).",
+    agent_campaign_no_mailbox: "A campanha {name} do agente está ligada, mas sem caixa de envio. Escolha uma caixa.",
     rehearsal_only: "Envio real bloqueado: a lista de verificação C12 está incompleta. As campanhas só fazem ensaio.",
   },
   nav: {
