@@ -140,6 +140,16 @@ describe("0020 part B call log", () => {
     const hunter = (await db.query<{ id: string }>(as(t.owner), "insert into public.agents (workspace_id, type, name) values ($1,'hunter','Caçador') returning id", [t.ws]))[0].id;
     expect(code((await db.try(as(t.owner), "select public.log_call($1,$2,'talked','','','',null)", [lead, hunter])).error)).toBe("22023");
 
+    // the agent, when named: an active call agent whose caller is the user, or any one for a sender
+    const herAgent = await callAgent(t, cfg(t.closer2), { ligar: false });
+    const myAgent = await callAgent(t, cfg(t.closer), { ligar: false });
+    expect(code((await db.try(as(t.closer), "select public.log_call($1,$2,'talked','','','',null)", [lead, herAgent])).error)).toBe("22023");
+    expect((await db.try(as(t.closer), "select public.log_call($1,$2,'talked','','','',null)", [lead, myAgent])).error).toBeUndefined();
+    expect((await db.try(as(t.sdr), "select public.log_call($1,$2,'talked','','','',null)", [lead, herAgent])).error).toBeUndefined();
+    await db.query(as(t.owner), "update public.agents set archived_at = now() where id = $1", [myAgent]);
+    expect(code((await db.try(as(t.closer), "select public.log_call($1,$2,'talked','','','',null)", [lead, myAgent])).error)).toBe("22023");
+    expect(code((await db.try(as(t.owner), "select public.log_call($1,$2,'talked','','','',null)", [lead, myAgent])).error)).toBe("22023");
+
     expect(await logCall(t.closer, lead, "meeting_booked")).toBe("meeting");
     expect((await leadRow(lead)).status).toBe("meeting");
   });
@@ -179,6 +189,19 @@ describe("0020 part B call log", () => {
     // a last call can still be recorded
     expect(await logCall(t.owner, lead, "no_answer")).toBe("call_list");
     expect((await leadRow(lead)).do_not_call).toBe(true);
+
+    // do_not_call is recordable when the lead has no phone any more: the newest call's number is used
+    const gone = await seedLead(t, { phone: phone(4) });
+    await logCall(t.owner, gone.lead, "talked");
+    await db.admin("update public.research_candidates set phone = null where id = $1", [gone.cand]);
+    await db.admin("update public.lead_fields set status = 'refuted' where lead_id = $1 and field = 'phone'", [gone.lead]);
+    expect(code((await db.try(as(t.owner), "select public.log_call($1,null,'talked','','','',null)", [gone.lead])).error)).toBe("55000");
+    expect(await logCall(t.owner, gone.lead, "do_not_call")).toBe("lost");
+    const used = await db.admin<{ phone_used: string }>("select phone_used from public.call_logs where lead_id = $1 and outcome = 'do_not_call'", [gone.lead]);
+    expect(used).toEqual([{ phone_used: phone(4) }]);
+    // never called and no phone: nothing to record
+    const never = await seedLead(t);
+    expect(code((await db.try(as(t.owner), "select public.log_call($1,null,'do_not_call','','','',null)", [never.lead])).error)).toBe("55000");
   });
 
   test("wrong number comes back only with a new phone", async () => {
@@ -191,6 +214,10 @@ describe("0020 part B call log", () => {
     expect(await callable(lead, t.closer)).toBe(false);
     expect(await build(t.owner, agent)).toBe(0);
     await db.admin("update public.research_candidates set phone = $2 where id = $1", [cand, "(508) 555-0103"]); // same number, other format
+    expect(await callable(lead, t.closer)).toBe(false);
+    // a later call on the same wrong number (any outcome) does not bring it back
+    expect(await logCall(t.owner, lead, "voicemail")).toBe("call_list");
+    await ageLead(lead, 2);
     expect(await callable(lead, t.closer)).toBe(false);
     await db.admin("update public.research_candidates set phone = $2 where id = $1", [cand, phone(13)]);
     expect(await callable(lead, t.closer)).toBe(true);
@@ -317,10 +344,22 @@ describe("0020 part B call list", () => {
     expect(await db.query(as(stranger.owner), "select id from public.call_logs")).toEqual([]);
     expect(code((await db.try(as(stranger.owner), "select public.build_call_list($1)", [mine])).error)).toBe("42501");
     // internal helpers are not callable by clients
-    for (const fn of ["lead_callable($1,$2)", "lead_phone($1)", "lead_in_active_campaign($1)"]) {
-      const r = await db.try(as(t.owner), `select public.${fn}`, fn.includes("$2") ? [m1, t.closer] : [m1]);
+    const internal: [string, unknown[]][] = [
+      ["lead_callable($1,$2)", [m1, t.closer]],
+      ["lead_phone($1)", [m1]],
+      ["lead_in_active_campaign($1)", [m1]],
+      ["call_agent_caller($1)", [mine]],
+      ["call_day()", []],
+      ["lead_status_after_call($1,$2)", ["new", "talked"]],
+    ];
+    for (const [fn, params] of internal) {
+      const r = await db.try(as(t.owner), `select public.${fn}`, params);
       expect(r.error?.message, fn).toMatch(/permission denied/);
     }
+    // call_agent_config_ok answers only owner/sdr of the workspace
+    const ok = async (user: string) =>
+      (await db.query<{ ok: boolean }>(as(user), "select public.call_agent_config_ok($1::jsonb,$2) as ok", [JSON.stringify(cfg(t.closer)), t.ws]))[0].ok;
+    expect([await ok(t.owner), await ok(t.sdr), await ok(t.closer), await ok(stranger.owner)]).toEqual([true, true, false, false]);
   });
 });
 

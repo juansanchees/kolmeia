@@ -469,8 +469,9 @@ begin
               where k.lead_id = p_lead and (k.called_at at time zone 'America/New_York')::date = public.call_day()) then
     return false;
   end if;
-  -- a wrong number comes back only with another phone; a callback only once it is due
-  if v_last.outcome = 'wrong_number' and public.company_phone_key(v_last.phone_used) = v_key then
+  -- a wrong number comes back only with another phone (whatever was logged on it later); a callback only once due
+  if exists (select 1 from public.call_logs k
+              where k.lead_id = p_lead and k.outcome = 'wrong_number' and public.company_phone_key(k.phone_used) = v_key) then
     return false;
   end if;
   return v_last.next_step_at is null or v_last.next_step_at <= now();
@@ -508,9 +509,12 @@ begin
                                             'not_interested', 'wrong_number', 'do_not_call') then
     raise exception 'unknown outcome' using errcode = '22023';
   end if;
+  -- the agent, when named: a call agent of this workspace, not archived, whose caller is the user (any one for a sender)
   if p_agent is not null and not exists (
-       select 1 from public.agents a where a.id = p_agent and a.workspace_id = v_ws and a.type = 'call') then
-    raise exception 'not a call agent of this workspace' using errcode = '22023';
+       select 1 from public.agents a
+        where a.id = p_agent and a.workspace_id = v_ws and a.type = 'call' and a.archived_at is null
+          and (public.is_workspace_sender(v_ws) or public.call_agent_caller(a.id) = v_uid)) then
+    raise exception 'not a call agent of this caller' using errcode = '22023';
   end if;
   if p_next_step_at is not null and (p_next_step_at < now() - interval '1 day' or p_next_step_at > now() + interval '180 days') then
     raise exception 'next step date out of range' using errcode = '22023';
@@ -520,6 +524,11 @@ begin
     raise exception 'text too long' using errcode = '22023';
   end if;
   v_phone := public.lead_phone(p_lead);
+  -- "do not call" is always recordable: with no phone left, the number of the newest call
+  if v_phone is null and p_outcome = 'do_not_call' then
+    select k.phone_used into v_phone from public.call_logs k
+     where k.lead_id = p_lead order by k.called_at desc, k.created_at desc, k.id desc limit 1;
+  end if;
   if v_phone is null then
     raise exception 'no phone' using errcode = '55000';
   end if;
@@ -781,14 +790,18 @@ begin
               l.level desc, l.first_seen_at, l.id
      limit v_room
   loop
-    v_pos := v_pos + 1;
-    insert into public.call_list_items (workspace_id, agent_id, lead_id, caller_id, list_date, position)
-    values (v_a.workspace_id, p_agent, r.id, v_caller, v_day, v_pos);
+    -- assign first, and only if nobody took the lead meanwhile (hand_off_lead / set_lead_status do not take this lock)
     update public.leads
        set owner_id = coalesce(owner_id, v_caller),
            status = case when status = 'new' then 'call_list' else status end,
            updated_at = now()
-     where id = r.id;
+     where id = r.id and (owner_id is null or owner_id = v_caller) and status in ('new', 'call_list') and not do_not_call;
+    if not found then
+      continue;
+    end if;
+    v_pos := v_pos + 1;
+    insert into public.call_list_items (workspace_id, agent_id, lead_id, caller_id, list_date, position)
+    values (v_a.workspace_id, p_agent, r.id, v_caller, v_day, v_pos);
     v_n := v_n + 1;
   end loop;
   return v_n;
@@ -851,15 +864,19 @@ begin
      or exists (select 1 from public.call_list_items i where i.lead_id = p_lead and i.list_date = v_day) then
     raise exception 'lead cannot be called today' using errcode = '55000';
   end if;
-  select coalesce(max(i.position), 0) + 1 into v_pos
-    from public.call_list_items i where i.agent_id = p_agent and i.list_date = v_day;
-  insert into public.call_list_items (workspace_id, agent_id, lead_id, caller_id, list_date, position, manual)
-  values (v_a.workspace_id, p_agent, p_lead, v_caller, v_day, v_pos, true);
+  -- assign first, and only if nobody took the lead meanwhile
   update public.leads
      set owner_id = coalesce(owner_id, v_caller),
          status = case when status = 'new' then 'call_list' else status end,
          updated_at = now()
-   where id = p_lead;
+   where id = p_lead and (owner_id is null or owner_id = v_caller) and status in ('new', 'call_list') and not do_not_call;
+  if not found then
+    raise exception 'lead cannot be called today' using errcode = '55000';
+  end if;
+  select coalesce(max(i.position), 0) + 1 into v_pos
+    from public.call_list_items i where i.agent_id = p_agent and i.list_date = v_day;
+  insert into public.call_list_items (workspace_id, agent_id, lead_id, caller_id, list_date, position, manual)
+  values (v_a.workspace_id, p_agent, p_lead, v_caller, v_day, v_pos, true);
 end;
 $$;
 
