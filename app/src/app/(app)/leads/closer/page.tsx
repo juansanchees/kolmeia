@@ -1,4 +1,7 @@
+import Link from "next/link";
 import { parseCloserBrief } from "@/lib/email/brief";
+import { listLeads } from "@/lib/leads/queries";
+import type { Person } from "@/lib/team/types";
 import { emailSession } from "@/lib/email/session";
 import { PROSPECT_COLUMNS, type ProspectRow } from "@/lib/email/types";
 import { refreshBriefAction } from "@/app/(app)/campanhas/actions";
@@ -9,6 +12,7 @@ import { fill, t } from "@/messages/pt";
 
 const M = t.email;
 const C = M.closer;
+const H = t.handoff;
 
 export default async function CloserPage() {
   const s = await emailSession();
@@ -23,8 +27,69 @@ export default async function CloserPage() {
     .limit(100);
   const rows = (data ?? []) as ProspectRow[];
 
+  // Leads handed to a closer (F5): RLS limits the closer to hers; owner/sdr see all and who holds each one.
+  const withCloser = (await listLeads(s.supabase, s.workspace.id))
+    .filter((i) => (i.lead.status === "with_closer" || i.lead.status === "meeting") && i.lead.owner_id)
+    .sort((a, b) => (b.lead.handed_off_at ?? "").localeCompare(a.lead.handed_off_at ?? ""));
+  let labels = new Map<string, string>();
+  if (s.canSend) {
+    const { data: people } = await s.supabase.rpc("list_workspace_people", { p_ws: s.workspace.id });
+    labels = new Map(((people ?? []) as Person[]).map((p) => [p.user_id, p.label]));
+  }
+
   return (
     <div className="flex min-w-0 flex-col gap-5">
+      {withCloser.length === 0 && <p className="text-sm text-muted">{H.noneYet}</p>}
+      <ul className="m-0 flex list-none flex-col gap-4 p-0">
+        {withCloser.map((i) => {
+          const b = parseCloserBrief(i.lead.closer_brief);
+          return (
+            <li key={i.lead.id}>
+              <article className="flex min-w-0 flex-col gap-3 border border-ink bg-surface p-5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="m-0 break-words font-display text-2xl uppercase">
+                    <Link href={`/leads/${i.lead.id}`} className="text-ink no-underline hover:underline">
+                      {i.display.name}
+                    </Link>
+                  </h3>
+                  <span className="font-mono text-xs text-muted">
+                    {t.leads.statuses[i.lead.status]}
+                    {s.canSend && i.lead.owner_id && labels.get(i.lead.owner_id) ? ` · ${H.assignedTo}: ${labels.get(i.lead.owner_id)}` : ""}
+                    {i.lead.handed_off_at ? ` · ${fill(H.handedAt, { when: when(i.lead.handed_off_at) })}` : ""}
+                  </span>
+                </div>
+                {b ? (
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div>
+                      <Label>{C.who}</Label>
+                      <p className="m-0 text-sm">{b.who}</p>
+                    </div>
+                    <div>
+                      <Label>{C.said}</Label>
+                      <p className="m-0 text-sm">{b.what_they_said}</p>
+                    </div>
+                    <div className="border-l-2 border-blue pl-3">
+                      <Label>{C.next}</Label>
+                      <p className="m-0 text-sm font-semibold">{b.next_step}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted">{H.noBrief}</p>
+                )}
+                {!i.lead.do_not_call && i.display.phone && (
+                  <div>
+                    <Link href={`/leads/ligar/${i.lead.id}`} className="inline-flex min-h-11 items-center border border-blue bg-surface px-4 text-sm font-semibold text-blue no-underline hover:bg-blue-wash">
+                      {H.callNow}
+                    </Link>
+                  </div>
+                )}
+              </article>
+            </li>
+          );
+        })}
+      </ul>
+      {s.canSend && (
+        <>
       <p className="text-sm">{C.intro}</p>
       {rows.length === 0 && <p className="text-sm text-muted">{C.none}</p>}
       <ul className="m-0 flex list-none flex-col gap-4 p-0">
@@ -82,6 +147,8 @@ export default async function CloserPage() {
           );
         })}
       </ul>
+        </>
+      )}
     </div>
   );
 }

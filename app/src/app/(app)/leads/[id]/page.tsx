@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getLead } from "@/lib/leads/queries";
+import { emailBriefOf, getLead } from "@/lib/leads/queries";
+import { parseCloserBrief } from "@/lib/email/brief";
+import { draftBrief } from "@/lib/leads/brief";
+import type { Person } from "@/lib/team/types";
+import { isSender } from "@/lib/roles";
+import { getCurrentWorkspace, getUser } from "@/lib/workspace";
+import { HandOffForm } from "@/components/leads/HandOffForm";
+import { StatusButtons } from "@/components/leads/StatusButtons";
+import { AddToCallList } from "@/components/leads/AddToCallList";
 import { displayOf, isStaleProof, originLabel } from "@/lib/leads/view";
 import { count, date, host, money, UNKNOWN } from "@/components/research/format";
 import { Hook, ProofList } from "@/components/research/proof";
@@ -15,6 +23,8 @@ import { fill, t } from "@/messages/pt";
 
 const L = t.research.list;
 const LB = t.research.labels;
+const H = t.handoff;
+const CLOSED = ["won", "lost", "discarded"];
 
 // One lead, read-only in F3a. Read as the user, so a closer only opens a lead assigned to her (RLS); anything else is a 404.
 export default async function LeadPage({ params }: { params: Promise<{ id: string }> }) {
@@ -30,6 +40,39 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   const importName = lead.origin_import_id ? (importNames[lead.origin_import_id] ?? null) : null;
   // "Listas:" = the import lists the values cite plus the agent that found the lead (spec 5.2).
   const listNames = [...new Set([...fields.flatMap((f) => (f.source === "import" && f.source_ref && importNames[f.source_ref] ? [importNames[f.source_ref]] : [])), ...(agentName ? [agentName] : [])])];
+  const [workspace, user] = await Promise.all([getCurrentWorkspace(), getUser()]);
+  const sender = workspace ? isSender(workspace.role) : false;
+  const open = !CLOSED.includes(lead.status);
+  const mine = Boolean(user && lead.owner_id === user.id);
+  const brief = parseCloserBrief(lead.closer_brief);
+  const callable = open && !lead.do_not_call && ["new", "call_list"].includes(lead.status) && Boolean(display.phone);
+
+  // Sender-only inputs of the hand-off and the call list (RLS keeps them from the closer anyway).
+  let people: Person[] = [];
+  let callAgents: { id: string; name: string }[] = [];
+  let draft: ReturnType<typeof draftBrief> | null = null;
+  if (sender && workspace && open) {
+    const [peopleRes, agentsRes, callsRes, emailBrief] = await Promise.all([
+      supabase.rpc("list_workspace_people", { p_ws: workspace.id }),
+      supabase.from("agents").select("id, name").eq("workspace_id", workspace.id).eq("type", "call").eq("status", "running").is("archived_at", null).order("name"),
+      supabase.from("call_logs").select("notes").eq("lead_id", lead.id).eq("outcome", "talked").order("called_at", { ascending: false }).limit(1).maybeSingle(),
+      emailBriefOf(supabase, lead.id),
+    ]);
+    people = (peopleRes.data ?? []) as Person[];
+    callAgents = (agentsRes.data ?? []) as { id: string; name: string }[];
+    const proofUrls = [
+      best?.found_at_url,
+      ...checks.filter((k) => k.candidate_id === best?.id && k.result === "ok").flatMap((k) => k.evidence.map((e) => e.url)),
+    ].filter((u): u is string => Boolean(u));
+    draft = draftBrief({
+      company: display.name,
+      askForName: best?.ask_for_name ?? null,
+      askForTitle: best?.ask_for_title ?? null,
+      emailBrief: parseCloserBrief(emailBrief),
+      talkedNotes: (callsRes.data as { notes: string } | null)?.notes ?? null,
+      proofUrls,
+    });
+  }
   const now = new Date();
   const stale = candidates.some(
     (c) => isStaleProof(c.found_at_seen_at, now) || checks.some((k) => k.candidate_id === c.id && k.evidence.some((e) => isStaleProof(e.seen_at, now))),
@@ -49,6 +92,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
             {best?.temperature && <Pill tone={best.temperature}>{LB.temperature[best.temperature]}</Pill>}
             {best?.second_pass === "refuted" && <Pill tone="no">{L.refuted}</Pill>}
             {!best && <Pill tone="no">{t.leads.unproven}</Pill>}
+            {lead.do_not_call && <Pill tone="no">{H.doNotCall}</Pill>}
           </span>
         </div>
         <p className="text-[13px] text-muted">
@@ -132,6 +176,38 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
           </>
         )}
       </section>
+
+      {brief && (
+        <section aria-labelledby="brief-title" className="flex flex-col gap-2 border border-ink bg-surface p-4">
+          <h2 id="brief-title" className="text-xl">
+            {H.brief}
+          </h2>
+          <p className="m-0 text-sm"><span className="font-mono text-xs">{H.who}</span> {brief.who}</p>
+          <p className="m-0 text-sm"><span className="font-mono text-xs">{H.said}</span> {brief.what_they_said}</p>
+          <p className="m-0 border-l-2 border-blue pl-3 text-sm font-semibold">{brief.next_step}</p>
+          {brief.evidence_urls.map((u) => (
+            <a key={u} href={u} target="_blank" rel="noopener noreferrer nofollow" className="break-all text-[13px] text-blue underline underline-offset-4">
+              {u} ↗
+            </a>
+          ))}
+        </section>
+      )}
+
+      {open && (sender || mine) && (
+        <section aria-labelledby="actions-title" className="flex flex-col gap-4 border border-line bg-surface p-4">
+          <h2 id="actions-title" className="sr-only">
+            {H.button}
+          </h2>
+          {sender && draft && <HandOffForm leadId={lead.id} closers={people} draft={draft} />}
+          {sender && callable && <AddToCallList leadId={lead.id} agents={callAgents} />}
+          {mine && !sender && !lead.do_not_call && display.phone && (
+            <Link href={`/leads/ligar/${lead.id}`} className="inline-flex min-h-11 w-fit items-center border border-blue bg-surface px-4 text-sm font-semibold text-blue no-underline hover:bg-blue-wash">
+              {H.callNow}
+            </Link>
+          )}
+          <StatusButtons leadId={lead.id} />
+        </section>
+      )}
 
       {fields.length > 0 && (
         <section aria-labelledby="fields-title" className="flex flex-col gap-3">

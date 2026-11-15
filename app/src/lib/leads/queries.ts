@@ -196,3 +196,21 @@ export async function getLead(db: SupabaseClient, id: string): Promise<LeadDetai
   const queue = q ? { next_step: String(q.next_step), done_reason: (q.done_reason as string | null) ?? null } : null;
   return { lead, agentName, candidates, checks, fields, importNames, queue };
 }
+
+/** The newest e-mail hand-off brief of the lead's candidates (the closer_brief jsonb as stored), or null. Parse it before use. */
+export async function emailBriefOf(db: SupabaseClient, leadId: string): Promise<unknown | null> {
+  const { data: cands, error: cErr } = await db.from("research_candidates").select("id").eq("lead_id", leadId).limit(100);
+  if (cErr) throw new Error(`emailBriefOf candidates: ${cErr.message}`);
+  const ids = (cands ?? []).map((c) => c.id as string);
+  if (ids.length === 0) return null;
+  const { data, error } = await db
+    .from("email_prospects")
+    .select("closer_brief")
+    .in("candidate_id", ids)
+    .not("closer_brief", "is", null)
+    .order("closer_brief_at", { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`emailBriefOf: ${error.message}`);
+  return data?.closer_brief ?? null;
+}
