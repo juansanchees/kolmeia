@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import { undoImportAction } from "@/app/(app)/leads/subir/actions";
-import Link from "next/link";
 import { btn } from "@/components/email/bits";
 import { TrainButton } from "@/components/profile/TrainButton";
 import { date } from "@/components/research/format";
@@ -50,8 +49,7 @@ export function ImportHistory({ items, profiles = {}, trainEstimateUsd = 0 }: { 
                 </p>
                 {i.use_as_training && status === "done" && (
                   <div className="flex flex-wrap items-center gap-3">
-                    <TrainButton importId={i.id} estimateUsd={trainEstimateUsd} />
-                    {profiles[i.id] && <Link href={`/leads/perfil/${profiles[i.id]}`} className={btn.link}>{t.profile.see}</Link>}
+                    <TrainButton importId={i.id} estimateUsd={trainEstimateUsd} knownProfileId={profiles[i.id] ?? null} />
                   </div>
                 )}
                 {result && <p role="status" className="m-0 text-[13px]">{fill(M.undoneCounts, result)}</p>}

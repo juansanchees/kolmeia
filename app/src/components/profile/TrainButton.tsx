@@ -7,11 +7,16 @@ import { btn } from "@/components/email/bits";
 import { usd } from "@/components/research/format";
 import { fill, t } from "@/messages/pt";
 
-/** One AI call per click; the proposal it saves changes nothing until it is approved on its own page. */
-export function TrainButton({ importId, estimateUsd }: { importId: string; estimateUsd: number }) {
+/**
+ * One AI call per click; the proposal it saves changes nothing until it is approved on its own page.
+ * `knownProfileId`: newest profile already saved for this list (server data); a fresh training replaces it. The only "see profile" link lives here.
+ */
+export function TrainButton({ importId, estimateUsd, knownProfileId = null }: { importId: string; estimateUsd: number; knownProfileId?: string | null }) {
   const [pending, start] = useTransition();
-  const [profileId, setProfileId] = useState<string | null>(null);
+  const [trainedId, setProfileId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const profileId = trainedId ?? knownProfileId;
 
   const train = () =>
     start(async () => {
