@@ -46,6 +46,12 @@ const answer = (over: object = {}) => ({
 });
 
 describe("profile_learn", () => {
+  test("prompt asks for Portuguese point texts and English search queries", () => {
+    expect(profileDef.system).toMatch(/text of every point is written in Brazilian Portuguese/);
+    expect(profileDef.system).toMatch(/search_queries: keep them in English/);
+    expect(profileDef.promptVersion).toBe("profile-learn-2026-11-15.1");
+  });
+
   test("sampleRows keeps every city, at most 200 rows, the same way every time", () => {
     const rows = Array.from({ length: 600 }, (_, i) => row(i + 1, `City ${i % 30}`));
     const a = sampleRows(rows);
