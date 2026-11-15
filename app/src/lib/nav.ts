@@ -25,14 +25,18 @@ export function settingsTabsFor(role: Role): readonly NavItem[] {
   return role === "owner" ? [...SETTINGS_TABS, { href: "/configuracoes/equipe", label: t.team.tab }] : SETTINGS_TABS;
 }
 
+/** Every role: Todos, Com a closer and Ligar (the closer sees her own call list there). */
 export const LEADS_TABS: readonly NavItem[] = [
   { href: "/leads", label: t.leads.nav.all },
   { href: "/leads/closer", label: t.leads.nav.closer },
+  { href: "/leads/ligar", label: t.calls.tab },
 ];
 
-/** Cobertura is for owner and sdr; the closer keeps the two tabs above. */
+/** Funil and Cobertura are for owner and sdr; the closer keeps the tabs above. */
 export function leadsTabsFor(role: Role): readonly NavItem[] {
-  return role === "closer" ? LEADS_TABS : [...LEADS_TABS, { href: "/leads/cobertura", label: t.coverage.tab }];
+  return role === "closer"
+    ? LEADS_TABS
+    : [...LEADS_TABS, { href: "/leads/funil", label: t.funnel.tab }, { href: "/leads/cobertura", label: t.coverage.tab }];
 }
 
 export const CAMPAIGN_TABS: readonly NavItem[] = [

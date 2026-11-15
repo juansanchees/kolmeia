@@ -35,11 +35,24 @@ describe("F1 nav", () => {
       ["Fontes conectadas", "/configuracoes/fontes"],
     ]);
   });
-  test("the LEADS tabs are Todos and Com a closer", () => {
-    expect(LEADS_TABS.map((i) => [i.label, i.href])).toEqual([
+  test("the LEADS tabs: Ligar for everyone, Funil and Cobertura for owner/sdr; Equipe only for the owner", () => {
+    expect(leadsTabsFor("closer").map((i) => [i.label, i.href])).toEqual([
       ["Todos", "/leads"],
       ["Com a closer", "/leads/closer"],
+      ["Ligar", "/leads/ligar"],
     ]);
+    for (const role of ["owner", "sdr"] as const) {
+      expect(leadsTabsFor(role).map((i) => [i.label, i.href])).toEqual([
+        ["Todos", "/leads"],
+        ["Com a closer", "/leads/closer"],
+        ["Ligar", "/leads/ligar"],
+        ["Funil", "/leads/funil"],
+        ["Cobertura", "/leads/cobertura"],
+      ]);
+    }
+    expect(LEADS_TABS).toEqual(leadsTabsFor("closer"));
+    expect(settingsTabsFor("owner").map((i) => i.href)).toContain("/configuracoes/equipe");
+    for (const role of ["sdr", "closer"] as const) expect(settingsTabsFor(role).map((i) => i.href)).not.toContain("/configuracoes/equipe");
   });
 });
 

@@ -137,6 +137,11 @@ describe("proof that RLS is really enforced in PGlite", () => {
         // release_member_leads have no client grant)
         "is_workspace_closer", "create_workspace_invite", "revoke_workspace_invite", "invite_preview", "accept_workspace_invite",
         "list_workspace_people", "release_member_leads", "hand_off_lead", "set_lead_status",
+        // 0020 part B (call log, call agent, daily list; call_day / lead_status_after_call / lead_phone /
+        // lead_in_active_campaign / lead_callable / call_agent_caller have no client grant; call_agent_config_ok answers
+        // only owner/sdr of the workspace because guard_agent runs as the client)
+        "call_day", "lead_status_after_call", "lead_phone", "lead_in_active_campaign", "lead_callable", "call_agent_caller",
+        "call_agent_config_ok", "log_call", "build_call_list", "build_my_call_lists", "add_to_call_list",
       ].sort(),
     );
     for (const r of rows) expect(r.proconfig).toContain("search_path=\"\"");

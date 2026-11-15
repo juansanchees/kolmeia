@@ -1,0 +1,28 @@
+// "Ligar": today's list and the call screen (F5). No recording, no SMS.
+export const calls = {
+  tab: "Ligar",
+  today: "Lista de hoje",
+  empty: "Nada para ligar hoje.",
+  call: "Ligar",
+  outcome: "Resultado",
+  outcomes: {
+    no_answer: "Não atendeu",
+    voicemail: "Caixa postal",
+    gatekeeper: "Recepção",
+    talked: "Falou",
+    meeting_booked: "Reunião marcada",
+    not_interested: "Sem interesse",
+    wrong_number: "Número errado",
+    do_not_call: "Não ligar mais",
+  },
+  spokeTo: "Falou com (nome/cargo)",
+  notes: "Nota",
+  nextStep: "Próximo passo",
+  nextAt: "Quando",
+  save: "Salvar e próximo",
+  statusWillBe: "Status vira: {status}",
+  noRecording: "Sem gravação: em MA gravar exige o OK de todos.",
+  b2bOnly: "Só empresas. Número residencial: checar a lista Do Not Call antes.",
+  history: "Ligações",
+  done: "Feitas hoje",
+} as const;
