@@ -7,12 +7,15 @@ const createSchedulerStore = vi.fn();
 const runTick = vi.fn();
 vi.mock("@/lib/email/scheduler-store", () => ({ createSchedulerStore: (...a: unknown[]) => createSchedulerStore(...a) }));
 class FakeNoSend {}
-class FakeGmail {}
-vi.mock("@/lib/email/scheduler", () => ({ runTick: (...a: unknown[]) => runTick(...a), NoSendSmtp: FakeNoSend }));
-vi.mock("@/lib/email/transport", () => ({ GmailSmtp: FakeGmail }));
-// the server switch (0025, D4), stubbed: the variable itself is never set in tests
-const sw = { on: false };
-vi.mock("@/lib/email/config", () => ({ realClockEnabled: () => sw.on, configuredPublicOrigin: () => "https://app.example.com" }));
+class FakeGmail {
+  constructor(readonly timeouts: unknown) {}
+}
+const CLOCK = { connectionTimeout: 1, greetingTimeout: 1, socketTimeout: 1 };
+vi.mock("@/lib/email/scheduler", () => ({ runTick: (...a: unknown[]) => runTick(...a), NoSendSmtp: FakeNoSend, TICK_BUDGET_MS: 40_000, TICK_REAL_BUDGET_MS: 30_000 }));
+vi.mock("@/lib/email/transport", () => ({ GmailSmtp: FakeGmail, CLOCK_SMTP_TIMEOUTS: CLOCK }));
+// the server switch (0025, D4) and the mailbox key, stubbed: the variables themselves are never set in tests
+const sw = { on: false, key: true };
+vi.mock("@/lib/email/config", () => ({ realClockEnabled: () => sw.on, hasMailboxKey: () => sw.key, configuredPublicOrigin: () => "https://app.example.com" }));
 
 const { POST } = await import("@/app/api/scheduler/tick/route");
 const TOKEN = "ab".repeat(32);
@@ -20,6 +23,7 @@ const call = (headers: Record<string, string> = {}) => POST(new Request("https:/
 
 beforeEach(() => {
   sw.on = false;
+  sw.key = true;
   createSchedulerStore.mockReset();
   runTick.mockReset();
 });
@@ -60,6 +64,19 @@ describe("POST /api/scheduler/tick", () => {
     expect((await call({ authorization: `Bearer ${TOKEN}` })).status).toBe(200);
     expect(createSchedulerStore).toHaveBeenCalledWith(TOKEN, true);
     expect(runTick.mock.calls[0][0].smtp).toBeInstanceOf(FakeGmail);
+    expect(runTick.mock.calls[0][0].smtp.timeouts).toBe(CLOCK); // short SMTP timeouts on the clock
+    expect(runTick.mock.calls[0][0].budgetMs).toBe(30_000);
+  });
+
+  test("the switch on but no mailbox key: treated as off (rehearsal store, no Gmail transport)", async () => {
+    sw.on = true;
+    sw.key = false;
+    createSchedulerStore.mockReturnValue({});
+    runTick.mockResolvedValue({ runId: "run-1", outcome: "ok", campaigns: 0, sent: 0, failed: 0 });
+    expect((await call({ authorization: `Bearer ${TOKEN}` })).status).toBe(200);
+    expect(createSchedulerStore).toHaveBeenCalledWith(TOKEN, false);
+    expect(runTick.mock.calls[0][0].smtp).toBeInstanceOf(FakeNoSend);
+    expect(runTick.mock.calls[0][0].budgetMs).toBe(40_000);
   });
 
   test("the database refusing the token is a 401", async () => {

@@ -231,7 +231,7 @@ describe("heartbeat on success and on error; nothing sensitive in it", () => {
     const st = newStore();
     await expect(st.getMailbox(randomUUID())).rejects.toThrow("no_mailbox_access");
     await expect(st.getMailboxSecret(randomUUID())).rejects.toThrow("no_mailbox_access");
-    await expect(st.setMailboxVerified()).rejects.toThrow("no_mailbox_access");
+    await expect(st.setMailboxVerified(randomUUID(), false, "auth_failed")).rejects.toThrow("no_mailbox_access");
     await st.beginRun();
     await expect(st.claimNext(randomUUID(), randomUUID())).rejects.toThrow("holder_is_not_the_run");
   });

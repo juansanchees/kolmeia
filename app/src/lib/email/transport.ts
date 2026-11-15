@@ -25,7 +25,10 @@ export interface ImapTransport {
   fetchSince(creds: MailCreds, since: Date, max: number): Promise<Incoming[]>;
 }
 
-const TIMEOUTS = { connectionTimeout: 15_000, greetingTimeout: 10_000, socketTimeout: 30_000 };
+type SmtpTimeouts = { connectionTimeout: number; greetingTimeout: number; socketTimeout: number };
+const TIMEOUTS: SmtpTimeouts = { connectionTimeout: 15_000, greetingTimeout: 10_000, socketTimeout: 30_000 };
+/** The clock's SMTP (0025): at most 5 + 5 + 10 s per send, so a send started inside the tick's real budget ends before the route's maxDuration. */
+export const CLOCK_SMTP_TIMEOUTS: SmtpTimeouts = { connectionTimeout: 5_000, greetingTimeout: 5_000, socketTimeout: 10_000 };
 /** Raw bytes read per incoming message (bigger messages are cut; we only need the text). */
 export const MAX_RAW_BYTES = 256 * 1024;
 
@@ -42,6 +45,8 @@ export function mailErrorText(e: unknown): string {
 }
 
 export class GmailSmtp implements SmtpTransport {
+  constructor(private readonly timeouts: SmtpTimeouts = TIMEOUTS) {}
+
   private client(creds: MailCreds) {
     return nodemailer.createTransport({
       host: GMAIL_SMTP.host,
@@ -50,7 +55,7 @@ export class GmailSmtp implements SmtpTransport {
       auth: { user: creds.user, pass: creds.pass },
       logger: false,
       debug: false,
-      ...TIMEOUTS,
+      ...this.timeouts,
     });
   }
 

@@ -154,7 +154,9 @@ describe("proof that RLS is really enforced in PGlite", () => {
         // 0024 (E4 mailbox health: bounce pause, owner clears it, emergency stop)
         "pause_mailbox_on_bounces", "clear_mailbox_pause", "set_sending_paused",
         // 0025 (D4: the clock reads the stop switch and, for a real message it holds behind the C12 gate, one mailbox secret)
-        "scheduler_sending_paused", "scheduler_mailbox_secret",
+        "scheduler_sending_paused", "scheduler_mailbox_secret", "scheduler_mailbox_failed",
+        // 0025 (D4: the owner's DB switch for the clock's real sending; clock_real_ready is NOT definer)
+        "set_clock_real",
       ].sort(),
     );
     for (const r of rows) expect(r.proconfig).toContain("search_path=\"\"");

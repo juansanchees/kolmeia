@@ -286,14 +286,14 @@ describe("E1 scheduler: anon key and scheduler_* functions only, no logging, no 
     expect(rpcs.length).toBeGreaterThan(0);
     for (const name of rpcs) expect(name, name).toMatch(/^scheduler_[a-z_]+$/);
     expect(new Set(rpcs)).toEqual(
-      new Set(["scheduler_begin_run", "scheduler_due_work", "scheduler_finish_run", "scheduler_sender", "scheduler_campaign", "scheduler_prospect", "scheduler_message", "scheduler_claim_next_email", "scheduler_finish_email_send", "scheduler_sending_paused", "scheduler_mailbox_secret"]),
+      new Set(["scheduler_begin_run", "scheduler_due_work", "scheduler_finish_run", "scheduler_sender", "scheduler_campaign", "scheduler_prospect", "scheduler_message", "scheduler_claim_next_email", "scheduler_finish_email_send", "scheduler_sending_paused", "scheduler_mailbox_secret", "scheduler_mailbox_failed"]),
     );
     expect(text.match(/this\.db\.rpc\(/g)).toHaveLength(1); // the one generic helper; every call site names a scheduler_* function above
   });
   test("the route and the store never touch the key, decryption, IMAP or the AI; the store reaches a secret only through scheduler_mailbox_secret (0025, D4)", () => {
     for (const f of [route, store, tick]) {
       // the two allowed mentions, removed before the check: the gated RPC name (store) and the one gated transport (route)
-      const text = readFileSync(f, "utf8").replace(/scheduler_mailbox_secret/g, "").replace(/real \? new GmailSmtp\(\) : new NoSendSmtp\(\)/g, "").replace(/import \{ GmailSmtp \} from "@\/lib\/email\/transport";/g, "");
+      const text = readFileSync(f, "utf8").replace(/scheduler_mailbox_secret/g, "").replace(/real \? new GmailSmtp\(CLOCK_SMTP_TIMEOUTS\) : new NoSendSmtp\(\)/g, "").replace(/import \{ CLOCK_SMTP_TIMEOUTS, GmailSmtp \} from "@\/lib\/email\/transport";/g, "");
       expect(text, f).not.toMatch(/mailbox_secret|getMailboxKey|MAILBOX_ENC_KEY|decryptSecret|GmailSmtp|GmailImap|imapflow|nodemailer|@\/lib\/ai\/|supabase-store|emailSession/);
     }
   });
@@ -302,8 +302,9 @@ describe("E1 scheduler: anon key and scheduler_* functions only, no logging, no 
     expect(builders.map((f) => path.relative(root, f)).sort()).toEqual(["src/app/api/scheduler/tick/route.ts", "src/lib/email/session.ts"]);
     const text = readFileSync(route, "utf8");
     expect(text.match(/new GmailSmtp\(/g)).toHaveLength(1);
-    expect(text).toMatch(/const real = realClockEnabled\(\);/);
-    expect(text).toMatch(/const smtp = real \? new GmailSmtp\(\) : new NoSendSmtp\(\);/);
+    expect(text).toMatch(/const real = realClockEnabled\(\) && hasMailboxKey\(\);/);
+    expect(text).toMatch(/const smtp = real \? new GmailSmtp\(CLOCK_SMTP_TIMEOUTS\) : new NoSendSmtp\(\);/);
+    expect(text).toMatch(/budgetMs: real \? TICK_REAL_BUDGET_MS : TICK_BUDGET_MS/);
     expect(text).toMatch(/createSchedulerStore\(m\[1\], real\)/);
     // the switch is read in one place, and only the exact string "1" turns it on
     const config = readFileSync(path.join(root, "src/lib/email/config.ts"), "utf8");

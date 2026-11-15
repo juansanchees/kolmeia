@@ -21,6 +21,7 @@ const ENTRY_POINTS: [string, unknown[]][] = [
   ["select public.scheduler_claim_next_email($1,$2,true)", [ZERO, ZERO]],
   ["select public.scheduler_sending_paused($1,$2)", [ZERO, ZERO]],
   ["select public.scheduler_mailbox_secret($1,$2)", [ZERO, ZERO]],
+  ["select public.scheduler_mailbox_failed($1,$2,'auth_failed')", [ZERO, ZERO]],
 ];
 
 let db: TestDb;
@@ -285,6 +286,11 @@ describe("rehearsal only, and only what the run holds", () => {
       expect(f.ret, f.proname).not.toBe("text");
       // the one exception is gated on a real message this run holds, with the C12 gate open (tests/db/clock-real.test.ts)
       if (f.proname === "scheduler_mailbox_secret") continue;
+      // marks a broken mailbox 'error'; never reads the secret
+      if (f.proname === "scheduler_mailbox_failed") {
+        expect(f.prosrc).not.toMatch(/ciphertext|mailbox_secret\(/i);
+        continue;
+      }
       expect(f.prosrc, f.proname).not.toMatch(/ciphertext|mailbox_secret|public\.mailboxes/i);
       expect(["jsonb", "void", "boolean"], f.proname).toContain(f.ret);
     }

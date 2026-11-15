@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vitest";
-import { TestDb, anon, anonWithToken, as, setSchedulerToken, UUID_A } from "./helpers";
+import { TestDb, anon, anonWithToken, as, setSchedulerToken, UUID_A, UUID_B } from "./helpers";
 import { approveAllC12 } from "./c12-seed";
 import { CIPHER, TOKEN, createOwner, seedCampaign, type Seeded } from "./scheduler-seed";
 
@@ -28,6 +28,7 @@ async function realCampaign(label: string): Promise<Seeded> {
   const s = await seedCampaign(db, ws, label);
   await db.query(as(UUID_A), "select public.set_mailbox_verified($1, true, null)", [s.mailbox]);
   await db.query(as(UUID_A), "select public.set_campaign_send_mode($1,'real')", [s.campaign]);
+  await db.query(as(UUID_A), "select public.set_clock_real($1,true)", [ws]);
   return s;
 }
 const park = (s: Seeded) => admin("update public.email_campaigns set status = 'paused' where id = $1", [s.campaign]);
@@ -63,10 +64,14 @@ describe("the work list and the claim", () => {
 
     await db.query(as(UUID_A), "select public.set_sending_paused($1,true)", [ws]);
     expect(await due(run, true)).not.toContain(s.campaign);
-    expect(await claim(run, s.campaign, true)).toEqual({ outcome: "sending_paused" });
-    expect(await one("select public.scheduler_sending_paused($1,$2) as r", [run, ws])).toBe(true);
+    expect(await claim(run, s.campaign, true)).toEqual({ outcome: "not_active" });
     await db.query(as(UUID_A), "select public.set_sending_paused($1,false)", [ws]);
-    expect(await one("select public.scheduler_sending_paused($1,$2) as r", [run, ws])).toBe(false);
+
+    // the owner's switch off: a token holder passing p_real gets nothing real (lock 1 is in the database)
+    await db.query(as(UUID_A), "select public.set_clock_real($1,false)", [ws]);
+    expect(await due(run, true)).not.toContain(s.campaign);
+    expect(await claim(run, s.campaign, true)).toEqual({ outcome: "not_active" });
+    await db.query(as(UUID_A), "select public.set_clock_real($1,true)", [ws]);
     expect(await admin("select 1 from public.email_send_log where campaign_id = $1", [s.campaign])).toHaveLength(0);
     await finish(run);
 
@@ -76,6 +81,21 @@ describe("the work list and the claim", () => {
     expect(c.outcome).toBe("claimed");
     const [m] = await admin<{ send_mode: string; claim_holder: string; claimed_by: string | null }>("select send_mode, claim_holder, claimed_by from public.email_messages where id = $1", [c.message_id]);
     expect(m).toEqual({ send_mode: "real", claim_holder: run, claimed_by: null });
+    // the stop re-read before SMTP: off now; on with the stop, with the gate revoked, or with the owner's switch off
+    const paused = () => one<boolean>("select public.scheduler_sending_paused($1,$2) as r", [run, ws]);
+    expect(await paused()).toBe(false);
+    await db.query(as(UUID_A), "select public.set_sending_paused($1,true)", [ws]);
+    expect(await paused()).toBe(true);
+    await db.query(as(UUID_A), "select public.set_sending_paused($1,false)", [ws]);
+    await gateClosed();
+    expect(await paused()).toBe(true);
+    await approveAllC12(db, ws);
+    await db.query(as(UUID_A), "select public.set_clock_real($1,false)", [ws]);
+    expect(await paused()).toBe(true);
+    await db.query(as(UUID_A), "select public.set_clock_real($1,true)", [ws]);
+    expect(await paused()).toBe(false);
+    // a workspace where this run holds nothing: answered "stopped"
+    expect(await one<boolean>("select public.scheduler_sending_paused($1,$2) as r", [run, "00000000-0000-4000-8000-000000000000"])).toBe(true);
     // a real message the run holds can be read, and finished as 'sent' (never 'dry_run')
     expect(await one("select public.scheduler_message($1,$2) as r", [run, c.message_id])).toMatchObject({ send_mode: "real" });
     expect((await db.try(clock, "select public.scheduler_finish_email_send($1,$2,'dry_run',null)", [run, c.message_id])).error?.message).toMatch(/send mode/);
@@ -126,6 +146,10 @@ describe("scheduler_mailbox_secret", () => {
     await db.query(as(UUID_A), "select public.set_sending_paused($1,true)", [ws]);
     expect(code((await secret(run, msg)).error)).toBe("42501");
     await db.query(as(UUID_A), "select public.set_sending_paused($1,false)", [ws]);
+    // the owner's switch off
+    await db.query(as(UUID_A), "select public.set_clock_real($1,false)", [ws]);
+    expect(code((await secret(run, msg)).error)).toBe("42501");
+    await db.query(as(UUID_A), "select public.set_clock_real($1,true)", [ws]);
     // mailbox no longer verified, or paused on bounces
     await admin("update public.mailboxes set status = 'error' where id = $1", [s.mailbox]);
     expect(code((await secret(run, msg)).error)).toBe("42501");
@@ -148,16 +172,61 @@ describe("scheduler_mailbox_secret", () => {
     await park(n);
   });
 
-  test("only scheduler_mailbox_secret, among scheduler functions, mentions public.mailboxes or the ciphertext", async () => {
+  test("only scheduler_mailbox_secret reads the ciphertext; only it and scheduler_mailbox_failed touch public.mailboxes", async () => {
     const fns = await admin<{ proname: string; prosrc: string }>(
       "select proname, prosrc from pg_proc where pronamespace = 'public'::regnamespace and proname like 'scheduler\\_%'",
     );
-    const touching = fns.filter((f) => /ciphertext|mailbox_secret\(|public\.mailboxes/i.test(f.prosrc)).map((f) => f.proname);
-    expect(touching).toEqual(["scheduler_mailbox_secret"]);
+    expect(fns.filter((f) => /ciphertext|mailbox_secret\(/i.test(f.prosrc)).map((f) => f.proname)).toEqual(["scheduler_mailbox_secret"]);
+    expect(fns.filter((f) => /public\.mailboxes/i.test(f.prosrc)).map((f) => f.proname).sort()).toEqual(["scheduler_mailbox_failed", "scheduler_mailbox_secret"]);
     const grants = await admin<{ proname: string; anon: boolean; authed: boolean }>(
-      "select proname, has_function_privilege('anon', oid, 'execute') as anon, has_function_privilege('authenticated', oid, 'execute') as authed from pg_proc where pronamespace = 'public'::regnamespace and proname in ('scheduler_mailbox_secret','scheduler_sending_paused','scheduler_due_work','scheduler_claim_next_email')",
+      "select proname, has_function_privilege('anon', oid, 'execute') as anon, has_function_privilege('authenticated', oid, 'execute') as authed from pg_proc where pronamespace = 'public'::regnamespace and proname in ('scheduler_mailbox_secret','scheduler_mailbox_failed','scheduler_sending_paused','scheduler_due_work','scheduler_claim_next_email')",
     );
-    expect(grants).toHaveLength(4); // the old signatures were dropped, not overloaded
+    expect(grants).toHaveLength(5); // the old signatures were dropped, not overloaded
     for (const g of grants) expect(g, g.proname).toMatchObject({ anon: true, authed: false });
+  });
+});
+
+describe("the owner's switch and broken mailboxes", () => {
+  test("set_clock_real: only an owner; turning it on needs the C12 gate; clients cannot write the column", async () => {
+    await db.query(as(UUID_A), "select public.set_clock_real($1,false)", [ws]);
+    const flag = async () => (await admin<{ v: boolean }>("select clock_real_enabled as v from public.workspace_settings where workspace_id = $1", [ws]))[0].v;
+    expect(await flag()).toBe(false);
+    await db.addUser(UUID_B);
+    await admin("insert into public.workspace_members (workspace_id, user_id, role) values ($1,$2,'sdr')", [ws, UUID_B]);
+    expect(code((await db.try(as(UUID_B), "select public.set_clock_real($1,true)", [ws])).error)).toBe("42501");
+    expect(code((await db.try(anon, "select public.set_clock_real($1,true)", [ws])).error)).toBe("42501");
+    await gateClosed();
+    expect(code((await db.try(as(UUID_A), "select public.set_clock_real($1,true)", [ws])).error)).toBe("23514");
+    await approveAllC12(db, ws);
+    await db.query(as(UUID_A), "select public.set_clock_real($1,true)", [ws]);
+    expect(await flag()).toBe(true);
+    expect((await db.try(as(UUID_A), "update public.workspace_settings set clock_real_enabled = false where workspace_id = $1", [ws])).error?.message).toMatch(/permission denied/);
+    await db.query(as(UUID_A), "select public.set_clock_real($1,false)", [ws]);
+    expect(await flag()).toBe(false);
+  });
+
+  test("scheduler_mailbox_failed marks only the mailbox of a real message this run held, with a mailbox code only", async () => {
+    const s = await realCampaign("mbfail");
+    const run = await begin();
+    const c = await claim(run, s.campaign, true);
+    expect(c.outcome).toBe("claimed");
+    const msg = c.message_id!;
+    const failed = (code_: string, m = msg, r = run) => db.try(clock, "select public.scheduler_mailbox_failed($1,$2,$3)", [r, m, code_]);
+    expect(code((await failed("timeout")).error)).toBe("22023");
+    expect(code((await failed("auth_failed", s.messages[0] === msg ? "00000000-0000-4000-8000-000000000000" : s.messages[0])).error)).toBe("42501");
+    expect((await db.try(as(UUID_A), "select public.scheduler_mailbox_failed($1,$2,'auth_failed')", [run, msg])).error?.message).toMatch(/permission denied/);
+    // the engine records the failure first, then reports the mailbox
+    await db.query(clock, "select public.scheduler_finish_email_send($1,$2,'failed','auth_failed')", [run, msg]);
+    await db.query(clock, "select public.scheduler_mailbox_failed($1,$2,'auth_failed')", [run, msg]);
+    expect((await admin<{ status: string; last_error: string }>("select status, last_error from public.mailboxes where id = $1", [s.mailbox]))[0]).toEqual({ status: "error", last_error: "auth_failed" });
+    await finish(run);
+    // a rehearsal message held by a run cannot mark its mailbox
+    const r2 = await seedCampaign(db, ws, "mbfail-dry");
+    const run2 = await begin();
+    const c2 = await claim(run2, r2.campaign, true);
+    expect(code((await failed("auth_failed", c2.message_id!, run2)).error)).toBe("42501");
+    await finish(run2);
+    await park(s);
+    await park(r2);
   });
 });

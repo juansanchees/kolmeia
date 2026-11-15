@@ -13,6 +13,8 @@ import type { SmtpTransport } from "./transport";
 export const TICK_MAX_CAMPAIGNS = 20;
 export const TICK_MAX_SENDS = 10;
 export const TICK_BUDGET_MS = 40_000;
+/** Real mode: no new item after 30 s; one send takes at most 20 s of SMTP (CLOCK_SMTP_TIMEOUTS), inside maxDuration 60. */
+export const TICK_REAL_BUDGET_MS = 30_000;
 
 const CODE = /^[a-z0-9_:]{1,60}$/;
 

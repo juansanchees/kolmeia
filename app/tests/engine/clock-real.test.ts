@@ -25,6 +25,8 @@ const ORIGINS: Origins = { publicOrigin: "https://app.example.com", requestOrigi
 class SpySmtp implements SmtpTransport {
   sends: { creds: MailCreds; mail: OutgoingEmail }[] = [];
   verifies = 0;
+  /** When set, every send is attempted (counted) and then fails with this error, as Gmail would. */
+  fail: Error | null = null;
   get calls() {
     return this.sends.length + this.verifies;
   }
@@ -33,6 +35,7 @@ class SpySmtp implements SmtpTransport {
   }
   async send(creds: MailCreds, mail: OutgoingEmail): Promise<{ response: string }> {
     this.sends.push({ creds, mail });
+    if (this.fail) throw this.fail;
     return { response: "250 OK" };
   }
 }
@@ -79,6 +82,7 @@ async function realCampaign(label: string): Promise<Seeded> {
   const s = await seedCampaign(db, ws, label);
   await verifiedMailbox(s.mailbox, s.address);
   await db.query(as(UUID_A), "select public.set_campaign_send_mode($1,'real')", [s.campaign]);
+  await db.query(as(UUID_A), "select public.set_clock_real($1,true)", [ws]);
   return s;
 }
 const park = (s: Seeded) => admin("update public.email_campaigns set status = 'paused' where id = $1", [s.campaign]);
@@ -160,6 +164,49 @@ describe("no SMTP while any lock is closed: gate closed, env off, sending_paused
     await park(s);
   });
 
+  test("env on, gate open, the owner's DB switch off: nothing listed, nothing claimed (the token alone is not enough)", async () => {
+    const s = await realCampaign("ownerswitch");
+    await db.query(as(UUID_A), "select public.set_clock_real($1,false)", [ws]);
+    const r = await tick(storeFor(ON));
+    expect(r).toMatchObject({ sent: 0, failed: 0 });
+    expect(smtp.calls).toBe(0);
+    expect(await status(s.messages[0])).toBe("approved");
+    await park(s);
+  });
+
+  test("env on, gate open, stop pressed after the mailbox was read: the engine's own check before SMTP stops it", async () => {
+    const s = await realCampaign("stopsecret");
+    class StopAfterMailbox extends SchedulerStore {
+      async getMailbox(mailboxId: string) {
+        const m = await super.getMailbox(mailboxId);
+        await db.query(as(UUID_A), "select public.set_sending_paused($1,true)", [ws]);
+        return m;
+      }
+    }
+    const r = await tick(new StopAfterMailbox(clockClient(), realClockEnabled(ON)));
+    expect(r).toMatchObject({ sent: 0, failed: 1 });
+    expect(smtp.calls).toBe(0);
+    expect((await admin<{ status: string; error: string }>("select status, error from public.email_messages where id = $1", [s.messages[0]]))[0]).toEqual({ status: "failed", error: "sending_paused" });
+    await park(s);
+  });
+
+  test("env on, the C12 gate revoked right after the clock's claim: the message cannot be built, nothing is sent", async () => {
+    const s = await realCampaign("gaterevoked");
+    class RevokeAfterClaim extends SchedulerStore {
+      async claimNext(campaignId: string, holder: string, messageId: string | null = null): Promise<ClaimResult> {
+        const r = await super.claimNext(campaignId, holder, messageId);
+        await gateClosed();
+        return r;
+      }
+    }
+    const r = await tick(new RevokeAfterClaim(clockClient(), realClockEnabled(ON)));
+    expect(r).toMatchObject({ sent: 0, failed: 1 });
+    expect(smtp.calls).toBe(0);
+    expect((await admin<{ status: string; error: string }>("select status, error from public.email_messages where id = $1", [s.messages[0]]))[0]).toEqual({ status: "failed", error: "compose:address" });
+    await gateOpen();
+    await park(s);
+  });
+
   test("env on, gate open, the mailbox paused on bounces: nothing claimed", async () => {
     const s = await realCampaign("mbpaused");
     await admin("update public.mailboxes set health_status = 'paused_bounce', paused_at = now() where id = $1", [s.mailbox]);
@@ -232,6 +279,26 @@ describe("both locks open", () => {
     const again = await tick(storeFor(ON));
     expect(again.sent).toBe(0);
     expect(smtp.sends).toHaveLength(1);
+    await park(s);
+  });
+});
+
+describe("a broken mailbox on the clock", () => {
+  test("auth_failed: the message fails, the mailbox is marked for a re-test, and the next tick tries no AUTH again", async () => {
+    const s = await realCampaign("authfail");
+    await admin("update public.email_campaigns set min_gap_minutes = 0, random_gap_minutes = 0 where id = $1", [s.campaign]);
+    smtp.fail = Object.assign(new Error("Invalid login: 535 5.7.8"), { code: "EAUTH", responseCode: 535 });
+    const r = await tick(storeFor(ON));
+    expect(r).toMatchObject({ sent: 0, failed: 1 });
+    expect(smtp.sends).toHaveLength(1);
+    expect((await admin<{ status: string; error: string }>("select status, error from public.email_messages where id = $1", [s.messages[0]]))[0]).toEqual({ status: "failed", error: "auth_failed" });
+    expect((await admin<{ status: string; last_error: string }>("select status, last_error from public.mailboxes where id = $1", [s.mailbox]))[0]).toEqual({ status: "error", last_error: "auth_failed" });
+    // a person retries the message; the clock still does not touch the broken mailbox
+    expect((await db.query<{ r: string }>(as(UUID_A), "select public.retry_failed_email($1) as r", [s.messages[0]]))[0].r).toBe("approved");
+    const again = await tick(storeFor(ON));
+    expect(again).toMatchObject({ sent: 0, failed: 0 });
+    expect(smtp.sends).toHaveLength(1);
+    expect(await status(s.messages[0])).toBe("approved");
     await park(s);
   });
 });

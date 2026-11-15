@@ -33,6 +33,8 @@ export class SchedulerStore implements TickStore {
   private claimed: string | null = null;
   /** Its workspace (from scheduler_message), to read the stop switch when the database refuses the mailbox. */
   private claimedWorkspace: string | null = null;
+  /** The mailbox read for the claimed message (kept after finishSend: the engine reports a broken mailbox afterwards). */
+  private lastMailbox: { messageId: string; mailboxId: string } | null = null;
   /** Ciphertext of the claimed message's mailbox, between getMailbox and getMailboxSecret. */
   private secret: { mailboxId: string; ciphertext: string } | null = null;
 
@@ -45,7 +47,11 @@ export class SchedulerStore implements TickStore {
   private async rpc<T>(fn: string, args: Record<string, unknown> = {}): Promise<T | null> {
     const { data, error } = await this.db.rpc(fn, args);
     if (error) {
-      if (error.code === "42501") throw new SchedulerAuthError();
+      if (error.code === "42501") {
+        // 0025: the token was fine but this mailbox may not be used now (gate, stop, holder, status): not an auth error
+        if (/^mailbox not available/.test(error.message ?? "")) throw new Error("mailbox_refused");
+        throw new SchedulerAuthError();
+      }
       throw new Error(`rpc_${fn}`);
     }
     return (data as T | null) ?? null;
@@ -74,6 +80,7 @@ export class SchedulerStore implements TickStore {
     this.claimed = null;
     this.claimedWorkspace = null;
     this.secret = null;
+    this.lastMailbox = null;
   }
 
   // ---- SendStore
@@ -97,6 +104,7 @@ export class SchedulerStore implements TickStore {
     this.claimed = null;
     this.claimedWorkspace = null;
     this.secret = null;
+    this.lastMailbox = null;
     const r = await this.rpc<ClaimResult>("scheduler_claim_next_email", { p_run: holder, p_campaign: campaignId, p_real: this.real });
     if (!r) throw new Error("rpc_scheduler_claim_next_email");
     if (r.outcome === "claimed" && r.message_id) this.claimed = r.message_id;
@@ -118,7 +126,8 @@ export class SchedulerStore implements TickStore {
     let r: { id: string; workspace_id: string; email: string; ciphertext: string } | null;
     try {
       r = await this.rpc("scheduler_mailbox_secret", { p_run: this.runId(), p_message: this.claimed });
-    } catch {
+    } catch (e) {
+      if (e instanceof SchedulerAuthError) throw e; // the token itself was refused: keep the 401 meaning
       // the database said no (gate, stop, mailbox, holder): a short code, nothing else; the stop keeps its own code so
       // the message stays retryable as 'sending_paused', like the engine's own re-check
       const ws = this.claimedWorkspace;
@@ -126,6 +135,7 @@ export class SchedulerStore implements TickStore {
     }
     if (!r || r.id !== mailboxId || typeof r.ciphertext !== "string") throw new Error("mailbox_refused");
     this.secret = { mailboxId: r.id, ciphertext: r.ciphertext };
+    this.lastMailbox = { messageId: this.claimed, mailboxId: r.id };
     return { id: r.id, workspace_id: r.workspace_id, email: r.email };
   }
   async getMailboxSecret(mailboxId: string): Promise<string> {
@@ -134,8 +144,15 @@ export class SchedulerStore implements TickStore {
     if (!this.real || !s || s.mailboxId !== mailboxId) throw new Error("no_mailbox_access");
     return s.ciphertext;
   }
-  async setMailboxVerified(): Promise<void> {
-    throw new Error("no_mailbox_access"); // a person re-tests the mailbox; the clock never changes it
+  /**
+   * The clock can only mark the mailbox of its last real message as broken (password refused, stored secret unreadable,
+   * key missing),
+   * so the next claims skip it; marking a mailbox good is a person's re-test.
+   */
+  async setMailboxVerified(mailboxId: string, ok: boolean, error: string | null): Promise<void> {
+    const last = this.lastMailbox;
+    if (ok || !this.real || !last || last.mailboxId !== mailboxId) throw new Error("no_mailbox_access");
+    await this.rpc("scheduler_mailbox_failed", { p_run: this.runId(), p_message: last.messageId, p_code: error });
   }
   /** E4: the stop switch, read again right before SMTP. Unreadable = stopped (fail closed). */
   async sendingPaused(workspaceId: string): Promise<boolean> {
