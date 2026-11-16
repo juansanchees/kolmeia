@@ -53,10 +53,14 @@ describe("Por que este lead é quente?", () => {
     expect(texts.join(" ")).not.toMatch(/Fake job|pat@x/);
     expect(facts.at(-1)).toEqual({ text: "Prova: New 4-unit building", url: "https://data.boston.gov/permit/1" });
   });
-  test("the AI summary must cite the facts; invented citations are dropped, none at all is refused", () => {
+  test("the AI summary keeps only sentences that cite a real fact; invented citations are dropped, none left is refused", () => {
     const input = { company: "Cedarwood", facts: ["a", "b"] };
-    expect(checkExplain({ summary: "Está construindo agora [1][2], e mais [7]." }, input)).toEqual({ summary: "Está construindo agora [1][2], e mais .", cited: [1, 2] });
+    expect(checkExplain({ summary: "Está construindo agora [1][2]. Ganhou 3 prêmios [7]. É o melhor cliente do estado! Obra grande [2][9]." }, input)).toEqual({
+      summary: "Está construindo agora [1][2]. Obra grande [2].",
+      cited: [1, 2],
+    });
     expect(() => checkExplain({ summary: "Muito quente." }, input)).toThrow();
+    expect(() => checkExplain({ summary: "Muito quente [5]." }, input)).toThrow();
   });
   test("one capped Haiku call in the user's ledger, facts only as untrusted data", async () => {
     expect(explainDef).toMatchObject({ task: "lead_explain", model: MODELS.haiku });

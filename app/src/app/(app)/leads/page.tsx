@@ -23,7 +23,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   const sender = isSender(workspace?.role ?? "closer");
   if (!supabase || !workspace) return <LeadsTable items={[]} canCreate={false} />;
 
-  const [views, lists, questions] = await Promise.all([listViews(supabase, workspace.id), sender ? listNames(supabase, workspace.id) : [], listQuestions(supabase, workspace.id)]);
+  const [views, lists, questions] = await Promise.all([listViews(supabase, workspace.id), sender ? listNames(supabase, workspace.id) : [], sender ? listQuestions(supabase, workspace.id) : []]);
   const pick = (await searchParams).lista;
   const list = typeof pick === "string" && UUID.test(pick) ? (lists.find((l) => l.id === pick) ?? null) : null;
   // Senders open on "Novos" (never contacted); the closer's leads were all handed to her, so she opens on "Todos".
@@ -34,8 +34,8 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
     // "Buscar" buttons: senders only, and only for sources the workspace connected (the closer never reads connections).
     sender ? connectedSources(supabase, workspace.id) : null,
   ]);
-  // AI-question answers (0029), attached per lead; RLS gives the closer only her leads' answers
-  const answers = await listAnswers(supabase, workspace.id, questions.map((q) => q.id));
+  // AI-question answers (0029), attached per lead. Senders only: the closer has no AI column on her list.
+  const answers = sender ? await listAnswers(supabase, workspace.id, questions.map((q) => q.id)) : new Map();
   for (const i of items) i.ai = answers.get(i.lead.id);
   return (
     <LeadsTable

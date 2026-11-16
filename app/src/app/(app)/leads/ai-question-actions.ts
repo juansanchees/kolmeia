@@ -6,7 +6,7 @@ import type { AiErrorCode } from "@/lib/ai/errors";
 import { defaultTransport } from "@/lib/ai/gateway";
 import { sessionLedger } from "@/lib/ai/session-ledger";
 import { runAnswerStep, type StepResult } from "@/lib/ai-questions/run";
-import { getQuestion, SupabaseAnswerStore } from "@/lib/ai-questions/store";
+import { enqueueAnswers, getQuestion, restoreAnswered, SupabaseAnswerStore } from "@/lib/ai-questions/store";
 import { ANSWER_TYPES, QUESTION_MAX, QUESTION_SOURCES, RUN_MAX, TEST_LEADS } from "@/lib/ai-questions/types";
 import { nodeRawHttp } from "@/lib/qualifier/site/net";
 import { createClient } from "@/lib/supabase/server";
@@ -65,24 +65,6 @@ export async function archiveQuestionAction(questionId: string): Promise<{ ok: b
   return { ok: !error };
 }
 
-/** Queues leads that have no answer yet; failed ones (and, for a test, finished ones too) go back to the queue. */
-async function enqueue(db: NonNullable<Awaited<ReturnType<typeof createClient>>>, wsId: string, questionId: string, leadIds: string[], redo: boolean): Promise<boolean> {
-  const { error } = await db
-    .from("ai_answers")
-    .upsert(
-      leadIds.map((lead_id) => ({ workspace_id: wsId, question_id: questionId, lead_id, status: "queued" })),
-      { onConflict: "question_id,lead_id", ignoreDuplicates: true },
-    );
-  if (error) return false;
-  const { error: e2 } = await db
-    .from("ai_answers")
-    .update({ status: "queued", answer: null, evidence_url: null, evidence_excerpt: null, evidence_label: null, error: null, claimed_at: null })
-    .eq("question_id", questionId)
-    .in("lead_id", leadIds)
-    .in("status", redo ? ["failed", "done", "skipped"] : ["failed"]);
-  return !e2;
-}
-
 export type StepOut = { ok: true; result: StepResult; stopText: string | null } | { ok: false; error: string };
 
 async function step(questionId: string, limit: number, leadIds?: string[]): Promise<StepOut> {
@@ -101,7 +83,7 @@ async function step(questionId: string, limit: number, leadIds?: string[]): Prom
       q,
       { limit, leadIds },
     );
-    revalidatePath("/leads");
+    // no revalidatePath here: the page refreshes once when the batch ends (onDone)
     return { ok: true, result, stopText: result.stop ? (AI_TEXT[result.stop] ?? t.ai.generic) : null };
   } catch {
     return { ok: false, error: A.failed };
@@ -114,8 +96,10 @@ export async function testQuestionAction(questionId: string, leadIds: string[]):
   const ids = z.array(uuid).min(1).max(TEST_LEADS).safeParse(leadIds);
   const db = await createClient();
   if (!db || !ids.success || !uuid.safeParse(questionId).success) return { ok: false, error: A.noLeads };
-  if (!(await enqueue(db, ws.id, questionId, ids.data, true))) return { ok: false, error: A.failed };
-  return step(questionId, TEST_LEADS, ids.data);
+  if (!(await enqueueAnswers(db, ws.id, questionId, ids.data, true))) return { ok: false, error: A.failed };
+  const r = await step(questionId, TEST_LEADS, ids.data);
+  if (!r.ok || r.result.stop) await restoreAnswered(db, questionId, ids.data);
+  return r;
 }
 
 /** "Rodar em N": queues the leads; the page then calls stepQuestionAction while rows remain. */
@@ -124,7 +108,7 @@ export async function enqueueQuestionAction(questionId: string, leadIds: string[
   const ids = z.array(uuid).min(1).max(RUN_MAX).safeParse(leadIds);
   const db = await createClient();
   if (!db || !ids.success || !uuid.safeParse(questionId).success) return { ok: false, error: A.noLeads };
-  return (await enqueue(db, ws.id, questionId, ids.data, false)) ? { ok: true } : { ok: false, error: A.failed };
+  return (await enqueueAnswers(db, ws.id, questionId, ids.data, false)) ? { ok: true } : { ok: false, error: A.failed };
 }
 
 export async function stepQuestionAction(questionId: string): Promise<StepOut> {

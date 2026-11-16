@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getLead } from "@/lib/leads/queries";
+import { getLead, ID_CHUNK } from "@/lib/leads/queries";
 import { displayOf } from "@/lib/leads/view";
 import type { AnswerStore, Claimed, Finished, LeadData } from "./run";
 import { QUESTION_COLUMNS, type AiCell, type AiQuestion } from "./types";
@@ -94,7 +94,10 @@ export async function listQuestions(db: SupabaseClient, workspaceId: string): Pr
   return (data ?? []) as AiQuestion[];
 }
 
-/** Every answer the user may read for these questions, as lead id -> question id -> cell (RLS: the closer's leads only). */
+/**
+ * Finished answers for these questions, as lead id -> question id -> cell. Only status 'done': a lead without a cell is
+ * "na fila" (pending) for the filter and the column, and queued or failed rows never use up the row cap.
+ */
 export async function listAnswers(db: SupabaseClient, workspaceId: string, questionIds: string[]): Promise<Map<string, Record<string, AiCell>>> {
   const out = new Map<string, Record<string, AiCell>>();
   if (questionIds.length === 0) return out;
@@ -104,6 +107,7 @@ export async function listAnswers(db: SupabaseClient, workspaceId: string, quest
       .select("id, question_id, lead_id, status, answer, evidence_url, evidence_excerpt, evidence_label")
       .eq("workspace_id", workspaceId)
       .in("question_id", questionIds)
+      .eq("status", "done")
       .order("id", { ascending: true })
       .range(from, from + PAGE - 1);
     if (error) throw new Error(`listAnswers: ${error.message}`);
@@ -116,4 +120,37 @@ export async function listAnswers(db: SupabaseClient, workspaceId: string, quest
     if (rows.length < PAGE) break;
   }
   return out;
+}
+
+/** Runs `fn` per ID_CHUNK lead ids (the `.in()` URL limit, see leads/queries.ts); false on the first error. */
+async function sliced(leadIds: string[], fn: (chunk: string[]) => PromiseLike<{ error: unknown }>): Promise<boolean> {
+  for (let i = 0; i < leadIds.length; i += ID_CHUNK) if ((await fn(leadIds.slice(i, i + ID_CHUNK))).error) return false;
+  return true;
+}
+
+/**
+ * Queues leads that have no answer yet; failed ones (and, for a test, finished ones too) go back to the queue. The
+ * stored answer and evidence stay until a new answer overwrites them (finish), so a stopped test loses nothing paid.
+ */
+export async function enqueueAnswers(db: SupabaseClient, wsId: string, questionId: string, leadIds: string[], redo: boolean): Promise<boolean> {
+  const { error } = await db
+    .from("ai_answers")
+    .upsert(
+      leadIds.map((lead_id) => ({ workspace_id: wsId, question_id: questionId, lead_id, status: "queued" })),
+      { onConflict: "question_id,lead_id", ignoreDuplicates: true },
+    );
+  if (error) return false;
+  return sliced(leadIds, (c) =>
+    db
+      .from("ai_answers")
+      .update({ status: "queued", error: null, claimed_at: null })
+      .eq("question_id", questionId)
+      .in("lead_id", c)
+      .in("status", redo ? ["failed", "done", "skipped"] : ["failed"]),
+  );
+}
+
+/** After a test stopped at a cap: rows it re-queued that still hold an earlier answer show that answer again. */
+export async function restoreAnswered(db: SupabaseClient, questionId: string, leadIds: string[]): Promise<void> {
+  await db.from("ai_answers").update({ status: "done" }).eq("question_id", questionId).in("lead_id", leadIds).eq("status", "queued").is("claimed_at", null).not("answer", "is", null);
 }

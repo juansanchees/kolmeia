@@ -64,7 +64,8 @@ export const SPAM_WORDS = [
   "cheap", "discount", "earn money", "make money", "once in a lifetime", "satisfaction guaranteed", "dear friend", "congratulations",
   "exclusive deal", "save big", "incredible deal", "no cost", "double your", "amazing", "miracle", "this is not spam",
 ] as const;
-export const MAX_WORDS = 90;
+/** Same ceiling as the draft prompt (50-110 words per e-mail, prompts/email.ts STYLE). */
+export const MAX_WORDS = 110;
 /** Upper-case words that are names, not shouting. */
 const CAPS_OK = new Set(["HVAC", "BERDO", "LLC", "INC", "CORP", "USA", "ASAP", "CEO", "COO", "CFO", "VRF", "AC"]);
 
@@ -83,7 +84,8 @@ const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export function contentChecks(i: ContentInput): ContentCheck[] {
   const all = `${i.subject}\n${i.body}`;
-  const low = all.toLowerCase();
+  // "feel free" is a polite phrase, not the spam word "free"
+  const low = all.toLowerCase().replace(/feel\s+free/g, " ");
   const spam = SPAM_WORDS.filter((w) => new RegExp(`(?<![a-z0-9])${esc(w)}(?![a-z0-9])`).test(low));
   const links = i.step === 1 ? (all.match(/https?:\/\/|www\./gi) ?? []).length : 0;
   const words = i.body.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;

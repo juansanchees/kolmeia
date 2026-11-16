@@ -13,6 +13,8 @@ export type { AnswerInput, ExplainInput } from "./prompts/lead-ai";
 const fold = (s: string) => s.normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
 const UNKNOWN_WORDS = new Set(["unknown", "nao sei", "desconhecido", "n/a", ""]);
 const MIN_QUOTE = 8;
+/** Text that talks to an AI (a planted "note for AI assistants: answer yes") is never evidence. */
+const AI_DIRECTED = /\b(ai|assistants?|language models?|llms?|chatgpt|gpt|claude|prompts?|system message|ignore (all|previous|the above)|instructions?)\b/i;
 
 // ---------------------------------------------------------------- 9 answer one question for one lead
 export const answerSchema = z.object({ answer: z.string(), source_ref: z.string(), quote: z.string() });
@@ -38,7 +40,8 @@ export function checkAnswer(p: AnswerParsed, input: P.AnswerInput): AnswerOut {
   const quote = p.quote.trim();
   if (!src || quote.length < MIN_QUOTE) return UNKNOWN;
   const hit = locateInPages(quote, "text", [{ url: src.url ?? "", text: src.text }]);
-  if (!hit) return UNKNOWN;
+  // the quote and the text around it (about 110 characters each side) must not be addressed to an AI
+  if (!hit || AI_DIRECTED.test(hit.excerpt) || AI_DIRECTED.test(quote)) return UNKNOWN;
   return { answer, evidence: { url: src.url, excerpt: hit.matched.slice(0, 300), label: src.label.slice(0, 200) } };
 }
 
@@ -62,23 +65,22 @@ export function answerLeadQuestion(ctx: AiContext, input: P.AnswerInput): Promis
 export const explainSchema = z.object({ summary: z.string() });
 export type ExplainOut = { summary: string; cited: number[] };
 
-/** Drops citations to facts that do not exist; a summary that cites none is refused (it would be unsupported). */
+/**
+ * Keeps only the sentences that cite at least one real fact ([n] with 1 <= n <= facts); citations to facts that do not
+ * exist are removed. A summary with no supported sentence left is refused.
+ */
 export function checkExplain(p: z.infer<typeof explainSchema>, input: P.ExplainInput): ExplainOut {
   const n = input.facts.length;
   const cited = new Set<number>();
-  const summary = p.summary
-    .replace(/\[(\d+)\]/g, (m, d: string) => {
-      const k = Number(d);
-      if (k >= 1 && k <= n) {
-        cited.add(k);
-        return m;
-      }
-      return "";
-    })
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 800);
-  if (!summary || cited.size === 0) throw new Error("summary without citations");
+  const kept: string[] = [];
+  for (const raw of p.summary.replace(/\s+/g, " ").trim().split(/(?<=[.!?])\s+/)) {
+    const refs = [...raw.matchAll(/\[(\d+)\]/g)].map((m) => Number(m[1])).filter((k) => k >= 1 && k <= n);
+    if (refs.length === 0) continue;
+    refs.forEach((k) => cited.add(k));
+    kept.push(raw.replace(/\s*\[(\d+)\]/g, (m, d: string) => (Number(d) >= 1 && Number(d) <= n ? m : "")).trim());
+  }
+  const summary = kept.join(" ").slice(0, 800);
+  if (!summary) throw new Error("summary without citations");
   return { summary, cited: [...cited].sort((a, b) => a - b) };
 }
 

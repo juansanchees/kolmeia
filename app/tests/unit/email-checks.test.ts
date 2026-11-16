@@ -26,9 +26,13 @@ describe("spam check (local rules)", () => {
     expect(failing({ ...GOOD, body: "See https://x.example and www.y.example" })).toContain("links");
     expect(failing({ ...GOOD, step: 2, body: "See https://x.example" })).not.toContain("links");
   });
-  test("over 90 words", () => {
-    expect(failing({ ...GOOD, body: Array(91).fill("word").join(" ") })).toEqual(["length"]);
-    expect(failing({ ...GOOD, body: Array(90).fill("word").join(" ") })).toEqual([]);
+  test("over 110 words (the draft prompt asks for 50-110)", () => {
+    expect(failing({ ...GOOD, body: Array(111).fill("word").join(" ") })).toEqual(["length"]);
+    expect(failing({ ...GOOD, body: Array(110).fill("word").join(" ") })).toEqual([]);
+  });
+  test("'feel free' is not the spam word 'free'", () => {
+    expect(failing({ ...GOOD, body: "Feel free to point me to the right person." })).toEqual([]);
+    expect(failing({ ...GOOD, body: "Feel   free to ask for a free quote." })).toEqual(["spam_words"]);
   });
   test("ALL CAPS: two shouted words or a shouted subject; HVAC and company suffixes are fine", () => {
     expect(failing({ ...GOOD, body: "This is HUGE and URGENT news" })).toContain("caps");

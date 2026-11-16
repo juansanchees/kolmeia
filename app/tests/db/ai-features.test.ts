@@ -136,3 +136,28 @@ describe("0029 e-mail: signal and strong redraft", () => {
     expect(r[0].ai_signal).toBe("Alvará · 12 Elm St");
   });
 });
+
+describe("0029 claims and re-queues (review fixes)", () => {
+  test("two steps claiming the same queued row: only one gets it", async () => {
+    const q2 = (await db.query<{ id: string }>(as(OWNER), "insert into public.ai_questions (workspace_id, question, answer_type, sources) values ($1,'Faz prédio?','yes_no_unknown','{data}') returning id", [ws]))[0].id;
+    const lead = await newLead();
+    const row = (await db.query<{ id: string }>(as(OWNER), "insert into public.ai_answers (workspace_id, question_id, lead_id) values ($1,$2,$3) returning id", [ws, q2, lead]))[0].id;
+    // what SupabaseAnswerStore.claim sends: a conditional update that only takes a free queued row
+    const claim = () =>
+      db.query(as(OWNER), "update public.ai_answers set claimed_at = now() where id = $1 and status = 'queued' and (claimed_at is null or claimed_at < now() - interval '10 minutes') returning id", [row]);
+    // both tabs saw the row free; their updates run one after the other in the database
+    const [a, b] = [await claim(), await claim()];
+    expect([a.length, b.length]).toEqual([1, 0]);
+  });
+
+  test("a re-queued row keeps its paid answer and evidence, and can go back to done unchanged", async () => {
+    const q3 = (await db.query<{ id: string }>(as(OWNER), "insert into public.ai_questions (workspace_id, question, answer_type, sources) values ($1,'Faz condomínio?','yes_no_unknown','{data}') returning id", [ws]))[0].id;
+    const lead = await newLead();
+    await db.query(as(OWNER), "insert into public.ai_answers (workspace_id, question_id, lead_id) values ($1,$2,$3)", [ws, q3, lead]);
+    await db.query(as(OWNER), "update public.ai_answers set status = 'done', answer = 'yes', evidence_excerpt = 'we build condos' where question_id = $1", [q3]);
+    await db.query(as(OWNER), "update public.ai_answers set status = 'queued', error = null, claimed_at = null where question_id = $1", [q3]);
+    await db.query(as(OWNER), "update public.ai_answers set status = 'done' where question_id = $1 and status = 'queued' and claimed_at is null and answer is not null", [q3]);
+    const r = await db.admin<{ status: string; answer: string; evidence_excerpt: string }>("select status, answer, evidence_excerpt from public.ai_answers where question_id = $1", [q3]);
+    expect(r).toEqual([{ status: "done", answer: "yes", evidence_excerpt: "we build condos" }]);
+  });
+});
