@@ -4,7 +4,7 @@ import { CONTEXT, UNTRUSTED, untrusted } from "./shared";
 // "Classificar tipo com IA" (LEADS ⋯ menu): Haiku, no web tools, many leads per call, only data the app already has.
 // Changing any text here changes the prompt: bump PROMPT_VERSION (rule R19).
 
-export const PROMPT_VERSION = "lead-type-2026-11-16.1";
+export const PROMPT_VERSION = "lead-type-2026-11-16.2";
 
 export const SYSTEM = `${CONTEXT}
 
@@ -13,8 +13,8 @@ Types:
 - "residential": a contractor or builder doing houses: single-family or two-family homes, residential remodels.
 - "small": small commercial work: shops, offices, restaurants, small fit-outs.
 - "large": condos or multifamily buildings, property managers, developers, institutional or large commercial work, or jobs of US$ 500,000 or more.
-- "unknown": the data does not make the type clear. Never guess from a vague name alone; "unknown" is a good answer.
-Return one item per company, with its ref exactly as given and the type, one of: "residential", "small", "large", "unknown".
+If the data does not make the type clear, OMIT that company. Never guess from a vague name alone; omitting is a good answer.
+Return ONLY compact JSON, no reasons and no other text: {"items":[{"r":"<ref exactly as given>","t":"residential|small|large"}]}. One item per company you are sure about.
 
 ${UNTRUSTED}`;
 

@@ -14,7 +14,7 @@ import * as P from "./prompts/lead-type";
 export type { LeadTypeInput, LeadTypeItem } from "./prompts/lead-type";
 
 // Lenient on purpose: one bad label must not throw away the whole batch; pickTypes drops it.
-export const leadTypeSchema = z.object({ items: z.array(z.object({ ref: z.string(), type: z.string() })) });
+export const leadTypeSchema = z.object({ items: z.array(z.object({ r: z.string(), t: z.string() })) });
 type Parsed = z.infer<typeof leadTypeSchema>;
 export type TypedLead = { ref: string; segment: Segment };
 
@@ -25,8 +25,8 @@ export function pickTypes(p: Parsed, input: P.LeadTypeInput): TypedLead[] {
   const sent = new Set(input.leads.map((l) => l.ref));
   const out = new Map<string, Segment>();
   for (const it of p.items) {
-    const ref = it.ref.trim();
-    const label = LABEL.safeParse(it.type.trim().toLowerCase());
+    const ref = it.r.trim();
+    const label = LABEL.safeParse(it.t.trim().toLowerCase());
     if (sent.has(ref) && label.success && !out.has(ref)) out.set(ref, label.data);
   }
   return [...out].map(([ref, segment]) => ({ ref, segment }));
@@ -40,8 +40,8 @@ export const leadTypeDef: TaskDef<P.LeadTypeInput, Parsed, TypedLead[]> = {
   system: P.SYSTEM,
   schema: leadTypeSchema,
   effort: "low",
-  // ~15 output tokens per lead; 40 leads fit with room to spare
-  maxTokens: 2000,
+  // compact {"r","t"} items: ~15 output tokens per lead (prod saw 45 with the verbose output and hit 2000); 4000 = headroom for 40 leads
+  maxTokens: 4000,
   buildUser: P.buildUser,
   normalize: pickTypes,
 };
