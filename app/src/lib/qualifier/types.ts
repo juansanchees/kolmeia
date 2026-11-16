@@ -102,6 +102,8 @@ export function normalizeSnapshot(raw: unknown): LeadSnapshot {
     const field = str(f.field);
     const value = str(f.value);
     if (!id || !field || value === null) return [];
+    // an e-mail guess (source 'pattern', 0028) is not a fact: the cascade never sees it
+    if (f.source === "pattern") return [];
     return [
       {
         id,

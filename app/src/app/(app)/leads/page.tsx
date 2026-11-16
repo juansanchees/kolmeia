@@ -7,6 +7,9 @@ import { listLeadIds, listNames } from "@/lib/lists/queries";
 import { connectedSources } from "@/lib/sources/queries";
 import { LeadsTable } from "@/components/leads/LeadsTable";
 
+// Server actions posted from this page ("Checar e-mails", "Achar e-mail") run DNS look-ups in rounds: give them time.
+export const maxDuration = 300;
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // The unified list: one row per company. Read as the user (RLS: the closer only gets leads assigned to her).

@@ -23,6 +23,7 @@ describe("layer 1: local rules", () => {
     expect(parseLeadQuery("com telefone", CITIES)).toEqual({ filters: { hasPhone: true }, unparsed: [] });
     expect(parseLeadQuery("Com E-mail", CITIES).filters).toEqual({ hasEmail: true });
     expect(parseLeadQuery("com email válido", CITIES).filters).toEqual({ emailQuality: ["verified"] });
+    expect(parseLeadQuery("com domínio ok", CITIES).filters).toEqual({ emailQuality: ["domain_ok"] });
   });
   test("temperature: muito quente before quente; morno; frio", () => {
     expect(parseLeadQuery("muito quentes", CITIES).filters.temperature).toBe("very_hot");

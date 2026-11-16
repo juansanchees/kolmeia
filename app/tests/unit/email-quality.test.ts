@@ -1,12 +1,12 @@
 import { describe, expect, test, vi } from "vitest";
-import type { DnsAnswer, EmailQuality } from "@/lib/leads/email-quality";
+import type { DnsAnswer, EmailQuality, VerifierStatus } from "@/lib/leads/email-quality";
 import { emailSyntaxOk, mxVerdict, ownDomain, patternCandidates } from "@/lib/leads/email-quality";
 import { findEmailFor, type GuessRow } from "@/lib/leads/email-cascade";
 import { DEFAULT_LEAD_FILTERS, displayOf, leadFacetsOf, matchesFacets } from "@/lib/leads/view";
 import type { LeadFieldRow, LeadListItem, LeadRow } from "@/lib/leads/types";
 
 vi.mock("server-only", () => ({}));
-const { checkEmails } = await import("@/lib/leads/email-check");
+const { checkEmails, planEmailCheck, FRESH_MS } = await import("@/lib/leads/email-check");
 const { emailVerifier } = await import("@/lib/leads/email-verifier");
 
 // Fase 2 items 6 and 7 (pure parts): free verdicts, pattern guesses, the cascade and the facet. Fictional data only.
@@ -15,8 +15,8 @@ const NONE: DnsAnswer = { mx: null, hasA: false, error: "ENOTFOUND" };
 const TIMEOUT: DnsAnswer = { mx: null, hasA: null, error: "ETIMEOUT" };
 
 describe("free e-mail check (syntax + DNS, never SMTP)", () => {
-  test("verdicts: MX = verified; null MX or no MX and no A = invalid; A only, timeouts = unknown", () => {
-    expect(mxVerdict(MX).status).toBe("verified");
+  test("verdicts: MX = domain_ok (only the paid verifier says verified); null MX or no MX and no A = invalid; A only, timeouts = unknown", () => {
+    expect(mxVerdict(MX).status).toBe("domain_ok");
     expect(mxVerdict({ mx: [{ exchange: ".", priority: 0 }], hasA: null, error: null })).toEqual({ status: "invalid", detail: "null_mx" });
     expect(mxVerdict(NONE)).toEqual({ status: "invalid", detail: "no_mx_no_a" });
     expect(mxVerdict({ mx: null, hasA: true, error: "ENODATA" }).status).toBe("unknown");
@@ -34,8 +34,8 @@ describe("free e-mail check (syntax + DNS, never SMTP)", () => {
     };
     const out = await checkEmails(["Pat@Acme.example", "ops@acme.example", "x@dead.example", "y@slow.example", "not-an-email"], lookup);
     expect(out).toEqual([
-      { email: "pat@acme.example", status: "verified", detail: "mx" },
-      { email: "ops@acme.example", status: "verified", detail: "mx" },
+      { email: "pat@acme.example", status: "domain_ok", detail: "mx" },
+      { email: "ops@acme.example", status: "domain_ok", detail: "mx" },
       { email: "x@dead.example", status: "invalid", detail: "no_mx_no_a" },
       { email: "y@slow.example", status: "unknown", detail: "dns" },
       { email: "not-an-email", status: "invalid", detail: "syntax" },
@@ -74,9 +74,9 @@ let fid = 0;
 const field = (f: Partial<LeadFieldRow>): LeadFieldRow =>
   ({ id: `f${++fid}`, lead_id: "lead-1", field: "email", value: "", source: "import", source_ref: null, status: "unverified", excerpt: null, seen_at: "2026-11-10T00:00:00Z", ...f }) as LeadFieldRow;
 
-function deps(dns: DnsAnswer, verify?: (e: string) => EmailQuality) {
+function deps(dns: DnsAnswer, verify?: (e: string) => VerifierStatus, invalid?: Set<string>) {
   const added: GuessRow[] = [];
-  const saved: [string, EmailQuality][] = [];
+  const saved: [string, VerifierStatus][] = [];
   return {
     added,
     saved,
@@ -84,7 +84,8 @@ function deps(dns: DnsAnswer, verify?: (e: string) => EmailQuality) {
       lookup: async () => dns,
       verifier: verify ? { name: "fake", verify: async (e: string) => verify(e) } : null,
       addGuesses: async (rows: GuessRow[]) => void added.push(...rows),
-      saveVerdict: async (e: string, s: EmailQuality) => void saved.push([e, s]),
+      saveVerdict: async (e: string, s: VerifierStatus) => void saved.push([e, s]),
+      invalid,
     },
   };
 }
@@ -99,6 +100,17 @@ describe("e-mail cascade", () => {
     ];
     expect(await findEmailFor(item(), fields, x.d)).toMatchObject({ step: "site", email: "office@acme.example", source: "apify_contact" });
     expect(x.added).toEqual([]);
+  });
+
+  test("step 1 never returns an address already checked invalid; the next one on file wins, else the cascade goes on", async () => {
+    const fields = [
+      field({ value: "office@acme.example", source: "apify_contact" }),
+      field({ value: "info@acme.example", source: "import" }),
+      field({ field: "contact_name", value: "Pat Doe" }),
+      field({ field: "website", value: "acme.example" }),
+    ];
+    expect(await findEmailFor(item(), fields, deps(MX, undefined, new Set(["office@acme.example"])).d)).toMatchObject({ step: "site", email: "info@acme.example" });
+    expect(await findEmailFor(item(), fields, deps(MX, undefined, new Set(["office@acme.example", "info@acme.example"])).d)).toMatchObject({ step: "pattern" });
   });
 
   test("step 2 with the verifier 'none': guesses are stored as source 'pattern', nothing is verified or saved as a verdict", async () => {
@@ -138,9 +150,26 @@ describe("e-mail cascade", () => {
 
 describe("quality badge facet and display", () => {
   const f = DEFAULT_LEAD_FILTERS;
+  test("check plan: 'unknown' is retried, fresh mx verdicts and any verifier verdict are skipped, the cap's cut is reported", () => {
+    const now = Date.parse("2026-11-16T12:00:00Z");
+    const recent = new Date(now - 3_600_000).toISOString();
+    const old = new Date(now - FRESH_MS - 1).toISOString();
+    const known = new Map([
+      ["fresh@a.example", { status: "domain_ok", method: "mx", checked_at: recent }],
+      ["unk@a.example", { status: "unknown", method: "mx", checked_at: recent }],
+      ["old@a.example", { status: "invalid", method: "mx", checked_at: old }],
+      ["paid@a.example", { status: "unknown", method: "verifier", checked_at: old }],
+    ]);
+    const emails = ["Fresh@a.example", "unk@a.example", "old@a.example", "paid@a.example", "new1@a.example", "new2@a.example"];
+    expect(planEmailCheck(emails, known, now, 3)).toEqual({ todo: ["unk@a.example", "old@a.example", "new1@a.example"], skipped: 2, cut: 1 });
+  });
+
   test("'Qualidade do e-mail' is any-of; an unchecked e-mail matches no quality", () => {
     expect(matchesFacets(item({ email: "a@x.example", quality: "invalid" }), { ...f, emailQuality: ["invalid"] })).toBe(true);
     expect(matchesFacets(item({ email: "a@x.example", quality: "verified" }), { ...f, emailQuality: ["invalid", "catch_all"] })).toBe(false);
+    // a domain that takes mail is not a verified mailbox: the two filters never mix
+    expect(matchesFacets(item({ email: "a@x.example", quality: "domain_ok" }), { ...f, emailQuality: ["verified"] })).toBe(false);
+    expect(matchesFacets(item({ email: "a@x.example", quality: "domain_ok" }), { ...f, emailQuality: ["domain_ok"] })).toBe(true);
     expect(matchesFacets(item({ email: "a@x.example" }), { ...f, emailQuality: ["unknown"] })).toBe(false);
   });
   test("counts per quality, with the quality filter itself left out", () => {

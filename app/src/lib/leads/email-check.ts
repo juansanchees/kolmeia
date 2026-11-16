@@ -1,12 +1,12 @@
 import "server-only";
 import { Resolver } from "node:dns/promises";
-import { domainOf, emailSyntaxOk, mxVerdict, normalizeEmail, type DnsAnswer, type EmailQuality } from "./email-quality";
+import { domainOf, emailSyntaxOk, mxVerdict, normalizeEmail, type DnsAnswer, type MxStatus } from "./email-quality";
 
 // The free e-mail check (Fase 2, item 7): syntax, then one MX (and, when there is none, one A) look-up per domain.
 // Never SMTP: no connection is ever opened to a mail server.
 
 export type DnsLookup = (domain: string) => Promise<DnsAnswer>;
-export type EmailVerdict = { email: string; status: EmailQuality; detail: string };
+export type EmailVerdict = { email: string; status: MxStatus; detail: string };
 
 /** Domains looked up at once: the rate limit of one "Checar e-mails" click. */
 export const DNS_CONCURRENCY = 5;
@@ -37,7 +37,7 @@ export function systemLookup(): DnsLookup {
 export async function checkEmails(emails: string[], lookup: DnsLookup): Promise<EmailVerdict[]> {
   const list = [...new Set(emails.map(normalizeEmail))];
   const domains = [...new Set(list.filter(emailSyntaxOk).map(domainOf))];
-  const byDomain = new Map<string, { status: EmailQuality; detail: string }>();
+  const byDomain = new Map<string, { status: MxStatus; detail: string }>();
   let next = 0;
   const worker = async () => {
     while (next < domains.length) {
@@ -47,4 +47,25 @@ export async function checkEmails(emails: string[], lookup: DnsLookup): Promise<
   };
   await Promise.all(Array.from({ length: Math.min(DNS_CONCURRENCY, domains.length) }, worker));
   return list.map((email) => (emailSyntaxOk(email) ? { email, ...byDomain.get(domainOf(email))! } : { email, status: "invalid" as const, detail: "syntax" }));
+}
+
+/** Addresses per DNS-and-save round: each round is stored before the next starts, so a timeout keeps the work done. */
+export const SAVE_CHUNK = 25;
+/** A free verdict is reused this long; 'unknown' never is (it is retried), a verifier verdict always is. */
+export const FRESH_MS = 7 * 86_400_000;
+
+type Known = { status: string; method: string; checked_at: string };
+
+/**
+ * Which addresses one click looks up: every address not freshly known, at most `max`. `skipped` = freshly known,
+ * `cut` = left for the next click by the cap.
+ */
+export function planEmailCheck(emails: string[], known: Map<string, Known>, now: number, max: number): { todo: string[]; skipped: number; cut: number } {
+  const list = [...new Set(emails.map(normalizeEmail))].filter((e) => e.length >= 3 && e.length <= 254);
+  const fresh = (e: string) => {
+    const k = known.get(e);
+    return Boolean(k && (k.method === "verifier" || (k.status !== "unknown" && now - Date.parse(k.checked_at) < FRESH_MS)));
+  };
+  const stale = list.filter((e) => !fresh(e));
+  return { todo: stale.slice(0, max), skipped: list.length - stale.length, cut: Math.max(0, stale.length - max) };
 }

@@ -98,7 +98,8 @@ export function matchesFacets(i: Pick<LeadListItem, "lead" | "display" | "emailQ
   return true;
 }
 
-function fold(s: string): string {
+/** Lower-case, accents removed: how names and cities are compared everywhere on LEADS. */
+export function fold(s: string): string {
   return s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
 }
 

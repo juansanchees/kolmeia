@@ -5,7 +5,7 @@
 //   3 'verifier' the paid verifier (EMAIL_VERIFIER) checks the guesses; the first 'verified' one becomes sendable.
 // No network of its own: DNS, the verifier and the writes are injected (tests use fakes).
 import type { DnsLookup } from "./email-check";
-import { emailSyntaxOk, mxVerdict, ownDomain, patternCandidates, type EmailQuality } from "./email-quality";
+import { emailSyntaxOk, mxVerdict, ownDomain, patternCandidates, type VerifierStatus } from "./email-quality";
 import type { EmailVerifier } from "./email-verifier";
 import type { LeadFieldRow, LeadListItem } from "./types";
 
@@ -27,7 +27,10 @@ export type CascadeDeps = {
   lookup: DnsLookup;
   verifier: EmailVerifier | null;
   addGuesses: (rows: GuessRow[]) => Promise<void>;
-  saveVerdict: (email: string, status: EmailQuality) => Promise<void>;
+  /** Server-side only (record_verifier_verdict): a verifier verdict never goes through the user's session. */
+  saveVerdict: (email: string, status: VerifierStatus) => Promise<void>;
+  /** Addresses already checked 'invalid' in this workspace: step 1 never returns them. */
+  invalid?: Set<string>;
 };
 
 /** Site-scraped values first, then the rest; newest first inside each group. */
@@ -43,10 +46,11 @@ export async function findEmailFor(item: LeadListItem, fields: LeadFieldRow[], d
   const base = { leadId, email: null, source: null, guesses: [], reason: null };
 
   // 1: an e-mail on file that is not a guess
-  const onFile = live(fields, "email").find((f) => f.source !== "pattern" && emailSyntaxOk(f.value.trim().toLowerCase()));
+  const usable = (e: string) => emailSyntaxOk(e) && !deps.invalid?.has(e);
+  const onFile = live(fields, "email").find((f) => f.source !== "pattern" && usable(f.value.trim().toLowerCase()));
   if (onFile) return { ...base, step: "site", email: onFile.value.trim().toLowerCase(), source: onFile.source };
   const researched = item.best?.public_email?.trim().toLowerCase();
-  if (researched && emailSyntaxOk(researched)) return { ...base, step: "site", email: researched, source: "research" };
+  if (researched && usable(researched)) return { ...base, step: "site", email: researched, source: "research" };
 
   // 2: guesses from the contact's name and the lead's own domain
   const contact = item.best?.ask_for_name?.trim() || live(fields, "contact_name")[0]?.value.trim() || null;

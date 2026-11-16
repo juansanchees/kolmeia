@@ -2,8 +2,14 @@
 import { hostOf } from "@/lib/safe-url";
 import { isDirectoryHost } from "@/lib/sources/contact";
 
-export const EMAIL_QUALITIES = ["verified", "catch_all", "unknown", "invalid"] as const;
+/**
+ * 'verified' and 'catch_all' only come from the paid verifier (a mailbox verdict). The free check can only say
+ * 'domain_ok' (the domain takes mail), 'unknown' or 'invalid'; it never calls an address valid.
+ */
+export const EMAIL_QUALITIES = ["verified", "domain_ok", "catch_all", "unknown", "invalid"] as const;
 export type EmailQuality = (typeof EMAIL_QUALITIES)[number];
+export type MxStatus = Extract<EmailQuality, "domain_ok" | "unknown" | "invalid">;
+export type VerifierStatus = Exclude<EmailQuality, "domain_ok">;
 
 /** Same shape as public.is_email_address (0003), so what passes here passes the campaign gate's syntax check. */
 const EMAIL = /^[a-z0-9._%+'-]+@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/;
@@ -26,14 +32,14 @@ export type DnsAnswer = { mx: { exchange: string; priority: number }[] | null; h
 const NO_RECORD = new Set(["ENODATA", "ENOTFOUND", "NXDOMAIN"]);
 
 /**
- * The free verdict for a domain. MX present = 'verified' (the domain takes mail; the mailbox itself is never probed).
+ * The free verdict for a domain. MX present = 'domain_ok' (the domain takes mail; the mailbox itself is never probed).
  * A null MX (RFC 7505, a single "." record) or no MX and no A = 'invalid'. A only, timeouts and server failures =
  * 'unknown'. Catch-all needs a mailbox probe, so only the paid verifier can say it.
  */
-export function mxVerdict(a: DnsAnswer): { status: EmailQuality; detail: string } {
+export function mxVerdict(a: DnsAnswer): { status: MxStatus; detail: string } {
   if (a.mx && a.mx.length > 0) {
     if (a.mx.length === 1 && (a.mx[0].exchange === "" || a.mx[0].exchange === ".")) return { status: "invalid", detail: "null_mx" };
-    return { status: "verified", detail: "mx" };
+    return { status: "domain_ok", detail: "mx" };
   }
   const missing = a.mx !== null || (a.error !== null && NO_RECORD.has(a.error));
   if (!missing) return { status: "unknown", detail: a.error ?? "dns" };

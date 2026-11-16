@@ -3,14 +3,10 @@
 // as `unparsed`, and only then is the AI layer asked (lead-search route). Nothing is applied until the user clicks.
 import type { CompanyType, Temperature } from "@/lib/research/types";
 import type { EmailQuality } from "./email-quality";
-import type { ContactTab, LeadFilters } from "./view";
+import { fold, type ContactTab, type LeadFilters } from "./view";
 
 export type NlFilters = Partial<Pick<LeadFilters, "cities" | "companyTypes" | "temperature" | "levels" | "minLevel" | "hasPhone" | "hasEmail" | "contact" | "emailQuality">>;
 export type NlParse = { filters: NlFilters; unparsed: string[] };
-
-export function fold(s: string): string {
-  return s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
-}
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 // word edges that also work next to "-" and digits (\b is ASCII-only, which is fine after fold())
@@ -31,7 +27,10 @@ const CONTACT: [string, ContactTab][] = [
   ["nunca contatad[oa]s?|sem contato|novos|novas|new", "new"],
   ["ja contatad[oa]s?|contatad[oa]s?|contacted", "contacted"],
 ];
-const QUALITY: [string, EmailQuality][] = [["e-?mails? (?:valido|verificado)s?|valid e-?mails?", "verified"]];
+const QUALITY: [string, EmailQuality][] = [
+  ["e-?mails? (?:valido|verificado)s?|valid e-?mails?", "verified"],
+  ["(?:com )?dominio ok", "domain_ok"],
+];
 const STOP = new Set(
   ("a o as os um uma uns umas de da do das dos em na no nas nos com sem e ou que para pra por me quero queria mostre mostrar mostra " +
     "ver veja busque buscar busca procure procurar achar lista leads lead empresas empresa todos todas so apenas tipo tipos cidade cidades " +

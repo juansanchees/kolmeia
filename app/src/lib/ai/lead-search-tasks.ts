@@ -1,7 +1,8 @@
 import "server-only";
 import { z } from "zod";
 import { EMAIL_QUALITIES } from "@/lib/leads/email-quality";
-import { fold, type NlFilters } from "@/lib/leads/nl-search";
+import type { NlFilters } from "@/lib/leads/nl-search";
+import { fold } from "@/lib/leads/view";
 import { COMPANY_TYPES, TEMPERATURES } from "@/lib/research/types";
 import { runTask, type AiContext, type TaskDef, type TaskResult } from "./gateway";
 import { MODELS } from "./models";
@@ -22,7 +23,7 @@ Your job now: the user typed, in Portuguese or English, which of their saved lea
 - levels: exact data levels 0-4 asked for; min_level: "level N or more" (0 = no minimum).
 - has_phone / has_email: true only when the text asks for leads with a phone / an e-mail.
 - contact: new (never contacted), contacted, or all.
-- email_quality: verified, catch_all, unknown, invalid; only when the text asks about e-mail quality.
+- email_quality: verified (confirmed by a paid verifier), domain_ok (the domain takes mail), catch_all, unknown, invalid; only when the text asks about e-mail quality.
 
 ${UNTRUSTED}`;
 

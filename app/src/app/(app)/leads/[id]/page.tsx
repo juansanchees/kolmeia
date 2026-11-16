@@ -25,6 +25,9 @@ import { levelReason, nextStepLabel } from "@/lib/qualifier/view";
 import { FieldList } from "@/components/leads/FieldList";
 import { fill, t } from "@/messages/pt";
 
+// "Checar e-mails" / "Achar e-mail" run from here too (DNS look-ups): give the server actions time.
+export const maxDuration = 300;
+
 const L = t.research.list;
 const LB = t.research.labels;
 const H = t.handoff;

@@ -5,6 +5,7 @@ const { qualifyLead } = await import("@/lib/qualifier/cascade");
 import { AiError } from "@/lib/ai/errors";
 import type { AiLedger } from "@/lib/ai/gateway";
 import type { PlaceHit, PlacesClient } from "@/lib/qualifier/types";
+import { normalizeSnapshot } from "@/lib/qualifier/types";
 import { FakeTransport } from "../engine/fake-ai";
 import { fakeHttp, fakeQualifierStore, field, htmlPage, snapshot } from "./qualifier-fakes";
 
@@ -634,6 +635,24 @@ describe("P5 IA forte", () => {
 describe("P2b contatos (Apify, F3d-2)", () => {
   const NO_EMAIL = htmlPage(`<h1>Acme HVAC</h1><a href="tel:+1-508-555-0142">Call</a>`);
   const asked = (st: { log: unknown[][] }) => st.log.filter((l) => l[0] === "requestContacts").map((l) => [l[1], l[2]]);
+
+  test("P2b: an e-mail guess (source 'pattern', 0028) is dropped by the claim parser, so the contact scraper still runs", async () => {
+    const raw = {
+      lead_id: "lead-1",
+      workspace_id: "ws-1",
+      next_step: "p2",
+      fields: [
+        { id: "g1", field: "email", value: "pat.doe@acme-hvac.test", source: "pattern", status: "unverified" },
+        { id: "w1", field: "website", value: SITE, source: "import", status: "unverified" },
+      ],
+    };
+    const parsed = normalizeSnapshot(raw);
+    expect(parsed.fields.map((f) => f.id)).toEqual(["w1"]);
+    const st = fakeQualifierStore([], { contacts: true });
+    await qualifyLead(snapshot({ nextStep: "p2", fields: parsed.fields }), deps(st, fakeHttp({ [SITE]: NO_EMAIL })));
+    expect(asked(st)).toEqual([["lead-1", SITE]]);
+    expect(steps(st)[1]).toBe("p2b:queued:p3:");
+  });
 
   test("P2b asks for contacts only when P2 found no e-mail", async () => {
     // P2 read the site and found an e-mail: nothing to ask
