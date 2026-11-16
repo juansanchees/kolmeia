@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { segmentOf, stageOf } from "@/lib/leads/classify";
-import { activeFilterKeys, DEFAULT_LEAD_FILTERS, filterLeads, leadFacetsOf, parseLeadFilters, type FilterRow, type LeadFilters } from "@/lib/leads/view";
+import { activeFilterKeys, DEFAULT_LEAD_FILTERS, filterLeads, hasSiteNoEmail, leadFacetsOf, parseLeadFilters, type FilterRow, type LeadFilters } from "@/lib/leads/view";
 import { LEAD_STAGES, type Segment } from "@/lib/leads/types";
 
 const base = { override: null, companyType: null, biggestPermitUsd: null, approach: null, biggestJobType: null, listNames: [] };
@@ -144,4 +144,20 @@ test("siteNoEmail facet: filters, counts, ignores its own filter in the count", 
   expect(leadFacetsOf(rs, DEFAULT_LEAD_FILTERS).siteNoEmail).toBe(1);
   expect(leadFacetsOf(rs, { ...DEFAULT_LEAD_FILTERS, siteNoEmail: true }).siteNoEmail).toBe(1);
   expect(activeFilterKeys({ ...DEFAULT_LEAD_FILTERS, siteNoEmail: true })).toEqual(["siteNoEmail"]);
+});
+
+test("temperature 'none' = no research: level 4 without research is in, researched with null temperature is out; named temps use the effective one", () => {
+  const l4 = prow("l4", { level: 4 });
+  const researched = { ...prow("res"), best: { temperature: null } as never } as FilterRow;
+  const coldL4 = prow("cold4", { level: 4, temp: "cold" });
+  const rs = [l4, researched, coldL4];
+  expect(names({ temperature: "none" }, rs)).toEqual(["l4"]);
+  expect(names({ temperature: "hot" }, rs).sort()).toEqual(["cold4", "l4"]);
+});
+
+test("find-email set and facet leave closed leads out", () => {
+  const rs = [prow("a", { website: "a.com" }), prow("w", { website: "w.com", status: "won" }), prow("l", { website: "l.com", status: "lost" }), prow("d", { website: "d.com", status: "discarded" })];
+  expect(names({ siteNoEmail: true }, rs)).toEqual(["a"]);
+  expect(rs.filter(hasSiteNoEmail).length).toBe(1);
+  expect(leadFacetsOf(rs, DEFAULT_LEAD_FILTERS).siteNoEmail).toBe(1);
 });

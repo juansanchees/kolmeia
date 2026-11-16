@@ -86,3 +86,12 @@ describe("Classificar tipo com IA: wiring", () => {
     expect(a.indexOf("writableTypes(")).toBeLessThan(a.indexOf('rpc("set_leads_segment"'));
   });
 });
+
+describe("Classificar tipo com IA: failed batches", () => {
+  test("non-stop failures are counted, returned, and keep the client from marking ids as tried", () => {
+    const a = read("src/app/(app)/leads/lead-type-actions.ts");
+    expect(a).toContain("failed += 1;");
+    expect(a).toMatch(/stopText, failed \}/);
+    expect(read("src/components/leads/LeadsTable.tsx")).toContain("!r.stopText && r.failed === 0");
+  });
+});

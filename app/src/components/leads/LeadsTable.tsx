@@ -192,11 +192,11 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
     startType(async () => {
       const r = await classifyTypesAction(ids);
       if (!r.ok) return setNotice({ ok: false, text: r.error });
-      // a cap stopped it: nothing is marked as tried, so the next click picks the rest up
-      if (!r.stopText) setTypeTried((s) => new Set([...s, ...ids]));
+      // a cap or a failed batch: nothing is marked as tried, so the next click picks the rest up
+      if (!r.stopText && r.failed === 0) setTypeTried((s) => new Set([...s, ...ids]));
       const left = untypedIds.length - ids.length;
       const more = !r.stopText && left > 0 ? fill(TB.aiTypeMore, { n: left }) : null;
-      setNotice({ ok: !r.stopText, text: [fill(TB.aiTypeDone, { typed: r.typed, untyped: r.untyped }), r.stopText, more].filter(Boolean).join(" ") });
+      setNotice({ ok: !r.stopText && r.failed === 0, text: [fill(TB.aiTypeDone, { typed: r.typed, untyped: r.untyped }), r.failed > 0 ? fill(TB.aiTypeBatchFailed, { n: r.failed }) : null, r.stopText, more].filter(Boolean).join(" ") });
       router.refresh();
     });
   };

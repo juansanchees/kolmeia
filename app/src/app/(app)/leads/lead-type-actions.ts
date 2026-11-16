@@ -17,7 +17,7 @@ const T = t.leads.toolbar;
 /** One batch call's deadline; 5 calls per click stay inside the page's maxDuration of 300 s. */
 const AI_MS = 45_000;
 
-export type TypeResult = { ok: true; typed: number; untyped: number; stopText: string | null } | { ok: false; error: string };
+export type TypeResult = { ok: true; typed: number; untyped: number; stopText: string | null; failed: number } | { ok: false; error: string };
 
 /**
  * "Classificar tipo com IA": owner/sdr only. The browser sends the ids it shows as "Sem tipo"; the server re-reads them
@@ -45,11 +45,12 @@ export async function classifyTypesAction(leadIds: string[]): Promise<TypeResult
   } catch {
     return { ok: false, error: T.aiTypeFailed };
   }
-  if (todo.length === 0) return { ok: true, typed: 0, untyped: 0, stopText: null };
+  if (todo.length === 0) return { ok: true, typed: 0, untyped: 0, stopText: null, failed: 0 };
 
   const ai = { workspaceId: ws.id, runId: null, ledger: sessionLedger(db), transport: defaultTransport(), deadlineMs: AI_MS };
   const suggested: { id: string; segment: Segment }[] = [];
   let stopText: string | null = null;
+  let failed = 0;
   for (let at = 0; at < todo.length; at += AI_TYPE_BATCH) {
     const batch = todo.slice(at, at + AI_TYPE_BATCH);
     const idOf = new Map(batch.map((b) => [b.item.ref, b.id]));
@@ -62,6 +63,7 @@ export async function classifyTypesAction(leadIds: string[]): Promise<TypeResult
         stopText = (t.email.ai as Record<string, string>)[e.code] ?? t.ai.generic;
         break;
       }
+      failed += 1;
     }
   }
 
@@ -81,5 +83,5 @@ export async function classifyTypesAction(leadIds: string[]): Promise<TypeResult
     }
     if (typed > 0) revalidatePath("/leads", "layout");
   }
-  return { ok: true, typed, untyped: todo.length - typed, stopText };
+  return { ok: true, typed, untyped: todo.length - typed, stopText, failed };
 }

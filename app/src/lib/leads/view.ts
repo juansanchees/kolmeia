@@ -124,7 +124,8 @@ export function parseLeadFilters(raw: unknown): LeadFilters {
 }
 
 /** A website on file and no e-mail: the leads "Achar e-mail" can work on. */
-export const hasSiteNoEmail = (i: Pick<FilterRow, "display">) => Boolean(i.display.website?.trim()) && !i.display.email?.trim();
+export const hasSiteNoEmail = (i: Pick<FilterRow, "display" | "lead">) =>
+  Boolean(i.display.website?.trim()) && !i.display.email?.trim() && !["won", "lost", "discarded"].includes(i.lead.status);
 
 /** Left-panel and tab rules: trimmed display values (as lead_contact_values reads them), never-contacted = "new". */
 export function matchesFacets(i: FilterRow, f: FacetFilters): boolean {
@@ -174,8 +175,8 @@ function otherFiltersOf(f: LeadFilters): (i: FilterRow) => boolean {
   const qDigits = f.q.replace(/\D/g, "");
   return ({ lead, best, display, ai }) => {
     if (!leadInTab({ best }, f.tab)) return false;
-    const temp = effectiveTemperature(lead.level, best?.temperature ?? null);
-    if (f.temperature === "none" ? temp !== null : f.temperature !== "all" && temp !== f.temperature) return false;
+    // "none" = no research at all; named temperatures use the effective (display) one
+    if (f.temperature === "none" ? best !== null : f.temperature !== "all" && effectiveTemperature(lead.level, best?.temperature ?? null) !== f.temperature) return false;
     if (f.status !== "all" && lead.status !== f.status) return false;
     if (f.minLevel > 0 && lead.level < f.minLevel) return false;
     if (f.companyTypes.length > 0 && !(f.companyTypes as string[]).includes(best?.company_type ?? display.companyType ?? "")) return false;

@@ -25,7 +25,11 @@ export function whyHotFacts(i: WhyIn): WhyFact[] {
   const ok = i.checks.filter((k) => k.result === "ok" && k.candidate_id === b?.id && k.evidence.length > 0);
   const workUrl = url(ok.find((k) => k.kind === "has_work")?.evidence[0]?.url);
   const temp = effectiveTemperature(i.level, b?.temperature ?? null);
-  if (temp) out.push({ text: fill(W.temperature, { v: t.research.labels.temperature[temp] }), url: null });
+  if (temp) {
+    const raw = b?.temperature ?? null; // the line says "da pesquisa": show the stored value, note the raise
+    const v = raw ? t.research.labels.temperature[raw] : W.temperatureNone;
+    out.push({ text: fill(temp !== raw ? W.temperatureRaised : W.temperature, { v }), url: null });
+  }
   if ((b?.permit_count ?? 0) > 0) out.push({ text: fill(W.permits, { n: b!.permit_count!, total: money(b!.total_value_usd), date: date(b!.last_permit_date) }), url: workUrl });
   if (b?.biggest_job_address) {
     out.push({ text: fill(W.biggest, { v: [b.biggest_job_address, b.biggest_job_type, b.biggest_job_value_usd !== null ? money(b.biggest_job_value_usd) : null].filter(Boolean).join(" · ") }), url: workUrl });
