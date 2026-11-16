@@ -18,9 +18,11 @@ describe("leads list UI rework", () => {
     expect(table).not.toMatch(/items\.find\(/);
     expect(table.match(/useMemo\(/g)!.length).toBeGreaterThanOrEqual(4);
   });
-  test("selection bar archives, unarchives and sets type in bulk", () => {
+  test("selection bar marks lost/discarded (confirmed) and sets type in bulk; no archive", () => {
     const bar = read("src/components/leads/SelectionBar.tsx");
-    for (const s of ["archiveLeadsAction", "unarchiveLeadsAction", "setLeadSegmentAction", "t.leads.archive.confirm", "AddToList", "EmailTools"]) expect(bar).toContain(s);
+    for (const s of ["setLeadsStatusAction", 'close("lost")', 'close("discarded")', "t.leads.close.confirmLost", "t.leads.close.confirmDiscarded", "setLeadSegmentAction", "AddToList", "EmailTools"]) expect(bar).toContain(s);
+    expect(bar).not.toMatch(/archive/i);
+    expect(table).not.toMatch(/archived/);
   });
   test("Filtros panel has origin list, 'Sem pesquisa' and agent", () => {
     const p = read("src/components/leads/FacetPanel.tsx");
@@ -35,7 +37,7 @@ describe("leads list UI rework", () => {
     expect(table).toContain('role="status"');
     expect(table).toContain("onResult={");
     expect(bar).toMatch(/onResult\(noticeOf\(await setLeadSegmentAction\(/);
-    expect(bar).toMatch(/onResult\(noticeOf\(await \(archivedTab \? unarchiveLeadsAction/);
+    expect(bar).toMatch(/onResult\(noticeOf\(await setLeadsStatusAction\(selected, status\)/);
     expect(bar).toContain("onDone={() => router.refresh()}"); // EmailTools keeps the selection and its own result
   });
   test("a failed CSV never leaves an unhandled rejection", () => {

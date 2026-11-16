@@ -27,8 +27,7 @@ const TB = t.leads.toolbar;
 const COL = t.leads.columns;
 const P = t.leads.paging;
 const SEGMENT_TABS: (SegmentTab | "all")[] = ["residential", "small", "large", "none", "all"];
-// the archived tab is drawn apart, after "Todos"
-const STAGE_TABS: (LeadStage | "all")[] = [...LEAD_STAGES.filter((s) => s !== "archived"), "all"];
+const STAGE_TABS: (LeadStage | "all")[] = [...LEAD_STAGES, "all"];
 
 const GRID = "md:grid-cols-[minmax(0,2fr)_minmax(0,0.8fr)_minmax(0,0.6fr)_minmax(0,0.9fr)_minmax(0,1.2fr)_minmax(0,0.9fr)]";
 // the same columns plus the AI question's (Tailwind needs both class names written out)
@@ -115,7 +114,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
   const [menuOpen, setMenuOpen] = useState(false);
   const [openPanel, setOpenPanel] = useState<Panel | null>(null);
   const [csvError, setCsvError] = useState<string | null>(null);
-  // the last bulk result (archive / type); kept here because a success unmounts the selection bar
+  // the last bulk result (status / type); kept here because a success unmounts the selection bar
   const [notice, setNotice] = useState<BulkNotice | null>(null);
   const router = useRouter();
   const search = useSearchParams();
@@ -146,7 +145,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
       return n;
     });
   const facets = useMemo(() => leadFacetsOf(items, f), [items, f]);
-  const activeTotal = useMemo(() => LEAD_STAGES.reduce((n, s) => (s === "archived" ? n : n + facets.stages[s]), 0), [facets]);
+  const activeTotal = useMemo(() => LEAD_STAGES.reduce((n, s) => n + facets.stages[s], 0), [facets]);
   const agents = useMemo(() => {
     const m = new Map<string, string>();
     for (const i of items) if (i.lead.origin_agent_id && i.agentName) m.set(i.lead.origin_agent_id, i.agentName);
@@ -251,10 +250,6 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
             {x === "all" ? L.filters.all : L.stages[x]} <span className={countCls}>{x === "all" ? activeTotal : facets.stages[x]}</span>
           </button>
         ))}
-        <span aria-hidden className="mx-2 my-2 border-l border-line" />
-        <button type="button" aria-pressed={f.stage === "archived"} onClick={() => pickTab({ stage: "archived" })} className={tabCls(f.stage === "archived")}>
-          {L.stages.archived} <span className={countCls}>{facets.stages.archived}</span>
-        </button>
       </div>
 
       <div className="flex flex-wrap items-start gap-2">
@@ -423,7 +418,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
 
       {canCreate && selected.length > 0 && (
         <div className="sticky bottom-0 z-10">
-          <SelectionBar selected={selected} lists={lists} archivedTab={f.stage === "archived"} onOpenQualifier={openQualifier} onResult={onBulkResult} />
+          <SelectionBar selected={selected} lists={lists} onOpenQualifier={openQualifier} onResult={onBulkResult} />
         </div>
       )}
     </div>

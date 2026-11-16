@@ -10,7 +10,7 @@ export type LeadStatus = (typeof LEAD_STATUSES)[number];
 export const SEGMENTS = ["residential", "small", "large"] as const;
 export type Segment = (typeof SEGMENTS)[number];
 
-export const LEAD_STAGES = ["new", "contacted", "replied", "meeting", "closed", "archived"] as const;
+export const LEAD_STAGES = ["new", "contacted", "replied", "meeting", "closed"] as const;
 export type LeadStage = (typeof LEAD_STAGES)[number];
 
 export type LeadRow = {
@@ -39,7 +39,7 @@ export type LeadRow = {
   /** Set by the database (migration 0027) on the first call, real e-mail or hand-off; null = never contacted. */
   first_contacted_at: string | null;
   last_touch_at: string | null;
-  /** Migration 0030: set = hidden from every tab, shown under "Arquivados". Nothing else about the lead changes. */
+  /** Migration 0030. Unused since 16/11 (archive removed: a finished lead is lost or discarded); the column stays. */
   archived_at: string | null;
   /** Migration 0030: the sender's manual type; null = automatic (classify.ts). */
   segment: Segment | null;
@@ -81,7 +81,7 @@ export const TABLE_BEST_COLUMNS = [
 ] as const;
 export type TableBest = Pick<CandidateRow, (typeof TABLE_BEST_COLUMNS)[number]>;
 
-export type TableLead = Pick<LeadRow, "id" | "status" | "level" | "origin_kind" | "origin_agent_id" | "first_contacted_at" | "last_touch_at" | "archived_at" | "segment">;
+export type TableLead = Pick<LeadRow, "id" | "status" | "level" | "origin_kind" | "origin_agent_id" | "first_contacted_at" | "last_touch_at" | "segment">;
 
 export type LeadTableRow = {
   lead: TableLead;

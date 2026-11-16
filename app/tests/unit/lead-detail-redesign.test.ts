@@ -12,18 +12,12 @@ describe("lead modal redesign", () => {
     expect(detail).toContain("t.leads.origin.none");
     expect(detail).not.toContain("t.qualifier.lists");
   });
-  test("type and archive controls are sender-only", () => {
+  test("type control is sender-only; no archive", () => {
     expect(detail).toMatch(/sender\s*&&[\s\S]{0,400}?LeadTypePicker/);
-    expect(detail).toMatch(/sender\s*&&[\s\S]{0,600}?LeadArchiveButton/);
+    for (const s of ["LeadArchiveButton", "t.leads.archive", "lead.archived_at"]) expect(detail).not.toContain(s);
   });
   test("research section: temperature, approach, proof", () => {
     for (const s of ["research-title", "t.leads.research.temperature", "t.leads.research.approach", "proofCount("]) expect(detail).toContain(s);
-  });
-  test("archive button confirms before archiving, not before unarchiving", () => {
-    const b = read("src/components/leads/LeadArchiveButton.tsx");
-    expect(b).toContain("archiveLeadsAction([leadId])");
-    expect(b).toContain("unarchiveLeadsAction([leadId])");
-    expect(b).toContain("t.leads.archive.confirm");
   });
   test("type picker can clear the override back to automatic", () => {
     const p = read("src/components/leads/LeadTypePicker.tsx");

@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { stageOf } from "@/lib/leads/classify";
 import { inChunks, listLeads } from "@/lib/leads/queries";
 import type { LeadListItem } from "@/lib/leads/types";
 import { CALL_LOG_COLUMNS, type CallListItemRow, type CallLogRow } from "./types";
@@ -40,9 +41,12 @@ export async function todayList(db: SupabaseClient, opts: { agentId?: string } =
   const out: TodayRow[] = [];
   for (const item of items) {
     const lead = leadBy.get(item.lead_id);
-    if (!lead || lead.lead.archived_at) continue; // not visible any more (RLS), gone, or archived
+    if (!lead) continue; // not visible any more (RLS) or gone
     const lastCall = lastBy.get(item.lead_id) ?? null;
-    out.push({ item, lead, lastCall, calledToday: lastCall !== null && nyDay(new Date(lastCall.called_at)) === today });
+    const calledToday = lastCall !== null && nyDay(new Date(lastCall.called_at)) === today;
+    // closed (won/lost/discarded) after the list was built: nothing left to call; one closed by today's call stays under "done"
+    if (stageOf(lead.lead) === "closed" && !calledToday) continue;
+    out.push({ item, lead, lastCall, calledToday });
   }
   return out;
 }

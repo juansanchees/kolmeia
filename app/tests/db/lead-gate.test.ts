@@ -222,3 +222,60 @@ describe("0022 the lead status is the truth (C2)", () => {
     expect(await clock(b.camp)).toEqual({ outcome: "claimed", message_id: b.messages[0] });
   });
 });
+
+// Migration 0031 (16/11 night, archive removed): a finished lead goes to "Fechado" (won/lost/discarded). The bulk
+// set_leads_status adds no e-mail logic of its own: the 0022 trigger stops the sequences.
+describe("0031 Fechado stops sequences; set_leads_status (bulk lost / discarded)", () => {
+  const bulk = (user: string, ids: string[], status: string, w = ws) =>
+    db.query<{ n: number }>(as(user), "select public.set_leads_status($1,$2::uuid[],$3) as n", [w, ids, status]).then((r) => r[0].n);
+  const leadStatus = async (id: string) => (await db.admin<{ status: string }>("select status from public.leads where id = $1", [id]))[0].status;
+
+  test("won, lost and discarded each stop pending steps; an untouched lead keeps its sequence", async () => {
+    const won = await leadInCampaign("f-won", [1, 2]);
+    const lost = await leadInCampaign("f-lost", [1, 2]);
+    const gone = await leadInCampaign("f-gone", [1, 2]);
+    const keep = await leadInCampaign("f-keep", [1, 2]);
+    const keepStatus = await leadStatus(keep.lead);
+    await db.query(as(UUID_A), "select public.set_lead_status($1,'won')", [won.lead]);
+    expect(await bulk(UUID_A, [lost.lead], "lost")).toBe(1);
+    expect(await bulk(UUID_A, [gone.lead], "discarded")).toBe(1);
+    for (const [s, reason] of [[won, "lead_status"], [lost, "lead_status"], [gone, "lead_discarded"]] as const) {
+      expect(await prospect(s.prospect)).toEqual({ status: "stopped", stop_reason: reason });
+      expect(await messages(s.messages)).toEqual([{ status: "cancelled", cancel_reason: reason }, { status: "cancelled", cancel_reason: reason }]);
+      expect(await lock(s.lead)).toHaveLength(0);
+      expect((await click(s.camp)).outcome).toBe("nothing_due");
+    }
+    expect(await prospect(keep.prospect)).toEqual({ status: "active", stop_reason: null });
+    expect(await messages(keep.messages)).toEqual([{ status: "approved", cancel_reason: null }, { status: "approved", cancel_reason: null }]);
+    expect(await leadStatus(keep.lead)).toBe(keepStatus);
+    expect(await click(keep.camp)).toEqual({ outcome: "claimed", message_id: keep.messages[0] });
+  });
+
+  test("only rows that change count; lost never un-discards; caps, unknown status, other workspace", async () => {
+    const a = await newLead("pat@f-a.example");
+    const b = await newLead("pat@f-b.example");
+    expect(await bulk(UUID_A, [a, b], "discarded")).toBe(2);
+    expect(await bulk(UUID_A, [a, b], "discarded")).toBe(0);
+    expect(await bulk(UUID_A, [a], "lost")).toBe(0);
+    expect(await leadStatus(a)).toBe("discarded");
+    const c = await newLead("pat@f-c.example");
+    expect(await bulk(UUID_A, [c], "lost")).toBe(1);
+    expect(await bulk(UUID_A, [c], "discarded")).toBe(1);
+    await expect(bulk(UUID_A, [c], "won")).rejects.toThrow(/lost or discarded/);
+    await expect(bulk(UUID_A, Array.from({ length: 5001 }, () => c), "lost")).rejects.toThrow(/5000/);
+    // a lead of this workspace named with another workspace's id: nothing changes
+    const d = await newLead("pat@f-d.example");
+    const other = (await db.query<{ id: string }>(as(UUID_A), "select public.create_workspace('Outra F7') as id"))[0].id;
+    expect(await bulk(UUID_A, [d], "lost", other)).toBe(0);
+    expect(await leadStatus(d)).toBe("new");
+  });
+
+  test("a closer cannot bulk-change status (42501)", async () => {
+    const closer = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+    await db.addUser(closer);
+    await db.admin("insert into public.workspace_members (workspace_id, user_id, role) values ($1,$2,'closer')", [ws, closer]);
+    const l = await newLead("pat@f-closer.example");
+    await expect(bulk(closer, [l], "lost")).rejects.toThrow(/sender|42501|permission/i);
+    expect(await leadStatus(l)).toBe("new");
+  });
+});

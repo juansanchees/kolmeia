@@ -24,7 +24,7 @@ const fullItem = {
 test("toTableRow keeps only what the table uses", () => {
   const r = toTableRow(fullItem, []);
   expect(Object.keys(r.best!).sort()).toEqual([...TABLE_BEST_COLUMNS].sort());
-  expect(Object.keys(r.lead).sort()).toEqual(["archived_at", "first_contacted_at", "id", "last_touch_at", "level", "origin_agent_id", "origin_kind", "segment", "status"]);
+  expect(Object.keys(r.lead).sort()).toEqual(["first_contacted_at", "id", "last_touch_at", "level", "origin_agent_id", "origin_kind", "segment", "status"]);
   expect(JSON.stringify(r)).not.toContain("closer_brief");
 });
 
@@ -69,7 +69,7 @@ test("originListsOf merges imports and lists, skips undone imports, sorts by dat
   expect(map.get("l2") ?? []).toEqual([]);
 });
 
-test("archive/segment/csv actions are sender-only, capped at 5000 and call the RPCs", () => {
+test("bulk status/segment/csv actions are sender-only, capped at 5000 and call the RPCs", () => {
   const code = read("src/app/(app)/leads/lead-actions.ts");
   // each body ends at the next function boundary, so one function's requireSender never counts for another
   const bodyOf = (fn: string) => {
@@ -78,9 +78,10 @@ test("archive/segment/csv actions are sender-only, capped at 5000 and call the R
     const next = rest.search(/\n(?:export )?async function /);
     return next < 0 ? rest : rest.slice(0, next);
   };
-  for (const fn of ["setArchived", "setLeadSegmentAction", "leadsCsvAction"]) expect(bodyOf(fn)).toContain("requireSender");
-  for (const fn of ["archiveLeadsAction", "unarchiveLeadsAction"]) expect(bodyOf(fn)).toContain("setArchived(");
-  expect(code).toContain('"set_leads_archived"');
+  for (const fn of ["setLeadsStatusAction", "setLeadSegmentAction", "leadsCsvAction"]) expect(bodyOf(fn)).toContain("requireSender");
+  expect(bodyOf("setLeadsStatusAction")).toContain('z.enum(["lost", "discarded"])');
+  expect(code).toContain('"set_leads_status"');
+  expect(code).not.toMatch(/archive/i);
   expect(code).toContain('"set_leads_segment"');
   expect(code).toMatch(/\.max\(5000\)/);
 });

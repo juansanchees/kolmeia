@@ -16,7 +16,6 @@ export async function pickLeads(db: SupabaseClient, ws: string, filter: LeadFilt
   const items = await listLeads(db, ws, { statuses: filter.statuses });
   return items
     .filter(({ lead, best }) => {
-      if (lead.archived_at) return false;
       if (filter.agentId && lead.origin_agent_id !== filter.agentId) return false;
       if (filter.temperature && best?.temperature !== filter.temperature) return false;
       if (filter.approach && best?.approach !== filter.approach) return false;

@@ -68,7 +68,7 @@ export type LeadFilters = FacetFilters & {
   aiQuestion: string;
   aiAnswer: string;
   segment: SegmentTab | "all";
-  /** "all" = every non-archived lead. */
+  /** "all" = every lead. */
   stage: LeadStage | "all";
 };
 
@@ -110,7 +110,8 @@ const filtersSchema = z.object({
   aiQuestion: z.union([z.literal(""), z.string().uuid()]),
   aiAnswer: z.string().max(20),
   segment: z.enum([...SEGMENTS, "none", "all"]),
-  stage: z.enum([...LEAD_STAGES, "all"]),
+  // an old saved view may still hold "archived" (removed 16/11): only the stage falls back
+  stage: z.enum([...LEAD_STAGES, "all"]).catch("all"),
   lists: z.array(z.string().max(120)).max(50),
 }).partial();
 
@@ -183,8 +184,8 @@ function otherFiltersOf(f: LeadFilters): (i: FilterRow) => boolean {
   };
 }
 
-/** The stage and type tabs: "all" stages hides archived leads, which show only under "archived". */
-const stageOk = (i: FilterRow, stage: LeadFilters["stage"]) => (stage === "all" ? !i.lead.archived_at : stageOf(i.lead) === stage);
+/** The stage and type tabs. */
+const stageOk = (i: FilterRow, stage: LeadFilters["stage"]) => stage === "all" || stageOf(i.lead) === stage;
 const segmentOk = (i: FilterRow, seg: LeadFilters["segment"]) => seg === "all" || (i.segment ?? "none") === seg;
 
 export function filterLeads<T extends FilterRow>(items: T[], f: LeadFilters): T[] {

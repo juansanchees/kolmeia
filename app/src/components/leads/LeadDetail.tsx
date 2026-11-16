@@ -12,7 +12,6 @@ import { getCurrentWorkspace, getUser } from "@/lib/workspace";
 import { HandOffForm } from "@/components/leads/HandOffForm";
 import { StatusButtons } from "@/components/leads/StatusButtons";
 import { LeadTypePicker } from "@/components/leads/LeadTypePicker";
-import { LeadArchiveButton } from "@/components/leads/LeadArchiveButton";
 import { derivedSegmentOf, segmentInputOf } from "@/lib/leads/classify";
 import { AddToCallList } from "@/components/leads/AddToCallList";
 import { AddToCampaign } from "@/components/leads/AddToCampaign";
@@ -120,7 +119,6 @@ export async function LeadDetail({ id, modal = false }: { id: string; modal?: bo
             {best?.second_pass === "refuted" && <Pill tone="no">{L.refuted}</Pill>}
             {!best && <Pill tone="no">{t.leads.unproven}</Pill>}
             {lead.do_not_call && <Pill tone="no">{H.doNotCall}</Pill>}
-            {lead.archived_at && <Pill tone="no">{fill(t.leads.archive.archivedOn, { date: date(lead.archived_at) })}</Pill>}
           </span>
         </div>
         <p className="text-[13px] text-muted">
@@ -145,7 +143,6 @@ export async function LeadDetail({ id, modal = false }: { id: string; modal?: bo
         {sender && (
           <div className="flex flex-wrap items-end gap-4">
             <LeadTypePicker leadId={lead.id} value={lead.segment} derived={derivedSegmentOf(segmentInputOf(lead, best, display.companyType ?? null, origins))} />
-            <LeadArchiveButton leadId={lead.id} archived={Boolean(lead.archived_at)} />
           </div>
         )}
         {queue && lead.level_note && <LevelNote leadId={lead.id} note={lead.level_note} />}

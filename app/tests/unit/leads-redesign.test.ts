@@ -36,9 +36,8 @@ test("segmentOf: manual override wins, null falls back to derived", () => {
   expect(segmentOf({ ...base, companyType: "developer", override: null })).toBe("large");
 });
 
-test("stageOf follows the spec table; archived overrides", () => {
-  const s = (status: string, first: string | null = null, archived_at: string | null = null) =>
-    stageOf({ status: status as never, first_contacted_at: first, archived_at });
+test("stageOf follows the spec table; won/lost/discarded are 'closed'", () => {
+  const s = (status: string, first: string | null = null) => stageOf({ status: status as never, first_contacted_at: first });
   expect(s("new")).toBe("new");
   expect(s("new", "2026-11-01T00:00:00Z")).toBe("contacted");
   expect(s("call_list")).toBe("contacted");
@@ -47,17 +46,16 @@ test("stageOf follows the spec table; archived overrides", () => {
   expect(s("with_closer")).toBe("meeting");
   expect(s("meeting")).toBe("meeting");
   for (const x of ["won", "lost", "discarded"]) expect(s(x)).toBe("closed");
-  expect(s("won", null, "2026-11-10T00:00:00Z")).toBe("archived");
-  expect(s("new", null, "2026-11-10T00:00:00Z")).toBe("archived");
+  expect(LEAD_STAGES).not.toContain("archived");
 });
 
 let n = 0;
-function row(name: string, o: { status?: string; archived?: boolean; segment?: Segment | null; origins?: string[]; temp?: string | null; first?: string | null } = {}): FilterRow {
+function row(name: string, o: { status?: string; segment?: Segment | null; origins?: string[]; temp?: string | null; first?: string | null } = {}): FilterRow {
   n += 1;
   return {
     lead: {
       id: `l${n}`, status: o.status ?? "new", level: 1, origin_kind: "import", origin_agent_id: null, first_contacted_at: o.first ?? null,
-      last_touch_at: null, archived_at: o.archived ? "2026-11-10T00:00:00Z" : null, segment: null,
+      last_touch_at: null, segment: null,
     },
     best: o.temp ? ({ id: `c${n}`, name, temperature: o.temp, approach: null, company_type: "other", total_value_usd: null, biggest_job_value_usd: null, biggest_job_type: null, biggest_job_address: null, permit_count: null, entry_path: null, second_pass: null } as never) : null,
     display: { name, city: null, phone: null, website: null, email: null },
@@ -66,12 +64,12 @@ function row(name: string, o: { status?: string; archived?: boolean; segment?: S
   } as FilterRow;
 }
 
-const rows = [row("a"), row("b", { status: "replied" }), row("c", { archived: true })];
+const rows = [row("a"), row("b", { status: "replied" }), row("c", { status: "lost" })];
 const names = (f: Partial<LeadFilters>, rs = rows) => filterLeads(rs, { ...DEFAULT_LEAD_FILTERS, ...f }).map((i) => i.display.name);
 
-test("filterLeads: archived only in stage 'archived'; stage 'all' hides archived", () => {
-  expect(names({ stage: "all" })).toEqual(["a", "b"]);
-  expect(names({ stage: "archived" })).toEqual(["c"]);
+test("filterLeads: stage 'all' shows every lead; lost is under 'closed'", () => {
+  expect(names({ stage: "all" })).toEqual(["a", "b", "c"]);
+  expect(names({ stage: "closed" })).toEqual(["c"]);
   expect(names({ stage: "replied" })).toEqual(["b"]);
 });
 
@@ -92,7 +90,7 @@ test("filterLeads: segment tabs, lists any-origin, temperature 'none'", () => {
 test("leadFacetsOf: stage counts sum to every lead; segment counts sum to segments.all", () => {
   const rs = [
     row("a"), row("b", { first: "2026-11-01T00:00:00Z", segment: "large" }), row("c", { status: "replied", segment: "small" }),
-    row("d", { status: "meeting", segment: "residential" }), row("e", { status: "won" }), row("f", { archived: true, segment: "large" }), row("g", { status: "lost", segment: "large" }),
+    row("d", { status: "meeting", segment: "residential" }), row("e", { status: "won" }), row("f", { status: "discarded", segment: "large" }), row("g", { status: "lost", segment: "large" }),
   ];
   const facets = leadFacetsOf(rs, DEFAULT_LEAD_FILTERS);
   expect(Object.values(facets.stages).reduce((a, b) => a + b, 0)).toBe(7);
@@ -107,7 +105,9 @@ test("activeFilterKeys: legacy hidden filters always surface as chips", () => {
 });
 
 test("parseLeadFilters keeps stage, segment, lists and temperature 'none'", () => {
-  const f = parseLeadFilters({ stage: "archived", segment: "none", lists: ["X"], temperature: "none" });
-  expect(f).toMatchObject({ stage: "archived", segment: "none", lists: ["X"], temperature: "none" });
+  const f = parseLeadFilters({ stage: "closed", segment: "none", lists: ["X"], temperature: "none" });
+  expect(f).toMatchObject({ stage: "closed", segment: "none", lists: ["X"], temperature: "none" });
+  // an old saved view with the removed "archived" stage keeps its other filters; only the stage falls back
+  expect(parseLeadFilters({ stage: "archived", segment: "large", lists: ["X"] })).toEqual({ ...DEFAULT_LEAD_FILTERS, segment: "large", lists: ["X"] });
   expect(parseLeadFilters({ stage: "bogus" })).toEqual(DEFAULT_LEAD_FILTERS);
 });

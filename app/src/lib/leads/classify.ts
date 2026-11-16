@@ -64,9 +64,8 @@ export function segmentInputOf(
   };
 }
 
-/** Archived overrides everything; "new" with a first contact already counts as contacted. */
-export function stageOf(lead: Pick<LeadRow, "status" | "first_contacted_at"> & { archived_at?: string | null }): LeadStage {
-  if (lead.archived_at) return "archived";
+/** "new" with a first contact already counts as contacted; won, lost and discarded are "closed". */
+export function stageOf(lead: Pick<LeadRow, "status" | "first_contacted_at">): LeadStage {
   switch (lead.status) {
     case "new": return lead.first_contacted_at ? "contacted" : "new";
     case "call_list":

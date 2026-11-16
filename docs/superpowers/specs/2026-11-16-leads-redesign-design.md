@@ -71,3 +71,14 @@ Exact component split, icons, copy details, how list names map to type keywords 
 
 ## Verification
 Unit tests for segment/stage/archive. Typecheck + existing tests green. Browser check on kolmeia.solutions: counts add up to 966, archive → appears only in Arquivados → unarchive restores, origin filter works, typing in search does not freeze.
+
+## Change 16/11 night: archive removed, Fechado stops sequences
+
+Juan decided (Apollo-style): no archive. A finished lead is marked **Perdido** (lost) or **Descartado** (discarded) and lands in **Fechado** (won/lost/discarded). This supersedes the archive items above (goals, stage tab "Arquivados", "Arquivar/Desarquivar", Arquivados row of the stage table, archive tests/checks).
+
+- Stage tabs: `Novo → Contatado → Respondeu → Reunião → Fechado`, plus "Todos" = every lead. A saved view still holding `stage: "archived"` falls back to "Todos" (other filters kept).
+- Selection bar: "Marcar como: Perdido / Descartado" (both confirm inline) via `setLeadsStatusAction` → RPC `set_leads_status` (migration **0031_leads_bulk_status.sql**: sender-only, ≤5000 ids, only this workspace, only rows that change; `lost` never un-discards). Lead modal: archive button and "Arquivado em" pill removed; Ganho/Perdido stay in StatusButtons.
+- E-mail: already handled by the DB. Trigger `stop_email_on_lead_block` (0022) fires on every status change; `lead_blocks_email` (0021) covers `discarded, with_closer, meeting, won, lost` (+ `do_not_call`). Prospects → `stopped`, waiting sequence steps → `cancelled` (`lead_status` / `lead_discarded`); the shared claim also skips blocked leads. No change to that logic; a PGlite test in `tests/db/lead-gate.test.ts` proves won/lost/discarded stop pending steps and an untouched lead keeps its sequence.
+- Pickers: the email agent filter only accepts `new`/`call_list` (Fechado never picked). Today's call list hides a lead closed after the list was built (one closed by today's call stays under "done").
+- Kept, unused: column `leads.archived_at` and RPC `set_leads_archived` (no destructive migration). Leads archived before this change reappear in their stage tab.
+- 0031 must be applied to the DB before deploying this app change, or "Marcar como" returns the error notice.

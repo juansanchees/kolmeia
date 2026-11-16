@@ -75,32 +75,26 @@ export async function addToCallListAction(leadId: string, agentId: string): Prom
 
 const leadIdsSchema = z.array(z.string().uuid()).min(1).max(5000);
 
-async function setArchived(leadIds: string[], archived: boolean): Promise<FormState> {
+/** Marks many leads lost or discarded (stage "Fechado"); the DB trigger stops their sequences. Owner/sdr only. */
+export async function setLeadsStatusAction(leadIds: string[], status: "lost" | "discarded"): Promise<FormState> {
   const ws = await requireSender();
   const ids = leadIdsSchema.safeParse(leadIds);
-  if (!ids.success) return fail(t.leads.archive.tooMany);
+  if (!ids.success) return fail(t.leads.tooMany);
+  const st = z.enum(["lost", "discarded"]).safeParse(status);
+  if (!st.success) return fail(t.leads.close.failed);
   const supabase = await createClient();
-  if (!supabase) return fail(t.leads.archive.failed);
-  const { data, error } = await supabase.rpc("set_leads_archived", { p_ws: ws.id, p_leads: ids.data, p_archived: archived });
-  if (error) return fail(t.leads.archive.failed);
+  if (!supabase) return fail(t.leads.close.failed);
+  const { data, error } = await supabase.rpc("set_leads_status", { p_ws: ws.id, p_leads: ids.data, p_status: st.data });
+  if (error) return fail(t.leads.close.failed);
   revalidatePath("/leads", "layout");
-  return ok(fill(archived ? t.leads.archive.archived : t.leads.archive.unarchived, { n: typeof data === "number" ? data : ids.data.length }));
-}
-
-/** Hides leads from every tab (archived_at). Nothing else about them changes. Owner/sdr only. */
-export async function archiveLeadsAction(leadIds: string[]): Promise<FormState> {
-  return setArchived(leadIds, true);
-}
-
-export async function unarchiveLeadsAction(leadIds: string[]): Promise<FormState> {
-  return setArchived(leadIds, false);
+  return ok(fill(t.leads.close.done, { n: typeof data === "number" ? data : ids.data.length, status: t.leads.close[st.data] }));
 }
 
 /** Sets the manual type of leads; null = back to automatic. Owner/sdr only. */
 export async function setLeadSegmentAction(leadIds: string[], segment: Segment | null): Promise<FormState> {
   const ws = await requireSender();
   const ids = leadIdsSchema.safeParse(leadIds);
-  if (!ids.success) return fail(t.leads.archive.tooMany);
+  if (!ids.success) return fail(t.leads.tooMany);
   const seg = z.enum(SEGMENTS).nullable().safeParse(segment);
   if (!seg.success) return fail(t.leads.segmentPick.failed);
   const supabase = await createClient();

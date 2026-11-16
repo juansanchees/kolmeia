@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
-import { archiveLeadsAction, setLeadSegmentAction, unarchiveLeadsAction } from "@/app/(app)/leads/lead-actions";
+import { setLeadSegmentAction, setLeadsStatusAction } from "@/app/(app)/leads/lead-actions";
 import { ActionButton } from "@/components/email/ActionButton";
 import { btn } from "@/components/email/bits";
 import { AddToList } from "@/components/leads/AddToList";
@@ -15,10 +15,10 @@ export type BulkNotice = { ok: boolean; text: string };
 const noticeOf = (r: FormState, failed: string): BulkNotice => ({ ok: r.status === "success", text: r.message ?? failed });
 
 /**
- * Shown only while rows are ticked: what can be done to all of them at once. Archive and type results go to `onResult`
+ * Shown only while rows are ticked: what can be done to all of them at once. Status and type results go to `onResult`
  * (the table shows them), because a success clears the selection and this bar unmounts with it.
  */
-export function SelectionBar({ selected, lists, archivedTab, onOpenQualifier, onResult }: { selected: string[]; lists: { id: string; name: string }[]; archivedTab: boolean; onOpenQualifier: () => void; onResult: (n: BulkNotice) => void }) {
+export function SelectionBar({ selected, lists, onOpenQualifier, onResult }: { selected: string[]; lists: { id: string; name: string }[]; onOpenQualifier: () => void; onResult: (n: BulkNotice) => void }) {
   const router = useRouter();
   const [pending, start] = useTransition();
 
@@ -26,8 +26,8 @@ export function SelectionBar({ selected, lists, archivedTab, onOpenQualifier, on
     start(async () => {
       onResult(noticeOf(await setLeadSegmentAction(selected, value === "none" ? null : (value as Segment)), t.leads.segmentPick.failed));
     });
-  const archive = async () => {
-    onResult(noticeOf(await (archivedTab ? unarchiveLeadsAction(selected) : archiveLeadsAction(selected)), t.leads.archive.failed));
+  const close = (status: "lost" | "discarded") => async () => {
+    onResult(noticeOf(await setLeadsStatusAction(selected, status), t.leads.close.failed));
     // the table shows the result; ActionButton must not show a second copy
     return { ok: true };
   };
@@ -48,11 +48,9 @@ export function SelectionBar({ selected, lists, archivedTab, onOpenQualifier, on
           ))}
           <option value="none">{t.leads.segments.none}</option>
       </select>
-      <ActionButton
-        action={archive}
-        label={archivedTab ? t.leads.archive.unarchive : t.leads.archive.archive}
-        confirm={archivedTab ? undefined : t.leads.archive.confirm}
-      />
+      <span className="flex min-h-11 items-center text-sm text-muted">{t.leads.close.label}</span>
+      <ActionButton action={close("lost")} label={t.leads.close.lost} confirm={t.leads.close.confirmLost} />
+      <ActionButton action={close("discarded")} label={t.leads.close.discarded} confirm={t.leads.close.confirmDiscarded} />
     </div>
   );
 }
