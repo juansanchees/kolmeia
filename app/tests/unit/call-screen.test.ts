@@ -1,20 +1,29 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { chipLocal, leadPhone, logCallSchema, nyLocalToIso } from "@/lib/calls/call-input";
+import { callBackAt, chipLocal, CONTACT_OUTCOMES, contactSchema, leadPhone, nyLocalToIso } from "@/lib/calls/call-input";
 
 const read = (p: string) => readFileSync(`${__dirname}/../../src/${p}`, "utf8");
-const ids = { leadId: "11111111-1111-4111-8111-111111111111", agentId: null, spokeTo: "", notes: "", nextStep: "", nextAt: null };
+const ids = { leadId: "11111111-1111-4111-8111-111111111111", note: "", callBackOn: null };
 
 describe("call screen", () => {
-  it("one tap picks the outcome; only the outcome is required", () => {
-    expect(logCallSchema.safeParse({ ...ids, outcome: "no_answer" }).success).toBe(true);
-    expect(logCallSchema.safeParse({ ...ids, outcome: "shouted" }).success).toBe(false);
-    expect(logCallSchema.safeParse({ ...ids, outcome: "talked", notes: "x".repeat(501) }).success).toBe(false);
-    expect(logCallSchema.safeParse({ ...ids, outcome: "talked", notes: "x".repeat(500) }).success).toBe(true);
+  it("one tap records; the note is optional; Ligar depois needs a day", () => {
+    expect(CONTACT_OUTCOMES).toEqual(["no_answer", "meeting_booked", "talked", "not_interested", "do_not_call"]);
+    expect(contactSchema.safeParse({ ...ids, outcome: "no_answer" }).success).toBe(true);
+    expect(contactSchema.safeParse({ ...ids, outcome: "voicemail" }).success).toBe(false);
+    expect(contactSchema.safeParse({ ...ids, outcome: "talked" }).success).toBe(false);
+    expect(contactSchema.safeParse({ ...ids, outcome: "talked", callBackOn: "2026-11-19" }).success).toBe(true);
+    expect(contactSchema.safeParse({ ...ids, outcome: "not_interested", note: "x".repeat(201) }).success).toBe(false);
+    expect(contactSchema.safeParse({ ...ids, outcome: "not_interested", note: "x".repeat(200) }).success).toBe(true);
+  });
+
+  it("Ligar depois is due at 9:00 New York time; the default day is today + 3", () => {
+    expect(callBackAt("2026-11-19")).toBe("2026-11-19T14:00:00.000Z");
+    expect(callBackAt("2026-02-31")).toBeNull();
+    expect(chipLocal(3, new Date("2026-11-16T15:00:00Z")).slice(0, 10)).toBe("2026-11-19");
   });
 
   it("no recording, no SMS, no AI voice on the call screen", () => {
-    for (const f of ["components/calls/CallForm.tsx", "components/calls/CallFacts.tsx", "app/(app)/leads/ligar/[id]/page.tsx"]) {
+    for (const f of ["components/calls/ContactRecord.tsx", "components/calls/CallFacts.tsx", "app/(app)/leads/ligar/[id]/page.tsx"]) {
       const s = read(f);
       expect(s, f).not.toMatch(/sms:|getUserMedia|MediaRecorder|type="file"|recorded|name="record/i);
     }
@@ -29,10 +38,11 @@ describe("call screen", () => {
     expect(facts).toContain("rawPhone");
   });
 
-  it("the form shows the status the lead will get", () => {
-    const form = read("components/calls/CallForm.tsx");
-    expect(form).toContain("statusAfterCall");
-    expect(form).toContain("statusWillBe");
+  it("one form for every screen: the lead modal (sender) and the call screen both use ContactRecord", () => {
+    expect(read("components/leads/LeadDetail.tsx")).toMatch(/sender && phone && \(/);
+    expect(read("components/leads/LeadDetail.tsx")).toContain('<ContactRecord leadId={lead.id} afterSave="stay"');
+    expect(read("app/(app)/leads/ligar/[id]/page.tsx")).toContain('<ContactRecord leadId={id} afterSave="next"');
+    expect(read("components/calls/ContactRecord.tsx")).toContain("R.dncHint");
   });
 
   it("do_not_call hides the form", () => {

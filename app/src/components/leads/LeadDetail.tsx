@@ -14,6 +14,10 @@ import { StatusButtons } from "@/components/leads/StatusButtons";
 import { LeadTypePicker } from "@/components/leads/LeadTypePicker";
 import { derivedSegmentOf, effectiveTemperature, segmentInputOf } from "@/lib/leads/classify";
 import { AddToCallList } from "@/components/leads/AddToCallList";
+import { CallHistory } from "@/components/calls/CallHistory";
+import { ContactRecord } from "@/components/calls/ContactRecord";
+import { leadPhone } from "@/lib/calls/call-input";
+import { callsOf } from "@/lib/calls/call-queries";
 import { AddToCampaign } from "@/components/leads/AddToCampaign";
 import type { CampaignChoice } from "@/lib/leads/campaign-note";
 import { displayOf, isStaleProof, originLabel, proofCount } from "@/lib/leads/view";
@@ -56,10 +60,13 @@ export async function LeadDetail({ id, modal = false }: { id: string; modal?: bo
   // e-mail quality badges (0028): senders only; RLS gives the closer no rows anyway
   // every import/list the lead came from (the closer has no list rows visible, so she gets none)
   const emailQuality: Record<string, EmailQuality> = {};
-  const [originMap, mailChecks] = await Promise.all([
+  const [originMap, mailChecks, calls] = await Promise.all([
     sender ? originListsOf(supabase, [lead.id]) : null,
     sender && workspace ? emailChecksOf(supabase, workspace.id, [...fields.filter((f) => f.field === "email").map((f) => f.value), ...(display.email ? [display.email] : [])]) : null,
+    sender ? callsOf(supabase, lead.id) : [],
   ]);
+  // the number log_call will use (same rule as SQL lead_phone)
+  const phone = leadPhone(best?.phone, fields);
   const origins = originMap?.get(lead.id) ?? [];
   if (mailChecks) for (const [k, v] of mailChecks) emailQuality[k] = v.status;
   const callable = open && !lead.do_not_call && ["new", "call_list"].includes(lead.status) && Boolean(display.phone);
@@ -244,6 +251,16 @@ export async function LeadDetail({ id, modal = false }: { id: string; modal?: bo
           ))}
         </section>
       )}
+
+      {sender && phone && (
+        <section aria-labelledby="contact-title" className="flex flex-col gap-3 border border-line bg-surface p-4">
+          <h2 id="contact-title" className="text-xl">
+            {t.calls.record.title}
+          </h2>
+          <ContactRecord leadId={lead.id} afterSave="stay" canRecord={open && !lead.do_not_call} />
+        </section>
+      )}
+      {sender && calls.length > 0 && <CallHistory calls={calls} />}
 
       {open && (sender || mine) && (
         <section aria-labelledby="actions-title" className="flex flex-col gap-4 border border-line bg-surface p-4">

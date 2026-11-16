@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CallFacts } from "@/components/calls/CallFacts";
-import { CallForm } from "@/components/calls/CallForm";
 import { CallHistory } from "@/components/calls/CallHistory";
+import { ContactRecord } from "@/components/calls/ContactRecord";
 import { Notice } from "@/components/email/bits";
 import { leadPhone } from "@/lib/calls/call-input";
-import { agentOfToday, callsOf } from "@/lib/calls/call-queries";
+import { callsOf } from "@/lib/calls/call-queries";
 import { getLead } from "@/lib/leads/queries";
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/workspace";
@@ -22,7 +22,7 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
   if (!detail) notFound();
   const best = detail.candidates.find((c) => c.id === detail.lead.best_candidate_id) ?? null;
   const phone = leadPhone(best?.phone, detail.fields);
-  const [calls, agentId] = await Promise.all([callsOf(supabase, id), agentOfToday(supabase, user.id, id)]);
+  const calls = await callsOf(supabase, id);
   const blocked = detail.lead.do_not_call;
 
   return (
@@ -31,7 +31,11 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
         {t.calls.back}
       </Link>
       <CallFacts detail={detail} phone={phone} now={new Date()} blocked={blocked} />
-      {blocked ? <Notice tone="warn" role="alert">{t.calls.blocked}</Notice> : <CallForm leadId={id} agentId={agentId} status={detail.lead.status} />}
+      {blocked ? <Notice tone="warn" role="alert">{t.calls.blocked}</Notice> : (
+        <section aria-label={t.calls.record.title} className="border border-line bg-surface p-4">
+          <ContactRecord leadId={id} afterSave="next" />
+        </section>
+      )}
       <CallHistory calls={calls} />
     </div>
   );

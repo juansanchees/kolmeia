@@ -2,20 +2,23 @@
 import { z } from "zod";
 import type { LeadFieldRow } from "@/lib/leads/types";
 import { phoneKey } from "@/lib/research/dedupe";
-import { CALL_OUTCOMES } from "./types";
+import type { CallOutcome } from "./types";
 
 const TZ = "America/New_York";
 
-/** Only the outcome is required: one tap. Everything else may be empty. */
-export const logCallSchema = z.object({
-  leadId: z.uuid(),
-  agentId: z.uuid().nullable(),
-  outcome: z.enum(CALL_OUTCOMES),
-  spokeTo: z.string().trim().max(120),
-  notes: z.string().trim().max(500),
-  nextStep: z.string().trim().max(200),
-  nextAt: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/).nullable(),
-});
+/** The five buttons of "Registrar contato" (lead modal and call screen), in screen order. */
+export const CONTACT_OUTCOMES = ["no_answer", "meeting_booked", "talked", "not_interested", "do_not_call"] as const satisfies readonly CallOutcome[];
+export type ContactOutcome = (typeof CONTACT_OUTCOMES)[number];
+
+/** One tap is enough; the note is optional. "Ligar depois" (talked) needs the day to call back. */
+export const contactSchema = z
+  .object({
+    leadId: z.uuid(),
+    outcome: z.enum(CONTACT_OUTCOMES),
+    note: z.string().trim().max(200),
+    callBackOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  })
+  .refine((d) => d.outcome !== "talked" || d.callBackOn !== null, { path: ["callBackOn"] });
 
 const parts = (ms: number) => {
   const p = Object.fromEntries(
@@ -58,4 +61,9 @@ export function leadPhone(bestPhone: string | null | undefined, fields: Pick<Lea
     .filter((x) => x.field === "phone" && x.status !== "refuted" && phoneKey(x.value))
     .sort((a, b) => Date.parse(b.seen_at) - Date.parse(a.seen_at))[0];
   return f?.value ?? null;
+}
+
+/** "Ligar depois": the callback task is due at 9:00 New York time on that day; null when the day is not real. */
+export function callBackAt(day: string): string | null {
+  return nyLocalToIso(`${day}T09:00`);
 }
