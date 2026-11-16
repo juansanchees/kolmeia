@@ -138,7 +138,8 @@ describe("0011 lead fields and one duplicate rule", () => {
     const [imp] = await db.admin<{ id: string }>("insert into public.lead_imports (workspace_id, file_name, list_name) values ($1,'f.csv','L') returning id", [wsA]);
     await db.admin("insert into public.lead_import_rows (import_id, workspace_id, row_number, data, outcome) values ($1,$2,1,'{}','new')", [imp.id, wsA]);
     const denied = async (sql: string, params: unknown[]) => expect((await db.try(as(UUID_A), sql, params)).error?.message).toMatch(/permission denied/);
-    await denied("insert into public.lead_fields (workspace_id, lead_id, field, value, source) values ($1,$2,'note','y','import')", [wsA, lead]);
+    // 0028 grants INSERT for e-mail guesses only (source 'pattern'); any other row is refused by RLS
+    expect((await db.try(as(UUID_A), "insert into public.lead_fields (workspace_id, lead_id, field, value, source) values ($1,$2,'note','y','import')", [wsA, lead])).error?.message).toMatch(/row-level security/);
     await denied("update public.lead_fields set value = 'z' where lead_id = $1", [lead]);
     await denied("delete from public.lead_fields where lead_id = $1", [lead]);
     await denied("insert into public.lead_imports (workspace_id, file_name, list_name) values ($1,'g.csv','M')", [wsA]);
