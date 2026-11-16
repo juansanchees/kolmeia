@@ -38,5 +38,6 @@ export async function logCallAction(input: Input): Promise<FormState & { next?: 
   }
   revalidatePath("/leads/ligar");
   revalidatePath("/leads");
+  revalidatePath("/leads/tarefas"); // a next-step date became a task (0027)
   return { status: "success", next: await nextInList(supabase, user.id, d.leadId) };
 }
