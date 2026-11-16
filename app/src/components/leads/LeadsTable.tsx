@@ -236,13 +236,15 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
   return (
     <div className="flex min-w-0 flex-col gap-4">
       {listBanner}
-      <div role="group" aria-label={L.segments.label} className="flex flex-wrap border-b border-line">
-        {SEGMENT_TABS.map((x) => (
-          <button key={x} type="button" aria-pressed={f.segment === x} onClick={() => pickTab({ segment: x })} className={tabCls(f.segment === x)}>
-            {L.segments[x]} <span className={countCls}>{facets.segments[x]}</span>
-          </button>
-        ))}
-      </div>
+      {canCreate && (
+        <div role="group" aria-label={L.segments.label} className="flex flex-wrap border-b border-line">
+          {SEGMENT_TABS.map((x) => (
+            <button key={x} type="button" aria-pressed={f.segment === x} onClick={() => pickTab({ segment: x })} className={tabCls(f.segment === x)}>
+              {L.segments[x]} <span className={countCls}>{facets.segments[x]}</span>
+            </button>
+          ))}
+        </div>
+      )}
       <div role="group" aria-label={L.stages.label} className="flex flex-wrap items-stretch border-b border-line">
         {STAGE_TABS.map((x) => (
           <button key={x} type="button" aria-pressed={f.stage === x} onClick={() => pickTab({ stage: x })} className={tabCls(f.stage === x)}>

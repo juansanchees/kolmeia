@@ -49,11 +49,13 @@ export function FacetPanel({ facets, f, set, agents, hasOneOff }: { facets: Lead
           <Check key={c} label={c} n={cityN.get(c) ?? null} checked={f.cities.includes(c)} onChange={(on) => set({ cities: toggle(f.cities, c, on) })} />
         ))}
       </Group>
-      <Group title={t.leads.origin.filter}>
-        {lists.map((l) => (
-          <Check key={l} label={l} n={listN.get(l) ?? null} checked={f.lists.includes(l)} onChange={(on) => set({ lists: toggle(f.lists, l, on) })} />
-        ))}
-      </Group>
+      {lists.length > 0 && (
+        <Group title={t.leads.origin.filter}>
+          {lists.map((l) => (
+            <Check key={l} label={l} n={listN.get(l) ?? null} checked={f.lists.includes(l)} onChange={(on) => set({ lists: toggle(f.lists, l, on) })} />
+          ))}
+        </Group>
+      )}
       <Group title={P.contact}>
         <Check label={P.hasEmail} n={facets.email} checked={f.hasEmail} onChange={(on) => set({ hasEmail: on })} />
         <Check label={P.hasPhone} n={facets.phone} checked={f.hasPhone} onChange={(on) => set({ hasPhone: on })} />

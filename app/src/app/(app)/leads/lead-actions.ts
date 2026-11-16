@@ -81,10 +81,10 @@ async function setArchived(leadIds: string[], archived: boolean): Promise<FormSt
   if (!ids.success) return fail(t.leads.archive.tooMany);
   const supabase = await createClient();
   if (!supabase) return fail(t.leads.archive.failed);
-  const { error } = await supabase.rpc("set_leads_archived", { p_ws: ws.id, p_leads: ids.data, p_archived: archived });
+  const { data, error } = await supabase.rpc("set_leads_archived", { p_ws: ws.id, p_leads: ids.data, p_archived: archived });
   if (error) return fail(t.leads.archive.failed);
   revalidatePath("/leads", "layout");
-  return ok(fill(archived ? t.leads.archive.archived : t.leads.archive.unarchived, { n: ids.data.length }));
+  return ok(fill(archived ? t.leads.archive.archived : t.leads.archive.unarchived, { n: typeof data === "number" ? data : ids.data.length }));
 }
 
 /** Hides leads from every tab (archived_at). Nothing else about them changes. Owner/sdr only. */
@@ -105,10 +105,10 @@ export async function setLeadSegmentAction(leadIds: string[], segment: Segment |
   if (!seg.success) return fail(t.leads.segmentPick.failed);
   const supabase = await createClient();
   if (!supabase) return fail(t.leads.segmentPick.failed);
-  const { error } = await supabase.rpc("set_leads_segment", { p_ws: ws.id, p_leads: ids.data, p_segment: seg.data });
+  const { data, error } = await supabase.rpc("set_leads_segment", { p_ws: ws.id, p_leads: ids.data, p_segment: seg.data });
   if (error) return fail(t.leads.segmentPick.failed);
   revalidatePath("/leads", "layout");
-  return ok(fill(t.leads.segmentPick.saved, { n: ids.data.length }));
+  return ok(fill(t.leads.segmentPick.saved, { n: typeof data === "number" ? data : ids.data.length }));
 }
 
 /** The full CSV of the given leads: the table only holds slim rows, so the server builds it. */
@@ -119,7 +119,10 @@ export async function leadsCsvAction(leadIds: string[]): Promise<{ csv: string }
   const supabase = await createClient();
   if (!supabase) return { error: t.leads.toolbar.csvFailed };
   try {
-    return { csv: leadsCsv(await listLeads(supabase, ws.id, { ids: ids.data })) };
+    const items = await listLeads(supabase, ws.id, { ids: ids.data });
+    const pos = new Map(ids.data.map((x, i) => [x, i]));
+    items.sort((a, b) => (pos.get(a.lead.id) ?? 0) - (pos.get(b.lead.id) ?? 0)); // table order, not DB chunk order
+    return { csv: leadsCsv(items) };
   } catch {
     return { error: t.leads.toolbar.csvFailed };
   }

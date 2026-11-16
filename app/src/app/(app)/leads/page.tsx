@@ -40,9 +40,11 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
     sender ? connectedSources(supabase, workspace.id) : null,
   ]);
   // AI-question answers (0029), attached per lead. Senders only: the closer has no AI column on her list.
-  const answers = sender ? await listAnswers(supabase, workspace.id, questions.map((q) => q.id)) : new Map();
+  const [answers, origins] = await Promise.all([
+    sender ? listAnswers(supabase, workspace.id, questions.map((q) => q.id)) : new Map(),
+    sender ? originListsOf(supabase, items.map((i) => i.lead.id)) : new Map(),
+  ]);
   for (const i of items) i.ai = answers.get(i.lead.id);
-  const origins = sender ? await originListsOf(supabase, items.map((i) => i.lead.id)) : new Map();
   return (
     <>
     <LeadsTable

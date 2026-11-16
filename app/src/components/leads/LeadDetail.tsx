@@ -55,12 +55,13 @@ export async function LeadDetail({ id, modal = false }: { id: string; modal?: bo
   const brief = parseCloserBrief(lead.closer_brief);
   // e-mail quality badges (0028): senders only; RLS gives the closer no rows anyway
   // every import/list the lead came from (the closer has no list rows visible, so she gets none)
-  const origins = sender ? ((await originListsOf(supabase, [lead.id])).get(lead.id) ?? []) : [];
   const emailQuality: Record<string, EmailQuality> = {};
-  if (sender && workspace) {
-    const checks = await emailChecksOf(supabase, workspace.id, [...fields.filter((f) => f.field === "email").map((f) => f.value), ...(display.email ? [display.email] : [])]);
-    for (const [k, v] of checks) emailQuality[k] = v.status;
-  }
+  const [originMap, mailChecks] = await Promise.all([
+    sender ? originListsOf(supabase, [lead.id]) : null,
+    sender && workspace ? emailChecksOf(supabase, workspace.id, [...fields.filter((f) => f.field === "email").map((f) => f.value), ...(display.email ? [display.email] : [])]) : null,
+  ]);
+  const origins = originMap?.get(lead.id) ?? [];
+  if (mailChecks) for (const [k, v] of mailChecks) emailQuality[k] = v.status;
   const callable = open && !lead.do_not_call && ["new", "call_list"].includes(lead.status) && Boolean(display.phone);
 
   // Sender-only inputs of the hand-off and the call list (RLS keeps them from the closer anyway).
@@ -135,10 +136,12 @@ export async function LeadDetail({ id, modal = false }: { id: string; modal?: bo
           <span className="font-semibold text-ink">{t.qualifier.levelLabel} {lead.level}</span> · {levelReason(fields, lead.level)}
           {queue && <> · {nextStepLabel(queue.next_step, queue.done_reason)}</>}
         </p>
-        <p className="text-[13px] text-muted">
-          <span className="font-semibold text-ink">{t.leads.origin.cameFrom}</span>{" "}
-          {origins.length > 0 ? origins.map((o) => fill(t.leads.origin.item, { name: o.name, date: date(o.at) })).join(", ") : t.leads.origin.none}
-        </p>
+        {sender && (
+          <p className="text-[13px] text-muted">
+            <span className="font-semibold text-ink">{t.leads.origin.cameFrom}</span>{" "}
+            {origins.length > 0 ? origins.map((o) => fill(t.leads.origin.item, { name: o.name, date: date(o.at) })).join(", ") : t.leads.origin.none}
+          </p>
+        )}
         {sender && (
           <div className="flex flex-wrap items-end gap-4">
             <LeadTypePicker leadId={lead.id} value={lead.segment} derived={derivedSegmentOf(segmentInputOf(lead, best, display.companyType ?? null, origins))} />
