@@ -3,7 +3,13 @@ import { notFound } from "next/navigation";
 import { loadMailboxes, loadSender, previewMessage } from "@/lib/email/queries";
 import { emailSession, previewOrigin } from "@/lib/email/session";
 import { CAMPAIGN_COLUMNS, MESSAGE_COLUMNS, PROSPECT_COLUMNS, type CampaignRow, type MessageRow, type ProspectRow } from "@/lib/email/types";
-import { setProspectSkipped } from "../../actions";
+import { redraftStrongAction, setProspectSkipped } from "../../actions";
+import { reserveFor } from "@/lib/ai/gateway";
+import { draftDef, draftStrongDef } from "@/lib/ai/email-tasks";
+import { MODELS } from "@/lib/ai/models";
+import { emailChecksOf } from "@/lib/leads/queries";
+import { contentChecks } from "@/lib/email/warnings";
+import { usd } from "@/components/research/format";
 import { ActionButton } from "@/components/email/ActionButton";
 import { Badge, Card, Label } from "@/components/email/bits";
 import { isPast, when } from "@/components/email/format";
@@ -125,6 +131,11 @@ export default async function ReviewPage({
   const pending = ms.filter((m) => m.status === "draft" || m.status === "rejected").map((m) => ({ id: m.id, updatedAt: m.updated_at }));
   const aiStep = ms.find((m) => m.ai_drafted) ?? null;
   const facts = Array.isArray(aiStep?.ai_facts) ? aiStep.ai_facts.filter((f): f is string => typeof f === "string") : [];
+  // item 11: local checks before approval, the recipient's quality from 0028 email_checks (no row = never checked)
+  const recipient = p.email ? ((await emailChecksOf(s.supabase, campaign.workspace_id, [p.email])).get(p.email.trim().toLowerCase())?.status ?? null) : null;
+  const toCheck = ms.filter((m) => m.kind === "sequence" && (m.status === "draft" || m.status === "rejected"));
+  const checks = toCheck.map((m) => ({ step: m.step ?? 1, list: contentChecks({ subject: m.subject, body: m.body, step: m.step, recipient: m.step === 1 ? recipient : undefined }) }));
+  const C = M.checks;
 
   return (
     <div className="flex min-w-0 flex-col gap-5">
@@ -189,11 +200,41 @@ export default async function ReviewPage({
               ) : (
                 <p className="m-0 text-sm text-warn">{R.noFact}</p>
               )}
+              {aiStep.ai_signal && (
+                <p className="m-0 text-sm">
+                  <span className="font-semibold">{R.signal}</span> {aiStep.ai_signal}
+                </p>
+              )}
+              {aiStep.ai_model && (
+                <p className="m-0 font-mono text-xs text-muted">{fill(R.model, { model: aiStep.ai_model === MODELS.sonnet ? R.modelStrong : R.modelCheap })}</p>
+              )}
+            </div>
+          )}
+          {checks.length > 0 && (
+            <div className="flex flex-col gap-2 border-t border-line pt-3">
+              <Label>{C.title}</Label>
+              {checks.map(({ step, list }) => (
+                <ul key={step} aria-label={fill(C.step, { n: step })} className="m-0 flex list-none flex-col gap-1 p-0 text-[13px]">
+                  <li className="font-mono text-xs text-muted">{fill(C.step, { n: step })}</li>
+                  {list.filter((c) => step === 1 || !c.ok).map((c) => (
+                    <li key={c.kind} className={c.ok ? "" : "text-warn"}>
+                      <span className="font-semibold">{c.ok ? C.ok : C.warn}</span> {c.text}
+                    </li>
+                  ))}
+                </ul>
+              ))}
+              <p className="m-0 text-[13px] text-muted">{C.ok} {C.footer}</p>
             </div>
           )}
           {s.canSend && (
             <div className="flex flex-wrap gap-2">
               <ApproveAllButton items={pending} />
+              {pending.length > 0 && (
+                <ActionButton
+                  action={redraftStrongAction.bind(null, p.id)}
+                  label={fill(R.strong, { strong: usd(reserveFor(draftStrongDef)), cheap: usd(reserveFor(draftDef)) })}
+                />
+              )}
               {p.status === "active" && <ActionButton action={setProspectSkipped.bind(null, p.id, true)} label={R.skipCompany} />}
             </div>
           )}

@@ -31,7 +31,12 @@ export type NewMessage = {
   /** What the AI said it used (shown to the reviewer). */
   ai_facts?: string[];
   ai_no_fact?: boolean | null;
+  /** The work/permit signal the AI draft opened with ("Sinal usado"). */
+  ai_signal?: string | null;
 };
+
+/** A new AI version of one sequence step (strong-model redraft, replace_ai_draft in 0029). */
+export type AiDraftVersion = { subject: string; body: string; model: string; promptVersion: string; facts: string[]; noFact: boolean; signal: string | null };
 
 export type NewReply = {
   prospectId: string;
@@ -113,4 +118,8 @@ export interface EmailStore extends AiLedger {
   /** E4 (0024): the workspace's emergency stop, read again right before SMTP. Unreadable = stopped (fail closed). */
   sendingPaused(workspaceId: string): Promise<boolean>;
   listProspectReplies(prospectId: string): Promise<ReplyRow[]>;
+  /** The work/permit signal a draft for this prospect opens with (signal.ts), or null. Optional: no signal without it. */
+  signalFor?(prospect: ProspectRow): Promise<string | null>;
+  /** Replaces a draft/rejected step seen at `version` with a new AI version; false when it changed or left draft. */
+  replaceAiDraft?(messageId: string, version: string, v: AiDraftVersion): Promise<boolean>;
 }

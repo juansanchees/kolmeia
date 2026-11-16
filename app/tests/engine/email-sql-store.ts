@@ -3,7 +3,8 @@ import type { AiCallRecord, AiReservation } from "@/lib/ai/gateway";
 import { DEFAULT_DAILY_CAP_USD } from "@/lib/ai/gateway";
 import type { ProfileInput } from "@/lib/ai/prompts/shared";
 import type { SentRef } from "@/lib/email/replies";
-import type { EmailStore, NewMessage, NewReply, TestClaim } from "@/lib/email/store";
+import { pickSignal, type SignalCandidate, type SignalField } from "@/lib/email/signal";
+import type { AiDraftVersion, EmailStore, NewMessage, NewReply, TestClaim } from "@/lib/email/store";
 import {
   CAMPAIGN_COLUMNS,
   MAILBOX_COLUMNS,
@@ -91,9 +92,9 @@ export class SqlEmailStore implements EmailStore {
   async insertMessages(rows: NewMessage[]) {
     for (const r of rows) {
       await this.q(
-        `insert into public.email_messages (workspace_id, campaign_id, prospect_id, kind, step, reply_to_id, subject, body, ai_drafted, ai_model, prompt_version, ai_facts, ai_no_fact)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13)`,
-        [r.workspace_id, r.campaign_id, r.prospect_id, r.kind, r.step, r.reply_to_id, r.subject, r.body, r.ai_drafted, r.ai_model, r.prompt_version, JSON.stringify(r.ai_facts ?? []), r.ai_no_fact ?? null],
+        `insert into public.email_messages (workspace_id, campaign_id, prospect_id, kind, step, reply_to_id, subject, body, ai_drafted, ai_model, prompt_version, ai_facts, ai_no_fact, ai_signal)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,$14)`,
+        [r.workspace_id, r.campaign_id, r.prospect_id, r.kind, r.step, r.reply_to_id, r.subject, r.body, r.ai_drafted, r.ai_model, r.prompt_version, JSON.stringify(r.ai_facts ?? []), r.ai_no_fact ?? null, r.ai_signal ?? null],
       );
     }
   }
@@ -157,6 +158,20 @@ export class SqlEmailStore implements EmailStore {
   }
   listProspectReplies(prospectId: string) {
     return this.many<ReplyRow>(`select ${REPLY_COLUMNS} from public.email_replies where prospect_id = $1 order by received_at`, [prospectId]);
+  }
+
+  async signalFor(p: ProspectRow): Promise<string | null> {
+    const cand = p.candidate_id
+      ? await this.one<SignalCandidate>("select permit_count, last_permit_date::text, biggest_job_address, biggest_job_type, hook from public.research_candidates where id = $1", [p.candidate_id])
+      : null;
+    const fields = p.lead_id ? await this.many<SignalField>("select field, value, status, source from public.lead_fields where lead_id = $1 and field in ('active_project','note') order by seen_at desc", [p.lead_id]) : [];
+    return pickSignal({ candidate: cand, fields, hook: p.hook });
+  }
+  async replaceAiDraft(messageId: string, version: string, v: AiDraftVersion): Promise<boolean> {
+    const r = await this.one<{ ok: boolean }>("select public.replace_ai_draft($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9) as ok", [
+      messageId, version, v.subject, v.body, v.model, v.promptVersion, JSON.stringify(v.facts), v.noFact, v.signal,
+    ]);
+    return r?.ok === true;
   }
 
   // AiLedger

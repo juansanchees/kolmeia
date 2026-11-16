@@ -29,6 +29,7 @@ const oneLine = (s: string, max: number) => clip(s.replace(/[\r\n]+/g, " ").repl
 // ---------------------------------------------------------------- sequence draft
 export type DraftedEmail = { step: 1 | 2 | 3; subject: string; body: string };
 export type DraftResult = { emails: DraftedEmail[]; factsUsed: string[]; noFact: boolean; model: string; promptVersion: string };
+type DraftModel = typeof MODELS.haiku | typeof MODELS.sonnet;
 
 /** Cleans one AI e-mail: no fake reply prefix (R4), no links (R12), bounded. Null when nothing valid is left. */
 export function cleanDraftEmail(subject: string, body: string): { subject: string; body: string } | null {
@@ -38,15 +39,17 @@ export function cleanDraftEmail(subject: string, body: string): { subject: strin
   return { subject: s, body: b };
 }
 
-const draftDef: TaskDef<P.DraftInput, DraftOut, DraftResult> = {
+// Model per task (Fase 3, item 12): the cheap model drafts by default; "Revisar com modelo forte" re-drafts with Sonnet.
+// Same task, prompt and checks; the ledger tells them apart by model.
+const draftDefFor = (model: DraftModel, reserveUsd: number): TaskDef<P.DraftInput, DraftOut, DraftResult> => ({
   task: "email_draft",
-  model: MODELS.sonnet,
+  model,
   promptVersion: P.DRAFT_PROMPT_VERSION,
   system: P.DRAFT_SYSTEM,
   schema: draftSchema,
   effort: "medium",
   maxTokens: 16_000,
-  reserveUsd: 0.05,
+  reserveUsd,
   buildUser: P.buildDraftUser,
   normalize: (p) => {
     const emails: DraftedEmail[] = [];
@@ -59,14 +62,17 @@ const draftDef: TaskDef<P.DraftInput, DraftOut, DraftResult> = {
       emails,
       factsUsed: p.facts_used.map((f) => oneLine(f, 200)).filter(Boolean).slice(0, 8),
       noFact: p.no_fact,
-      model: MODELS.sonnet,
+      model,
       promptVersion: P.DRAFT_PROMPT_VERSION,
     };
   },
-};
+});
 
-export function draftSequence(ctx: AiContext, input: P.DraftInput): Promise<TaskResult<DraftResult>> {
-  return runTask(ctx, draftDef, input);
+export const draftDef = draftDefFor(MODELS.haiku, 0.01);
+export const draftStrongDef = draftDefFor(MODELS.sonnet, 0.05);
+
+export function draftSequence(ctx: AiContext, input: P.DraftInput, strong = false): Promise<TaskResult<DraftResult>> {
+  return runTask(ctx, strong ? draftStrongDef : draftDef, input);
 }
 
 // ---------------------------------------------------------------- reply classification

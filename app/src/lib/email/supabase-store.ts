@@ -4,7 +4,8 @@ import { DEFAULT_DAILY_CAP_USD, type AiCallRecord, type AiReservation } from "@/
 import { reserveAiCallRpc, settleAiCallRpc } from "@/lib/ai/ledger-rpc";
 import type { ProfileInput } from "@/lib/ai/prompts/shared";
 import type { SentRef } from "./replies";
-import type { EmailStore, NewMessage, NewReply, TestClaim } from "./store";
+import { pickSignal, type SignalCandidate, type SignalField } from "./signal";
+import type { AiDraftVersion, EmailStore, NewMessage, NewReply, TestClaim } from "./store";
 import {
   CAMPAIGN_COLUMNS,
   MAILBOX_COLUMNS,
@@ -243,6 +244,41 @@ export class SupabaseEmailStore implements EmailStore {
     const { data, error } = await this.db.from("email_replies").select(REPLY_COLUMNS).eq("prospect_id", prospectId).order("received_at", { ascending: true });
     if (error) this.fail("listProspectReplies", error);
     return (data ?? []) as ReplyRow[];
+  }
+
+  async signalFor(p: ProspectRow): Promise<string | null> {
+    let candidateId = p.candidate_id;
+    if (!candidateId && p.lead_id) {
+      const { data } = await this.db.from("leads").select("best_candidate_id").eq("id", p.lead_id).maybeSingle();
+      candidateId = (data?.best_candidate_id as string | null) ?? null;
+    }
+    const [cand, fields] = await Promise.all([
+      candidateId
+        ? this.db.from("research_candidates").select("permit_count, last_permit_date, biggest_job_address, biggest_job_type, hook").eq("id", candidateId).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      p.lead_id
+        ? this.db.from("lead_fields").select("field, value, status, source").eq("lead_id", p.lead_id).in("field", ["active_project", "note"]).order("seen_at", { ascending: false }).limit(50)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (cand.error) this.fail("signalFor", cand.error);
+    if (fields.error) this.fail("signalFor", fields.error);
+    return pickSignal({ candidate: (cand.data as SignalCandidate | null) ?? null, fields: (fields.data ?? []) as SignalField[], hook: p.hook });
+  }
+
+  async replaceAiDraft(messageId: string, version: string, v: AiDraftVersion): Promise<boolean> {
+    const { data, error } = await this.db.rpc("replace_ai_draft", {
+      p_message: messageId,
+      p_version: version,
+      p_subject: v.subject,
+      p_body: v.body,
+      p_model: v.model,
+      p_prompt_version: v.promptVersion,
+      p_facts: v.facts,
+      p_no_fact: v.noFact,
+      p_signal: v.signal,
+    });
+    if (error) this.fail("replaceAiDraft", error);
+    return data === true;
   }
 
   // ---------------------------------------------------------------- AiLedger

@@ -6,7 +6,7 @@ import { z } from "zod";
 import { MailboxKeyError } from "@/lib/email/config";
 import { bodyProblem, subjectProblem } from "@/lib/email/compose";
 import { encryptSecret, mailboxAad } from "@/lib/email/crypto";
-import { draftAnswer, fetchReplies, handOffWithBrief, refreshBrief, sendTestToSelf, templateDrafts, verifyMailbox } from "@/lib/email/engine";
+import { draftAnswer, fetchReplies, handOffWithBrief, redraftStrong, refreshBrief, sendTestToSelf, templateDrafts, verifyMailbox } from "@/lib/email/engine";
 import { emailOrigins, emailSession } from "@/lib/email/session";
 import { MAX_CAMPAIGN_MAILBOXES, mailboxListChange } from "@/lib/email/rotation";
 import { validDelays } from "@/lib/email/schedule";
@@ -443,6 +443,18 @@ export async function draftAnswerAction(replyId: string): Promise<ActionResult> 
   const r = await draftAnswer(s.deps, reply, s.workspace.name);
   revalidatePath("/campanhas", "layout");
   return r.ok ? ok() : err(M.ai[r.code] ?? M.genericError);
+}
+
+/** "Revisar com modelo forte" (item 12): one Sonnet call in the user's AI caps; the result is a draft to review again. */
+export async function redraftStrongAction(prospectId: string): Promise<ActionResult> {
+  const s = await sender();
+  if (!s || !uuid.safeParse(prospectId).success) return err();
+  const r = await redraftStrong(s.deps, prospectId, s.workspace.name);
+  const p = await s.store.getProspect(prospectId);
+  if (p) refresh(`/campanhas/${p.campaign_id}/revisar`);
+  if (r.ok) return ok(M.review.strongDone);
+  if (r.code === "nothing") return err(M.review.strongNothing);
+  return err((M.ai as Record<string, string>)[r.code] ?? M.review.strongFailed);
 }
 
 // ---------------------------------------------------------------- closer

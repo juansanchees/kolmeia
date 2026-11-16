@@ -6,9 +6,11 @@ import { ComposeError, composeEmail, replySubject, senderComplete, unsubscribeOr
 import type { MailboxKeyRing } from "./config";
 import { decryptSecret, mailboxAad } from "./crypto";
 import { matchIncoming, isAutoReply } from "./replies";
+import type { DraftInput } from "@/lib/ai/prompts/email";
+import type { ProfileInput } from "@/lib/ai/prompts/shared";
 import type { EmailStore, NewMessage, SendCampaign, SendStore } from "./store";
 import { mailErrorText, type ImapTransport, type MailCreds, type SmtpTransport } from "./transport";
-import { DEFAULT_STEP_DELAYS, type ClaimOutcome, type MailboxRow, type ReplyRow } from "./types";
+import { DEFAULT_STEP_DELAYS, type CampaignRow, type ClaimOutcome, type MailboxRow, type ProspectRow, type ReplyRow } from "./types";
 
 // The e-mail engine. No background worker inside the app: the open page calls one bounded step at a time
 // (drafting a couple of prospects, or sending at most ONE message), like the research engine. Every database
@@ -81,6 +83,28 @@ export async function templateDrafts(deps: Pick<EmailDeps, "store">, campaignId:
 }
 
 // ---------------------------------------------------------------- 1. drafting (step-driven)
+/** What the draft prompt gets for one prospect; the signal (item 10) only when the store can look it up. */
+async function draftInputFor(
+  deps: Pick<EmailDeps, "store">,
+  campaign: Pick<CampaignRow, "step2_delay_days" | "step3_delay_days">,
+  p: ProspectRow,
+  base: { workspaceName: string; senderName: string; profile: ProfileInput },
+): Promise<DraftInput> {
+  const signal = deps.store.signalFor ? await deps.store.signalFor(p).catch(() => null) : null;
+  return {
+    ...base,
+    prospect: {
+      company: p.company_name,
+      contactName: p.contact_name,
+      contactTitle: p.contact_title,
+      hook: p.hook,
+      evidence: (p.evidence ?? []).map((e) => ({ url: e.url, title: e.title, excerpt: e.excerpt })),
+      signal,
+    },
+    delays: { step2: campaign.step2_delay_days ?? DEFAULT_STEP_DELAYS.step2, step3: campaign.step3_delay_days ?? DEFAULT_STEP_DELAYS.step3 },
+  };
+}
+
 export type DraftStepResult =
   | { kind: "not_found" }
   | { kind: "busy" }
@@ -103,22 +127,8 @@ export async function draftStep(deps: EmailDeps, campaignId: string, holder: str
     for (const p of prospects) {
       let rows: NewMessage[];
       try {
-        const res = await draftSequence(
-          { workspaceId: campaign.workspace_id, runId: null, ledger: deps.store, transport: deps.ai },
-          {
-            workspaceName,
-            senderName,
-            profile,
-            prospect: {
-              company: p.company_name,
-              contactName: p.contact_name,
-              contactTitle: p.contact_title,
-              hook: p.hook,
-              evidence: (p.evidence ?? []).map((e) => ({ url: e.url, title: e.title, excerpt: e.excerpt })),
-            },
-            delays: { step2: campaign.step2_delay_days ?? DEFAULT_STEP_DELAYS.step2, step3: campaign.step3_delay_days ?? DEFAULT_STEP_DELAYS.step3 },
-          },
-        );
+        const input = await draftInputFor(deps, campaign, p, { workspaceName, senderName, profile });
+        const res = await draftSequence({ workspaceId: campaign.workspace_id, runId: null, ledger: deps.store, transport: deps.ai }, input);
         const byStep = new Map(res.data.emails.map((e) => [e.step, e]));
         if (!byStep.has(1)) throw Object.assign(new Error("no step 1"), { aiCode: "invalid_output" as const });
         rows = ([1, 2, 3] as const).map((step) => {
@@ -139,6 +149,7 @@ export async function draftStep(deps: EmailDeps, campaignId: string, holder: str
             // shown to the reviewer next to the evidence links ("Fatos usados pela IA" / "sem fato específico")
             ai_facts: ai ? res.data.factsUsed : [],
             ai_no_fact: ai ? res.data.noFact : null,
+            ai_signal: ai ? (input.prospect.signal ?? null) : null,
           };
         });
       } catch (e) {
@@ -153,6 +164,47 @@ export async function draftStep(deps: EmailDeps, campaignId: string, holder: str
   } finally {
     await deps.store.releaseDraft(campaignId, holder).catch(() => undefined);
   }
+}
+
+/**
+ * "Revisar com modelo forte" (item 12): one prospect's sequence drafted again with the strong model, in the user's
+ * ledger. Only steps still in draft (or rejected) at the version just read are replaced; any other step stays as it is.
+ */
+export async function redraftStrong(
+  deps: Pick<EmailDeps, "store" | "ai">,
+  prospectId: string,
+  workspaceName: string,
+): Promise<{ ok: true; replaced: number } | { ok: false; code: AiErrorCode | "not_found" | "nothing" }> {
+  const p = await deps.store.getProspect(prospectId);
+  const campaign = p ? await deps.store.getCampaign(p.campaign_id) : null;
+  if (!p || !campaign || !deps.store.replaceAiDraft) return { ok: false, code: "not_found" };
+  const open = (await deps.store.listProspectMessages(p.id)).filter((m) => m.kind === "sequence" && (m.status === "draft" || m.status === "rejected"));
+  if (open.length === 0) return { ok: false, code: "nothing" };
+  const [sender, profile] = await Promise.all([deps.store.getSender(campaign.workspace_id), deps.store.getProfile(campaign.workspace_id)]);
+  const senderName = sender?.sender_name.trim() || workspaceName;
+  const input = await draftInputFor(deps, campaign, p, { workspaceName, senderName, profile });
+  let res;
+  try {
+    res = await draftSequence({ workspaceId: campaign.workspace_id, runId: null, ledger: deps.store, transport: deps.ai }, input, true);
+  } catch (e) {
+    return { ok: false, code: isAiError(e) ? e.code : "invalid_output" };
+  }
+  let replaced = 0;
+  for (const m of open) {
+    const e = res.data.emails.find((x) => x.step === m.step);
+    if (!e) continue;
+    const ok = await deps.store.replaceAiDraft(m.id, m.updated_at, {
+      subject: e.subject,
+      body: e.body,
+      model: res.data.model,
+      promptVersion: res.data.promptVersion,
+      facts: res.data.factsUsed,
+      noFact: res.data.noFact,
+      signal: input.prospect.signal ?? null,
+    });
+    if (ok) replaced++;
+  }
+  return { ok: true, replaced };
 }
 
 // ---------------------------------------------------------------- 2. sending (one message per call)

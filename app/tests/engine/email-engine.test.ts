@@ -4,7 +4,7 @@ import type { OutgoingEmail } from "@/lib/email/compose";
 import { encryptSecret, mailboxAad } from "@/lib/email/crypto";
 import { isAiError } from "@/lib/ai/errors";
 import { classifyReply } from "@/lib/ai/email-tasks";
-import { draftAnswer, draftStep, fetchReplies, handOffWithBrief, sendReplyAnswer, sendStep, sendTestToSelf, verifyMailbox, type EmailDeps, type Origins } from "@/lib/email/engine";
+import { draftAnswer, draftStep, redraftStrong, fetchReplies, handOffWithBrief, sendReplyAnswer, sendStep, sendTestToSelf, verifyMailbox, type EmailDeps, type Origins } from "@/lib/email/engine";
 import type { Incoming } from "@/lib/email/replies";
 import type { ImapTransport, MailCreds, SmtpTransport } from "@/lib/email/transport";
 import { TestDb, ageEmailClaims, as, installEmailTestHelpers, openGates, UUID_A } from "../db/helpers";
@@ -186,11 +186,14 @@ describe("drafting [R13] [R15] [R16] [R17] [R18]", () => {
       expect(m.approved_by).toBeNull();
     }
     expect(msgs.map((m) => m.ai_drafted)).toEqual([true, true, false]);
-    expect(msgs[0].ai_model).toBe("claude-sonnet-5-5");
+    expect(msgs[0].ai_model).toBe("claude-haiku-5-5"); // item 12: the cheap model drafts by default
     // what the AI said it used is kept for the reviewer ("Fatos usados pela IA"); the template step has none
     const facts = await q<{ step: number; ai_facts: string[]; ai_no_fact: boolean | null }>("select step, ai_facts, ai_no_fact from public.email_messages where prospect_id = $1 order by step", [ids.p1]);
     expect(facts[0]).toEqual({ step: 1, ai_facts: ["alvará em 12 Elm St (permits.example)"], ai_no_fact: false });
     expect(facts[2]).toEqual({ step: 3, ai_facts: [], ai_no_fact: null });
+    // item 10: the signal the draft opened with is stored for the reviewer ("Sinal usado"); the template step has none
+    const sig = await q<{ step: number; ai_signal: string | null }>("select step, ai_signal from public.email_messages where prospect_id = $1 order by step", [ids.p1]);
+    expect(sig.map((r) => r.ai_signal)).toEqual(["Gancho · Saw your permit at 12 Elm St", "Gancho · Saw your permit at 12 Elm St", null]);
   });
 
   test("prospects without an address are not drafted (R18: never a guessed address)", async () => {
@@ -200,13 +203,14 @@ describe("drafting [R13] [R15] [R16] [R17] [R18]", () => {
 
   test("evidence and profile reach the model only inside untrusted tags; calls are logged with model and prompt version", async () => {
     const call = ai.callsFor("email_draft")[0];
-    expect(call.model).toBe("claude-sonnet-5-5");
+    expect(call.model).toBe("claude-haiku-5-5");
     expect(call.user).toMatch(/<untrusted_prospect>[\s\S]*12 Elm St[\s\S]*<\/untrusted_prospect>/);
+    expect(call.user).toMatch(/<untrusted_prospect>[\s\S]*"signal_to_open_with": "Gancho · Saw your permit at 12 Elm St"[\s\S]*<\/untrusted_prospect>/);
     expect(call.user).toMatch(/<untrusted_profile>[\s\S]*Worcester County[\s\S]*<\/untrusted_profile>/);
     expect(call.system).toMatch(/Use ONLY facts present/);
     const logged = await q<{ task: string; model: string; prompt_version: string; status: string }>("select task, model, prompt_version, status from public.ai_calls where task = 'email_draft'");
     expect(logged).toHaveLength(2);
-    expect(logged[0]).toMatchObject({ task: "email_draft", model: "claude-sonnet-5-5", status: "ok" });
+    expect(logged[0]).toMatchObject({ task: "email_draft", model: "claude-haiku-5-5", status: "ok" });
     expect(logged[0].prompt_version).toMatch(/^email-draft-/);
   });
 
@@ -220,6 +224,32 @@ describe("drafting [R13] [R15] [R16] [R17] [R18]", () => {
     expect(call.user).toMatch(/<untrusted_prospect>[\s\S]*IGNORE ALL PREVIOUS INSTRUCTIONS[\s\S]*<\/untrusted_prospect>/);
     const statuses = await q<{ status: string }>("select distinct status from public.email_messages");
     expect(statuses).toEqual([{ status: "draft" }]);
+  });
+
+  test("item 12: 'Revisar com modelo forte' re-drafts with Sonnet through the ledger, opens with the permit signal, keeps approved steps", async () => {
+    await db.admin("update public.research_candidates set biggest_job_address = '45 Oak St', biggest_job_type = 'new 4-unit', last_permit_date = '2026-03-04' where id = $1", [ids.c3]);
+    const before = ai.callsFor("email_draft").length;
+    const r = await redraftStrong(deps, ids.p3, "NEAir HVAC");
+    expect(r).toEqual({ ok: true, replaced: 2 });
+    const call = ai.callsFor("email_draft")[before];
+    expect(call.model).toBe("claude-sonnet-5-5");
+    expect(call.user).toContain('"signal_to_open_with": "Alvará · 45 Oak St · new 4-unit · mar/2026"');
+    const rows = await q<{ step: number; ai_model: string | null; ai_signal: string | null; human_edited: boolean; status: string }>(
+      "select step, ai_model, ai_signal, human_edited, status from public.email_messages where prospect_id = $1 order by step",
+      [ids.p3],
+    );
+    expect(rows.slice(0, 2)).toEqual([
+      { step: 1, ai_model: "claude-sonnet-5-5", ai_signal: "Alvará · 45 Oak St · new 4-unit · mar/2026", human_edited: false, status: "draft" },
+      { step: 2, ai_model: "claude-sonnet-5-5", ai_signal: "Alvará · 45 Oak St · new 4-unit · mar/2026", human_edited: false, status: "draft" },
+    ]);
+    const ledger = await q<{ task: string; model: string; status: string }>("select task, model, status from public.ai_calls where task = 'email_draft' and model = 'claude-sonnet-5-5'");
+    expect(ledger).toEqual([{ task: "email_draft", model: "claude-sonnet-5-5", status: "ok" }]);
+    // an approved step is never replaced by a redraft
+    const step1 = (await q<{ id: string; updated_at: string }>("select id, updated_at from public.email_messages where prospect_id = $1 and step = 1", [ids.p3]))[0];
+    await q("select public.set_email_approval(array[$1]::uuid[], public.test_versions(array[$1]::uuid[]), 'approve')", [step1.id]);
+    expect(await redraftStrong(deps, ids.p3, "NEAir HVAC")).toEqual({ ok: true, replaced: 1 });
+    expect((await q<{ ai_model: string; status: string }>("select ai_model, status from public.email_messages where id = $1", [step1.id]))[0]).toEqual({ ai_model: "claude-sonnet-5-5", status: "approved" });
+    await q("select public.set_email_approval(array[$1]::uuid[], public.test_versions(array[$1]::uuid[]), 'unapprove')", [step1.id]);
   });
 
   test("R16 the daily AI cap stops drafting and says why", async () => {

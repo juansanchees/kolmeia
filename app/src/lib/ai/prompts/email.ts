@@ -19,12 +19,12 @@ export const STYLE = `Style rules:
 - One clear, easy question per e-mail. No pressure tactics, no fake urgency, no guarantees.`;
 
 // ---------------------------------------------------------------- sequence draft (Sonnet)
-export const DRAFT_PROMPT_VERSION = "email-draft-2026-11-10.1";
+export const DRAFT_PROMPT_VERSION = "email-draft-2026-11-16.1";
 
 export const DRAFT_SYSTEM = `${EMAIL_CONTEXT}
 
 Your job: draft a 3-e-mail cold sequence to ONE prospect company.
-- Step 1 (day 0): the first e-mail. Lead with the strongest real fact from the evidence (for example a permit or project), then who we are in one sentence, then one question.
+- Step 1 (day 0): the first e-mail. Lead with the strongest real fact from the evidence (for example a permit or project), then who we are in one sentence, then one question. When the prospect data has a signal_to_open_with (a permit or job we already hold), open with that signal.
 - Step 2 (a few business days later): a short, friendly follow-up that adds one different, useful angle from the profile. It may refer to "my note last week" but its subject must be its own (no "Re:").
 - Step 3 (about a week after step 1): a very short last note that makes it easy to say "not now" or point to the right person.
 Return exactly three e-mails with step 1, 2 and 3. In facts_used, list (in Portuguese, short) each fact you used and where it came from; leave it empty when you used none. Set no_fact to true when the evidence had no usable fact.
@@ -45,6 +45,8 @@ export type DraftInput = {
     contactTitle: string | null;
     hook: string | null;
     evidence: { url: string; title: string; excerpt: string }[];
+    /** The work/permit signal to open with (signal.ts), or null. */
+    signal?: string | null;
   };
   delays: { step2: number; step3: number };
 };
@@ -60,6 +62,7 @@ export function buildDraftUser(i: DraftInput): string {
       contact_name: i.prospect.contactName ?? "",
       contact_title: i.prospect.contactTitle ?? "",
       opening_hook_from_research: i.prospect.hook ?? "",
+      signal_to_open_with: i.prospect.signal ?? "",
       evidence: i.prospect.evidence,
     }),
   ].join("\n");

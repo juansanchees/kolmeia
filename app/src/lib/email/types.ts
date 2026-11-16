@@ -126,6 +126,8 @@ export type MessageRow = {
   /** What the AI said it used (shown to the reviewer, never sent). */
   ai_facts: string[];
   ai_no_fact: boolean | null;
+  /** The signal the AI draft opened with (0029), or null. */
+  ai_signal: string | null;
   human_edited: boolean;
   status: MessageStatus;
   approved_by: string | null;
@@ -149,7 +151,7 @@ export type MessageRow = {
   updated_at: string;
 };
 export const MESSAGE_COLUMNS =
-  "id, workspace_id, campaign_id, prospect_id, kind, step, reply_to_id, subject, body, ai_drafted, ai_model, ai_facts, ai_no_fact, human_edited, status, approved_by, approved_at, approved_to, due_at, cancel_reason, mailbox_id, from_address, to_address, send_mode, claimed_at, rfc_message_id, in_reply_to, sent_at, error, created_at, updated_at";
+  "id, workspace_id, campaign_id, prospect_id, kind, step, reply_to_id, subject, body, ai_drafted, ai_model, ai_facts, ai_no_fact, ai_signal, human_edited, status, approved_by, approved_at, approved_to, due_at, cancel_reason, mailbox_id, from_address, to_address, send_mode, claimed_at, rfc_message_id, in_reply_to, sent_at, error, created_at, updated_at";
 
 export type ReplyRow = {
   id: string;
