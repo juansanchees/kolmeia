@@ -49,12 +49,12 @@ export type Tab = (typeof TABS)[number];
 
 const TEMP_ORDER = { very_hot: 0, hot: 1, warm: 2, cold: 3 } as const;
 
-export function hasSignal(c: CandidateRow): boolean {
+export function hasSignal(c: Pick<CandidateRow, "permit_count" | "biggest_job_address">): boolean {
   return (c.permit_count ?? 0) > 0 || Boolean(c.biggest_job_address);
 }
 
 /** A company the second pass refuted shows only in "Todos" (finding 11). The jobs tab holds jobs, not companies. */
-export function inTab(c: CandidateRow, tab: Tab): boolean {
+export function inTab(c: Pick<CandidateRow, "approach" | "entry_path" | "second_pass" | "permit_count" | "biggest_job_address">, tab: Tab): boolean {
   const refuted = c.second_pass === "refuted";
   switch (tab) {
     case "call":
@@ -72,7 +72,7 @@ export function inTab(c: CandidateRow, tab: Tab): boolean {
   }
 }
 
-export function byTemperature(a: CandidateRow, b: CandidateRow): number {
+export function byTemperature(a: Pick<CandidateRow, "temperature" | "biggest_job_value_usd" | "name">, b: Pick<CandidateRow, "temperature" | "biggest_job_value_usd" | "name">): number {
   const ta = a.temperature ? TEMP_ORDER[a.temperature] : 4;
   const tb = b.temperature ? TEMP_ORDER[b.temperature] : 4;
   return ta - tb || (b.biggest_job_value_usd ?? 0) - (a.biggest_job_value_usd ?? 0) || a.name.localeCompare(b.name);

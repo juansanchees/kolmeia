@@ -7,7 +7,10 @@ import { z } from "zod";
 import { fill, t } from "@/messages/pt";
 import { matchesAnswer } from "@/lib/ai-questions/types";
 import { EMAIL_QUALITIES, type EmailQuality } from "./email-quality";
-import type { LeadDisplay, LeadFieldRow, LeadListItem, LeadStatus } from "./types";
+import { fold, stageOf } from "./classify";
+import { LEAD_STAGES, SEGMENTS, type LeadDisplay, type LeadFieldRow, type LeadListItem, type LeadStage, type LeadStatus, type OriginList, type Segment, type TableBest, type TableLead } from "./types";
+
+export { fold };
 
 export const STALE_PROOF_DAYS = 90;
 const DAY_MS = 86_400_000;
@@ -33,11 +36,26 @@ export const LEAD_ORIGINS = ["import", "agent", "one_off"] as const;
 export type LeadOrigin = (typeof LEAD_ORIGINS)[number];
 
 /** The filters the left panel counts (leadFacetsOf). City/phone/e-mail are the displayed values (displayOf). */
-export type FacetFilters = { contact: ContactTab; cities: string[]; levels: number[]; hasPhone: boolean; hasEmail: boolean; origins: LeadOrigin[]; emailQuality: EmailQuality[] };
+export type FacetFilters = { contact: ContactTab; cities: string[]; levels: number[]; hasPhone: boolean; hasEmail: boolean; origins: LeadOrigin[]; emailQuality: EmailQuality[]; lists: string[] };
+
+/** The type tabs ("none" = no type). */
+export type SegmentTab = Segment | "none";
+
+/** What the filters read; both LeadListItem and LeadTableRow satisfy it. Absent origins/segment = none. */
+export type FilterRow = {
+  lead: TableLead;
+  best: TableBest | null;
+  display: LeadDisplay;
+  emailQuality?: EmailQuality | null;
+  ai?: LeadListItem["ai"];
+  origins?: OriginList[];
+  segment?: Segment | null;
+};
 
 export type LeadFilters = FacetFilters & {
   q: string;
-  temperature: Temperature | "all";
+  /** "none" = no research. */
+  temperature: Temperature | "all" | "none";
   agent: "all" | "one_off" | string;
   status: LeadStatus | "all";
   tab: LeadTab;
@@ -49,11 +67,14 @@ export type LeadFilters = FacetFilters & {
   /** The AI question shown as a column ("" = none) and the answer it is filtered by ("all" = no filter). */
   aiQuestion: string;
   aiAnswer: string;
+  segment: SegmentTab | "all";
+  /** "all" = every non-archived lead. */
+  stage: LeadStage | "all";
 };
 
 export const DEFAULT_LEAD_FILTERS: LeadFilters = {
   q: "", temperature: "all", agent: "all", status: "all", tab: "all", minLevel: 0, companyTypes: [], minPermitUsd: 0, aiQuestion: "", aiAnswer: "all",
-  contact: "all", cities: [], levels: [], hasPhone: false, hasEmail: false, origins: [], emailQuality: [],
+  contact: "all", cities: [], levels: [], hasPhone: false, hasEmail: false, origins: [], emailQuality: [], lists: [], segment: "all", stage: "all",
 };
 
 export type FacetCount<T> = { value: T; n: number };
@@ -65,6 +86,9 @@ export type LeadFacets = {
   email: number;
   origins: FacetCount<LeadOrigin>[];
   emailQuality: FacetCount<EmailQuality>[];
+  stages: Record<LeadStage, number>;
+  segments: Record<SegmentTab | "all", number>;
+  lists: FacetCount<string>[];
 };
 
 const filtersSchema = z.object({
@@ -85,6 +109,9 @@ const filtersSchema = z.object({
   minPermitUsd: z.number().min(0).max(1e10),
   aiQuestion: z.union([z.literal(""), z.string().uuid()]),
   aiAnswer: z.string().max(20),
+  segment: z.enum([...SEGMENTS, "none", "all"]),
+  stage: z.enum([...LEAD_STAGES, "all"]),
+  lists: z.array(z.string().max(120)).max(50),
 }).partial();
 
 /** A saved view's filters over the defaults; anything unreadable falls back to the default. */
@@ -94,7 +121,7 @@ export function parseLeadFilters(raw: unknown): LeadFilters {
 }
 
 /** Left-panel and tab rules: trimmed display values (as lead_contact_values reads them), never-contacted = "new". */
-export function matchesFacets(i: Pick<LeadListItem, "lead" | "display" | "emailQuality">, f: FacetFilters): boolean {
+export function matchesFacets(i: FilterRow, f: FacetFilters): boolean {
   const contacted = i.lead.first_contacted_at !== null;
   if (f.contact === "new" ? contacted : f.contact === "contacted" ? !contacted : false) return false;
   const city = i.display.city?.trim() || null;
@@ -104,12 +131,8 @@ export function matchesFacets(i: Pick<LeadListItem, "lead" | "display" | "emailQ
   if (f.hasEmail && !i.display.email?.trim()) return false;
   if (f.origins.length > 0 && !f.origins.includes(i.lead.origin_kind)) return false;
   if (f.emailQuality.length > 0 && (!i.emailQuality || !f.emailQuality.includes(i.emailQuality))) return false;
+  if (f.lists.length > 0 && !(i.origins ?? []).some((o) => f.lists.includes(o.name))) return false;
   return true;
-}
-
-/** Lower-case, accents removed: how names and cities are compared everywhere on LEADS. */
-export function fold(s: string): string {
-  return s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
 }
 
 /** What to show for a lead: the best candidate's values first; otherwise the oldest non-refuted field of each kind. */
@@ -134,17 +157,17 @@ export function displayOf(best: CandidateRow | null, fields: LeadFieldRow[]): Le
 }
 
 /** A lead with no research candidate (import-only) shows only in "Todos". */
-export function leadInTab(i: Pick<LeadListItem, "best">, tab: LeadTab): boolean {
+export function leadInTab(i: Pick<FilterRow, "best">, tab: LeadTab): boolean {
   return i.best ? inTab(i.best, tab) : tab === "all";
 }
 
 /** Every filter except the left-panel ones (tabs and facets are counted on top of these). */
-function otherFiltersOf(f: LeadFilters): (i: LeadListItem) => boolean {
+function otherFiltersOf(f: LeadFilters): (i: FilterRow) => boolean {
   const q = fold(f.q.trim());
   const qDigits = f.q.replace(/\D/g, "");
   return ({ lead, best, display, ai }) => {
     if (!leadInTab({ best }, f.tab)) return false;
-    if (f.temperature !== "all" && (!best || best.temperature !== f.temperature)) return false;
+    if (f.temperature === "none" ? best !== null : f.temperature !== "all" && best?.temperature !== f.temperature) return false;
     if (f.status !== "all" && lead.status !== f.status) return false;
     if (f.minLevel > 0 && lead.level < f.minLevel) return false;
     if (f.companyTypes.length > 0 && !(f.companyTypes as string[]).includes(best?.company_type ?? display.companyType ?? "")) return false;
@@ -160,14 +183,18 @@ function otherFiltersOf(f: LeadFilters): (i: LeadListItem) => boolean {
   };
 }
 
-export function filterLeads(items: LeadListItem[], f: LeadFilters): LeadListItem[] {
+/** The stage and type tabs: "all" stages hides archived leads, which show only under "archived". */
+const stageOk = (i: FilterRow, stage: LeadFilters["stage"]) => (stage === "all" ? !i.lead.archived_at : stageOf(i.lead) === stage);
+const segmentOk = (i: FilterRow, seg: LeadFilters["segment"]) => seg === "all" || (i.segment ?? "none") === seg;
+
+export function filterLeads<T extends FilterRow>(items: T[], f: LeadFilters): T[] {
   const other = otherFiltersOf(f);
   return items
-    .filter((i) => other(i) && matchesFacets(i, f))
+    .filter((i) => other(i) && stageOk(i, f.stage) && segmentOk(i, f.segment) && matchesFacets(i, f))
     .sort((a, b) => (a.best && b.best ? byTemperature(a.best, b.best) : a.best ? -1 : b.best ? 1 : a.display.name.localeCompare(b.display.name)));
 }
 
-function countBy<T>(rows: LeadListItem[], key: (i: LeadListItem) => T | null): FacetCount<T>[] {
+function countBy<T>(rows: FilterRow[], key: (i: FilterRow) => T | null): FacetCount<T>[] {
   const m = new Map<T, number>();
   for (const i of rows) {
     const k = key(i);
@@ -176,16 +203,42 @@ function countBy<T>(rows: LeadListItem[], key: (i: LeadListItem) => T | null): F
   return [...m.entries()].map(([value, n]) => ({ value, n }));
 }
 
+/** Each lead counts once per list it came from. */
+function listCounts(rows: FilterRow[]): FacetCount<string>[] {
+  const m = new Map<string, number>();
+  for (const i of rows) for (const name of new Set((i.origins ?? []).map((o) => o.name))) m.set(name, (m.get(name) ?? 0) + 1);
+  return [...m.entries()].map(([value, n]) => ({ value, n })).sort((a, b) => b.n - a.n || a.value.localeCompare(b.value));
+}
+
 export const TOP_CITIES = 12;
+
+/** Filters that differ from the defaults and need a removable chip; q, the tabs and the AI column have their own control. */
+export function activeFilterKeys(f: LeadFilters): (keyof LeadFilters)[] {
+  const own = new Set<keyof LeadFilters>(["q", "segment", "stage", "aiQuestion"]);
+  return (Object.keys(DEFAULT_LEAD_FILTERS) as (keyof LeadFilters)[]).filter(
+    (k) => !own.has(k) && JSON.stringify(f[k]) !== JSON.stringify(DEFAULT_LEAD_FILTERS[k]),
+  );
+}
 
 /**
  * Counts for the tabs and the left panel over the leads already loaded: each facet with every OTHER filter applied (its
  * own left out, so a picked value never hides its siblings); the tabs with every filter except the tab itself.
  */
-export function leadFacetsOf(items: LeadListItem[], f: LeadFilters): LeadFacets {
+export function leadFacetsOf<T extends FilterRow>(items: T[], f: LeadFilters): LeadFacets {
   const other = otherFiltersOf(f);
   const base = items.filter(other);
-  const without = (patch: Partial<FacetFilters>) => base.filter((i) => matchesFacets(i, { ...f, ...patch }));
+  const without = (patch: Partial<FacetFilters>) => base.filter((i) => stageOk(i, f.stage) && segmentOk(i, f.segment) && matchesFacets(i, { ...f, ...patch }));
+  // stage counts leave the stage filter out, type counts leave the type filter out; one pass over the rows that pass the rest
+  const stages = Object.fromEntries(LEAD_STAGES.map((s) => [s, 0])) as Record<LeadStage, number>;
+  const segments: LeadFacets["segments"] = { all: 0, none: 0, residential: 0, small: 0, large: 0 };
+  for (const i of base) {
+    if (!matchesFacets(i, f)) continue;
+    if (segmentOk(i, f.segment)) stages[stageOf(i.lead)] += 1;
+    if (stageOk(i, f.stage)) {
+      segments.all += 1;
+      segments[i.segment ?? "none"] += 1;
+    }
+  }
   const tabRows = without({ contact: "all" });
   const contacted = tabRows.filter((i) => i.lead.first_contacted_at !== null).length;
   return {
@@ -198,6 +251,9 @@ export function leadFacetsOf(items: LeadListItem[], f: LeadFilters): LeadFacets 
     email: without({ hasEmail: false }).filter((i) => i.display.email?.trim()).length,
     origins: countBy(without({ origins: [] }), (i) => i.lead.origin_kind).sort((a, b) => b.n - a.n || a.value.localeCompare(b.value)),
     emailQuality: countBy(without({ emailQuality: [] }), (i) => i.emailQuality ?? null),
+    stages,
+    segments,
+    lists: listCounts(without({ lists: [] })),
   };
 }
 

@@ -7,6 +7,12 @@ import type { EmailQuality } from "./email-quality";
 export const LEAD_STATUSES = ["new", "call_list", "in_campaign", "replied", "with_closer", "meeting", "won", "lost", "discarded"] as const;
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
 
+export const SEGMENTS = ["residential", "small", "large"] as const;
+export type Segment = (typeof SEGMENTS)[number];
+
+export const LEAD_STAGES = ["new", "contacted", "replied", "meeting", "closed", "archived"] as const;
+export type LeadStage = (typeof LEAD_STAGES)[number];
+
 export type LeadRow = {
   id: string;
   workspace_id: string;
@@ -33,9 +39,13 @@ export type LeadRow = {
   /** Set by the database (migration 0027) on the first call, real e-mail or hand-off; null = never contacted. */
   first_contacted_at: string | null;
   last_touch_at: string | null;
+  /** Migration 0030: set = hidden from every tab, shown under "Arquivados". Nothing else about the lead changes. */
+  archived_at: string | null;
+  /** Migration 0030: the sender's manual type; null = automatic (classify.ts). */
+  segment: Segment | null;
 };
 
-export const LEAD_COLUMNS = "id, workspace_id, best_candidate_id, status, origin_kind, origin_agent_id, origin_run_id, origin_import_id, owner_id, first_seen_at, last_seen_at, level, level_note, handed_off_at, handed_off_by, closer_brief, do_not_call, do_not_call_at, first_contacted_at, last_touch_at";
+export const LEAD_COLUMNS = "id, workspace_id, best_candidate_id, status, origin_kind, origin_agent_id, origin_run_id, origin_import_id, owner_id, first_seen_at, last_seen_at, level, level_note, handed_off_at, handed_off_by, closer_brief, do_not_call, do_not_call_at, first_contacted_at, last_touch_at, archived_at, segment";
 
 export const LEAD_FIELD_NAMES = [
   "name", "phone", "email", "website", "address", "city", "state", "zip", "contact_name", "contact_title", "company_type", "note", "active_project", "place_id",
@@ -60,6 +70,31 @@ export const LEAD_FIELD_COLUMNS = "id, lead_id, field, value, source, source_ref
 
 /** What the LEADS list shows for a lead: the best candidate's values, else the lead's own (imported) fields. */
 export type LeadDisplay = { name: string; city: string | null; phone: string | null; website: string | null; email: string | null; companyType?: string | null };
+
+/** A list (or import) a lead came from; `at` = ISO date the lead entered it. */
+export type OriginList = { name: string; at: string; kind: "import" | "list" };
+
+/** The research columns the leads table needs from the best candidate. */
+export const TABLE_BEST_COLUMNS = [
+  "id", "name", "temperature", "approach", "company_type", "total_value_usd", "biggest_job_value_usd", "biggest_job_type",
+  "biggest_job_address", "permit_count", "entry_path", "second_pass",
+] as const;
+export type TableBest = Pick<CandidateRow, (typeof TABLE_BEST_COLUMNS)[number]>;
+
+export type TableLead = Pick<LeadRow, "id" | "status" | "level" | "origin_kind" | "origin_agent_id" | "first_contacted_at" | "last_touch_at" | "archived_at" | "segment">;
+
+export type LeadTableRow = {
+  lead: TableLead;
+  best: TableBest | null;
+  display: LeadDisplay;
+  agentName: string | null;
+  importName: string | null;
+  emailQuality?: EmailQuality | null;
+  ai?: Record<string, AiCell>;
+  origins: OriginList[];
+  /** The effective type: the manual one, else the derived one. */
+  segment: Segment | null;
+};
 
 export type LeadListItem = {
   lead: LeadRow;

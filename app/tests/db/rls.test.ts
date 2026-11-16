@@ -136,7 +136,7 @@ describe("proof that RLS is really enforced in PGlite", () => {
         // 0020 part A (closer invites by link, people list, hand-off, won/lost; is_workspace_closer and
         // release_member_leads have no client grant)
         "is_workspace_closer", "create_workspace_invite", "revoke_workspace_invite", "invite_preview", "accept_workspace_invite",
-        "list_workspace_people", "release_member_leads", "hand_off_lead", "set_lead_status",
+        "list_workspace_people", "release_member_leads", "hand_off_lead", "set_lead_status", "set_leads_archived", "set_leads_segment",
         // 0020 part B (call log, call agent, daily list; call_day / lead_status_after_call / lead_phone /
         // lead_in_active_campaign / lead_callable / call_agent_caller have no client grant; call_agent_config_ok answers
         // only owner/sdr of the workspace because guard_agent runs as the client)

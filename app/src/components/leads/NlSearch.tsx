@@ -15,7 +15,7 @@ export function nlChips(f: NlFilters): string[] {
   return [
     ...(f.cities ?? []).map((v) => fill(c.city, { v })),
     ...(f.companyTypes ?? []).map((v) => fill(c.type, { v: N.types[v] })),
-    ...(f.temperature && f.temperature !== "all" ? [fill(c.temperature, { v: t.research.labels.temperature[f.temperature] })] : []),
+    ...(f.temperature && f.temperature !== "all" && f.temperature !== "none" ? [fill(c.temperature, { v: t.research.labels.temperature[f.temperature] })] : []),
     ...(f.levels ?? []).map((v) => fill(c.level, { v })),
     ...(f.minLevel ? [fill(c.minLevel, { v: f.minLevel })] : []),
     ...(f.hasPhone ? [c.phone] : []),
