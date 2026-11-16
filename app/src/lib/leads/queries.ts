@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { CANDIDATE_COLUMNS, normalizeCandidate, type CandidateRow } from "@/lib/research/rows";
 import type { CheckWithEvidence } from "@/lib/research/store";
 import { displayOf, parseLeadFilters, type LeadFilters } from "./view";
+import type { EmailQuality } from "./email-quality";
 import { LEAD_COLUMNS, LEAD_FIELD_COLUMNS, type LeadDetail, type LeadFieldRow, type LeadListItem, type LeadRow } from "./types";
 
 /**
@@ -30,7 +31,7 @@ export async function inChunks<T>(
   return out;
 }
 
-const DISPLAY_FIELDS = ["name", "website", "phone", "email", "city"];
+const DISPLAY_FIELDS = ["name", "website", "phone", "email", "city", "company_type"];
 
 const CHECK_SELECT = "id, candidate_id, kind, pass, result, summary, created_at, research_evidence(url, title, excerpt, seen_at)";
 
@@ -148,7 +149,22 @@ export async function listLeads(db: SupabaseClient, workspaceId: string, filter:
       proofOk: best ? (proofBy.get(best.id) ?? 0) : 0,
     });
   }
+  const checks = await emailChecksOf(db, workspaceId, items.map((i) => i.display.email).filter((e): e is string => Boolean(e)));
+  for (const i of items) i.emailQuality = i.display.email ? (checks.get(i.display.email.trim().toLowerCase())?.status ?? null) : null;
   return items;
+}
+
+export type EmailCheckRow = { email: string; status: EmailQuality; method: "mx" | "verifier"; checked_at: string };
+
+/** The workspace's e-mail checks (0028) for these addresses, by lower-cased address. RLS: a closer reads none. */
+export async function emailChecksOf(db: SupabaseClient, workspaceId: string, emails: string[]): Promise<Map<string, EmailCheckRow>> {
+  const keys = [...new Set(emails.map((e) => e.trim().toLowerCase()).filter(Boolean))];
+  const rows = await inChunks<EmailCheckRow>(
+    keys,
+    (c) => db.from("email_checks").select("email, status, method, checked_at").eq("workspace_id", workspaceId).in("email", c) as never,
+    "emailChecksOf",
+  );
+  return new Map(rows.map((r) => [r.email, r]));
 }
 
 /** One lead with every candidate that joined it (newest first, with the run they came from) and their proof. */

@@ -1,6 +1,7 @@
 // Lead vocabulary (migration 0009). Safe for client and server.
 import type { CandidateRow } from "@/lib/research/rows";
 import type { CheckWithEvidence } from "@/lib/research/store";
+import type { EmailQuality } from "./email-quality";
 
 export const LEAD_STATUSES = ["new", "call_list", "in_campaign", "replied", "with_closer", "meeting", "won", "lost", "discarded"] as const;
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
@@ -46,7 +47,8 @@ export type LeadFieldRow = {
   lead_id: string;
   field: LeadFieldName;
   value: string;
-  source: "import" | "site" | "places" | "ai" | "research";
+  /** 'pattern' = an e-mail guess from the contact's name and the site's domain (0028): never a fact, never sent unverified. */
+  source: "import" | "site" | "places" | "ai" | "research" | "apify_maps" | "apollo" | "apify_contact" | "pattern";
   source_ref: string | null;
   status: "unverified" | "confirmed" | "refuted";
   excerpt: string | null;
@@ -56,9 +58,18 @@ export type LeadFieldRow = {
 export const LEAD_FIELD_COLUMNS = "id, lead_id, field, value, source, source_ref, status, excerpt, seen_at";
 
 /** What the LEADS list shows for a lead: the best candidate's values, else the lead's own (imported) fields. */
-export type LeadDisplay = { name: string; city: string | null; phone: string | null; website: string | null; email: string | null };
+export type LeadDisplay = { name: string; city: string | null; phone: string | null; website: string | null; email: string | null; companyType?: string | null };
 
-export type LeadListItem = { lead: LeadRow; best: CandidateRow | null; display: LeadDisplay; agentName: string | null; importName: string | null; proofOk: number };
+export type LeadListItem = {
+  lead: LeadRow;
+  best: CandidateRow | null;
+  display: LeadDisplay;
+  agentName: string | null;
+  importName: string | null;
+  proofOk: number;
+  /** The checked quality of display.email (0028 email_checks); absent = never checked. */
+  emailQuality?: EmailQuality | null;
+};
 
 export type LeadDetail = {
   lead: LeadRow;

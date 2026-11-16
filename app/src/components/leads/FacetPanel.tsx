@@ -1,5 +1,6 @@
 "use client";
 
+import { EMAIL_QUALITIES } from "@/lib/leads/email-quality";
 import { DEFAULT_LEAD_FILTERS, type FacetFilters, type LeadFacets, type LeadOrigin } from "@/lib/leads/view";
 import { t } from "@/messages/pt";
 
@@ -35,7 +36,9 @@ export function FacetPanel({ facets, f, set }: { facets: LeadFacets; f: FacetFil
   const cities = [...facets.cities.map((c) => c.value), ...f.cities.filter((c) => !cityN.has(c))];
   const levelN = new Map(facets.levels.map((c) => [c.value, c.n]));
   const originN = new Map(facets.origins.map((c) => [c.value, c.n]));
-  const dirty = f.cities.length + f.levels.length + f.origins.length > 0 || f.hasPhone || f.hasEmail;
+  const qualityN = new Map(facets.emailQuality.map((c) => [c.value, c.n]));
+  const qualities = EMAIL_QUALITIES.filter((q) => qualityN.has(q) || f.emailQuality.includes(q));
+  const dirty = f.cities.length + f.levels.length + f.origins.length + f.emailQuality.length > 0 || f.hasPhone || f.hasEmail;
   return (
     <aside aria-label={P.label} className="flex flex-col gap-3 border border-line bg-surface p-3">
       <Group title={P.city}>
@@ -52,6 +55,13 @@ export function FacetPanel({ facets, f, set }: { facets: LeadFacets; f: FacetFil
         <Check label={P.hasPhone} n={facets.phone} checked={f.hasPhone} onChange={(on) => set({ hasPhone: on })} />
         <Check label={P.hasEmail} n={facets.email} checked={f.hasEmail} onChange={(on) => set({ hasEmail: on })} />
       </Group>
+      {qualities.length > 0 && (
+        <Group title={P.emailQuality}>
+          {qualities.map((q) => (
+            <Check key={q} label={t.leads.emailQuality.labels[q]} n={qualityN.get(q) ?? null} checked={f.emailQuality.includes(q)} onChange={(on) => set({ emailQuality: toggle(f.emailQuality, q, on) })} />
+          ))}
+        </Group>
+      )}
       <Group title={P.origin}>
         {(["import", "agent", "one_off"] as LeadOrigin[]).filter((o) => originN.has(o) || f.origins.includes(o)).map((o) => (
           <Check key={o} label={P.origins[o]} n={originN.get(o) ?? null} checked={f.origins.includes(o)} onChange={(on) => set({ origins: toggle(f.origins, o, on) })} />
@@ -60,7 +70,7 @@ export function FacetPanel({ facets, f, set }: { facets: LeadFacets; f: FacetFil
       {dirty && (
         <button
           type="button"
-          onClick={() => set({ cities: [], levels: [], origins: [], hasPhone: DEFAULT_LEAD_FILTERS.hasPhone, hasEmail: DEFAULT_LEAD_FILTERS.hasEmail })}
+          onClick={() => set({ cities: [], levels: [], origins: [], emailQuality: [], hasPhone: DEFAULT_LEAD_FILTERS.hasPhone, hasEmail: DEFAULT_LEAD_FILTERS.hasEmail })}
           className="min-h-11 self-start text-sm text-blue underline underline-offset-4"
         >
           {P.clear}

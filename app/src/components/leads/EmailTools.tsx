@@ -1,0 +1,76 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { checkEmailsAction, findEmailAction } from "@/app/(app)/leads/email-actions";
+import { btn, Notice } from "@/components/email/bits";
+import type { FindEmailResult } from "@/lib/leads/email-cascade";
+import { fill, t } from "@/messages/pt";
+
+const Q = t.leads.emailQuality;
+const FE = t.leads.findEmail;
+
+function summary(results: FindEmailResult[]): string {
+  const n = (s: FindEmailResult["step"]) => results.filter((r) => r.step === s).length;
+  return fill(FE.summary, { site: n("site"), pattern: n("pattern"), verifier: n("verifier"), none: n("none") });
+}
+
+/** One lead's result: which step found what. */
+function ResultLine({ r }: { r: FindEmailResult }) {
+  return (
+    <span>
+      <span className="font-semibold">{FE.steps[r.step]}</span>
+      {r.email && <> · <span className="font-mono">{r.email}</span></>}
+      {r.step === "pattern" && r.guesses.length > 0 && <> · <span className="font-mono">{r.guesses.join(", ")}</span></>}
+      {r.reason && <> · {FE.reasons[r.reason]}</>}
+    </span>
+  );
+}
+
+/** "Checar e-mails" (free: syntax + DNS) and "Achar e-mail" (the cascade) for the selected leads, or for one lead. */
+export function EmailTools({ selected, onDone, single = false }: { selected: string[]; onDone?: () => void; single?: boolean }) {
+  const [pending, start] = useTransition();
+  const [msg, setMsg] = useState<{ tone: "ok" | "warn" | "info"; node: React.ReactNode } | null>(null);
+  const none = selected.length === 0;
+  const count = single || none ? "" : ` (${selected.length})`;
+
+  const check = () =>
+    start(async () => {
+      const r = await checkEmailsAction(selected);
+      setMsg(r.ok ? { tone: "ok", node: r.message } : { tone: "warn", node: r.error });
+      if (r.ok) onDone?.();
+    });
+  const find = () =>
+    start(async () => {
+      const r = await findEmailAction(selected);
+      if (!r.ok) return setMsg({ tone: "warn", node: r.error });
+      const offNote = !r.verifierConfigured && r.results.some((x) => x.step === "pattern") ? <span className="block">{FE.verifierOff}</span> : null;
+      setMsg({
+        tone: "info",
+        node: (
+          <>
+            {single && r.results[0] ? <ResultLine r={r.results[0]} /> : summary(r.results)}
+            {offNote}
+          </>
+        ),
+      });
+      onDone?.();
+    });
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" disabled={pending || none} onClick={check} className={btn.ghost}>
+          {pending ? Q.checking : `${Q.check}${count}`}
+        </button>
+        <button type="button" disabled={pending || none} onClick={find} className={btn.ghost}>
+          {pending ? FE.finding : `${FE.button}${count}`}
+        </button>
+      </div>
+      {msg && (
+        <Notice tone={msg.tone} role={msg.tone === "warn" ? "alert" : "status"}>
+          {msg.node}
+        </Notice>
+      )}
+    </div>
+  );
+}

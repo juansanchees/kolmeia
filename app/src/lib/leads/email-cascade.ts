@@ -1,0 +1,82 @@
+// The e-mail cascade (Fase 2, item 6). Stops at the first step that gives an e-mail:
+//   1 'site'     an e-mail already on file (scraped from the lead's site, or from a list/research), never a guess;
+//   2 'pattern'  guesses from the contact's name + the site's domain, stored as lead_fields source 'pattern'
+//                (unverified; the campaign gate refuses them, 0028 email_sendable);
+//   3 'verifier' the paid verifier (EMAIL_VERIFIER) checks the guesses; the first 'verified' one becomes sendable.
+// No network of its own: DNS, the verifier and the writes are injected (tests use fakes).
+import type { DnsLookup } from "./email-check";
+import { emailSyntaxOk, mxVerdict, ownDomain, patternCandidates, type EmailQuality } from "./email-quality";
+import type { EmailVerifier } from "./email-verifier";
+import type { LeadFieldRow, LeadListItem } from "./types";
+
+export type FindEmailStep = "site" | "pattern" | "verifier" | "none";
+export type FindEmailResult = {
+  leadId: string;
+  step: FindEmailStep;
+  /** The e-mail the step found (step 1 or 3). */
+  email: string | null;
+  /** Where step 1's e-mail came from (the lead_fields source, or 'research'). */
+  source: string | null;
+  /** Step 2's guesses (all of them, new and already stored). */
+  guesses: string[];
+  reason: "no_contact" | "no_domain" | "dead_domain" | null;
+};
+
+export type GuessRow = { leadId: string; email: string; pattern: string; excerpt: string };
+export type CascadeDeps = {
+  lookup: DnsLookup;
+  verifier: EmailVerifier | null;
+  addGuesses: (rows: GuessRow[]) => Promise<void>;
+  saveVerdict: (email: string, status: EmailQuality) => Promise<void>;
+};
+
+/** Site-scraped values first, then the rest; newest first inside each group. */
+const SITE_SOURCES = ["apify_contact", "site"];
+
+const live = (fields: LeadFieldRow[], kind: LeadFieldRow["field"]) =>
+  fields
+    .filter((f) => f.field === kind && f.status !== "refuted")
+    .sort((a, b) => Number(SITE_SOURCES.includes(b.source)) - Number(SITE_SOURCES.includes(a.source)) || Date.parse(b.seen_at) - Date.parse(a.seen_at));
+
+export async function findEmailFor(item: LeadListItem, fields: LeadFieldRow[], deps: CascadeDeps): Promise<FindEmailResult> {
+  const leadId = item.lead.id;
+  const base = { leadId, email: null, source: null, guesses: [], reason: null };
+
+  // 1: an e-mail on file that is not a guess
+  const onFile = live(fields, "email").find((f) => f.source !== "pattern" && emailSyntaxOk(f.value.trim().toLowerCase()));
+  if (onFile) return { ...base, step: "site", email: onFile.value.trim().toLowerCase(), source: onFile.source };
+  const researched = item.best?.public_email?.trim().toLowerCase();
+  if (researched && emailSyntaxOk(researched)) return { ...base, step: "site", email: researched, source: "research" };
+
+  // 2: guesses from the contact's name and the lead's own domain
+  const contact = item.best?.ask_for_name?.trim() || live(fields, "contact_name")[0]?.value.trim() || null;
+  const domain = ownDomain(item.best?.website ?? live(fields, "website")[0]?.value ?? item.display.website);
+  if (!contact) return { ...base, step: "none", reason: "no_contact" };
+  if (!domain) return { ...base, step: "none", reason: "no_domain" };
+  if (mxVerdict(await deps.lookup(domain)).status === "invalid") return { ...base, step: "none", reason: "dead_domain" };
+  const candidates = patternCandidates(contact, domain);
+  if (candidates.length === 0) return { ...base, step: "none", reason: "no_contact" };
+  const stored = new Set(fields.filter((f) => f.field === "email" && f.source === "pattern").map((f) => f.value.trim().toLowerCase()));
+  const fresh = candidates.filter((c) => !stored.has(c.email));
+  if (fresh.length > 0) {
+    await deps.addGuesses(fresh.map((c) => ({ leadId, email: c.email, pattern: c.pattern, excerpt: `${c.pattern}@${domain} a partir de "${contact}"`.slice(0, 300) })));
+  }
+  const guesses = candidates.map((c) => c.email);
+
+  // 3: the paid verifier, when configured; the first 'verified' guess wins
+  if (deps.verifier) {
+    for (const g of guesses) {
+      const status = await deps.verifier.verify(g);
+      await deps.saveVerdict(g, status);
+      if (status === "verified") return { ...base, step: "verifier", email: g, guesses };
+    }
+  }
+  return { ...base, step: "pattern", guesses };
+}
+
+/** One lead at a time: bounded DNS and verifier traffic per click. */
+export async function findEmails(leads: { item: LeadListItem; fields: LeadFieldRow[] }[], deps: CascadeDeps): Promise<FindEmailResult[]> {
+  const out: FindEmailResult[] = [];
+  for (const l of leads) out.push(await findEmailFor(l.item, l.fields, deps));
+  return out;
+}

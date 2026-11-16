@@ -29,6 +29,8 @@ export const envSchema = z.object({
   APP_PUBLIC_ORIGIN: opt,
   /** Server-only, optional: Google Places key for the Qualificador's P3 step. Read only in src/lib/qualifier/places-config.ts. */
   GOOGLE_PLACES_API_KEY: opt,
+  /** Server-only, optional: the paid e-mail verifier of the cascade's step 3. Empty or 'none' = skipped. Read only in src/lib/leads/email-verifier.ts. */
+  EMAIL_VERIFIER: opt,
 });
 
 const publicEnvSchema = envSchema.pick({ NEXT_PUBLIC_SUPABASE_URL: true, NEXT_PUBLIC_SUPABASE_ANON_KEY: true });

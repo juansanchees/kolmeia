@@ -46,7 +46,7 @@ describe("R14: no service-role key in the product", () => {
     }
   });
   test("process.env is read only in src/lib/env.ts, the AI gateway config, the mailbox key config and the Places key config (NODE_ENV allowed)", () => {
-    const allowed = [path.join(root, "src/lib/env.ts"), path.join(root, "src/lib/ai/config.ts"), path.join(root, "src/lib/email/config.ts"), path.join(root, "src/lib/qualifier/places-config.ts")];
+    const allowed = [path.join(root, "src/lib/env.ts"), path.join(root, "src/lib/ai/config.ts"), path.join(root, "src/lib/email/config.ts"), path.join(root, "src/lib/qualifier/places-config.ts"), path.join(root, "src/lib/leads/email-verifier.ts")];
     for (const file of walk(path.join(root, "src"))) {
       if (allowed.includes(file)) continue;
       const uses = readFileSync(file, "utf8").match(/process\.env\b(?!\.NODE_ENV\b)/g);
@@ -59,6 +59,7 @@ describe("R14: no service-role key in the product", () => {
       "AI_USER_DAILY_CAP_USD",
       "ANTHROPIC_API_KEY",
       "APP_PUBLIC_ORIGIN",
+      "EMAIL_VERIFIER",
       "GOOGLE_PLACES_API_KEY",
       "MAILBOX_ENC_KEY",
       "MAILBOX_ENC_KEY_PREVIOUS",
@@ -69,7 +70,7 @@ describe("R14: no service-role key in the product", () => {
   test("the public env object never carries the Anthropic key, the mailbox keys or the public origin", () => {
     expect(Object.keys(env).sort()).toEqual(["NEXT_PUBLIC_SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_URL"]);
   });
-  test(".env.example lists exactly those nine variables, empty", () => {
+  test(".env.example lists exactly those ten variables, empty", () => {
     const lines = readFileSync(path.join(root, ".env.example"), "utf8")
       .split("\n")
       .filter((l) => l.trim() && !l.startsWith("#"));
@@ -78,6 +79,7 @@ describe("R14: no service-role key in the product", () => {
       "AI_USER_DAILY_CAP_USD=",
       "ANTHROPIC_API_KEY=",
       "APP_PUBLIC_ORIGIN=",
+      "EMAIL_VERIFIER=",
       "GOOGLE_PLACES_API_KEY=",
       "MAILBOX_ENC_KEY=",
       "MAILBOX_ENC_KEY_PREVIOUS=",
@@ -340,13 +342,13 @@ describe("E1 scheduler: anon key and scheduler_* functions only, no logging, no 
     const text = readFileSync(path.join(root, "src/lib/supabase/proxy.ts"), "utf8");
     expect(text).toMatch(/PUBLIC_PATHS = \["\/login", "\/u", "\/api\/unsubscribe", "\/api\/scheduler", "\/api\/hunter"\]/);
   });
-  test("no new environment variable: the nine known names are the only ones named anywhere in src", () => {
-    const known = new Set(["AI_GLOBAL_DAILY_CAP_USD", "AI_USER_DAILY_CAP_USD", "ANTHROPIC_API_KEY", "APP_PUBLIC_ORIGIN", "GOOGLE_PLACES_API_KEY", "MAILBOX_ENC_KEY", "MAILBOX_ENC_KEY_PREVIOUS", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_URL"]);
+  test("no new environment variable: the ten known names (Fase 2 added EMAIL_VERIFIER) are the only ones named anywhere in src", () => {
+    const known = new Set(["AI_GLOBAL_DAILY_CAP_USD", "AI_USER_DAILY_CAP_USD", "ANTHROPIC_API_KEY", "APP_PUBLIC_ORIGIN", "EMAIL_VERIFIER", "GOOGLE_PLACES_API_KEY", "MAILBOX_ENC_KEY", "MAILBOX_ENC_KEY_PREVIOUS", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_URL"]);
     for (const f of [route, store, tick, path.join(root, "src/lib/email/engine.ts")]) {
       const names = readFileSync(f, "utf8").match(/process\.env\.[A-Z0-9_]+|\benv\.[A-Z][A-Z0-9_]+/g) ?? [];
       for (const n of names) expect(known.has(n.replace(/^process\.env\.|^env\./, "")), `${f}: ${n}`).toBe(true);
     }
-    expect(Object.keys(envSchema.shape)).toHaveLength(9);
+    expect(Object.keys(envSchema.shape)).toHaveLength(10);
   });
   test("the manual cron script lives outside migrations and carries placeholders, not a real token", () => {
     const text = readFileSync(path.join(root, "supabase/manual/scheduler_cron.sql"), "utf8");

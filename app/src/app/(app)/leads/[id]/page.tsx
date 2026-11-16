@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { emailBriefOf, getLead } from "@/lib/leads/queries";
+import { emailBriefOf, emailChecksOf, getLead } from "@/lib/leads/queries";
+import type { EmailQuality } from "@/lib/leads/email-quality";
+import { EmailTools } from "@/components/leads/EmailTools";
 import { parseCloserBrief } from "@/lib/email/brief";
 import { draftBrief } from "@/lib/leads/brief";
 import type { Person } from "@/lib/team/types";
@@ -47,6 +49,12 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   const open = !CLOSED.includes(lead.status);
   const mine = Boolean(user && lead.owner_id === user.id);
   const brief = parseCloserBrief(lead.closer_brief);
+  // e-mail quality badges (0028): senders only; RLS gives the closer no rows anyway
+  const emailQuality: Record<string, EmailQuality> = {};
+  if (sender && workspace) {
+    const checks = await emailChecksOf(supabase, workspace.id, [...fields.filter((f) => f.field === "email").map((f) => f.value), ...(display.email ? [display.email] : [])]);
+    for (const [k, v] of checks) emailQuality[k] = v.status;
+  }
   const callable = open && !lead.do_not_call && ["new", "call_list"].includes(lead.status) && Boolean(display.phone);
 
   // Sender-only inputs of the hand-off and the call list (RLS keeps them from the closer anyway).
@@ -211,6 +219,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
           {sender && draft && <HandOffForm leadId={lead.id} closers={people} draft={draft} />}
           {sender && callable && <AddToCallList leadId={lead.id} agents={callAgents} />}
           {sender && !lead.do_not_call && <AddToCampaign leadIds={[lead.id]} campaigns={campaigns} />}
+          {sender && <EmailTools selected={[lead.id]} single />}
           {mine && !sender && !lead.do_not_call && display.phone && (
             <Link href={`/leads/ligar/${lead.id}`} className="inline-flex min-h-11 w-fit items-center border border-blue bg-surface px-4 text-sm font-semibold text-blue no-underline hover:bg-blue-wash">
               {H.callNow}
@@ -225,7 +234,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
           <h2 id="fields-title" className="text-2xl">
             {t.leads.fieldsTitle}
           </h2>
-          <FieldList fields={fields} importNames={importNames} />
+          <FieldList fields={fields} importNames={importNames} emailQuality={emailQuality} />
         </section>
       )}
 
