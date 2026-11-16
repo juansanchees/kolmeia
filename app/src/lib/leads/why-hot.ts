@@ -7,6 +7,7 @@ import type { CandidateRow } from "@/lib/research/rows";
 import type { CheckWithEvidence } from "@/lib/research/store";
 import { sanitizeUrl } from "@/lib/safe-url";
 import { fill, t } from "@/messages/pt";
+import { effectiveTemperature } from "./classify";
 import type { LeadFieldRow } from "./types";
 
 export type WhyFact = { text: string; url: string | null };
@@ -23,7 +24,8 @@ export function whyHotFacts(i: WhyIn): WhyFact[] {
   const b = i.best;
   const ok = i.checks.filter((k) => k.result === "ok" && k.candidate_id === b?.id && k.evidence.length > 0);
   const workUrl = url(ok.find((k) => k.kind === "has_work")?.evidence[0]?.url);
-  if (b?.temperature) out.push({ text: fill(W.temperature, { v: t.research.labels.temperature[b.temperature] }), url: null });
+  const temp = effectiveTemperature(i.level, b?.temperature ?? null);
+  if (temp) out.push({ text: fill(W.temperature, { v: t.research.labels.temperature[temp] }), url: null });
   if ((b?.permit_count ?? 0) > 0) out.push({ text: fill(W.permits, { n: b!.permit_count!, total: money(b!.total_value_usd), date: date(b!.last_permit_date) }), url: workUrl });
   if (b?.biggest_job_address) {
     out.push({ text: fill(W.biggest, { v: [b.biggest_job_address, b.biggest_job_type, b.biggest_job_value_usd !== null ? money(b.biggest_job_value_usd) : null].filter(Boolean).join(" · ") }), url: workUrl });

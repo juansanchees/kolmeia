@@ -12,7 +12,7 @@ import { getCurrentWorkspace, getUser } from "@/lib/workspace";
 import { HandOffForm } from "@/components/leads/HandOffForm";
 import { StatusButtons } from "@/components/leads/StatusButtons";
 import { LeadTypePicker } from "@/components/leads/LeadTypePicker";
-import { derivedSegmentOf, segmentInputOf } from "@/lib/leads/classify";
+import { derivedSegmentOf, effectiveTemperature, segmentInputOf } from "@/lib/leads/classify";
 import { AddToCallList } from "@/components/leads/AddToCallList";
 import { AddToCampaign } from "@/components/leads/AddToCampaign";
 import type { CampaignChoice } from "@/lib/leads/campaign-note";
@@ -45,6 +45,7 @@ export async function LeadDetail({ id, modal = false }: { id: string; modal?: bo
   if (!detail) notFound();
   const { lead, candidates, checks, agentName, fields, importNames, queue } = detail;
   const best = candidates.find((c) => c.id === lead.best_candidate_id) ?? candidates[0] ?? null;
+  const temp = effectiveTemperature(lead.level, best?.temperature ?? null);
   const display = displayOf(best, fields);
   const importName = lead.origin_import_id ? (importNames[lead.origin_import_id] ?? null) : null;
   const [workspace, user] = await Promise.all([getCurrentWorkspace(), getUser()]);
@@ -115,7 +116,7 @@ export async function LeadDetail({ id, modal = false }: { id: string; modal?: bo
           <h2 id="lead-modal-title" className="text-[22px]">{display.name}</h2>
           <span className="flex flex-wrap items-center gap-1.5">
             <LevelBadge level={lead.level} />
-            {best?.temperature && <Pill tone={best.temperature}>{LB.temperature[best.temperature]}</Pill>}
+            {temp && <Pill tone={temp}>{LB.temperature[temp]}</Pill>}
             {best?.second_pass === "refuted" && <Pill tone="no">{L.refuted}</Pill>}
             {!best && <Pill tone="no">{t.leads.unproven}</Pill>}
             {lead.do_not_call && <Pill tone="no">{H.doNotCall}</Pill>}
@@ -214,7 +215,7 @@ export async function LeadDetail({ id, modal = false }: { id: string; modal?: bo
         </h2>
         <dl className="m-0 grid grid-cols-3 gap-2">
           {[
-            [t.leads.research.temperature, best?.temperature ? LB.temperature[best.temperature] : t.leads.research.none],
+            [t.leads.research.temperature, temp ? LB.temperature[temp] : t.leads.research.none],
             [t.leads.research.approach, best?.approach ? LB.approach[best.approach] : t.leads.research.none],
             [t.leads.research.proof, best ? fill(t.leads.proofCount, { n: proofCount(checks.filter((k) => k.candidate_id === best.id)) }) : t.leads.unproven],
           ].map(([k, v]) => (

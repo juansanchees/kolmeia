@@ -46,7 +46,7 @@ describe("Por que este lead é quente?", () => {
       checks: [{ candidate_id: "c1", kind: "has_work", result: "ok", evidence: [{ url: "https://data.boston.gov/permit/1", title: "Permit", excerpt: "New 4-unit building", seen_at: "" }] }],
     });
     const texts = facts.map((f) => f.text);
-    expect(texts[0]).toMatch(/^Nível 4 de 4/);
+    expect(texts[0]).toMatch(/^Dados 4 de 4/);
     expect(texts).toContain("5 alvarás, total US$ 4,8 mi, o último em 10/03/2026");
     expect(facts.find((f) => f.text.startsWith("Maior obra"))).toEqual({ text: "Maior obra: 363 E St, South Boston · new 4-unit · US$ 1,8 mi", url: "https://data.boston.gov/permit/1" });
     expect(texts).toContain("active_project: Mill St condos (fonte: import)");

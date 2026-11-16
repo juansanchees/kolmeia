@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Pill } from "@/components/research/controls";
+import { effectiveTemperature } from "@/lib/leads/classify";
 import { todayList, type TodayRow } from "@/lib/calls/list-queries";
 import { createClient } from "@/lib/supabase/server";
 import { isSender } from "@/lib/roles";
@@ -11,6 +12,7 @@ const C = t.calls;
 
 function Row({ r, done }: { r: TodayRow; done?: boolean }) {
   const best = r.lead.best;
+  const temp = effectiveTemperature(r.lead.lead.level, best?.temperature ?? null);
   return (
     <li className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-4 py-3 last:border-b-0">
       <div className="flex min-w-0 flex-[1_1_220px] flex-col gap-0.5">
@@ -19,7 +21,7 @@ function Row({ r, done }: { r: TodayRow; done?: boolean }) {
         </Link>
         <span className="font-mono text-xs text-muted">{r.lead.display.phone ?? t.callAgent.noPhone}</span>
       </div>
-      {best?.temperature && <Pill tone={best.temperature}>{t.research.labels.temperature[best.temperature]}</Pill>}
+      {temp && <Pill tone={temp}>{t.research.labels.temperature[temp]}</Pill>}
       <span className="font-mono text-xs text-muted">N{r.lead.lead.level}</span>
       {done ? (
         <span className="font-mono text-xs">{r.lastCall ? C.outcomes[r.lastCall.outcome] : ""}</span>

@@ -1,7 +1,16 @@
 // Client-safe rules that classify a lead: its type ("Tipo", segment) and its stage ("Etapa"). No imports from view.ts
 // (shortcuts.ts imports from here, and view.ts imports shortcuts' consumers).
 import type { CandidateRow } from "@/lib/research/rows";
+import type { Temperature } from "@/lib/research/types";
 import type { LeadRow, LeadStage, OriginList, Segment } from "./types";
+
+/** Qualifier level that means active work was confirmed (the has_work check). */
+export const ACTIVE_WORK_LEVEL = 4;
+
+/** Temperature to show: the freshest signal. Confirmed active work (level 4) is at least "hot", even if research said cold. Display only, never stored. */
+export function effectiveTemperature(level: number, temperature: Temperature | null): Temperature | null {
+  return level >= ACTIVE_WORK_LEVEL && temperature !== "very_hot" ? "hot" : temperature;
+}
 
 /** "Alvará grande": the research's permits add up to at least this much (US$). */
 export const BIG_PERMIT_USD = 500_000;

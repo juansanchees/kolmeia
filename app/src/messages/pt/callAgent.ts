@@ -3,7 +3,7 @@ export const callAgent = {
   create: "Criar",
   caller: "Quem liga",
   perDay: "Quantos por dia",
-  minLevel: "Nível mínimo",
+  minLevel: "Dados mínimos",
   temperatures: "Temperatura",
   any: "Qualquer",
   build: "Montar lista de hoje",

@@ -7,7 +7,7 @@ import { z } from "zod";
 import { fill, t } from "@/messages/pt";
 import { matchesAnswer } from "@/lib/ai-questions/types";
 import { EMAIL_QUALITIES, type EmailQuality } from "./email-quality";
-import { fold, stageOf } from "./classify";
+import { effectiveTemperature, fold, stageOf } from "./classify";
 import { LEAD_STAGES, SEGMENTS, type LeadDisplay, type LeadFieldRow, type LeadListItem, type LeadStage, type LeadStatus, type OriginList, type Segment, type TableBest, type TableLead } from "./types";
 
 export { fold };
@@ -168,7 +168,8 @@ function otherFiltersOf(f: LeadFilters): (i: FilterRow) => boolean {
   const qDigits = f.q.replace(/\D/g, "");
   return ({ lead, best, display, ai }) => {
     if (!leadInTab({ best }, f.tab)) return false;
-    if (f.temperature === "none" ? best !== null : f.temperature !== "all" && best?.temperature !== f.temperature) return false;
+    const temp = effectiveTemperature(lead.level, best?.temperature ?? null);
+    if (f.temperature === "none" ? temp !== null : f.temperature !== "all" && temp !== f.temperature) return false;
     if (f.status !== "all" && lead.status !== f.status) return false;
     if (f.minLevel > 0 && lead.level < f.minLevel) return false;
     if (f.companyTypes.length > 0 && !(f.companyTypes as string[]).includes(best?.company_type ?? display.companyType ?? "")) return false;

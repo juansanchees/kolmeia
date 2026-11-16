@@ -2,6 +2,7 @@ import type { CandidateRow } from "@/lib/research/rows";
 import type { LeadDetail } from "@/lib/leads/types";
 import { sanitizeUrl } from "@/lib/safe-url";
 import { telHref } from "@/lib/calls/view";
+import { effectiveTemperature } from "@/lib/leads/classify";
 import { displayOf, isStaleProof } from "@/lib/leads/view";
 import { parseCloserBrief } from "@/lib/email/brief";
 import { Notice } from "@/components/email/bits";
@@ -32,6 +33,7 @@ export function CallFacts({ detail, phone, now, blocked = false }: { detail: Lea
   const { lead, candidates, checks, fields } = detail;
   const best: CandidateRow | null = candidates.find((c) => c.id === lead.best_candidate_id) ?? candidates[0] ?? null;
   const display = displayOf(best, fields);
+  const temp = effectiveTemperature(lead.level, best?.temperature ?? null);
   const href = !blocked && phone ? telHref(phone) : null;
   const brief = parseCloserBrief(lead.closer_brief);
   return (
@@ -40,7 +42,7 @@ export function CallFacts({ detail, phone, now, blocked = false }: { detail: Lea
         <h2 className="text-[22px]">{display.name}</h2>
         <span className="flex flex-wrap items-center gap-1.5">
           <LevelBadge level={lead.level} />
-          {best?.temperature && <Pill tone={best.temperature}>{LB.temperature[best.temperature]}</Pill>}
+          {temp && <Pill tone={temp}>{LB.temperature[temp]}</Pill>}
         </span>
       </div>
 
