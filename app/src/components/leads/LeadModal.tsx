@@ -1,18 +1,26 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-// Close = back, so the list keeps its page, filters and scroll. No history (new tab): go to the list.
-export function closeLead(router: { back(): void; push(href: string): void }, historyLength: number) {
-  if (historyLength > 1) router.back();
-  else router.push("/leads");
+// Set by the list's company links: true only when this modal was opened from the list in this tab.
+export const openedFromList = { value: false };
+
+// Close = back when we came from the list (state and scroll stay); on a direct visit/reload, drop ?lead from the URL.
+export function closeLead(router: { back(): void; replace(href: string, o?: { scroll: boolean }): void }, fromList: boolean, href: string) {
+  if (fromList) {
+    openedFromList.value = false;
+    router.back();
+  } else router.replace(href, { scroll: false });
 }
 
 export function LeadModal({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const panel = useRef<HTMLDivElement>(null);
-  const close = () => closeLead(router, window.history.length);
+  const pathname = usePathname();
+  const params = new URLSearchParams(useSearchParams());
+  params.delete("lead");
+  const close = () => closeLead(router, openedFromList.value, `${pathname}${params.size ? `?${params}` : ""}`);
 
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;

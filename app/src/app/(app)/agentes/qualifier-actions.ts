@@ -41,6 +41,7 @@ export async function ackLevelNoteAction(leadId: string): Promise<FormState> {
   const { error } = await supabase.rpc("ack_level_note", { p_lead: leadId });
   if (error) return { status: "error", message: E.failed };
   revalidatePath(`/leads/${leadId}`);
+  revalidatePath("/leads"); // the lead can be open as a modal over the list
   return { status: "success" };
 }
 

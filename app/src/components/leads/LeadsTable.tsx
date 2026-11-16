@@ -21,7 +21,8 @@ import { Pager, usePaged } from "@/components/Pager";
 import { LEAD_STATUSES, type LeadListItem } from "@/lib/leads/types";
 import { LevelBadge } from "@/components/qualifier/LevelBadge";
 import { QualifyControls, RowCheck } from "@/components/qualifier/QualifyControls";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { openedFromList } from "@/components/leads/LeadModal";
 import { fill, t } from "@/messages/pt";
 
 const F = t.leads.filters;
@@ -56,6 +57,9 @@ const lastTouch = (iso: string | null) => (iso ? new Date(iso).toLocaleDateStrin
 export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: false }, initialFilters = DEFAULT_LEAD_FILTERS, views = [], lists = [], list = null, questions = [], answerReserveUsd = 0 }: Props) {
   const [f, setF] = useState<LeadFilters>(initialFilters);
   const router = useRouter();
+  const search = useSearchParams();
+  // The lead opens as a modal over this list (?lead=): same page, so filters/pager/scroll stay.
+  const leadHref = (id: string) => `?${new URLSearchParams({ ...Object.fromEntries(search), lead: id })}`;
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const toggle = (id: string, on: boolean) =>
     setPicked((p) => {
@@ -281,7 +285,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
           {pageItems.map((i) => (
             <li key={i.lead.id} className="flex items-stretch border-b border-line last:border-b-0">
               {canCreate && <RowCheck checked={picked.has(i.lead.id)} name={i.display.name} onChange={(v) => toggle(i.lead.id, v)} />}
-              <Link href={`/leads/${i.lead.id}`} className={`flex min-w-0 flex-1 flex-col gap-1 px-3.5 py-3 text-ink no-underline hover:bg-ground md:grid ${aiQ ? GRID_AI : GRID} md:items-center md:gap-3`}>
+              <Link href={leadHref(i.lead.id)} scroll={false} onClick={() => (openedFromList.value = true)} className={`flex min-w-0 flex-1 flex-col gap-1 px-3.5 py-3 text-ink no-underline hover:bg-ground md:grid ${aiQ ? GRID_AI : GRID} md:items-center md:gap-3`}>
                 <span className="min-w-0">
                   <span className="sr-only">{t.leads.columns.company}: </span>
                   <span className="block truncate text-sm font-semibold">{i.display.name}</span>

@@ -5,6 +5,8 @@ import { listLeads, listViews } from "@/lib/leads/queries";
 import { DEFAULT_LEAD_FILTERS } from "@/lib/leads/view";
 import { listLeadIds, listNames } from "@/lib/lists/queries";
 import { connectedSources } from "@/lib/sources/queries";
+import { LeadDetail } from "@/components/leads/LeadDetail";
+import { LeadModal } from "@/components/leads/LeadModal";
 import { LeadsTable } from "@/components/leads/LeadsTable";
 import { reserveFor } from "@/lib/ai/gateway";
 import { answerDef } from "@/lib/ai/lead-ai-tasks";
@@ -24,7 +26,9 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   if (!supabase || !workspace) return <LeadsTable items={[]} canCreate={false} />;
 
   const [views, lists, questions] = await Promise.all([listViews(supabase, workspace.id), sender ? listNames(supabase, workspace.id) : [], sender ? listQuestions(supabase, workspace.id) : []]);
-  const pick = (await searchParams).lista;
+  const sp = await searchParams;
+  const pick = sp.lista;
+  const open = typeof sp.lead === "string" && UUID.test(sp.lead) ? sp.lead : null;
   const list = typeof pick === "string" && UUID.test(pick) ? (lists.find((l) => l.id === pick) ?? null) : null;
   // Senders open on "Novos" (never contacted); the closer's leads were all handed to her, so she opens on "Todos".
   const initial = views.find((v) => v.is_default)?.filters ?? { ...DEFAULT_LEAD_FILTERS, contact: sender ? ("new" as const) : ("all" as const) };
@@ -38,6 +42,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   const answers = sender ? await listAnswers(supabase, workspace.id, questions.map((q) => q.id)) : new Map();
   for (const i of items) i.ai = answers.get(i.lead.id);
   return (
+    <>
     <LeadsTable
       items={items}
       canCreate={isSender(workspace.role)}
@@ -49,5 +54,11 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
       questions={questions}
       answerReserveUsd={reserveFor(answerDef)}
     />
+    {open && (
+      <LeadModal>
+        <LeadDetail id={open} modal />
+      </LeadModal>
+    )}
+    </>
   );
 }

@@ -5,7 +5,7 @@ import { Notice } from "@/components/email/bits";
 import { t } from "@/messages/pt";
 
 // LEADS: every company the searches found, once each, and the ones handed to the closer.
-export default async function LeadsLayout({ children, modal }: { children: React.ReactNode; modal: React.ReactNode }) {
+export default async function LeadsLayout({ children }: { children: React.ReactNode }) {
   const workspace = await getCurrentWorkspace();
   return (
     <div className="flex min-w-0 flex-col gap-5">
@@ -18,7 +18,6 @@ export default async function LeadsLayout({ children, modal }: { children: React
       </div>
       {workspace?.role === "closer" && <Notice tone="info">{t.roles.closerNotice}</Notice>}
       {children}
-      {modal}
     </div>
   );
 }
