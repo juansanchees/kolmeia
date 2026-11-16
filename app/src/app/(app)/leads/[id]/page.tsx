@@ -23,6 +23,10 @@ import { LevelBadge } from "@/components/qualifier/LevelBadge";
 import { LevelNote } from "@/components/qualifier/LevelNote";
 import { levelReason, nextStepLabel } from "@/lib/qualifier/view";
 import { FieldList } from "@/components/leads/FieldList";
+import { WhyHot } from "@/components/leads/WhyHot";
+import { whyHotFacts } from "@/lib/leads/why-hot";
+import { reserveFor } from "@/lib/ai/gateway";
+import { explainDef } from "@/lib/ai/lead-ai-tasks";
 import { fill, t } from "@/messages/pt";
 
 // "Checar e-mails" / "Achar e-mail" run from here too (DNS look-ups): give the server actions time.
@@ -197,6 +201,8 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
           </>
         )}
       </section>
+
+      <WhyHot leadId={lead.id} facts={whyHotFacts({ level: lead.level, best, fields, checks })} canSummarize={sender} reserveUsd={reserveFor(explainDef)} />
 
       {brief && (
         <section aria-labelledby="brief-title" className="flex flex-col gap-2 border border-ink bg-surface p-4">
