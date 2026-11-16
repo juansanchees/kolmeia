@@ -21,9 +21,12 @@ export const resultsSchema = z.object({
   favor: filterSchema,
   avoid_filter: filterSchema,
   search_queries: z.array(z.string()),
+  /** Numbers (1 = first) of the current profile's points that the results contradict; every other one is carried over. */
+  contradicted: z.array(z.number()),
 });
 type Parsed = z.infer<typeof resultsSchema>;
 
+const MAX_POINTS = 12; // learned_profile_valid
 const MAX_FAVOR = 8;
 const MAX_AVOID = 4;
 const MAX_ROWS = 20;
@@ -70,8 +73,12 @@ export const resultsDef: TaskDef<ProfileResultsInput, Parsed, LearnedProfile> = 
 
     const towns = uniq(p.favor.towns.map(townOf).filter((x): x is string => x !== null)).filter((x) => !avoidTowns.includes(x)).slice(0, MAX_TOWNS);
     const queries = uniq(p.search_queries.map((q) => q.replace(/\s+/g, " ").trim()).filter((q) => q && q.length <= MAX_QUERY && !SOCIAL.test(q))).slice(0, MAX_QUERIES);
+    // the approved profile's points stay (marked, with their own citations) unless the model names them as contradicted
+    const dropped = new Set(p.contradicted);
+    const carried = (input.current?.points ?? []).filter((_, i) => !dropped.has(i + 1)).map((x) => ({ ...x, carried: true as const }));
+    const kept = avoid.slice(0, MAX_AVOID);
     return {
-      points: [...points, ...avoid.slice(0, MAX_AVOID)],
+      points: [...[...carried, ...points].slice(0, MAX_POINTS - kept.length), ...kept],
       filter: { companyTypes: uniq(p.favor.company_types).filter((ct) => !avoidTypes.includes(ct)), towns },
       searchQueries: queries,
     };

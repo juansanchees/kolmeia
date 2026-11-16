@@ -107,3 +107,8 @@ export function sampleResults(rows: ResultRow[], each = RESULTS_SAMPLE_EACH, max
 export function currentProfileOf(v: unknown): LearnedProfile | null {
   return v && typeof v === "object" && Array.isArray((v as LearnedProfile).points) ? (v as LearnedProfile) : null;
 }
+
+/** A results proposal is worth saving only with a new point or a dropped (contradicted) approved point. */
+export function learnedSomething(p: LearnedProfile, current: LearnedProfile | null): boolean {
+  return p.points.some((x) => !x.carried) || p.points.length < (current?.points.length ?? 0);
+}

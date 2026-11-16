@@ -21,9 +21,13 @@ Call recording/transcription (MA all-party consent), WhatsApp, numeric ML models
 - Ligar depois → date field (default +3 days) → creates a task for that date; stage Contatado.
 - Sem interesse → status lost.
 - Não ligar mais → status discarded + do_not_call.
+- Second row (small links, modal and call screen): Caixa postal (voicemail) and Número errado (wrong_number: the lead leaves the call lists until a new phone appears, 0020 lead_callable). Recepção is recorded as Não atendeu.
+- As built: Não ligar mais sets status **lost** + do_not_call (not discarded), because log_call (0020 lead_status_after_call) already maps do_not_call to lost; discarded stays a manual choice.
+- A lead without a phone cannot record a contact yet (log_call needs a phone). Future: an e-mail / WhatsApp outcome.
+- Results proposals carry over the approved profile's points (marked "do perfil aprovado", their own citations) unless the model lists them as contradicted; approving one supersedes the approved profile, so nothing is lost silently.
 Every record is stored as a contact event (reuse the existing calls table / call logging if it already stores outcome + note; extend minimally otherwise) with outcome, note, author, time. History shows in the modal (existing CallHistory if reusable). Optional, never blocking.
 
-**Outcome labels for learning:** positive = meeting, won, email reply classified interested (existing email_messages.ai_signal); negative = lost, discarded, Sem interesse; neutral (ignored) = Não atendeu, Ligar depois.
+**Outcome labels for learning:** positive = meeting, won, email reply classified interested (existing email_messages.ai_signal); negative = lost, discarded, Sem interesse; neutral (ignored) = Não atendeu, Ligar depois, Caixa postal, Número errado.
 
 **Learning job:** reuse the existing profile machinery (trainProfileAction / approve_profile / profile_hints). New proposal source "results": one Sonnet call over a sample of up to 40 positive + 40 negative leads (type, city, company_type, size note, biggest job, origin list, contact notes) asking for: what the good ones have in common, what to avoid, towns/types to favor/avoid, up to 8 search queries. Saved as a profile proposal Juan approves on the existing profile page. Trigger: automatically at most once a week from the existing hunter tick when ≥ 10 labeled leads (≥ 3 positive) exist since the last proposal, plus a manual button "Aprender com os resultados" on the profile page with the cost estimate. Respects AI caps/ledger. Approved "avoid" points go into the collect prompt as hints (same "hint, never a rule" framing).
 

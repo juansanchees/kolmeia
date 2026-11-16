@@ -10,10 +10,15 @@ export function citeRows(rows: number[]): string {
   return fill(t.profile.rowsCite, { rows: rows.length > CITE_MAX ? `${shown}…` : shown });
 }
 
+/** A point's citation: its rows, or "do perfil aprovado" when a results proposal carried it over. */
+export function citeOf(pt: LearnedProfile["points"][number]): string {
+  return pt.carried ? t.profile.carriedCite : citeRows(pt.rows);
+}
+
 /** The card's lines in the spec's order (POINT_KEYS), the model's order inside one key. */
 export function cardLines(p: LearnedProfile): { key: PointKey; label: string; text: string; cite: string }[] {
   return POINT_KEYS.flatMap((key) =>
-    p.points.filter((pt) => pt.key === key).map((pt) => ({ key, label: t.profile.keys[key], text: pt.text, cite: citeRows(pt.rows) })),
+    p.points.filter((pt) => pt.key === key).map((pt) => ({ key, label: t.profile.keys[key], text: pt.text, cite: citeOf(pt) })),
   );
 }
 

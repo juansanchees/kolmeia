@@ -10,7 +10,8 @@ export type PointKey = (typeof POINT_KEYS)[number];
 /** What the AI proposes and a sender approves. Every point cites rows of the training list (or of the results sample). */
 export type LearnedProfile = {
   /** At most 12; `text` up to 200 characters; `rows` are 1..20 import row numbers. */
-  points: { key: PointKey; text: string; rows: number[] }[];
+  /** `carried`: kept from the approved profile by a results proposal (its rows cite that profile's list, not the sample). */
+  points: { key: PointKey; text: string; rows: number[]; carried?: true }[];
   /** The P5 filter (K-11): company type and town, both required when both are set. */
   filter: { companyTypes: CompanyType[]; towns: string[] };
   /** At most 8, up to 120 characters each; no social-network queries. */

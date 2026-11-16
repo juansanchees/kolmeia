@@ -252,12 +252,12 @@ export async function LeadDetail({ id, modal = false }: { id: string; modal?: bo
         </section>
       )}
 
-      {sender && phone && (
+      {sender && phone && open && !lead.do_not_call && (
         <section aria-labelledby="contact-title" className="flex flex-col gap-3 border border-line bg-surface p-4">
           <h2 id="contact-title" className="text-xl">
             {t.calls.record.title}
           </h2>
-          <ContactRecord leadId={lead.id} afterSave="stay" canRecord={open && !lead.do_not_call} />
+          <ContactRecord leadId={lead.id} afterSave="stay" />
         </section>
       )}
       {sender && calls.length > 0 && <CallHistory calls={calls} />}

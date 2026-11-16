@@ -8,13 +8,15 @@ const TZ = "America/New_York";
 
 /** The five buttons of "Registrar contato" (lead modal and call screen), in screen order. */
 export const CONTACT_OUTCOMES = ["no_answer", "meeting_booked", "talked", "not_interested", "do_not_call"] as const satisfies readonly CallOutcome[];
-export type ContactOutcome = (typeof CONTACT_OUTCOMES)[number];
+/** The small second row: they keep their own effect (a wrong number leaves the call lists until a new phone appears). */
+export const CONTACT_EXTRA_OUTCOMES = ["voicemail", "wrong_number"] as const satisfies readonly CallOutcome[];
+export type ContactOutcome = (typeof CONTACT_OUTCOMES)[number] | (typeof CONTACT_EXTRA_OUTCOMES)[number];
 
 /** One tap is enough; the note is optional. "Ligar depois" (talked) needs the day to call back. */
 export const contactSchema = z
   .object({
     leadId: z.uuid(),
-    outcome: z.enum(CONTACT_OUTCOMES),
+    outcome: z.enum([...CONTACT_OUTCOMES, ...CONTACT_EXTRA_OUTCOMES]),
     note: z.string().trim().max(200),
     callBackOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
   })
@@ -61,6 +63,11 @@ export function leadPhone(bestPhone: string | null | undefined, fields: Pick<Lea
     .filter((x) => x.field === "phone" && x.status !== "refuted" && phoneKey(x.value))
     .sort((a, b) => Date.parse(b.seen_at) - Date.parse(a.seen_at))[0];
   return f?.value ?? null;
+}
+
+/** "Ligar depois" date bounds (log_call refuses a next step more than 180 days ahead): today .. today + 180, New York. */
+export function callBackRange(now: Date = new Date()): { min: string; max: string } {
+  return { min: chipLocal(0, now).slice(0, 10), max: chipLocal(180, now).slice(0, 10) };
 }
 
 /** "Ligar depois": the callback task is due at 9:00 New York time on that day; null when the day is not real. */

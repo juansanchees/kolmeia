@@ -7,7 +7,7 @@ import { btn, input, Notice } from "@/components/email/bits";
 import { Pill } from "@/components/research/controls";
 import type { ProfileRow } from "@/lib/profile/queries";
 import type { LearnedProfile } from "@/lib/profile/types";
-import { cardLines, citeRows } from "@/lib/profile/view";
+import { cardLines, citeOf } from "@/lib/profile/view";
 import { COMPANY_TYPES, type CompanyType } from "@/lib/research/types";
 import { fill, t } from "@/messages/pt";
 
@@ -63,7 +63,7 @@ export function ProfileCard({ profile, hunters }: { profile: ProfileRow; hunters
           {p.points.map((pt, i) => (
             <li key={i} className="flex flex-col gap-1 text-sm">
               <label className="flex flex-col gap-1">
-                <span className="font-mono text-xs text-muted">{M.keys[pt.key]} {citeRows(pt.rows)}</span>
+                <span className="font-mono text-xs text-muted">{M.keys[pt.key]} {citeOf(pt)}</span>
                 <input value={draft.texts[i] ?? ""} maxLength={200} onChange={(e) => setDraft((d) => ({ ...d, texts: d.texts.map((x, j) => (j === i ? e.target.value : x)) }))} className={input} />
               </label>
             </li>

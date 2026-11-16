@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { callBackAt, chipLocal, CONTACT_OUTCOMES, contactSchema, leadPhone, nyLocalToIso } from "@/lib/calls/call-input";
+import { callBackAt, callBackRange, chipLocal, CONTACT_EXTRA_OUTCOMES, CONTACT_OUTCOMES, contactSchema, leadPhone, nyLocalToIso } from "@/lib/calls/call-input";
 
 const read = (p: string) => readFileSync(`${__dirname}/../../src/${p}`, "utf8");
 const ids = { leadId: "11111111-1111-4111-8111-111111111111", note: "", callBackOn: null };
@@ -9,7 +9,11 @@ describe("call screen", () => {
   it("one tap records; the note is optional; Ligar depois needs a day", () => {
     expect(CONTACT_OUTCOMES).toEqual(["no_answer", "meeting_booked", "talked", "not_interested", "do_not_call"]);
     expect(contactSchema.safeParse({ ...ids, outcome: "no_answer" }).success).toBe(true);
-    expect(contactSchema.safeParse({ ...ids, outcome: "voicemail" }).success).toBe(false);
+    // the small second row keeps wrong_number (0020 lead_callable) and voicemail; gatekeeper is recorded as Não atendeu
+    expect(CONTACT_EXTRA_OUTCOMES).toEqual(["voicemail", "wrong_number"]);
+    expect(contactSchema.safeParse({ ...ids, outcome: "voicemail" }).success).toBe(true);
+    expect(contactSchema.safeParse({ ...ids, outcome: "wrong_number" }).success).toBe(true);
+    expect(contactSchema.safeParse({ ...ids, outcome: "gatekeeper" }).success).toBe(false);
     expect(contactSchema.safeParse({ ...ids, outcome: "talked" }).success).toBe(false);
     expect(contactSchema.safeParse({ ...ids, outcome: "talked", callBackOn: "2026-11-19" }).success).toBe(true);
     expect(contactSchema.safeParse({ ...ids, outcome: "not_interested", note: "x".repeat(201) }).success).toBe(false);
@@ -20,6 +24,13 @@ describe("call screen", () => {
     expect(callBackAt("2026-11-19")).toBe("2026-11-19T14:00:00.000Z");
     expect(callBackAt("2026-02-31")).toBeNull();
     expect(chipLocal(3, new Date("2026-11-16T15:00:00Z")).slice(0, 10)).toBe("2026-11-19");
+    expect(callBackRange(new Date("2026-11-16T15:00:00Z"))).toEqual({ min: "2026-11-16", max: "2027-05-15" });
+  });
+
+  it("the record form has the second row (Caixa postal, Número errado) and the day bounds", () => {
+    const form = read("components/calls/ContactRecord.tsx");
+    expect(form).toContain("CONTACT_EXTRA_OUTCOMES.map");
+    expect(form).toMatch(/min=\{range\.min\} max=\{range\.max\}/);
   });
 
   it("no recording, no SMS, no AI voice on the call screen", () => {
@@ -39,7 +50,7 @@ describe("call screen", () => {
   });
 
   it("one form for every screen: the lead modal (sender) and the call screen both use ContactRecord", () => {
-    expect(read("components/leads/LeadDetail.tsx")).toMatch(/sender && phone && \(/);
+    expect(read("components/leads/LeadDetail.tsx")).toMatch(/sender && phone && open && !lead\.do_not_call && \(/);
     expect(read("components/leads/LeadDetail.tsx")).toContain('<ContactRecord leadId={lead.id} afterSave="stay"');
     expect(read("app/(app)/leads/ligar/[id]/page.tsx")).toContain('<ContactRecord leadId={id} afterSave="next"');
     expect(read("components/calls/ContactRecord.tsx")).toContain("R.dncHint");

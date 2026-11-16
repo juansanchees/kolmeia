@@ -273,8 +273,8 @@ begin
     raise exception 'not allowed' using errcode = '42501';
   end if;
   return coalesce((
-    select jsonb_agg(jsonb_build_object('workspace_id', w.id, 'last_at', w.last_at) order by w.last_at nulls first, w.id)
-      from (
+    select jsonb_agg(jsonb_build_object('workspace_id', d.id, 'last_at', d.last_at) order by d.last_at nulls first, d.id)
+      from (select w.id, w.last_at from (
         select s.id, public.results_last_at(s.id) as last_at
           from public.workspaces s
          where exists (select 1 from public.agents a where a.workspace_id = s.id and a.type = 'hunter' and a.archived_at is null)
@@ -282,7 +282,8 @@ begin
            and not exists (select 1 from public.learned_profiles x where x.workspace_id = s.id and x.source = 'results' and x.status = 'proposed')
       ) w
      where w.last_at is null or w.last_at < now() - interval '7 days'
-     limit 3
+     order by w.last_at nulls first, w.id
+     limit 3) d  -- the limit sits inside: after jsonb_agg (one row) it would limit nothing
   ), '[]'::jsonb);
 end;
 $$;

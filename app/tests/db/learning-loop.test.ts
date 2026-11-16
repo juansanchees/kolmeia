@@ -87,6 +87,16 @@ describe("0032 learning loop", () => {
     expect(rows.find((r) => r.lead_id === gone)).toMatchObject({ status: "lost", interested: true });
   });
 
+  test("Caixa postal and Número errado are neutral: the lead is not a result", async () => {
+    const t = await seedTeam();
+    const [vm, wrong] = [await newLead(t.ws, "new"), await newLead(t.ws, "new")];
+    await addField(t.ws, vm, "phone", "508-555-0102");
+    await addField(t.ws, wrong, "phone", "508-555-0103");
+    await db.query(as(t.sdr), "select public.log_call($1,null,'voicemail','','','',null)", [vm]);
+    await db.query(as(t.sdr), "select public.log_call($1,null,'wrong_number','','','',null)", [wrong]);
+    expect((await rowsAs(t.sdr, t.ws)).rows).toEqual([]);
+  });
+
   test("propose: sender only, valid shape (avoid key ok), one open proposal at a time, approved through approve_profile", async () => {
     const t = await seedTeam();
     await expect(propose(t.closer, t.ws)).rejects.toThrow(/sender/);
@@ -152,6 +162,17 @@ describe("0032 learning loop", () => {
     await setSchedulerToken(db, TOKEN.replace(/a/g, "b"));
     await expect(rpc("select public.hunter_results_due($1) as r", [tick])).rejects.toThrow(/not allowed/);
     await setSchedulerToken(db, TOKEN);
+  });
+
+  test("the clock's due list holds at most 3 workspaces", async () => {
+    for (let i = 0; i < 4; i++) {
+      const t = await seedTeam();
+      await db.admin("insert into public.agents (workspace_id, type, name, schedule, config, created_by) values ($1,'hunter','Caçador','weekly','{}'::jsonb,$2)", [t.ws, t.owner]);
+    }
+    const tick = await beginTick(db);
+    const due = (await db.query<{ r: { workspace_id: string }[] }>(clock, "select public.hunter_results_due($1) as r", [tick]))[0].r;
+    expect(due).toHaveLength(3);
+    await db.query(clock, "select public.hunter_finish_tick($1,'{}'::jsonb,null)", [tick]);
   });
 
   test("re-runnable: running 0032 again keeps proposals and their source", async () => {

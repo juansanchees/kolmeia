@@ -3,7 +3,7 @@ import type { AiLedger } from "@/lib/ai/gateway";
 import { learnFromResults } from "@/lib/ai/results-tasks";
 import type { AiTransport } from "@/lib/ai/types";
 import type { RpcFn } from "@/lib/hunter/rpc";
-import { currentProfileOf, resultsDue, type ResultsData } from "./results";
+import { currentProfileOf, learnedSomething, resultsDue, type ResultsData } from "./results";
 
 /**
  * The clock's side of the learning loop: at most ONE workspace per call, at most one AI call. Picks the first workspace
@@ -51,9 +51,10 @@ export async function learnFromResultsTick(rpc: RpcFn, tickId: string, transport
       dailyCapUsd: no,
       spentTodayUsd: no,
     };
-    const r = await learnFromResults({ workspaceId: w.workspace_id, runId: null, ledger, transport }, d.rows, currentProfileOf(d.current));
+    const current = currentProfileOf(d.current);
+    const r = await learnFromResults({ workspaceId: w.workspace_id, runId: null, ledger, transport }, d.rows, current);
     // nothing the results back: no proposal; the call itself (ai_calls) starts the 7 days (results_last_at)
-    if (r.data.points.length === 0) return "empty";
+    if (!learnedSomething(r.data, current)) return "empty";
     await rpc("hunter_propose_results_profile", { p_tick: tickId, p_ws: w.workspace_id, p_profile: r.data, p_sample_rows: r.sampleRows });
     return "proposed";
   }

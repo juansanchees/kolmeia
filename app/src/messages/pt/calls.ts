@@ -39,6 +39,8 @@ export const calls = {
       talked: "Ligar depois",
       not_interested: "Sem interesse",
       do_not_call: "Não ligar mais",
+      voicemail: "Caixa postal",
+      wrong_number: "Número errado",
     },
     callBackOn: "Ligar em",
     save: "Salvar",
@@ -51,6 +53,7 @@ export const calls = {
   errors: {
     invalid: "Confira: nota até 200 letras e, em Ligar depois, a data.",
     badDate: "Data inválida.",
+    dateRange: "Escolha uma data de hoje até 180 dias.",
     failed: "Não deu para salvar. Tente de novo.",
     noPhone: "Esse lead não tem telefone para ligar.",
     denied: "Você não pode registrar ligação neste lead.",

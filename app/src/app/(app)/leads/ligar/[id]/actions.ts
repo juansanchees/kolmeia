@@ -32,11 +32,15 @@ export async function recordContactAction(input: Input): Promise<FormState & { s
     p_outcome: d.outcome,
     p_spoke_to: "",
     p_notes: d.note,
-    p_next_step: "",
+    p_next_step: d.outcome === "talked" ? d.note.slice(0, 200) : "", // the callback task's title (tasks.title <= 200)
     p_next_step_at: nextAt,
   });
   if (error) {
-    const msg = error.code === "55000" ? t.calls.errors.noPhone : error.code === "42501" ? t.calls.errors.denied : t.calls.errors.failed;
+    const msg =
+      error.code === "55000" ? t.calls.errors.noPhone
+      : error.code === "42501" ? t.calls.errors.denied
+      : error.code === "22023" && nextAt ? t.calls.errors.dateRange // next step date out of range
+      : t.calls.errors.failed;
     return { status: "error", message: msg };
   }
   revalidatePath("/leads/ligar");

@@ -7,7 +7,7 @@ import { defaultTransport } from "@/lib/ai/gateway";
 import { isAiError, type AiErrorCode } from "@/lib/ai/errors";
 import { learnProfile, SOCIAL } from "@/lib/ai/profile-tasks";
 import { learnFromResults } from "@/lib/ai/results-tasks";
-import { currentProfileOf, learnBlock, resultCounts, type ResultsData } from "@/lib/learning/results";
+import { currentProfileOf, learnBlock, learnedSomething, resultCounts, type ResultsData } from "@/lib/learning/results";
 import { sessionLedger } from "@/lib/ai/session-ledger";
 import { openProposalId } from "@/lib/profile/queries";
 import { sampleRows } from "@/lib/profile/sample";
@@ -34,7 +34,7 @@ const AI_MESSAGES: Partial<Record<AiErrorCode, string>> = {
 
 /** The owner's edit, held to the same limits as the AI's proposal (the database only checks the top-level keys). */
 const edited = z.object({
-  points: z.array(z.object({ key: z.enum(POINT_KEYS), text: z.string().trim().min(1).max(200), rows: z.array(z.number().int().min(1).max(5000)).min(1).max(20) })).max(12),
+  points: z.array(z.object({ key: z.enum(POINT_KEYS), text: z.string().trim().min(1).max(200), rows: z.array(z.number().int().min(1).max(5000)).min(1).max(20), carried: z.literal(true).optional() })).max(12),
   filter: z.object({ companyTypes: z.array(z.enum(COMPANY_TYPES)).max(4), towns: z.array(z.string().max(80)).max(60) }),
   searchQueries: z.array(z.string().trim().min(1).max(120)).max(8),
 });
@@ -122,7 +122,7 @@ export async function learnFromResultsAction(): Promise<{ ok: true; profileId: s
   } catch (e) {
     return { ok: false, error: (isAiError(e) && AI_MESSAGES[e.code]) || t.ai.generic };
   }
-  if (profile.points.length === 0) return { ok: false, error: t.profile.results.empty };
+  if (!learnedSomething(profile, currentProfileOf(d.current))) return { ok: false, error: t.profile.results.empty };
 
   const { data: id, error: pErr } = await db.rpc("propose_results_profile", { p_ws: workspace.id, p_profile: profile, p_sample_rows: sampleRows });
   if (pErr || !id) return { ok: false, error: E.failed };

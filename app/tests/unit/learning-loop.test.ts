@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 import type { AiContext, AiLedger, AiReservation } from "@/lib/ai/gateway";
-import { labelOf, learnBlock, RESULT_HEADER, resultCounts, resultLine, resultsDue, RESULTS_BUDGET_CHARS, sampleResults, type ResultRow } from "@/lib/learning/results";
+import { labelOf, learnBlock, learnedSomething, RESULT_HEADER, resultCounts, resultLine, resultsDue, RESULTS_BUDGET_CHARS, sampleResults, type ResultRow } from "@/lib/learning/results";
 import { FakeTransport } from "../engine/fake-ai";
 
 vi.mock("server-only", () => ({}));
@@ -115,6 +115,7 @@ const answer = (over: object = {}) => ({
   favor: { company_types: ["builder", "property_manager"], towns: ["Worcester", "Boston"] },
   avoid_filter: { company_types: [], towns: [] },
   search_queries: ["multifamily builders Worcester MA"],
+  contradicted: [],
   ...over,
 });
 
@@ -141,6 +142,30 @@ describe("profile from results (one Sonnet call)", () => {
     ]);
     expect(r.data.filter).toEqual({ companyTypes: ["builder"], towns: ["Worcester"] });
     expect(r.data.searchQueries).toEqual(["multifamily builders Worcester MA"]);
+  });
+
+  test("the approved list profile's points carry over (marked, own citations) unless the results contradict them", async () => {
+    const current = {
+      points: [
+        { key: "region" as const, text: "Região de Worcester", rows: [7, 8] },
+        { key: "size" as const, text: "Prédios grandes", rows: [9] },
+      ],
+      filter: { companyTypes: [], towns: [] },
+      searchQueries: [],
+    };
+    const t = new FakeTransport({ profile_learn: () => ({ json: answer({ contradicted: [2] }) }) });
+    const r = await learnFromResults(ctx(t).c, ROWS, current);
+    expect(r.data.points).toEqual([
+      { key: "region", text: "Região de Worcester", rows: [7, 8], carried: true },
+      { key: "type", text: "Construtoras de prédios", rows: [1, 3] },
+      { key: "avoid", text: "Reformas pequenas", rows: [2, 4] },
+    ]);
+    expect(t.callsFor("profile_learn")[0].user).toMatch(/"n": ?1/);
+    expect(learnedSomething(r.data, current)).toBe(true);
+    // nothing new and nothing contradicted: not worth a proposal
+    const same = await learnFromResults(ctx(new FakeTransport({ profile_learn: () => ({ json: answer({ points: [], avoid: [] }) }) })).c, ROWS, current);
+    expect(same.data.points.every((p) => p.carried)).toBe(true);
+    expect(learnedSomething(same.data, current)).toBe(false);
   });
 
   test("rows and the current profile are untrusted data; a planted instruction changes nothing", async () => {

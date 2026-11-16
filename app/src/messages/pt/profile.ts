@@ -11,6 +11,7 @@ export const profile = {
   approve: "Aprovar",
   cancelEdit: "Cancelar edição",
   rowsCite: "(linhas {rows})",
+  carriedCite: "(do perfil aprovado)",
   keys: { type: "Tipo", size: "Porte", region: "Região", projects: "Obras", signals: "Sinais", where_to_find: "Onde achar", avoid: "Evitar" },
   train: "Treinar (estimativa US$ {usd})",
   see: "Ver perfil aprendido",
