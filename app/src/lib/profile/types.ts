@@ -1,10 +1,13 @@
 // F3c-3: the learned profile (K-7). Stored as jsonb in public.learned_profiles (migration 0015).
 import type { CompanyType } from "@/lib/research/types";
 
-export const POINT_KEYS = ["type", "size", "region", "projects", "signals", "where_to_find"] as const;
+/** The keys a training list can show. */
+export const LIST_POINT_KEYS = ["type", "size", "region", "projects", "signals", "where_to_find"] as const;
+/** Plus "avoid": what did not work (results proposals, 0032). Shown last on the card. */
+export const POINT_KEYS = [...LIST_POINT_KEYS, "avoid"] as const;
 export type PointKey = (typeof POINT_KEYS)[number];
 
-/** What the AI proposes and a sender approves. Every point cites rows of the training list. */
+/** What the AI proposes and a sender approves. Every point cites rows of the training list (or of the results sample). */
 export type LearnedProfile = {
   /** At most 12; `text` up to 200 characters; `rows` are 1..20 import row numbers. */
   points: { key: PointKey; text: string; rows: number[] }[];

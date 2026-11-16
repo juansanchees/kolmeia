@@ -6,6 +6,8 @@ import { townOf } from "@/lib/coverage/region";
 import { defaultTransport } from "@/lib/ai/gateway";
 import { isAiError, type AiErrorCode } from "@/lib/ai/errors";
 import { learnProfile, SOCIAL } from "@/lib/ai/profile-tasks";
+import { learnFromResults } from "@/lib/ai/results-tasks";
+import { currentProfileOf, learnBlock, resultCounts, type ResultsData } from "@/lib/learning/results";
 import { sessionLedger } from "@/lib/ai/session-ledger";
 import { openProposalId } from "@/lib/profile/queries";
 import { sampleRows } from "@/lib/profile/sample";
@@ -94,6 +96,38 @@ export async function trainProfileAction(importId: string): Promise<{ ok: true; 
   if (error || !data) return { ok: false, error: E.failed };
   revalidatePath("/leads/subir");
   return { ok: true, profileId: String(data) };
+}
+
+/**
+ * "Aprender com os resultados": one Sonnet call in this user's session over the leads with a result; saves a PROPOSAL
+ * only (an open one is returned instead of paying twice). Needs 10 labeled leads, 3 of them good.
+ */
+export async function learnFromResultsAction(): Promise<{ ok: true; profileId: string } | { ok: false; error: string }> {
+  const workspace = await requireSender();
+  const db = await createClient();
+  if (!db) return { ok: false, error: E.failed };
+  const { data, error } = await db.rpc("results_learning_rows", { p_ws: workspace.id });
+  if (error || !data) return { ok: false, error: E.failed };
+  const d = data as ResultsData;
+  if (d.open_id) return { ok: true, profileId: d.open_id };
+  const block = learnBlock(resultCounts(d.rows));
+  if (block) return { ok: false, error: t.profile.results[block] };
+
+  let profile: LearnedProfile;
+  let sampleRows: number;
+  try {
+    const r = await learnFromResults({ workspaceId: workspace.id, runId: null, ledger: sessionLedger(db), transport: defaultTransport() }, d.rows, currentProfileOf(d.current));
+    profile = r.data;
+    sampleRows = r.sampleRows;
+  } catch (e) {
+    return { ok: false, error: (isAiError(e) && AI_MESSAGES[e.code]) || t.ai.generic };
+  }
+  if (profile.points.length === 0) return { ok: false, error: t.profile.results.empty };
+
+  const { data: id, error: pErr } = await db.rpc("propose_results_profile", { p_ws: workspace.id, p_profile: profile, p_sample_rows: sampleRows });
+  if (pErr || !id) return { ok: false, error: E.failed };
+  revalidatePath("/leads/perfil");
+  return { ok: true, profileId: String(id) };
 }
 
 /** The only way a profile starts to apply. `editedProfile` replaces the proposal's content (the original is kept). */

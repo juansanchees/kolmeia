@@ -12,6 +12,8 @@ export type ProfileRow = {
   agent_id: string | null;
   version: number | null;
   status: "proposed" | "approved" | "rejected" | "superseded";
+  /** 'list': a training list (0015); 'results': lead outcomes (0032). */
+  source: "list" | "results";
   profile: LearnedProfile;
   original: LearnedProfile;
   sample_rows: number;
@@ -25,7 +27,7 @@ const PAGE = 1000;
 export async function getProfile(db: SupabaseClient, id: string): Promise<ProfileRow | null> {
   const { data, error } = await db
     .from("learned_profiles")
-    .select("id, workspace_id, import_id, agent_id, version, status, profile, original, sample_rows, created_at, lead_imports(list_name, row_count)")
+    .select("id, workspace_id, import_id, agent_id, version, status, source, profile, original, sample_rows, created_at, lead_imports(list_name, row_count)")
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error(`getProfile: ${error.message}`);

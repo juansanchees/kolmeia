@@ -53,7 +53,7 @@ export function ProfileCard({ profile, hunters }: { profile: ProfileRow; hunters
   return (
     <section aria-labelledby="profile-title" className="flex min-w-0 flex-col gap-4 border border-line bg-surface p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 id="profile-title" className="text-2xl">{fill(M.title, { list: profile.list_name, rows: profile.row_count })}</h1>
+        <h1 id="profile-title" className="text-2xl">{profile.source === "results" ? fill(M.results.cardTitle, { rows: profile.sample_rows }) : fill(M.title, { list: profile.list_name, rows: profile.row_count })}</h1>
         <Pill tone={proposed ? "warm" : profile.status === "approved" ? "ok" : "cold"}>{status}</Pill>
       </div>
       {error && <Notice tone="warn" role="alert">{error}</Notice>}

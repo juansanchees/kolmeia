@@ -2,7 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { townOf } from "@/lib/coverage/region";
 import { PROFILE_ROWS_BUDGET_CHARS, PROFILE_SAMPLE_MAX, sampleRows } from "@/lib/profile/sample";
-import { POINT_KEYS, type LearnedProfile } from "@/lib/profile/types";
+import { LIST_POINT_KEYS, type LearnedProfile } from "@/lib/profile/types";
 import { COMPANY_TYPES } from "@/lib/research/types";
 import { reserveFor, runTask, type AiContext, type TaskDef, type TaskResult } from "./gateway";
 import { MODELS } from "./models";
@@ -16,7 +16,7 @@ import type { ProfileLearnInput } from "./prompts/profile-learn";
 export type { ProfileLearnInput };
 
 export const profileSchema = z.object({
-  points: z.array(z.object({ key: z.enum(POINT_KEYS), text: z.string(), rows: z.array(z.number()) })),
+  points: z.array(z.object({ key: z.enum(LIST_POINT_KEYS), text: z.string(), rows: z.array(z.number()) })),
   filter: z.object({ company_types: z.array(z.enum(COMPANY_TYPES)), towns: z.array(z.string()) }),
   search_queries: z.array(z.string()),
 });

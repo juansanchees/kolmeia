@@ -35,7 +35,7 @@ describe("F1 nav", () => {
       ["Fontes conectadas", "/configuracoes/fontes"],
     ]);
   });
-  test("the LEADS tabs: Ligar and Tarefas for everyone, Listas, Funil and Cobertura for owner/sdr; Equipe only for the owner", () => {
+  test("the LEADS tabs: Ligar and Tarefas for everyone, Listas, Funil, Cobertura and Perfil for owner/sdr; Equipe only for the owner", () => {
     expect(leadsTabsFor("closer").map((i) => [i.label, i.href])).toEqual([
       ["Todos", "/leads"],
       ["Ligar", "/leads/ligar"],
@@ -49,6 +49,7 @@ describe("F1 nav", () => {
         ["Listas", "/leads/listas"],
         ["Funil", "/leads/funil"],
         ["Cobertura", "/leads/cobertura"],
+        ["Perfil", "/leads/perfil"],
       ]);
     }
     expect(LEADS_TABS).toEqual(leadsTabsFor("closer"));

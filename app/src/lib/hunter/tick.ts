@@ -81,6 +81,9 @@ export async function runHunterTick(opts: {
         firstError ??= codeOf(e, e instanceof Error && e.name === "HunterAuthError" ? "run_refused" : "step_error");
       }
     }
+    // learning loop: only on a tick with no Caçador step (its one AI call never competes with a run); a failure is
+    // never the tick's failure
+    if (counts.steps === 0 && store.learnFromResults) await store.learnFromResults(tickId, transport).catch(() => undefined);
   } catch (e) {
     firstError ??= codeOf(e, "tick_error");
     await finish().catch(() => undefined);

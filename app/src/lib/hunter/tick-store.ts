@@ -1,6 +1,8 @@
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { env } from "@/lib/env";
+import type { AiTransport } from "@/lib/ai/types";
+import { learnFromResultsTick } from "@/lib/learning/tick";
 import type { ResearchStore } from "@/lib/research/store";
 import { HunterResearchStore } from "./research-store";
 import { supabaseRpc, type RpcFn } from "./rpc";
@@ -17,6 +19,8 @@ export interface HunterTickStore {
   pauseAgent(tickId: string, runId: string, reason: HunterPauseReason): Promise<void>;
   finishTick(tickId: string, counts: HunterCounts, error: string | null): Promise<void>;
   research(tickId: string): ResearchStore;
+  /** Learning loop (0032): at most one results proposal per idle tick. Optional: test stores leave it out. */
+  learnFromResults?(tickId: string, transport: AiTransport | null): Promise<unknown>;
 }
 
 export class RpcHunterTickStore implements HunterTickStore {
@@ -45,6 +49,10 @@ export class RpcHunterTickStore implements HunterTickStore {
 
   research(tickId: string): ResearchStore {
     return new HunterResearchStore(this.rpc, tickId);
+  }
+
+  learnFromResults(tickId: string, transport: AiTransport | null): Promise<unknown> {
+    return learnFromResultsTick(this.rpc, tickId, transport);
   }
 }
 

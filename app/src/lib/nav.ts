@@ -32,7 +32,7 @@ export const LEADS_TABS: readonly NavItem[] = [
   { href: "/leads/tarefas", label: t.leads.nav.tasks },
 ];
 
-/** Listas, Funil and Cobertura are for owner and sdr; the closer keeps the tabs above. */
+/** Listas, Funil, Cobertura and Perfil are for owner and sdr; the closer keeps the tabs above. */
 export function leadsTabsFor(role: Role): readonly NavItem[] {
   return role === "closer"
     ? LEADS_TABS
@@ -41,6 +41,7 @@ export function leadsTabsFor(role: Role): readonly NavItem[] {
         { href: "/leads/listas", label: t.leads.nav.lists },
         { href: "/leads/funil", label: t.funnel.tab },
         { href: "/leads/cobertura", label: t.coverage.tab },
+        { href: "/leads/perfil", label: t.profile.results.tab },
       ];
 }
 

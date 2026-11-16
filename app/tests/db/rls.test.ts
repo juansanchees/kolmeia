@@ -168,6 +168,10 @@ describe("proof that RLS is really enforced in PGlite", () => {
         "record_verifier_verdict", "strip_invalid_email",
         // 0029 (the strong-model redraft writes AI columns the client may not; the AI-question tables need no definer)
         "replace_ai_draft",
+        // 0032 (learning loop: the core, payer and tick check have no client grant; learned_profile_valid is NOT definer)
+        "results_last_at", "results_rows_core", "propose_results_core", "results_learning_rows", "propose_results_profile",
+        "results_tick_ok", "results_payer", "hunter_results_due", "hunter_results_rows", "hunter_results_reserve_ai_call",
+        "hunter_results_settle_ai_call", "hunter_propose_results_profile",
       ].sort(),
     );
     for (const r of rows) expect(r.proconfig).toContain("search_path=\"\"");

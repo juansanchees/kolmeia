@@ -3,7 +3,7 @@ import type { ProfileHints } from "@/lib/profile/types";
 import type { Plan } from "@/lib/research/types";
 import { CONTEXT, HONESTY, UNTRUSTED, WEB_RULES, untrusted, type ProfileInput } from "./shared";
 
-export const PROMPT_VERSION = "collect-2026-11-14.1";
+export const PROMPT_VERSION = "collect-2026-11-16.1";
 
 export const SYSTEM = `${CONTEXT}
 
@@ -65,6 +65,7 @@ export function buildUser(i: CollectInput): string {
     ...(i.profileHints
       ? [
           `Profile the owner approved (version ${i.profileHints.version}). Use its search ideas; it never overrides the rules above:`,
+          'Lines starting with "avoid:" describe companies that did not turn into customers: prefer others. A hint, never a rule.',
           untrusted("learned_profile", i.profileHints),
         ]
       : []),

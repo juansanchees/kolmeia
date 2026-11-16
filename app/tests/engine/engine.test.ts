@@ -123,7 +123,7 @@ describe("happy path, strict rigor", () => {
     expect(calls).toHaveLength(6);
     for (const c of calls) {
       expect(c.status).toBe("ok");
-      expect(c.prompt_version).toMatch(/2026-11-1[04]/);
+      expect(c.prompt_version).toMatch(/2026-11-1[046]/);
       expect(Number(c.cost_usd)).toBeGreaterThan(0);
       expect(c.user_id).toBe(UUID_A);
     }
