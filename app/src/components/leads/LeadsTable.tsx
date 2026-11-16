@@ -7,7 +7,7 @@ import type { AiQuestion } from "@/lib/ai-questions/types";
 import { EmailBadge } from "@/components/leads/EmailBadge";
 import { FacetPanel } from "@/components/leads/FacetPanel";
 import { NlSearch } from "@/components/leads/NlSearch";
-import { SelectionBar } from "@/components/leads/SelectionBar";
+import { SelectionBar, type BulkNotice } from "@/components/leads/SelectionBar";
 import { ViewBar } from "@/components/leads/ViewBar";
 import type { LeadView } from "@/lib/leads/queries";
 import { usd } from "@/components/research/format";
@@ -115,6 +115,8 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
   const [menuOpen, setMenuOpen] = useState(false);
   const [openPanel, setOpenPanel] = useState<Panel | null>(null);
   const [csvError, setCsvError] = useState<string | null>(null);
+  // the last bulk result (archive / type); kept here because a success unmounts the selection bar
+  const [notice, setNotice] = useState<BulkNotice | null>(null);
   const router = useRouter();
   const search = useSearchParams();
   // The lead opens as a modal over this list (?lead=): same page, so filters/pager/scroll stay.
@@ -222,25 +224,33 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
     setPicked(new Set());
     router.refresh();
   };
+  const onBulkResult = (n: BulkNotice) => {
+    setNotice(n);
+    if (n.ok) clearSelection();
+  };
+  const pickTab = (patch: Partial<LeadFilters>) => {
+    setNotice(null);
+    set(patch);
+  };
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
       {listBanner}
       <div role="group" aria-label={L.segments.label} className="flex flex-wrap border-b border-line">
         {SEGMENT_TABS.map((x) => (
-          <button key={x} type="button" aria-pressed={f.segment === x} onClick={() => set({ segment: x })} className={tabCls(f.segment === x)}>
+          <button key={x} type="button" aria-pressed={f.segment === x} onClick={() => pickTab({ segment: x })} className={tabCls(f.segment === x)}>
             {L.segments[x]} <span className={countCls}>{facets.segments[x]}</span>
           </button>
         ))}
       </div>
       <div role="group" aria-label={L.stages.label} className="flex flex-wrap items-stretch border-b border-line">
         {STAGE_TABS.map((x) => (
-          <button key={x} type="button" aria-pressed={f.stage === x} onClick={() => set({ stage: x })} className={tabCls(f.stage === x)}>
+          <button key={x} type="button" aria-pressed={f.stage === x} onClick={() => pickTab({ stage: x })} className={tabCls(f.stage === x)}>
             {x === "all" ? L.filters.all : L.stages[x]} <span className={countCls}>{x === "all" ? activeTotal : facets.stages[x]}</span>
           </button>
         ))}
         <span aria-hidden className="mx-2 my-2 border-l border-line" />
-        <button type="button" aria-pressed={f.stage === "archived"} onClick={() => set({ stage: "archived" })} className={tabCls(f.stage === "archived")}>
+        <button type="button" aria-pressed={f.stage === "archived"} onClick={() => pickTab({ stage: "archived" })} className={tabCls(f.stage === "archived")}>
           {L.stages.archived} <span className={countCls}>{facets.stages.archived}</span>
         </button>
       </div>
@@ -340,6 +350,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
         </div>
       )}
 
+      {notice && <p role="status" className={`m-0 text-sm ${notice.ok ? "text-ok" : "text-danger"}`}>{notice.text}</p>}
       <span className="font-mono text-xs text-muted">{filtered.length} / {items.length}</span>
 
       {filtered.length === 0 ? (
@@ -410,7 +421,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
 
       {canCreate && selected.length > 0 && (
         <div className="sticky bottom-0 z-10">
-          <SelectionBar selected={selected} lists={lists} archivedTab={f.stage === "archived"} onOpenQualifier={openQualifier} onDone={clearSelection} />
+          <SelectionBar selected={selected} lists={lists} archivedTab={f.stage === "archived"} onOpenQualifier={openQualifier} onResult={onBulkResult} />
         </div>
       )}
     </div>

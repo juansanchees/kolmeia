@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { useTransition } from "react";
 import { archiveLeadsAction, setLeadSegmentAction, unarchiveLeadsAction } from "@/app/(app)/leads/lead-actions";
 import { ActionButton } from "@/components/email/ActionButton";
 import { btn } from "@/components/email/bits";
@@ -10,43 +11,43 @@ import type { FormState } from "@/lib/form-state";
 import { SEGMENTS, type Segment } from "@/lib/leads/types";
 import { fill, t } from "@/messages/pt";
 
-const asResult = (r: FormState) => ({ ok: r.status === "success", message: r.message });
+export type BulkNotice = { ok: boolean; text: string };
+const noticeOf = (r: FormState, failed: string): BulkNotice => ({ ok: r.status === "success", text: r.message ?? failed });
 
-/** Shown only while rows are ticked: what can be done to all of them at once. */
-export function SelectionBar({ selected, lists, archivedTab, onOpenQualifier, onDone }: { selected: string[]; lists: { id: string; name: string }[]; archivedTab: boolean; onOpenQualifier: () => void; onDone: () => void }) {
+/**
+ * Shown only while rows are ticked: what can be done to all of them at once. Archive and type results go to `onResult`
+ * (the table shows them), because a success clears the selection and this bar unmounts with it.
+ */
+export function SelectionBar({ selected, lists, archivedTab, onOpenQualifier, onResult }: { selected: string[]; lists: { id: string; name: string }[]; archivedTab: boolean; onOpenQualifier: () => void; onResult: (n: BulkNotice) => void }) {
+  const router = useRouter();
   const [pending, start] = useTransition();
-  const [msg, setMsg] = useState<string | null>(null);
 
   const setSegment = (value: string) =>
     start(async () => {
-      const r = await setLeadSegmentAction(selected, value === "none" ? null : (value as Segment));
-      setMsg(r.message ?? null);
-      if (r.status === "success") onDone();
+      onResult(noticeOf(await setLeadSegmentAction(selected, value === "none" ? null : (value as Segment)), t.leads.segmentPick.failed));
     });
   const archive = async () => {
-    const r = asResult(await (archivedTab ? unarchiveLeadsAction(selected) : archiveLeadsAction(selected)));
-    if (r.ok) onDone();
-    return r;
+    onResult(noticeOf(await (archivedTab ? unarchiveLeadsAction(selected) : archiveLeadsAction(selected)), t.leads.archive.failed));
+    // the table shows the result; ActionButton must not show a second copy
+    return { ok: true };
   };
 
   return (
     <div role="region" aria-label={fill(t.leads.toolbar.selected, { n: selected.length })} className="flex flex-wrap items-start gap-2 border border-blue bg-blue-wash p-3">
       <span className="flex min-h-11 items-center text-sm font-semibold">{fill(t.leads.toolbar.selected, { n: selected.length })}</span>
       <AddToList selected={selected} lists={lists} />
-      <EmailTools selected={selected} onDone={onDone} />
+      {/* refresh only: EmailTools shows its own result, so the selection (and this bar) stays */}
+      <EmailTools selected={selected} onDone={() => router.refresh()} />
       <button type="button" className={btn.ghost} onClick={onOpenQualifier}>
         {t.spend.qualify.go}
       </button>
-      <span className="flex flex-col gap-1">
-        <select aria-label={t.leads.segmentPick.bulk} value="" disabled={pending} onChange={(e) => setSegment(e.target.value)} className="min-h-11 min-w-0 border border-edge bg-surface px-2.5 text-[15px] text-ink">
+      <select aria-label={t.leads.segmentPick.bulk} value="" disabled={pending} onChange={(e) => setSegment(e.target.value)} className="min-h-11 min-w-0 border border-edge bg-surface px-2.5 text-[15px] text-ink">
           <option value="" disabled>{t.leads.segmentPick.bulk}</option>
           {SEGMENTS.map((s) => (
             <option key={s} value={s}>{t.leads.segments[s]}</option>
           ))}
           <option value="none">{t.leads.segments.none}</option>
-        </select>
-        {msg && <span role="status" className="text-sm text-muted">{msg}</span>}
-      </span>
+      </select>
       <ActionButton
         action={archive}
         label={archivedTab ? t.leads.archive.unarchive : t.leads.archive.archive}

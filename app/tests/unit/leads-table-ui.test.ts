@@ -26,6 +26,14 @@ describe("leads list UI rework", () => {
     const p = read("src/components/leads/FacetPanel.tsx");
     for (const s of ["facets.lists", "noResearch", "agents"]) expect(p).toContain(s);
   });
+  test("bulk results stay visible after the selection bar unmounts", () => {
+    const bar = read("src/components/leads/SelectionBar.tsx");
+    expect(table).toContain('role="status"');
+    expect(table).toContain("onResult={");
+    expect(bar).toMatch(/onResult\(noticeOf\(await setLeadSegmentAction\(/);
+    expect(bar).toMatch(/onResult\(noticeOf\(await \(archivedTab \? unarchiveLeadsAction/);
+    expect(bar).toContain("onDone={() => router.refresh()}"); // EmailTools keeps the selection and its own result
+  });
   test("a failed CSV never leaves an unhandled rejection", () => {
     expect(table).toMatch(/try \{[\s\S]{0,200}?leadsCsvAction\(/);
     expect(table).toContain("t.leads.toolbar.csvFailed");
