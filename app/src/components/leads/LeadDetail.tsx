@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { emailBriefOf, emailChecksOf, getLead } from "@/lib/leads/queries";
+import { emailBriefOf, emailChecksOf, getLead, originListsOf } from "@/lib/leads/queries";
 import type { EmailQuality } from "@/lib/leads/email-quality";
 import { EmailTools } from "@/components/leads/EmailTools";
 import { parseCloserBrief } from "@/lib/email/brief";
@@ -11,10 +11,13 @@ import { isSender } from "@/lib/roles";
 import { getCurrentWorkspace, getUser } from "@/lib/workspace";
 import { HandOffForm } from "@/components/leads/HandOffForm";
 import { StatusButtons } from "@/components/leads/StatusButtons";
+import { LeadTypePicker } from "@/components/leads/LeadTypePicker";
+import { LeadArchiveButton } from "@/components/leads/LeadArchiveButton";
+import { derivedSegmentOf, segmentInputOf } from "@/lib/leads/classify";
 import { AddToCallList } from "@/components/leads/AddToCallList";
 import { AddToCampaign } from "@/components/leads/AddToCampaign";
 import type { CampaignChoice } from "@/lib/leads/campaign-note";
-import { displayOf, isStaleProof, originLabel } from "@/lib/leads/view";
+import { displayOf, isStaleProof, originLabel, proofCount } from "@/lib/leads/view";
 import { count, date, host, money, UNKNOWN } from "@/components/research/format";
 import { Hook, ProofList } from "@/components/research/proof";
 import { Pill } from "@/components/research/controls";
@@ -45,14 +48,14 @@ export async function LeadDetail({ id, modal = false }: { id: string; modal?: bo
   const best = candidates.find((c) => c.id === lead.best_candidate_id) ?? candidates[0] ?? null;
   const display = displayOf(best, fields);
   const importName = lead.origin_import_id ? (importNames[lead.origin_import_id] ?? null) : null;
-  // "Listas:" = the import lists the values cite plus the agent that found the lead (spec 5.2).
-  const listNames = [...new Set([...fields.flatMap((f) => (f.source === "import" && f.source_ref && importNames[f.source_ref] ? [importNames[f.source_ref]] : [])), ...(agentName ? [agentName] : [])])];
   const [workspace, user] = await Promise.all([getCurrentWorkspace(), getUser()]);
   const sender = workspace ? isSender(workspace.role) : false;
   const open = !CLOSED.includes(lead.status);
   const mine = Boolean(user && lead.owner_id === user.id);
   const brief = parseCloserBrief(lead.closer_brief);
   // e-mail quality badges (0028): senders only; RLS gives the closer no rows anyway
+  // every import/list the lead came from (the closer has no list rows visible, so she gets none)
+  const origins = sender ? ((await originListsOf(supabase, [lead.id])).get(lead.id) ?? []) : [];
   const emailQuality: Record<string, EmailQuality> = {};
   if (sender && workspace) {
     const checks = await emailChecksOf(supabase, workspace.id, [...fields.filter((f) => f.field === "email").map((f) => f.value), ...(display.email ? [display.email] : [])]);
@@ -116,11 +119,11 @@ export async function LeadDetail({ id, modal = false }: { id: string; modal?: bo
             {best?.second_pass === "refuted" && <Pill tone="no">{L.refuted}</Pill>}
             {!best && <Pill tone="no">{t.leads.unproven}</Pill>}
             {lead.do_not_call && <Pill tone="no">{H.doNotCall}</Pill>}
+            {lead.archived_at && <Pill tone="no">{fill(t.leads.archive.archivedOn, { date: date(lead.archived_at) })}</Pill>}
           </span>
         </div>
         <p className="text-[13px] text-muted">
           {[
-            best?.approach ? LB.approach[best.approach] : null,
             t.leads.statuses[lead.status],
             originLabel({ lead, agentName, importName }),
             fill(t.leads.firstSeen, { date: date(lead.first_seen_at) }),
@@ -132,10 +135,15 @@ export async function LeadDetail({ id, modal = false }: { id: string; modal?: bo
           <span className="font-semibold text-ink">{t.qualifier.levelLabel} {lead.level}</span> · {levelReason(fields, lead.level)}
           {queue && <> · {nextStepLabel(queue.next_step, queue.done_reason)}</>}
         </p>
-        {listNames.length > 0 && (
-          <p className="text-[13px] text-muted">
-            <span className="font-semibold text-ink">{t.qualifier.lists}</span> {listNames.join(", ")}
-          </p>
+        <p className="text-[13px] text-muted">
+          <span className="font-semibold text-ink">{t.leads.origin.cameFrom}</span>{" "}
+          {origins.length > 0 ? origins.map((o) => fill(t.leads.origin.item, { name: o.name, date: date(o.at) })).join(", ") : t.leads.origin.none}
+        </p>
+        {sender && (
+          <div className="flex flex-wrap items-end gap-4">
+            <LeadTypePicker leadId={lead.id} value={lead.segment} derived={derivedSegmentOf(segmentInputOf(lead, best, display.companyType ?? null, origins))} />
+            <LeadArchiveButton leadId={lead.id} archived={Boolean(lead.archived_at)} />
+          </div>
         )}
         {queue && lead.level_note && <LevelNote leadId={lead.id} note={lead.level_note} />}
 
@@ -198,6 +206,24 @@ export async function LeadDetail({ id, modal = false }: { id: string; modal?: bo
             )}
           </>
         )}
+      </section>
+
+      <section aria-labelledby="research-title" className="flex flex-col gap-2 border border-line bg-surface p-4">
+        <h2 id="research-title" className="text-xl">
+          {t.leads.research.title}
+        </h2>
+        <dl className="m-0 grid grid-cols-3 gap-2">
+          {[
+            [t.leads.research.temperature, best?.temperature ? LB.temperature[best.temperature] : t.leads.research.none],
+            [t.leads.research.approach, best?.approach ? LB.approach[best.approach] : t.leads.research.none],
+            [t.leads.research.proof, best ? fill(t.leads.proofCount, { n: proofCount(checks.filter((k) => k.candidate_id === best.id)) }) : t.leads.unproven],
+          ].map(([k, v]) => (
+            <div key={k} className="flex min-w-0 flex-col">
+              <dt className="font-mono text-xs text-muted">{k}</dt>
+              <dd className="m-0 text-[15px] font-semibold">{v}</dd>
+            </div>
+          ))}
+        </dl>
       </section>
 
       <WhyHot leadId={lead.id} facts={whyHotFacts({ level: lead.level, best, fields, checks })} canSummarize={sender} reserveUsd={reserveFor(explainDef)} />
