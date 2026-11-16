@@ -24,6 +24,7 @@ describe("pageBounds", () => {
 
 describe("Paged", () => {
   const render = (n: number) =>
+    // eslint-disable-next-line react/no-children-prop
     renderToStaticMarkup(createElement(Paged, { as: "ul", children: Array.from({ length: n }, (_, i) => createElement("li", { key: i }, `item${i}`)) }));
   it("shows 15 rows and the pager when there are more", () => {
     const html = render(40);
