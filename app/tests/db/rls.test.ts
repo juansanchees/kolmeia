@@ -166,6 +166,8 @@ describe("proof that RLS is really enforced in PGlite", () => {
         // 0028 (e-mail quality: the paid verifier's verdict has no client grant; the prospect trigger reads checks
         // the client may not; email_sendable / stamp_email_check / claim_next_email_core are NOT definer)
         "record_verifier_verdict", "strip_invalid_email",
+        // 0029 (the strong-model redraft writes AI columns the client may not; the AI-question tables need no definer)
+        "replace_ai_draft",
       ].sort(),
     );
     for (const r of rows) expect(r.proconfig).toContain("search_path=\"\"");
