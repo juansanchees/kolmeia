@@ -1,6 +1,7 @@
 // Lead vocabulary (migration 0009). Safe for client and server.
 import type { CandidateRow } from "@/lib/research/rows";
 import type { CheckWithEvidence } from "@/lib/research/store";
+import type { AiCell } from "@/lib/ai-questions/types";
 import type { EmailQuality } from "./email-quality";
 
 export const LEAD_STATUSES = ["new", "call_list", "in_campaign", "replied", "with_closer", "meeting", "won", "lost", "discarded"] as const;
@@ -69,6 +70,8 @@ export type LeadListItem = {
   proofOk: number;
   /** The checked quality of display.email (0028 email_checks); absent = never checked. */
   emailQuality?: EmailQuality | null;
+  /** AI-question answers of this lead, by question id (0029); absent = none loaded. */
+  ai?: Record<string, AiCell>;
 };
 
 export type LeadDetail = {

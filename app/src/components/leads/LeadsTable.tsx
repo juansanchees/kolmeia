@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AddToList } from "@/components/leads/AddToList";
+import { AiQuestionPanel, answerText } from "@/components/leads/AiQuestionPanel";
+import type { AiQuestion } from "@/lib/ai-questions/types";
+import { applyShortcut, SHORTCUTS } from "@/lib/leads/shortcuts";
 import { EmailBadge } from "@/components/leads/EmailBadge";
 import { EmailTools } from "@/components/leads/EmailTools";
 import { FacetPanel } from "@/components/leads/FacetPanel";
@@ -25,6 +28,11 @@ const LB = t.research.labels;
 const LEAD_TABS = TABS.filter((x): x is LeadTab => x !== "jobs");
 const selectCls = "min-h-11 min-w-0 border border-line bg-surface px-2.5 text-sm text-ink";
 
+const GRID = "md:grid-cols-[minmax(0,2fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,1.2fr)_minmax(0,0.9fr)]";
+// the same columns plus the AI question's (Tailwind needs both class names written out)
+const GRID_AI = "md:grid-cols-[minmax(0,2fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,1.6fr)]";
+const SC = t.leads.shortcuts;
+
 const linkBtn = "inline-flex min-h-11 items-center border border-blue bg-surface px-4 text-sm font-semibold text-blue no-underline hover:bg-blue-wash";
 
 type Props = {
@@ -36,11 +44,14 @@ type Props = {
   lists?: { id: string; name: string }[];
   /** Showing one list only (/leads?lista=<id>). */
   list?: { id: string; name: string } | null;
+  /** AI questions of the workspace (0029) and the worst-case cost of one answer. */
+  questions?: AiQuestion[];
+  answerReserveUsd?: number;
 };
 
 const lastTouch = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/New_York" }) : t.leads.never);
 
-export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: false }, initialFilters = DEFAULT_LEAD_FILTERS, views = [], lists = [], list = null }: Props) {
+export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: false }, initialFilters = DEFAULT_LEAD_FILTERS, views = [], lists = [], list = null, questions = [], answerReserveUsd = 0 }: Props) {
   const [f, setF] = useState<LeadFilters>(initialFilters);
   const router = useRouter();
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -60,6 +71,8 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
     return [...m.entries()];
   }, [items]);
   const hasOneOff = items.some((i) => i.lead.origin_kind === "one_off");
+  const [shortcutHref, setShortcutHref] = useState<string | null>(null);
+  const aiQ = questions.find((q) => q.id === f.aiQuestion) ?? null;
   const cities = useMemo(() => [...new Set(items.map((i) => i.display.city?.trim()).filter((c): c is string => Boolean(c)))], [items]);
 
   const listBanner = list && (
@@ -128,7 +141,43 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
       <div className="grid min-w-0 gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
       <FacetPanel facets={facets} f={f} set={set} />
       <div className="flex min-w-0 flex-col gap-4">
+      {canCreate && (
+        <div role="group" aria-label={SC.title} className="flex flex-wrap items-center gap-2">
+          <span className="font-mono text-xs text-muted">{SC.title}</span>
+          {SHORTCUTS.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => {
+                setF(applyShortcut(s, f));
+                setShortcutHref(s.href ?? null);
+              }}
+              className="min-h-11 border border-blue bg-surface px-3 text-[13px] font-semibold text-blue hover:bg-blue-wash"
+            >
+              {SC[s.id]}
+            </button>
+          ))}
+        </div>
+      )}
+      {canCreate && shortcutHref && (
+        <p className="m-0 text-[13px] text-muted">
+          {SC.builderSequenceHint}{" "}
+          <Link href={shortcutHref} className="text-blue underline underline-offset-4">{SC.builderSequenceLink}</Link>
+        </p>
+      )}
       {canCreate && <NlSearch cities={cities} onApply={(nl) => set(nl)} />}
+      {canCreate && (
+        <AiQuestionPanel
+          questions={questions}
+          f={f}
+          set={set}
+          selected={filtered.filter((i) => picked.has(i.lead.id)).map((i) => i.lead.id)}
+          filtered={filtered.map((i) => i.lead.id)}
+          reserveUsd={answerReserveUsd}
+          nameOf={(id) => items.find((i) => i.lead.id === id)?.display.name ?? id}
+          onDone={() => router.refresh()}
+        />
+      )}
       <div className="flex flex-wrap gap-2">
         <input
           type="search"
@@ -211,7 +260,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
           {filtered.map((i) => (
             <li key={i.lead.id} className="flex items-stretch border-b border-line last:border-b-0">
               {canCreate && <RowCheck checked={picked.has(i.lead.id)} name={i.display.name} onChange={(v) => toggle(i.lead.id, v)} />}
-              <Link href={`/leads/${i.lead.id}`} className="flex min-w-0 flex-1 flex-col gap-1 px-3.5 py-3 text-ink no-underline hover:bg-ground md:grid md:grid-cols-[minmax(0,2fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,1.2fr)_minmax(0,0.9fr)] md:items-center md:gap-3">
+              <Link href={`/leads/${i.lead.id}`} className={`flex min-w-0 flex-1 flex-col gap-1 px-3.5 py-3 text-ink no-underline hover:bg-ground md:grid ${aiQ ? GRID_AI : GRID} md:items-center md:gap-3`}>
                 <span className="min-w-0">
                   <span className="sr-only">{t.leads.columns.company}: </span>
                   <span className="block truncate text-sm font-semibold">{i.display.name}</span>
@@ -251,6 +300,13 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
                   <span className="sr-only">{t.leads.lastTouch}: </span>
                   {lastTouch(i.lead.last_touch_at)}
                 </span>
+                {aiQ && (
+                  <span className="min-w-0 text-[13px]">
+                    <span className="sr-only">{aiQ.question}: </span>
+                    <span className="font-semibold">{answerText(i.ai?.[aiQ.id])}</span>
+                    {i.ai?.[aiQ.id]?.excerpt && <span className="block truncate text-muted" title={i.ai[aiQ.id].excerpt ?? undefined}>“{i.ai[aiQ.id].excerpt}” · {i.ai[aiQ.id].label}</span>}
+                  </span>
+                )}
               </Link>
             </li>
           ))}

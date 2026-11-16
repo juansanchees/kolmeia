@@ -5,6 +5,7 @@ import type { CheckWithEvidence } from "@/lib/research/store";
 import { COMPANY_TYPES, type CompanyType, type Temperature } from "@/lib/research/types";
 import { z } from "zod";
 import { fill, t } from "@/messages/pt";
+import { matchesAnswer } from "@/lib/ai-questions/types";
 import { EMAIL_QUALITIES, type EmailQuality } from "./email-quality";
 import type { LeadDisplay, LeadFieldRow, LeadListItem, LeadStatus } from "./types";
 
@@ -43,10 +44,15 @@ export type LeadFilters = FacetFilters & {
   minLevel: 0 | 1 | 2 | 3 | 4;
   /** The best candidate's type, else the lead's own company_type value. */
   companyTypes: CompanyType[];
+  /** Permits worth at least this much in total (US$; 0 = no filter): the research's total_value_usd. */
+  minPermitUsd: number;
+  /** The AI question shown as a column ("" = none) and the answer it is filtered by ("all" = no filter). */
+  aiQuestion: string;
+  aiAnswer: string;
 };
 
 export const DEFAULT_LEAD_FILTERS: LeadFilters = {
-  q: "", temperature: "all", agent: "all", status: "all", tab: "all", minLevel: 0, companyTypes: [],
+  q: "", temperature: "all", agent: "all", status: "all", tab: "all", minLevel: 0, companyTypes: [], minPermitUsd: 0, aiQuestion: "", aiAnswer: "all",
   contact: "all", cities: [], levels: [], hasPhone: false, hasEmail: false, origins: [], emailQuality: [],
 };
 
@@ -76,6 +82,9 @@ const filtersSchema = z.object({
   origins: z.array(z.enum(LEAD_ORIGINS)).max(3),
   emailQuality: z.array(z.enum(EMAIL_QUALITIES)).max(4),
   companyTypes: z.array(z.enum(COMPANY_TYPES)).max(4),
+  minPermitUsd: z.number().min(0).max(1e10),
+  aiQuestion: z.union([z.literal(""), z.string().uuid()]),
+  aiAnswer: z.string().max(20),
 }).partial();
 
 /** A saved view's filters over the defaults; anything unreadable falls back to the default. */
@@ -133,12 +142,14 @@ export function leadInTab(i: Pick<LeadListItem, "best">, tab: LeadTab): boolean 
 function otherFiltersOf(f: LeadFilters): (i: LeadListItem) => boolean {
   const q = fold(f.q.trim());
   const qDigits = f.q.replace(/\D/g, "");
-  return ({ lead, best, display }) => {
+  return ({ lead, best, display, ai }) => {
     if (!leadInTab({ best }, f.tab)) return false;
     if (f.temperature !== "all" && (!best || best.temperature !== f.temperature)) return false;
     if (f.status !== "all" && lead.status !== f.status) return false;
     if (f.minLevel > 0 && lead.level < f.minLevel) return false;
     if (f.companyTypes.length > 0 && !(f.companyTypes as string[]).includes(best?.company_type ?? display.companyType ?? "")) return false;
+    if (f.minPermitUsd > 0 && (best?.total_value_usd ?? 0) < f.minPermitUsd) return false;
+    if (f.aiQuestion && !matchesAnswer(ai?.[f.aiQuestion], f.aiAnswer)) return false;
     if (f.agent === "one_off" ? lead.origin_kind !== "one_off" : f.agent !== "all" && lead.origin_agent_id !== f.agent) return false;
     if (q) {
       const phone = (display.phone ?? "").replace(/\D/g, "");

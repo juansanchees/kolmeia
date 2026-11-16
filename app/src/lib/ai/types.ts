@@ -17,7 +17,9 @@ export type AiTask =
   | "qualify_light"
   | "qualify_deep"
   | "profile_learn"
-  | "lead_search";
+  | "lead_search"
+  | "ai_answer"
+  | "lead_explain";
 
 export type AiUsage = {
   inputTokens: number;

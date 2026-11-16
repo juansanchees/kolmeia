@@ -6,6 +6,9 @@ import { DEFAULT_LEAD_FILTERS } from "@/lib/leads/view";
 import { listLeadIds, listNames } from "@/lib/lists/queries";
 import { connectedSources } from "@/lib/sources/queries";
 import { LeadsTable } from "@/components/leads/LeadsTable";
+import { reserveFor } from "@/lib/ai/gateway";
+import { answerDef } from "@/lib/ai/lead-ai-tasks";
+import { listAnswers, listQuestions } from "@/lib/ai-questions/store";
 
 // Server actions posted from this page ("Checar e-mails", "Achar e-mail") run DNS look-ups in rounds: give them time.
 export const maxDuration = 300;
@@ -20,7 +23,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   const sender = isSender(workspace?.role ?? "closer");
   if (!supabase || !workspace) return <LeadsTable items={[]} canCreate={false} />;
 
-  const [views, lists] = await Promise.all([listViews(supabase, workspace.id), sender ? listNames(supabase, workspace.id) : []]);
+  const [views, lists, questions] = await Promise.all([listViews(supabase, workspace.id), sender ? listNames(supabase, workspace.id) : [], listQuestions(supabase, workspace.id)]);
   const pick = (await searchParams).lista;
   const list = typeof pick === "string" && UUID.test(pick) ? (lists.find((l) => l.id === pick) ?? null) : null;
   // Senders open on "Novos" (never contacted); the closer's leads were all handed to her, so she opens on "Todos".
@@ -31,6 +34,9 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
     // "Buscar" buttons: senders only, and only for sources the workspace connected (the closer never reads connections).
     sender ? connectedSources(supabase, workspace.id) : null,
   ]);
+  // AI-question answers (0029), attached per lead; RLS gives the closer only her leads' answers
+  const answers = await listAnswers(supabase, workspace.id, questions.map((q) => q.id));
+  for (const i of items) i.ai = answers.get(i.lead.id);
   return (
     <LeadsTable
       items={items}
@@ -40,6 +46,8 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
       views={views}
       lists={lists}
       list={list}
+      questions={questions}
+      answerReserveUsd={reserveFor(answerDef)}
     />
   );
 }
