@@ -80,18 +80,22 @@ export async function inLeadChunks<T>(ids: string[], run: (chunk: string[]) => P
 /** Leads of a workspace with their best candidate. Runs as the user, so RLS decides what the closer sees. */
 export type LeadFilter = { ids?: string[]; statuses?: LeadRow["status"][]; ownerNotNull?: boolean };
 
+/** The list's read also embeds the qualifier's profile_match (one-to-one on lead_id): same request, no extra query. */
+const LIST_SELECT = `${LEAD_COLUMNS}, qualifier_queue(profile_match)`;
+type ListRow = LeadRow & { qualifier_queue?: { profile_match: boolean } | { profile_match: boolean }[] | null };
+
 export async function listLeads(db: SupabaseClient, workspaceId: string, filter: LeadFilter = {}): Promise<LeadListItem[]> {
-  let leads: LeadRow[] = [];
+  let raw: ListRow[] = [];
   if (filter.ids) {
     // a few known leads: no paging, only those ids (still the workspace's; RLS applies)
-    leads = await inChunks<LeadRow>(
+    raw = await inChunks<ListRow>(
       filter.ids,
-      (c) => db.from("leads").select(LEAD_COLUMNS).eq("workspace_id", workspaceId).in("id", c) as never,
+      (c) => db.from("leads").select(LIST_SELECT).eq("workspace_id", workspaceId).in("id", c) as never,
       "listLeads ids",
     );
   } else {
     for (let from = 0; from < LEADS_MAX; from += PAGE) {
-      let q = db.from("leads").select(LEAD_COLUMNS).eq("workspace_id", workspaceId);
+      let q = db.from("leads").select(LIST_SELECT).eq("workspace_id", workspaceId);
       if (filter.statuses) q = q.in("status", filter.statuses);
       if (filter.ownerNotNull) q = q.not("owner_id", "is", null);
       const { data: page, error } = await q
@@ -99,11 +103,16 @@ export async function listLeads(db: SupabaseClient, workspaceId: string, filter:
         .order("id", { ascending: true })
         .range(from, Math.min(from + PAGE, LEADS_MAX) - 1);
       if (error) throw new Error(`listLeads: ${error.message}`);
-      const rows = (page ?? []) as LeadRow[];
-      leads.push(...rows);
+      const rows = (page ?? []) as ListRow[];
+      raw.push(...rows);
       if (rows.length < PAGE) break;
     }
   }
+  const matched = new Set<string>();
+  const leads: LeadRow[] = raw.map(({ qualifier_queue: q, ...l }) => {
+    if ((Array.isArray(q) ? q[0] : q)?.profile_match) matched.add(l.id);
+    return l;
+  });
   if (leads.length === 0) return [];
 
   const bestIds = leads.map((l) => l.best_candidate_id).filter((x): x is string => Boolean(x));
@@ -147,6 +156,7 @@ export async function listLeads(db: SupabaseClient, workspaceId: string, filter:
       agentName: lead.origin_agent_id ? (agentName.get(lead.origin_agent_id) ?? null) : null,
       importName: lead.origin_import_id ? (importName.get(lead.origin_import_id) ?? null) : null,
       proofOk: best ? (proofBy.get(best.id) ?? 0) : 0,
+      profileMatch: matched.has(lead.id),
     });
   }
   const checks = await emailChecksOf(db, workspaceId, items.map((i) => i.display.email).filter((e): e is string => Boolean(e)));

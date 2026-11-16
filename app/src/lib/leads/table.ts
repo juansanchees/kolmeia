@@ -18,6 +18,7 @@ export function toTableRow(i: LeadListItem, origins: OriginList[]): LeadTableRow
     ai: i.ai,
     origins,
     segment: segmentOf(segmentInputOf(i.lead, i.best, i.display.companyType ?? null, origins)),
+    profileMatch: i.profileMatch,
   };
 }
 

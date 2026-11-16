@@ -94,6 +94,7 @@ export type LeadTableRow = {
   origins: OriginList[];
   /** The effective type: the manual one, else the derived one. */
   segment: Segment | null;
+  profileMatch?: boolean;
 };
 
 export type LeadListItem = {
@@ -107,6 +108,8 @@ export type LeadListItem = {
   emailQuality?: EmailQuality | null;
   /** AI-question answers of this lead, by question id (0029); absent = none loaded. */
   ai?: Record<string, AiCell>;
+  /** It fits the approved profile's filter (qualifier_queue.profile_match, 0015); absent = not loaded. */
+  profileMatch?: boolean;
 };
 
 export type LeadDetail = {

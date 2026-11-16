@@ -50,6 +50,7 @@ export type FilterRow = {
   ai?: LeadListItem["ai"];
   origins?: OriginList[];
   segment?: Segment | null;
+  profileMatch?: boolean;
 };
 
 export type LeadFilters = FacetFilters & {

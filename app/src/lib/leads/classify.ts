@@ -14,11 +14,14 @@ export function effectiveTemperature(level: number, temperature: Temperature | n
 
 const TEMP_SCORE: Record<string, number> = { very_hot: 4, hot: 3, warm: 2, cold: 1 };
 
-/** "Fila do dia": higher = call first. Weights are lexicographic (phone > temperature > never contacted > Dados > e-mail); closed leads are always last. */
-export function priorityOf(r: { lead: Pick<LeadRow, "status" | "level" | "first_contacted_at">; best: { temperature: Temperature | null } | null; display: { phone: string | null; email: string | null } }): number {
+/**
+ * "Fila do dia": higher = call first. Weights are lexicographic (phone > temperature > fits the approved profile >
+ * never contacted > Dados > e-mail); closed leads are always last.
+ */
+export function priorityOf(r: { lead: Pick<LeadRow, "status" | "level" | "first_contacted_at">; best: { temperature: Temperature | null } | null; display: { phone: string | null; email: string | null }; profileMatch?: boolean }): number {
   if (stageOf(r.lead) === "closed") return -1;
   const temp = TEMP_SCORE[effectiveTemperature(r.lead.level, r.best?.temperature ?? null) ?? ""] ?? 0;
-  return (r.display.phone?.trim() ? 10_000 : 0) + temp * 1_000 + (r.lead.status === "new" && !r.lead.first_contacted_at ? 100 : 0) + r.lead.level * 10 + (r.display.email?.trim() ? 1 : 0);
+  return (r.display.phone?.trim() ? 10_000 : 0) + temp * 1_000 + (r.profileMatch ? 200 : 0) + (r.lead.status === "new" && !r.lead.first_contacted_at ? 100 : 0) + r.lead.level * 10 + (r.display.email?.trim() ? 1 : 0);
 }
 
 /** "Alvará grande": the research's permits add up to at least this much (US$). */
