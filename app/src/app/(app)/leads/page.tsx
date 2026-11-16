@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace } from "@/lib/workspace";
 import { isSender } from "@/lib/roles";
-import { listLeads, listViews } from "@/lib/leads/queries";
+import { listLeads, listViews, originListsOf } from "@/lib/leads/queries";
+import { toTableRow } from "@/lib/leads/table";
 import { DEFAULT_LEAD_FILTERS } from "@/lib/leads/view";
 import { listLeadIds, listNames } from "@/lib/lists/queries";
 import { connectedSources } from "@/lib/sources/queries";
@@ -31,7 +32,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   const open = typeof sp.lead === "string" && UUID.test(sp.lead) ? sp.lead : null;
   const list = typeof pick === "string" && UUID.test(pick) ? (lists.find((l) => l.id === pick) ?? null) : null;
   // Senders open on "Novos" (never contacted); the closer's leads were all handed to her, so she opens on "Todos".
-  const initial = views.find((v) => v.is_default)?.filters ?? { ...DEFAULT_LEAD_FILTERS, contact: sender ? ("new" as const) : ("all" as const) };
+  const initial = views.find((v) => v.is_default)?.filters ?? { ...DEFAULT_LEAD_FILTERS, stage: sender ? ("new" as const) : ("all" as const) };
 
   const [items, conn] = await Promise.all([
     list ? listLeadIds(supabase, list.id).then((ids) => listLeads(supabase, workspace.id, { ids })) : listLeads(supabase, workspace.id),
@@ -41,10 +42,11 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   // AI-question answers (0029), attached per lead. Senders only: the closer has no AI column on her list.
   const answers = sender ? await listAnswers(supabase, workspace.id, questions.map((q) => q.id)) : new Map();
   for (const i of items) i.ai = answers.get(i.lead.id);
+  const origins = sender ? await originListsOf(supabase, items.map((i) => i.lead.id)) : new Map();
   return (
     <>
     <LeadsTable
-      items={items}
+      items={items.map((i) => toTableRow(i, origins.get(i.lead.id) ?? []))}
       canCreate={isSender(workspace.role)}
       sources={{ maps: conn?.maps ?? false, apollo: conn?.apollo ?? false }}
       initialFilters={initial}

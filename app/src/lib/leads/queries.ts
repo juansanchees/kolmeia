@@ -4,7 +4,7 @@ import { CANDIDATE_COLUMNS, normalizeCandidate, type CandidateRow } from "@/lib/
 import type { CheckWithEvidence } from "@/lib/research/store";
 import { displayOf, parseLeadFilters, type LeadFilters } from "./view";
 import type { EmailQuality } from "./email-quality";
-import { LEAD_COLUMNS, LEAD_FIELD_COLUMNS, type LeadDetail, type LeadFieldRow, type LeadListItem, type LeadRow } from "./types";
+import { LEAD_COLUMNS, LEAD_FIELD_COLUMNS, type LeadDetail, type LeadFieldRow, type LeadListItem, type LeadRow, type OriginList } from "./types";
 
 /**
  * Ids per `.in()` request. Two limits at once: the URL stays small (100 UUIDs is ~3.8 KB, 500 would be ~19 KB, over
@@ -249,4 +249,28 @@ export async function listViews(db: SupabaseClient, workspaceId: string): Promis
   const { data, error } = await db.from("lead_views").select("id, name, filters, is_default").eq("workspace_id", workspaceId).order("name").limit(100);
   if (error) throw new Error(`listViews: ${error.message}`);
   return (data ?? []).map((r) => ({ id: r.id as string, name: r.name as string, filters: parseLeadFilters(r.filters), is_default: r.is_default as boolean }));
+}
+
+/** The lists and imports each lead came from (earliest per name first). RLS: a closer sees none, so her map is empty. */
+export async function originListsOf(db: SupabaseClient, leadIds: string[]): Promise<Map<string, OriginList[]>> {
+  const [importRows, listRows] = await Promise.all([
+    inLeadChunks<{ lead_id: string; import_id: string }>(leadIds, (c) => db.from("lead_import_rows").select("lead_id, import_id").in("lead_id", c).in("outcome", ["new", "merged"]) as never, "originLists imports"),
+    inLeadChunks<{ lead_id: string; list_id: string; added_at: string }>(leadIds, (c) => db.from("list_leads").select("lead_id, list_id, added_at").in("lead_id", c) as never, "originLists lists"),
+  ]);
+  const [imports, lists] = await Promise.all([
+    inChunks<{ id: string; list_name: string; created_at: string; status: string }>([...new Set(importRows.map((r) => r.import_id))], (c) => db.from("lead_imports").select("id, list_name, created_at, status").in("id", c) as never, "originLists lead_imports"),
+    inChunks<{ id: string; name: string }>([...new Set(listRows.map((r) => r.list_id))], (c) => db.from("lists").select("id, name").in("id", c) as never, "originLists lists names"),
+  ]);
+  const importById = new Map(imports.filter((i) => i.status !== "undone").map((i) => [i.id, i]));
+  const listName = new Map(lists.map((l) => [l.id, l.name]));
+  const all = new Map<string, OriginList[]>();
+  const add = (leadId: string, o: OriginList) => all.set(leadId, [...(all.get(leadId) ?? []), o]);
+  for (const r of importRows) { const i = importById.get(r.import_id); if (i) add(r.lead_id, { name: i.list_name, at: i.created_at, kind: "import" }); }
+  for (const r of listRows) { const n = listName.get(r.list_id); if (n) add(r.lead_id, { name: n, at: r.added_at, kind: "list" }); }
+  const out = new Map<string, OriginList[]>();
+  for (const [id, arr] of all) {
+    const seen = new Set<string>();
+    out.set(id, arr.sort((a, b) => a.at.localeCompare(b.at)).filter((o) => !seen.has(o.name) && !!seen.add(o.name)));
+  }
+  return out;
 }

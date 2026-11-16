@@ -16,9 +16,11 @@ import { DarkChoice } from "@/components/research/controls";
 import { UNKNOWN } from "@/components/research/format";
 import { TEMPERATURES } from "@/lib/research/types";
 import { TABS } from "@/lib/research/sheet";
-import { CONTACT_TABS, DEFAULT_LEAD_FILTERS, filterLeads, leadFacetsOf, leadInTab, leadsCsv, originLabel, type LeadFilters, type LeadTab } from "@/lib/leads/view";
+import { CONTACT_TABS, DEFAULT_LEAD_FILTERS, filterLeads, leadFacetsOf, leadInTab, type LeadFilters, type LeadTab } from "@/lib/leads/view";
+import { leadsCsvAction } from "@/app/(app)/leads/lead-actions";
+import { originText } from "@/lib/leads/table";
 import { Pager, usePaged } from "@/components/Pager";
-import { LEAD_STATUSES, type LeadListItem } from "@/lib/leads/types";
+import { LEAD_STATUSES, type LeadTableRow } from "@/lib/leads/types";
 import { LevelBadge } from "@/components/qualifier/LevelBadge";
 import { QualifyControls, RowCheck } from "@/components/qualifier/QualifyControls";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -39,7 +41,7 @@ const P = t.leads.paging;
 const linkBtn = "inline-flex min-h-11 items-center border border-blue bg-surface px-4 text-sm font-semibold text-blue no-underline hover:bg-blue-wash";
 
 type Props = {
-  items: LeadListItem[];
+  items: LeadTableRow[];
   canCreate: boolean;
   sources?: { maps: boolean; apollo: boolean };
   initialFilters?: LeadFilters;
@@ -129,8 +131,10 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
     );
   }
 
-  const download = () => {
-    const blob = new Blob([leadsCsv(filtered)], { type: "text/csv;charset=utf-8" });
+  const download = async () => {
+    const res = await leadsCsvAction(filtered.map((i) => i.lead.id));
+    if ("error" in res) return window.alert(res.error);
+    const blob = new Blob([res.csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -313,13 +317,9 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
                   <span className="sr-only">{t.leads.columns.status}: </span>
                   {t.leads.statuses[i.lead.status]}
                 </span>
-                <span className="font-mono text-[13px]">
-                  <span className="sr-only">{t.leads.columns.proof}: </span>
-                  {i.best ? fill(t.leads.proofCount, { n: i.proofOk }) : t.leads.unproven}
-                </span>
                 <span className="truncate text-[13px] text-muted">
                   <span className="sr-only">{t.leads.columns.agent}: </span>
-                  {originLabel(i)}
+                  {originText(i)}
                 </span>
                 <span className="font-mono text-[13px] text-muted">
                   <span className="sr-only">{t.leads.lastTouch}: </span>

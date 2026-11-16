@@ -3,10 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { FormState } from "@/lib/form-state";
+import { listLeads } from "@/lib/leads/queries";
+import { SEGMENTS, type Segment } from "@/lib/leads/types";
+import { leadsCsv } from "@/lib/leads/view";
 import { sanitizeUrl } from "@/lib/safe-url";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace, requireSender } from "@/lib/workspace";
-import { t } from "@/messages/pt";
+import { fill, t } from "@/messages/pt";
 
 const H = t.handoff;
 const id = z.string().uuid();
@@ -68,4 +71,56 @@ export async function addToCallListAction(leadId: string, agentId: string): Prom
   if (error) return fail(H.failed);
   revalidatePath("/leads", "layout");
   return ok(H.added);
+}
+
+const leadIdsSchema = z.array(z.string().uuid()).min(1).max(5000);
+
+async function setArchived(leadIds: string[], archived: boolean): Promise<FormState> {
+  const ws = await requireSender();
+  const ids = leadIdsSchema.safeParse(leadIds);
+  if (!ids.success) return fail(t.leads.archive.tooMany);
+  const supabase = await createClient();
+  if (!supabase) return fail(t.leads.archive.failed);
+  const { error } = await supabase.rpc("set_leads_archived", { p_ws: ws.id, p_leads: ids.data, p_archived: archived });
+  if (error) return fail(t.leads.archive.failed);
+  revalidatePath("/leads", "layout");
+  return ok(fill(archived ? t.leads.archive.archived : t.leads.archive.unarchived, { n: ids.data.length }));
+}
+
+/** Hides leads from every tab (archived_at). Nothing else about them changes. Owner/sdr only. */
+export async function archiveLeadsAction(leadIds: string[]): Promise<FormState> {
+  return setArchived(leadIds, true);
+}
+
+export async function unarchiveLeadsAction(leadIds: string[]): Promise<FormState> {
+  return setArchived(leadIds, false);
+}
+
+/** Sets the manual type of leads; null = back to automatic. Owner/sdr only. */
+export async function setLeadSegmentAction(leadIds: string[], segment: Segment | null): Promise<FormState> {
+  const ws = await requireSender();
+  const ids = leadIdsSchema.safeParse(leadIds);
+  if (!ids.success) return fail(t.leads.archive.tooMany);
+  const seg = z.enum(SEGMENTS).nullable().safeParse(segment);
+  if (!seg.success) return fail(t.leads.segmentPick.failed);
+  const supabase = await createClient();
+  if (!supabase) return fail(t.leads.segmentPick.failed);
+  const { error } = await supabase.rpc("set_leads_segment", { p_ws: ws.id, p_leads: ids.data, p_segment: seg.data });
+  if (error) return fail(t.leads.segmentPick.failed);
+  revalidatePath("/leads", "layout");
+  return ok(fill(t.leads.segmentPick.saved, { n: ids.data.length }));
+}
+
+/** The full CSV of the given leads: the table only holds slim rows, so the server builds it. */
+export async function leadsCsvAction(leadIds: string[]): Promise<{ csv: string } | { error: string }> {
+  const ws = await requireSender();
+  const ids = leadIdsSchema.safeParse(leadIds);
+  if (!ids.success) return { error: t.leads.toolbar.csvFailed };
+  const supabase = await createClient();
+  if (!supabase) return { error: t.leads.toolbar.csvFailed };
+  try {
+    return { csv: leadsCsv(await listLeads(supabase, ws.id, { ids: ids.data })) };
+  } catch {
+    return { error: t.leads.toolbar.csvFailed };
+  }
 }

@@ -257,7 +257,7 @@ export function leadFacetsOf<T extends FilterRow>(items: T[], f: LeadFilters): L
   };
 }
 
-export function originLabel(i: Pick<LeadListItem, "lead" | "agentName"> & { importName?: string | null }): string {
+export function originLabel(i: { lead: Pick<LeadListItem["lead"], "origin_kind">; agentName: string | null; importName?: string | null }): string {
   if (i.lead.origin_kind === "import") return i.importName ? fill(t.leads.imported, { list: i.importName }) : t.leads.importedNoList;
   return i.agentName ?? t.leads.oneOff;
 }
