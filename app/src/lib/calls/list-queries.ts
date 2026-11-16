@@ -40,7 +40,7 @@ export async function todayList(db: SupabaseClient, opts: { agentId?: string } =
   const out: TodayRow[] = [];
   for (const item of items) {
     const lead = leadBy.get(item.lead_id);
-    if (!lead) continue; // not visible any more (RLS) or gone
+    if (!lead || lead.lead.archived_at) continue; // not visible any more (RLS), gone, or archived
     const lastCall = lastBy.get(item.lead_id) ?? null;
     out.push({ item, lead, lastCall, calledToday: lastCall !== null && nyDay(new Date(lastCall.called_at)) === today });
   }
