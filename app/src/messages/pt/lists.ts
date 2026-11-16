@@ -3,6 +3,7 @@ export const lists = {
   subtitle: "Um lead pode estar em várias listas. Apagar a lista não apaga os leads.",
   columns: { name: "Lista", leads: "Leads", contacted: "Contatados", phone: "Com telefone", actions: "Ações" },
   open: "Abrir",
+  emptyList: "Esta lista ainda não tem leads que você possa ver.",
   csv: "Exportar CSV",
   csvNote: "Exportar CSV: só o dono e o SDR. A closer vê só os leads que foram passados pra ela.",
   empty: "Nenhuma lista ainda. Na tela de Leads, marque leads e use \"Adicionar à lista\".",

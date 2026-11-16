@@ -160,8 +160,8 @@ describe("proof that RLS is really enforced in PGlite", () => {
         // 0026 (E5: the clock reads replies behind the same locks; record_email_reply_core / set_reply_class_core /
         // clock_reply_mailbox_ok are NOT definer)
         "scheduler_reply_mailboxes", "scheduler_imap_secret", "scheduler_reply_sent_refs", "scheduler_record_reply",
-        // 0027 (contacted tracking: the call and send-log triggers write leads/tasks; lead_facets / lead_contact_values /
-        // list_stats / mark_lead_handed_off are NOT definer)
+        // 0027 (contacted tracking: the call and send-log triggers write leads/tasks; lead_contact_values / list_stats /
+        // mark_lead_handed_off are NOT definer)
         "after_call_logged", "mark_lead_emailed",
       ].sort(),
     );

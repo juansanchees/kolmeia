@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { CANDIDATE_COLUMNS, normalizeCandidate, type CandidateRow } from "@/lib/research/rows";
 import type { CheckWithEvidence } from "@/lib/research/store";
-import { displayOf, EMPTY_FACETS, parseLeadFilters, type FacetFilters, type LeadFacets, type LeadFilters } from "./view";
+import { displayOf, parseLeadFilters, type LeadFilters } from "./view";
 import { LEAD_COLUMNS, LEAD_FIELD_COLUMNS, type LeadDetail, type LeadFieldRow, type LeadListItem, type LeadRow } from "./types";
 
 /**
@@ -224,13 +224,6 @@ export async function emailBriefOf(db: SupabaseClient, leadId: string): Promise<
     .maybeSingle();
   if (error) throw new Error(`emailBriefOf: ${error.message}`);
   return data?.closer_brief ?? null;
-}
-
-/** Counts for the left panel and the Novos/Contatados/Todos tabs (lead_facets, migration 0027; RLS applies). */
-export async function leadFacets(db: SupabaseClient, workspaceId: string, filters: FacetFilters, listId: string | null = null): Promise<LeadFacets> {
-  const { data, error } = await db.rpc("lead_facets", { p_ws: workspaceId, p_filters: { ...filters, listId } });
-  if (error) throw new Error(`leadFacets: ${error.message}`);
-  return { ...EMPTY_FACETS, ...(data as Partial<LeadFacets> | null) };
 }
 
 export type LeadView = { id: string; name: string; filters: LeadFilters; is_default: boolean };

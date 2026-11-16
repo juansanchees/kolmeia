@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { DEFAULT_LEAD_FILTERS, leadsCsv, matchesFacets, parseLeadFilters } from "@/lib/leads/view";
+import { DEFAULT_LEAD_FILTERS, filterLeads, leadFacetsOf, leadsCsv, matchesFacets, parseLeadFilters } from "@/lib/leads/view";
 import type { LeadListItem, LeadRow } from "@/lib/leads/types";
 import { postponed, taskTab } from "@/lib/tasks/view";
 
@@ -23,7 +23,7 @@ function item(o: Partial<LeadRow> & { city?: string | null; phone?: string | nul
   return { lead, best: null, display: { name: o.name ?? "Acme", city: o.city ?? null, phone: o.phone ?? null, website: null, email: o.email ?? null }, agentName: null, importName: null, proofOk: 0 };
 }
 
-describe("leads phase 1: facet filters on the client mirror lead_facets", () => {
+describe("leads phase 1: facet filters use the displayed values", () => {
   const f = DEFAULT_LEAD_FILTERS;
   test("contact tabs: new = never contacted", () => {
     const fresh = item();
@@ -47,6 +47,39 @@ describe("leads phase 1: facet filters on the client mirror lead_facets", () => 
   });
 });
 
+describe("leads phase 1: tab and facet counts follow every filter", () => {
+  const f = DEFAULT_LEAD_FILTERS;
+  let k = 0;
+  const row = (o: NonNullable<Parameters<typeof item>[0]>) => {
+    const i = item({ ...o, name: o.name ?? `Co ${++k}` });
+    return { ...i, lead: { ...i.lead, id: `l${k}` } };
+  };
+  const items = [
+    row({ status: "new", city: "Boston", phone: "508-555-0101", level: 2 }),
+    row({ status: "new", city: "Boston", first_contacted_at: "2026-11-14T10:00:00Z", level: 1 }),
+    row({ status: "lost", city: "Quincy", phone: "508-555-0103", level: 1 }),
+    row({ status: "lost", city: " Quincy ", first_contacted_at: "2026-11-14T10:00:00Z", origin_kind: "agent", level: 0 }),
+  ];
+  test("with a status filter, each tab count equals the rows it shows", () => {
+    const g = { ...f, status: "lost" as const };
+    const facets = leadFacetsOf(items, g);
+    for (const contact of ["new", "contacted", "all"] as const) expect(facets.tabs[contact]).toBe(filterLeads(items, { ...g, contact }).length);
+    expect(facets.tabs).toEqual({ new: 1, contacted: 1, all: 2 });
+    expect(facets.cities).toEqual([{ value: "Quincy", n: 2 }]);
+  });
+  test("a facet is counted with the other filters only", () => {
+    const facets = leadFacetsOf(items, { ...f, contact: "new", cities: ["Boston"] });
+    expect(facets.tabs).toEqual({ new: 1, contacted: 1, all: 2 });
+    expect(facets.cities).toEqual([{ value: "Boston", n: 1 }, { value: "Quincy", n: 1 }]);
+    expect(facets.phone).toBe(1);
+    expect(facets.levels).toEqual([{ value: 2, n: 1 }]);
+    const all = leadFacetsOf(items, f);
+    expect(all.levels).toEqual([{ value: 2, n: 1 }, { value: 1, n: 2 }, { value: 0, n: 1 }]);
+    expect(all.origins).toEqual([{ value: "import", n: 3 }, { value: "agent", n: 1 }]);
+    expect([all.phone, all.email]).toEqual([2, 0]);
+  });
+});
+
 describe("leads phase 1: tasks by New York day", () => {
   const now = new Date("2026-11-15T15:00:00Z"); // 10:00 in New York
   test("today / late / next", () => {
@@ -58,6 +91,15 @@ describe("leads phase 1: tasks by New York day", () => {
   test("Adiar moves one day, and a late task lands in the future", () => {
     expect(postponed("2026-11-16T15:00:00Z", now)).toBe("2026-11-17T15:00:00.000Z");
     expect(postponed("2026-11-10T15:00:00Z", now)).toBe("2026-11-15T16:00:00.000Z");
+  });
+  test("Adiar across the end of DST (2026-11-01) keeps the New York wall clock", () => {
+    const before = new Date("2026-10-01T00:00:00Z");
+    // Sat 31 Oct 10:00 EDT -> Sun 1 Nov 10:00 EST
+    expect(postponed("2026-10-31T14:00:00Z", before)).toBe("2026-11-01T15:00:00.000Z");
+    // Sun 1 Nov 10:00 EST -> Mon 2 Nov 10:00 EST (no shift after the change)
+    expect(postponed("2026-11-01T15:00:00Z", before)).toBe("2026-11-02T15:00:00.000Z");
+    // Sat 7 Mar 2026 09:00 EST -> Sun 8 Mar 09:00 EDT (start of DST)
+    expect(postponed("2026-03-07T14:00:00Z", new Date("2026-01-01T00:00:00Z"))).toBe("2026-03-08T13:00:00.000Z");
   });
 });
 

@@ -30,7 +30,7 @@ export type ContactTab = (typeof CONTACT_TABS)[number];
 export const LEAD_ORIGINS = ["import", "agent", "one_off"] as const;
 export type LeadOrigin = (typeof LEAD_ORIGINS)[number];
 
-/** The filters the left panel counts (lead_facets, migration 0027, applies the same rules in SQL). */
+/** The filters the left panel counts (leadFacetsOf). City/phone/e-mail are the displayed values (displayOf). */
 export type FacetFilters = { contact: ContactTab; cities: string[]; levels: number[]; hasPhone: boolean; hasEmail: boolean; origins: LeadOrigin[] };
 
 export type LeadFilters = FacetFilters & {
@@ -56,11 +56,6 @@ export type LeadFacets = {
   email: number;
   origins: FacetCount<LeadOrigin>[];
 };
-export const EMPTY_FACETS: LeadFacets = { tabs: { new: 0, contacted: 0, all: 0 }, cities: [], levels: [], phone: 0, email: 0, origins: [] };
-
-export function facetFiltersOf(f: LeadFilters): FacetFilters {
-  return { contact: f.contact, cities: f.cities, levels: f.levels, hasPhone: f.hasPhone, hasEmail: f.hasEmail, origins: f.origins };
-}
 
 const filtersSchema = z.object({
   q: z.string().max(200),
@@ -83,7 +78,7 @@ export function parseLeadFilters(raw: unknown): LeadFilters {
   return r.success ? ({ ...DEFAULT_LEAD_FILTERS, ...r.data } as LeadFilters) : DEFAULT_LEAD_FILTERS;
 }
 
-/** The same rules as lead_contact_values / lead_facets: trimmed display values, never-contacted = "new". */
+/** Left-panel and tab rules: trimmed display values (as lead_contact_values reads them), never-contacted = "new". */
 export function matchesFacets(i: Pick<LeadListItem, "lead" | "display">, f: FacetFilters): boolean {
   const contacted = i.lead.first_contacted_at !== null;
   if (f.contact === "new" ? contacted : f.contact === "contacted" ? !contacted : false) return false;
@@ -124,25 +119,63 @@ export function leadInTab(i: Pick<LeadListItem, "best">, tab: LeadTab): boolean 
   return i.best ? inTab(i.best, tab) : tab === "all";
 }
 
-export function filterLeads(items: LeadListItem[], f: LeadFilters): LeadListItem[] {
+/** Every filter except the left-panel ones (tabs and facets are counted on top of these). */
+function otherFiltersOf(f: LeadFilters): (i: LeadListItem) => boolean {
   const q = fold(f.q.trim());
   const qDigits = f.q.replace(/\D/g, "");
+  return ({ lead, best, display }) => {
+    if (!leadInTab({ best }, f.tab)) return false;
+    if (f.temperature !== "all" && (!best || best.temperature !== f.temperature)) return false;
+    if (f.status !== "all" && lead.status !== f.status) return false;
+    if (f.minLevel > 0 && lead.level < f.minLevel) return false;
+    if (f.agent === "one_off" ? lead.origin_kind !== "one_off" : f.agent !== "all" && lead.origin_agent_id !== f.agent) return false;
+    if (q) {
+      const phone = (display.phone ?? "").replace(/\D/g, "");
+      const hit = fold(display.name).includes(q) || fold(display.city ?? "").includes(q) || (qDigits.length > 0 && phone.includes(qDigits));
+      if (!hit) return false;
+    }
+    return true;
+  };
+}
+
+export function filterLeads(items: LeadListItem[], f: LeadFilters): LeadListItem[] {
+  const other = otherFiltersOf(f);
   return items
-    .filter(({ lead, best, display }) => {
-      if (!leadInTab({ best }, f.tab)) return false;
-      if (!matchesFacets({ lead, display }, f)) return false;
-      if (f.temperature !== "all" && (!best || best.temperature !== f.temperature)) return false;
-      if (f.status !== "all" && lead.status !== f.status) return false;
-      if (f.minLevel > 0 && lead.level < f.minLevel) return false;
-      if (f.agent === "one_off" ? lead.origin_kind !== "one_off" : f.agent !== "all" && lead.origin_agent_id !== f.agent) return false;
-      if (q) {
-        const phone = (display.phone ?? "").replace(/\D/g, "");
-        const hit = fold(display.name).includes(q) || fold(display.city ?? "").includes(q) || (qDigits.length > 0 && phone.includes(qDigits));
-        if (!hit) return false;
-      }
-      return true;
-    })
+    .filter((i) => other(i) && matchesFacets(i, f))
     .sort((a, b) => (a.best && b.best ? byTemperature(a.best, b.best) : a.best ? -1 : b.best ? 1 : a.display.name.localeCompare(b.display.name)));
+}
+
+function countBy<T>(rows: LeadListItem[], key: (i: LeadListItem) => T | null): FacetCount<T>[] {
+  const m = new Map<T, number>();
+  for (const i of rows) {
+    const k = key(i);
+    if (k !== null) m.set(k, (m.get(k) ?? 0) + 1);
+  }
+  return [...m.entries()].map(([value, n]) => ({ value, n }));
+}
+
+export const TOP_CITIES = 12;
+
+/**
+ * Counts for the tabs and the left panel over the leads already loaded: each facet with every OTHER filter applied (its
+ * own left out, so a picked value never hides its siblings); the tabs with every filter except the tab itself.
+ */
+export function leadFacetsOf(items: LeadListItem[], f: LeadFilters): LeadFacets {
+  const other = otherFiltersOf(f);
+  const base = items.filter(other);
+  const without = (patch: Partial<FacetFilters>) => base.filter((i) => matchesFacets(i, { ...f, ...patch }));
+  const tabRows = without({ contact: "all" });
+  const contacted = tabRows.filter((i) => i.lead.first_contacted_at !== null).length;
+  return {
+    tabs: { new: tabRows.length - contacted, contacted, all: tabRows.length },
+    cities: countBy(without({ cities: [] }), (i) => i.display.city?.trim() || null)
+      .sort((a, b) => b.n - a.n || a.value.localeCompare(b.value))
+      .slice(0, TOP_CITIES),
+    levels: countBy(without({ levels: [] }), (i) => i.lead.level).sort((a, b) => b.value - a.value),
+    phone: without({ hasPhone: false }).filter((i) => i.display.phone?.trim()).length,
+    email: without({ hasEmail: false }).filter((i) => i.display.email?.trim()).length,
+    origins: countBy(without({ origins: [] }), (i) => i.lead.origin_kind).sort((a, b) => b.n - a.n || a.value.localeCompare(b.value)),
+  };
 }
 
 export function originLabel(i: Pick<LeadListItem, "lead" | "agentName"> & { importName?: string | null }): string {

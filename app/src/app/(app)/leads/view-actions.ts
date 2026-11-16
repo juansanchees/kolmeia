@@ -2,23 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { leadFacets } from "@/lib/leads/queries";
-import { facetFiltersOf, parseLeadFilters, type LeadFacets } from "@/lib/leads/view";
+import { parseLeadFilters } from "@/lib/leads/view";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace, requireSender } from "@/lib/workspace";
 import { fill, t } from "@/messages/pt";
 
 const uuid = z.string().uuid();
 type Result = { ok: boolean; message?: string };
-
-/** Left-panel counts for the current filters. Any member: lead_facets is security invoker, so RLS decides. */
-export async function leadFacetsAction(filters: unknown, listId: string | null): Promise<LeadFacets | null> {
-  const workspace = await getCurrentWorkspace();
-  const supabase = await createClient();
-  if (!workspace || !supabase) return null;
-  const list = listId && uuid.safeParse(listId).success ? listId : null;
-  return leadFacets(supabase, workspace.id, facetFiltersOf(parseLeadFilters(filters)), list);
-}
 
 /** Saves the current filters under a name (replacing a view of the same name); optionally the one the page opens with. */
 export async function saveViewAction(name: string, filters: unknown, makeDefault: boolean): Promise<Result> {

@@ -28,7 +28,7 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
-/** The left panel: each value with its count for the current filters (lead_facets). */
+/** The left panel: each value with its count for the current filters (leadFacetsOf). */
 export function FacetPanel({ facets, f, set }: { facets: LeadFacets; f: FacetFilters; set: (patch: Partial<FacetFilters>) => void }) {
   const cityN = new Map(facets.cities.map((c) => [c.value, c.n]));
   // a picked city outside the top list stays visible so it can be unticked

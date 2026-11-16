@@ -3,15 +3,14 @@
 --       a logged call (call_logs insert), a REAL e-mail that went out (email_send_log result 'sent' with mode 'real'; a
 --       dry_run rehearsal or a test e-mail never counts) and a hand-off to the closer (handed_off_at set, or the status
 --       becoming with_closer). Existing rows are back-filled once.
---   2 lead_contact_values(ws) + lead_facets(ws, filters): counts per tab (new/contacted/all), city (top 12), level, has
---       phone, has e-mail and origin. Security invoker: RLS decides which leads are counted (the closer: hers only).
---       City/phone/e-mail mirror displayOf (src/lib/leads/view.ts): the best candidate's value, else the oldest
---       non-refuted lead_fields value.
+--   2 lead_contact_values(ws): city/phone/e-mail per lead as the list shows them (displayOf, src/lib/leads/view.ts: the
+--       best candidate's value, else the oldest non-refuted lead_fields value). Security invoker: RLS decides. The
+--       facet counts themselves are computed on the client over the leads it already holds (matchesFacets).
 --   3 lead_views: saved filters per user and workspace, at most one default.
 --   4 lists + list_leads: named lists of leads (research_lists of 0002 hold research candidates, not leads, and feed
 --       e-mail campaigns, so they are not reused). Owner/sdr only; the closer reads none. list_stats(ws) for the page.
 --   5 tasks: one row per to-do on a lead. A logged call with a next-step date creates one (kind 'call', due at that
---       date, assigned to whoever called). Read and updated (done_at, due_at) like call_logs: senders, or the closer
+--       date, assigned to whoever called); the next call on that lead closes the earlier call follow-ups. Read and updated (done_at, due_at) like call_logs: senders, or the closer
 --       assigned to the lead.
 -- Depends on 0001-0026. Re-runnable.
 
@@ -78,6 +77,10 @@ begin
      set first_contacted_at = coalesce(first_contacted_at, new.called_at),
          last_touch_at = greatest(last_touch_at, new.called_at)
    where id = new.lead_id;
+  -- a new call answers the earlier call follow-ups of this lead (whatever its outcome)
+  update public.tasks
+     set done_at = new.called_at
+   where lead_id = new.lead_id and done_at is null and created_from_call_id is not null;
   -- "do not call" ends the conversation: no follow-up task even if a date was typed
   if new.next_step_at is not null and new.outcome <> 'do_not_call' then
     insert into public.tasks (workspace_id, lead_id, kind, title, due_at, assignee_id, created_from_call_id)
@@ -167,6 +170,18 @@ update public.leads l
      group by e.lead_id
   ) s
  where l.id = s.lead_id and l.first_contacted_at is null;
+
+-- Back-fill tasks: the open follow-up of each lead's latest call (the trigger only sees calls logged from now on).
+-- tasks_call_key makes a re-run add nothing.
+insert into public.tasks (workspace_id, lead_id, kind, title, due_at, assignee_id, created_from_call_id)
+select k.workspace_id, k.lead_id, 'call', k.next_step, k.next_step_at, k.called_by, k.id
+  from (
+    select distinct on (c.lead_id) c.*
+      from public.call_logs c
+     order by c.lead_id, c.called_at desc, c.created_at desc, c.id desc
+  ) k
+ where k.next_step_at is not null and k.outcome <> 'do_not_call'
+on conflict (created_from_call_id) where created_from_call_id is not null do nothing;
 
 -- ---------------------------------------------------------------- 4 lists
 create table if not exists public.lists (
@@ -259,7 +274,7 @@ create policy lead_views_own on public.lead_views
   using (user_id = auth.uid() and public.is_workspace_member(workspace_id))
   with check (user_id = auth.uid() and public.is_workspace_member(workspace_id));
 
--- ---------------------------------------------------------------- 2 facets and list stats
+-- ---------------------------------------------------------------- 2 display values and list stats
 -- One row per lead the caller can see, with what the list shows (invoker: RLS on leads, candidates and fields applies).
 create or replace function public.lead_contact_values(p_ws uuid)
 returns table (lead_id uuid, level smallint, origin_kind text, contacted boolean, city text, phone text, email text)
@@ -288,58 +303,6 @@ as $$
      and (l.best_candidate_id is null or c.id is not null);
 $$;
 
--- p_filters: { contact: 'new'|'contacted'|'all', cities: text[], levels: int[], hasPhone: bool, hasEmail: bool,
--- origins: text[], listId: uuid }. Each facet is counted with every OTHER filter applied (its own is left out), so a
--- picked value never hides its siblings; the tabs are counted with every facet filter applied.
-create or replace function public.lead_facets(p_ws uuid, p_filters jsonb default '{}'::jsonb)
-returns jsonb
-language sql
-stable
-security invoker
-set search_path = ''
-as $$
-  with f as (
-    select coalesce(p_filters ->> 'contact', 'all') as contact,
-           array(select jsonb_array_elements_text(case when jsonb_typeof(p_filters -> 'cities') = 'array' then p_filters -> 'cities' else '[]'::jsonb end)) as cities,
-           array(select x::smallint from jsonb_array_elements_text(case when jsonb_typeof(p_filters -> 'levels') = 'array' then p_filters -> 'levels' else '[]'::jsonb end) x
-                  where x ~ '^[0-4]$') as levels,
-           coalesce(p_filters ->> 'hasPhone', '') = 'true' as has_phone,
-           coalesce(p_filters ->> 'hasEmail', '') = 'true' as has_email,
-           array(select jsonb_array_elements_text(case when jsonb_typeof(p_filters -> 'origins') = 'array' then p_filters -> 'origins' else '[]'::jsonb end)) as origins,
-           case when coalesce(p_filters ->> 'listId', '') ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
-                then (p_filters ->> 'listId')::uuid end as list_id
-  ),
-  m as (
-    select v.*,
-           case f.contact when 'new' then not v.contacted when 'contacted' then v.contacted else true end as m_tab,
-           (cardinality(f.cities) = 0 or v.city = any (f.cities)) as m_city,
-           (cardinality(f.levels) = 0 or v.level = any (f.levels)) as m_level,
-           (not f.has_phone or v.phone is not null) as m_phone,
-           (not f.has_email or v.email is not null) as m_email,
-           (cardinality(f.origins) = 0 or v.origin_kind = any (f.origins)) as m_origin
-      from public.lead_contact_values(p_ws) v
-     cross join f
-     where f.list_id is null
-        or exists (select 1 from public.list_leads x where x.list_id = f.list_id and x.lead_id = v.lead_id)
-  )
-  select jsonb_build_object(
-    'tabs', (select jsonb_build_object('new', count(*) filter (where not contacted), 'contacted', count(*) filter (where contacted), 'all', count(*))
-               from m where m_city and m_level and m_phone and m_email and m_origin),
-    'cities', (select coalesce(jsonb_agg(jsonb_build_object('value', s.city, 'n', s.n) order by s.n desc, s.city), '[]'::jsonb)
-                 from (select city, count(*)::integer as n from m
-                        where city is not null and m_tab and m_level and m_phone and m_email and m_origin
-                        group by city order by count(*) desc, city limit 12) s),
-    'levels', (select coalesce(jsonb_agg(jsonb_build_object('value', s.level, 'n', s.n) order by s.level desc), '[]'::jsonb)
-                 from (select level, count(*)::integer as n from m
-                        where m_tab and m_city and m_phone and m_email and m_origin group by level) s),
-    'phone', (select count(*) filter (where phone is not null) from m where m_tab and m_city and m_level and m_email and m_origin),
-    'email', (select count(*) filter (where email is not null) from m where m_tab and m_city and m_level and m_phone and m_origin),
-    'origins', (select coalesce(jsonb_agg(jsonb_build_object('value', s.origin_kind, 'n', s.n) order by s.n desc, s.origin_kind), '[]'::jsonb)
-                  from (select origin_kind, count(*)::integer as n from m
-                         where m_tab and m_city and m_level and m_phone and m_email group by origin_kind) s)
-  );
-$$;
-
 -- The Listas page: per list, its leads the caller can see, how many were contacted and how many have a phone.
 create or replace function public.list_stats(p_ws uuid)
 returns table (id uuid, name text, created_at timestamptz, leads integer, contacted integer, with_phone integer)
@@ -365,8 +328,6 @@ revoke all on function public.after_call_logged() from public, anon, authenticat
 revoke all on function public.mark_lead_emailed() from public, anon, authenticated;
 revoke all on function public.mark_lead_handed_off() from public, anon, authenticated;
 revoke all on function public.lead_contact_values(uuid) from public, anon;
-revoke all on function public.lead_facets(uuid, jsonb) from public, anon;
 revoke all on function public.list_stats(uuid) from public, anon;
 grant execute on function public.lead_contact_values(uuid) to authenticated;
-grant execute on function public.lead_facets(uuid, jsonb) to authenticated;
 grant execute on function public.list_stats(uuid) to authenticated;

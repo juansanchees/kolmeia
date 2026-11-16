@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { leadFacetsAction } from "@/app/(app)/leads/view-actions";
+import { useMemo, useState } from "react";
 import { AddToList } from "@/components/leads/AddToList";
 import { FacetPanel } from "@/components/leads/FacetPanel";
 import { ViewBar } from "@/components/leads/ViewBar";
@@ -11,7 +10,7 @@ import { DarkChoice } from "@/components/research/controls";
 import { UNKNOWN } from "@/components/research/format";
 import { TEMPERATURES } from "@/lib/research/types";
 import { TABS } from "@/lib/research/sheet";
-import { CONTACT_TABS, DEFAULT_LEAD_FILTERS, facetFiltersOf, filterLeads, leadInTab, leadsCsv, originLabel, type LeadFacets, type LeadFilters, type LeadTab } from "@/lib/leads/view";
+import { CONTACT_TABS, DEFAULT_LEAD_FILTERS, filterLeads, leadFacetsOf, leadInTab, leadsCsv, originLabel, type LeadFilters, type LeadTab } from "@/lib/leads/view";
 import { LEAD_STATUSES, type LeadListItem } from "@/lib/leads/types";
 import { LevelBadge } from "@/components/qualifier/LevelBadge";
 import { QualifyControls, RowCheck } from "@/components/qualifier/QualifyControls";
@@ -30,7 +29,6 @@ type Props = {
   canCreate: boolean;
   sources?: { maps: boolean; apollo: boolean };
   initialFilters?: LeadFilters;
-  initialFacets: LeadFacets;
   views?: LeadView[];
   lists?: { id: string; name: string }[];
   /** Showing one list only (/leads?lista=<id>). */
@@ -39,21 +37,8 @@ type Props = {
 
 const lastTouch = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/New_York" }) : t.leads.never);
 
-export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: false }, initialFilters = DEFAULT_LEAD_FILTERS, initialFacets, views = [], lists = [], list = null }: Props) {
+export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: false }, initialFilters = DEFAULT_LEAD_FILTERS, views = [], lists = [], list = null }: Props) {
   const [f, setF] = useState<LeadFilters>(initialFilters);
-  const [facets, setFacets] = useState<LeadFacets>(initialFacets);
-  // Counts follow the facet filters; the first render already has the server's counts. Only the newest answer is kept.
-  const facetKey = JSON.stringify(facetFiltersOf(f));
-  const firstKey = useRef(facetKey);
-  const asked = useRef(0);
-  useEffect(() => {
-    if (facetKey === firstKey.current) return;
-    firstKey.current = "";
-    const n = ++asked.current;
-    leadFacetsAction(JSON.parse(facetKey), list?.id ?? null).then((r) => {
-      if (r && n === asked.current) setFacets(r);
-    }, () => undefined);
-  }, [facetKey, list?.id]);
   const router = useRouter();
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const toggle = (id: string, on: boolean) =>
@@ -65,6 +50,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
     });
   const set = (patch: Partial<LeadFilters>) => setF((x) => ({ ...x, ...patch }));
   const filtered = useMemo(() => filterLeads(items, f), [items, f]);
+  const facets = useMemo(() => leadFacetsOf(items, f), [items, f]);
   const agents = useMemo(() => {
     const m = new Map<string, string>();
     for (const i of items) if (i.lead.origin_agent_id && i.agentName) m.set(i.lead.origin_agent_id, i.agentName);
@@ -72,6 +58,22 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
   }, [items]);
   const hasOneOff = items.some((i) => i.lead.origin_kind === "one_off");
 
+  const listBanner = list && (
+    <p className="flex flex-wrap items-center gap-3 text-sm">
+      <span className="font-semibold">{fill(t.leads.inList, { name: list.name })}</span>
+      <Link href="/leads" className="text-blue underline underline-offset-4">{t.leads.clearList}</Link>
+    </p>
+  );
+
+  // An empty list is not an empty workspace: say so and offer the way back.
+  if (items.length === 0 && list) {
+    return (
+      <div className="flex flex-col items-start gap-3">
+        {listBanner}
+        <p className="text-sm text-muted">{t.lists.emptyList}</p>
+      </div>
+    );
+  }
   if (items.length === 0) {
     return (
       <div className="flex flex-col items-start gap-3">
@@ -105,12 +107,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <ViewBar views={views} filters={f} onPick={(v) => setF(v ?? initialFilters)} />
-      {list && (
-        <p className="flex flex-wrap items-center gap-3 text-sm">
-          <span className="font-semibold">{fill(t.leads.inList, { name: list.name })}</span>
-          <Link href="/leads" className="text-blue underline underline-offset-4">{t.leads.clearList}</Link>
-        </p>
-      )}
+      {listBanner}
       <div role="group" aria-label={t.leads.contactTabs.label} className="flex flex-wrap border-b border-line">
         {CONTACT_TABS.map((x) => (
           <button

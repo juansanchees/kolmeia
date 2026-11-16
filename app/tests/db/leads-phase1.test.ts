@@ -44,10 +44,24 @@ const contactOf = (id: string) =>
   db.admin<{ first_contacted_at: string | null; last_touch_at: string | null }>("select first_contacted_at, last_touch_at from public.leads where id = $1", [id]).then((r) => r[0]);
 const logCall = (user: string, leadId: string, outcome: string, nextStep = "", nextAt: string | null = null) =>
   db.query(as(user), "select public.log_call($1,null,$2,'','',$3,$4::timestamptz)", [leadId, outcome, nextStep, nextAt]);
-const facets = async (user: string, ws: string, filters: Record<string, unknown> = {}) =>
-  (await db.query<{ f: Record<string, unknown> }>(as(user), "select public.lead_facets($1,$2::jsonb) as f", [ws, JSON.stringify(filters)]))[0].f;
+type Values = { lead_id: string; contacted: boolean; city: string | null; phone: string | null; email: string | null };
+const values = (user: string, ws: string) =>
+  db.query<Values>(as(user), "select lead_id, contacted, city, phone, email from public.lead_contact_values($1) order by city, lead_id", [ws]);
+const openTasks = (leadId: string) => db.admin<{ title: string }>("select title from public.tasks where lead_id = $1 and done_at is null", [leadId]);
 
 describe("0027 contacted tracking", () => {
+  test("a new call closes the earlier call follow-ups: two dated calls leave 1 open task; do-not-call leaves 0", async () => {
+    const t = await seedTeam();
+    const a = await lead(t, { phone: "508-555-0161" });
+    const due = new Date(Date.now() + 86_400_000).toISOString();
+    await logCall(t.sdr, a, "voicemail", "Tentar de novo", due);
+    await logCall(t.sdr, a, "talked", "Mandar proposta", due);
+    expect(await openTasks(a)).toEqual([{ title: "Mandar proposta" }]);
+    await logCall(t.sdr, a, "do_not_call", "nunca", due);
+    expect(await openTasks(a)).toHaveLength(0);
+    expect(await db.admin("select 1 from public.tasks where lead_id = $1", [a])).toHaveLength(2);
+  });
+
   test("a logged call marks the lead contacted; a next-step date becomes a task; do-not-call makes none", async () => {
     const t = await seedTeam();
     const a = await lead(t, { phone: "508-555-0101" });
@@ -73,7 +87,9 @@ describe("0027 contacted tracking", () => {
     const c2 = await contactOf(a);
     expect(Date.now() - Date.parse(c2.first_contacted_at!)).toBeGreaterThan(2 * 86_400_000);
     expect(Date.now() - Date.parse(c2.last_touch_at!)).toBeLessThan(60_000);
-    expect(await db.admin("select 1 from public.tasks where lead_id = $1", [a])).toHaveLength(1); // no date, no task
+    // the new call (no date) closes the earlier follow-up and opens none
+    expect(await db.admin("select 1 from public.tasks where lead_id = $1", [a])).toHaveLength(1);
+    expect(await openTasks(a)).toHaveLength(0);
 
     await logCall(t.sdr, b, "do_not_call", "nunca mais", due);
     expect((await contactOf(b)).first_contacted_at).not.toBeNull();
@@ -113,35 +129,21 @@ describe("0027 contacted tracking", () => {
   });
 });
 
-describe("0027 facet counts", () => {
-  test("counts per tab and facet follow the filters, and RLS: the closer counts only her leads", async () => {
+describe("0027 display values", () => {
+  test("lead_contact_values reads the displayed city/phone/e-mail, trimmed, and RLS: the closer gets only her leads", async () => {
     const t = await seedTeam();
-    const a = await lead(t, { city: "Boston", phone: "508-555-0111", email: "a@f1.example", level: 2 });
-    await lead(t, { city: "Boston", level: 1 });
-    await lead(t, { city: "Quincy", phone: "508-555-0113", level: 1, owner: t.closer });
-    await lead(t, { city: " Quincy ", level: 0, owner: t.closer2 });
+    const a = await lead(t, { city: " Boston ", phone: "508-555-0111", email: "a@f1.example" });
+    const b = await lead(t, { city: "Quincy", owner: t.closer });
+    await lead(t, { city: "Quincy", owner: t.closer2 });
     await logCall(t.sdr, a, "talked");
 
-    const all = await facets(t.sdr, t.ws);
-    expect(all.tabs).toEqual({ new: 3, contacted: 1, all: 4 });
-    expect(all.cities).toEqual([{ value: "Boston", n: 2 }, { value: "Quincy", n: 2 }]);
-    expect(all.levels).toEqual([{ value: 2, n: 1 }, { value: 1, n: 2 }, { value: 0, n: 1 }]);
-    expect(all.phone).toBe(2);
-    expect(all.email).toBe(1);
-    expect(all.origins).toEqual([{ value: "import", n: 4 }]);
-
-    // a facet is counted with the OTHER filters; the tabs with every facet filter
-    const boston = await facets(t.sdr, t.ws, { contact: "new", cities: ["Boston"] });
-    expect(boston.tabs).toEqual({ new: 1, contacted: 1, all: 2 });
-    expect(boston.cities).toEqual([{ value: "Quincy", n: 2 }, { value: "Boston", n: 1 }]);
-    expect(boston.phone).toBe(0);
-    expect((await facets(t.sdr, t.ws, { hasPhone: true })).tabs).toEqual({ new: 1, contacted: 1, all: 2 });
-
-    const closer = await facets(t.closer, t.ws);
-    expect(closer.tabs).toEqual({ new: 1, contacted: 0, all: 1 });
-    expect(closer.cities).toEqual([{ value: "Quincy", n: 1 }]);
-    expect((await facets(randomUUID(), t.ws)).tabs).toEqual({ new: 0, contacted: 0, all: 0 });
-    expect((await db.try(anon, "select public.lead_facets($1,'{}'::jsonb)", [t.ws])).error).toBeDefined();
+    const all = await values(t.sdr, t.ws);
+    expect(all).toHaveLength(3);
+    expect(all[0]).toEqual({ lead_id: a, contacted: true, city: "Boston", phone: "508-555-0111", email: "a@f1.example" });
+    expect((await values(t.closer, t.ws)).map((r) => r.lead_id)).toEqual([b]);
+    expect(await values(randomUUID(), t.ws)).toEqual([]);
+    expect((await db.try(anon, "select * from public.lead_contact_values($1)", [t.ws])).error).toBeDefined();
+    expect((await db.admin("select 1 from pg_proc where proname = 'lead_facets'"))).toHaveLength(0);
   });
 });
 
@@ -166,8 +168,6 @@ describe("0027 lists", () => {
     const other = await seedTeam();
     const foreign = await lead(other);
     expect((await db.try(as(t.sdr), "insert into public.list_leads (list_id, lead_id, workspace_id) values ($1,$2,$3)", [list, foreign, t.ws])).error).toBeDefined();
-    // the facets of one list
-    expect((await facets(t.sdr, t.ws, { listId: list })).tabs).toEqual({ new: 1, contacted: 1, all: 2 });
   });
 });
 
@@ -215,6 +215,27 @@ describe("0027 re-runnable", () => {
     const before = await contactOf(a);
     await db.pg.exec(readFileSync(MIGRATION_PATHS.find((p) => p.includes("0027_"))!, "utf8"));
     expect(await contactOf(a)).toEqual(before);
-    expect((await facets(t.sdr, t.ws)).tabs).toEqual({ new: 0, contacted: 1, all: 1 });
+    expect((await values(t.sdr, t.ws)).map((r) => r.contacted)).toEqual([true]);
+  });
+
+  test("the back-fill opens a task for each lead's latest dated call (not do-not-call), once", async () => {
+    const t = await seedTeam();
+    const a = await lead(t, { phone: "508-555-0151" });
+    const b = await lead(t, { phone: "508-555-0152" });
+    const c = await lead(t, { phone: "508-555-0153" });
+    const due = new Date(Date.now() + 86_400_000).toISOString();
+    await logCall(t.sdr, a, "talked", "Primeira", due);
+    await logCall(t.sdr, a, "talked", "Segunda", due);
+    await logCall(t.sdr, b, "talked", "Antes", due);
+    await logCall(t.sdr, b, "do_not_call");
+    await logCall(t.sdr, c, "talked");
+    // as if these calls were logged before 0027: no task rows yet
+    await db.admin("delete from public.tasks where workspace_id = $1", [t.ws]);
+    const sql = readFileSync(MIGRATION_PATHS.find((p) => p.includes("0027_"))!, "utf8");
+    await db.pg.exec(sql);
+    await db.pg.exec(sql);
+    expect(await openTasks(a)).toEqual([{ title: "Segunda" }]);
+    expect(await db.admin("select 1 from public.tasks where lead_id = $1", [a])).toHaveLength(1);
+    expect(await db.admin("select 1 from public.tasks where lead_id = any($1::uuid[])", [[b, c]])).toHaveLength(0);
   });
 });
