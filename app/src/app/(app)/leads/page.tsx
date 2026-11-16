@@ -11,6 +11,7 @@ import { LeadModal } from "@/components/leads/LeadModal";
 import { LeadsTable } from "@/components/leads/LeadsTable";
 import { reserveFor } from "@/lib/ai/gateway";
 import { answerDef } from "@/lib/ai/lead-ai-tasks";
+import { leadTypeReserveUsd } from "@/lib/ai/lead-type-tasks";
 import { listAnswers, listQuestions } from "@/lib/ai-questions/store";
 
 // Server actions posted from this page ("Checar e-mails", "Achar e-mail") run DNS look-ups in rounds: give them time.
@@ -57,6 +58,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
       list={list}
       questions={questions}
       answerReserveUsd={reserveFor(answerDef)}
+      typeReserveUsd={leadTypeReserveUsd()}
     />
     {open && (
       <LeadModal>

@@ -18,7 +18,7 @@ export const spend = {
   pendingNote: "Chamadas em andamento contam pela reserva.",
   truncated: "Mostrando só os 20.000 gastos mais recentes. O total pode ser maior.",
   failed: "Não consegui ler os gastos agora. Atualize a página.",
-  agents: { qualifier: "Qualificador", learned: "Perfil aprendido", email: "E-mail", emailAgent: "Agente E-mail", leadSearch: "Busca por texto (LEADS)", aiQuestion: "Pergunta da IA (LEADS)", leadExplain: "Por que é quente (LEADS)", oneOff: "Pesquisa avulsa" },
+  agents: { qualifier: "Qualificador", learned: "Perfil aprendido", email: "E-mail", emailAgent: "Agente E-mail", leadSearch: "Busca por texto (LEADS)", aiQuestion: "Pergunta da IA (LEADS)", leadExplain: "Por que é quente (LEADS)", leadType: "Tipo com IA (LEADS)", oneOff: "Pesquisa avulsa" },
   steps: {
     qualify_places: "P3 Places",
     qualify_light: "P4 IA leve",
@@ -38,7 +38,7 @@ export const spend = {
     research_collect: "Pesquisa: coletar",
     research_verify: "Pesquisa: verificar",
     research_second_pass: "Pesquisa: segunda passada",
-    classify: "Classificar",
+    classify: "Classificar tipo",
     other: "Outro passo",
   },
   sources: {

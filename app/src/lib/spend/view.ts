@@ -57,6 +57,7 @@ export function agentLabel(c: SpendCall, runAgent: Map<string, string | null>): 
   if (c.task === "lead_search") return S.agents.leadSearch;
   if (c.task === "ai_answer") return S.agents.aiQuestion;
   if (c.task === "lead_explain") return S.agents.leadExplain;
+  if (c.task === "classify") return S.agents.leadType;
   if (c.task === "email_sequence") return S.agents.emailAgent;
   if (c.task.startsWith("email_")) return S.agents.email;
   const name = c.run_id ? runAgent.get(c.run_id) : null;

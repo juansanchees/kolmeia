@@ -82,6 +82,18 @@ export function segmentInputOf(
   };
 }
 
+/** "Classificar tipo com IA": leads per AI call, and per click (5 calls stay well inside the page's 300 s). */
+export const AI_TYPE_BATCH = 40;
+export const AI_TYPE_MAX = 200;
+
+/**
+ * Of the AI's suggestions, the ones that may be written: the lead's stored type is still empty right before the write
+ * (a manual choice made meanwhile, or a lead not re-read, is never overwritten).
+ */
+export function writableTypes<T extends { id: string }>(suggested: T[], storedSegment: Map<string, Segment | null>): T[] {
+  return suggested.filter((s) => storedSegment.has(s.id) && storedSegment.get(s.id) === null);
+}
+
 /** "new" with a first contact already counts as contacted; won, lost and discarded are "closed". */
 export function stageOf(lead: Pick<LeadRow, "status" | "first_contacted_at">): LeadStage {
   switch (lead.status) {

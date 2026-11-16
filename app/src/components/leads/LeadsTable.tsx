@@ -13,7 +13,8 @@ import type { LeadView } from "@/lib/leads/queries";
 import { usd } from "@/components/research/format";
 import { activeFilterKeys, DEFAULT_LEAD_FILTERS, filterLeads, hasSiteNoEmail, leadFacetsOf, type LeadFilters, type SegmentTab } from "@/lib/leads/view";
 import { leadsCsvAction } from "@/app/(app)/leads/lead-actions";
-import { stageOf } from "@/lib/leads/classify";
+import { AI_TYPE_BATCH, AI_TYPE_MAX, stageOf } from "@/lib/leads/classify";
+import { classifyTypesAction } from "@/app/(app)/leads/lead-type-actions";
 import { findEmailAction } from "@/app/(app)/leads/email-actions";
 import { summary as findSummary } from "@/components/leads/EmailTools";
 import { originText } from "@/lib/leads/table";
@@ -56,6 +57,8 @@ type Props = {
   /** AI questions of the workspace (0029) and the worst-case cost of one answer. */
   questions?: AiQuestion[];
   answerReserveUsd?: number;
+  /** Worst-case cost of one "Classificar tipo com IA" batch call (the gateway's reservation). */
+  typeReserveUsd?: number;
 };
 
 const lastTouch = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/New_York" }) : L.never);
@@ -110,7 +113,7 @@ function ContactIcon({ on, glyph, yes, no }: { on: boolean; glyph: string; yes: 
   );
 }
 
-export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: false }, initialFilters = DEFAULT_LEAD_FILTERS, views = [], lists = [], list = null, questions = [], answerReserveUsd = 0 }: Props) {
+export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: false }, initialFilters = DEFAULT_LEAD_FILTERS, views = [], lists = [], list = null, questions = [], answerReserveUsd = 0, typeReserveUsd = 0 }: Props) {
   const [f, setF] = useState<LeadFilters>(initialFilters);
   // bumped when a saved view replaces every filter, so the search box takes the view's text
   const [searchKey, setSearchKey] = useState(0);
@@ -173,6 +176,27 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
       setSearched((s) => new Set([...s, ...ids]));
       const left = findable.length - ids.length;
       setNotice({ ok: true, text: `${fill(TB.findEmailBulkRun, { done: ids.length, total: findable.length, summary: findSummary(r.results) })}${left > 0 ? ` ${TB.findEmailBulkMore}` : ""}` });
+      router.refresh();
+    });
+  };
+  // "Classificar tipo com IA": leads sent this visit are not sent again (an "unknown" stays Sem tipo)
+  const [typeTried, setTypeTried] = useState<Set<string>>(new Set());
+  const [confirmType, setConfirmType] = useState(false);
+  const [typing, startType] = useTransition();
+  const untypedIds = useMemo(() => items.filter((i) => i.segment === null && !typeTried.has(i.lead.id)).map((i) => i.lead.id), [items, typeTried]);
+  const typeTarget = untypedIds.slice(0, AI_TYPE_MAX);
+  const typeEstimate = Math.ceil(typeTarget.length / AI_TYPE_BATCH) * typeReserveUsd;
+  const classifyTypes = () => {
+    setConfirmType(false);
+    const ids = typeTarget;
+    startType(async () => {
+      const r = await classifyTypesAction(ids);
+      if (!r.ok) return setNotice({ ok: false, text: r.error });
+      // a cap stopped it: nothing is marked as tried, so the next click picks the rest up
+      if (!r.stopText) setTypeTried((s) => new Set([...s, ...ids]));
+      const left = untypedIds.length - ids.length;
+      const more = !r.stopText && left > 0 ? fill(TB.aiTypeMore, { n: left }) : null;
+      setNotice({ ok: !r.stopText, text: [fill(TB.aiTypeDone, { typed: r.typed, untyped: r.untyped }), r.stopText, more].filter(Boolean).join(" ") });
       router.refresh();
     });
   };
@@ -301,6 +325,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
                 {sources.maps && <Link href="/leads/buscar#maps" role="menuitem" className={menuItem}>{t.sources.search.maps}</Link>}
                 {sources.apollo && <Link href="/leads/buscar#apollo" role="menuitem" className={menuItem}>{t.sources.search.apollo}</Link>}
                 <button type="button" role="menuitem" disabled={finding || findable.length === 0} onClick={findEmails} className={`${menuItem} disabled:text-muted`}>{fill(TB.findEmailBulk, { n: findable.length })}</button>
+                <button type="button" role="menuitem" disabled={typing || untypedIds.length === 0} onClick={() => { setMenuOpen(false); setConfirmType(true); }} className={`${menuItem} disabled:text-muted`}>{fill(TB.aiType, { n: untypedIds.length })}</button>
                 <button type="button" role="menuitem" onClick={download} className={menuItem}>{L.csv}</button>
                 <button type="button" role="menuitem" onClick={() => openFromMenu("nl")} className={menuItem}>{TB.aiSearch}</button>
                 <button type="button" role="menuitem" onClick={() => openFromMenu("ai")} className={menuItem}>{TB.aiQuestion}</button>
@@ -312,6 +337,14 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
         )}
       </div>
       {csvError && <p role="alert" className="m-0 text-sm text-danger">{csvError}</p>}
+      {canCreate && confirmType && typeTarget.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 border border-line bg-surface p-3">
+          <p className="m-0 min-w-0 flex-[1_1_240px] text-sm text-ink">{fill(TB.aiTypeEstimate, { usd: `US$ ${usd(typeEstimate)}`, n: typeTarget.length })}</p>
+          <button type="button" onClick={classifyTypes} className={linkBtn}>{TB.aiTypeRun}</button>
+          <button type="button" onClick={() => setConfirmType(false)} className="min-h-11 px-3 text-sm text-blue underline underline-offset-4">{TB.aiTypeCancel}</button>
+        </div>
+      )}
+      {typing && <p role="status" className="m-0 text-sm text-muted">{TB.aiTypeRunning}</p>}
 
       {showFilters && <FacetPanel facets={facets} f={f} set={set} agents={agents} hasOneOff={hasOneOff} />}
 
