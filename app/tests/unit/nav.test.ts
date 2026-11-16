@@ -179,7 +179,7 @@ describe("F2 setup chat", () => {
 
 describe("F4 LEADS Pôr em campanha", () => {
   test("the lead page offers it to senders only, and the action is sender-only", () => {
-    expect(read("src/app/(app)/leads/[id]/page.tsx")).toMatch(/sender && [^\n]*<AddToCampaign/);
+    expect(read("src/components/leads/LeadDetail.tsx")).toMatch(/sender && [^\n]*<AddToCampaign/);
     expect(read("src/app/(app)/leads/campaign-actions.ts")).toContain("await requireSender()");
   });
 });
@@ -189,13 +189,13 @@ describe("F3a LEADS", () => {
     const page = read("src/app/(app)/leads/page.tsx");
     expect(page).toContain("listLeads(");
     expect(page).not.toContain("research_runs");
-    const detail = read("src/app/(app)/leads/[id]/page.tsx");
+    const detail = read("src/components/leads/LeadDetail.tsx");
     expect(detail).toContain("getLead(");
     expect(detail).toContain("[0-9a-f-]{36}");
     expect(detail).toContain("notFound()");
   });
   test("the lead page renders import-only leads with their sources", () => {
-    const detail = read("src/app/(app)/leads/[id]/page.tsx");
+    const detail = read("src/components/leads/LeadDetail.tsx");
     expect(detail).toContain("FieldList");
     expect(detail).not.toContain("if (!best) notFound()");
     expect(read("src/components/leads/FieldList.tsx")).toContain("sanitizeUrl(");
@@ -273,7 +273,7 @@ describe("F3c-1 upload screen", () => {
 
 describe("F3c-2 qualifier screens", () => {
   test("the lead page shows the level drop until ok", () => {
-    expect(read("src/app/(app)/leads/[id]/page.tsx")).toContain("LevelNote");
+    expect(read("src/components/leads/LeadDetail.tsx")).toContain("LevelNote");
     const note = read("src/components/qualifier/LevelNote.tsx");
     expect(note).toContain("ackLevelNoteAction");
     expect(note).toContain("levelDrop");

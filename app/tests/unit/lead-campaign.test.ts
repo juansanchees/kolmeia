@@ -28,7 +28,7 @@ describe("F4 Pôr em campanha", () => {
 
     const src = read("src/components/leads/AddToCampaign.tsx");
     for (const k of ["noEmail", "otherCampaign", "blocked"]) expect(src, k).toContain(k);
-    const page = read("src/app/(app)/leads/[id]/page.tsx");
+    const page = read("src/components/leads/LeadDetail.tsx");
     expect(page).toContain("<AddToCampaign");
     expect(page).toContain("sender &&");
     for (const keep of ["HandOffForm", "StatusButtons", "AddToCallList"]) expect(page).toContain(`<${keep}`);
