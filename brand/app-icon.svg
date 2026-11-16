@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="512" height="512" role="img" aria-labelledby="t">
+  <title id="t">Kolmeia</title>
+  <!-- Ícone de app e favicon: favo claro sobre tinta, lê bem em aba clara ou escura -->
+  <rect width="32" height="32" rx="7" fill="#1A1712"/>
+  <g transform="translate(5 5) scale(.9167)" stroke-width="1.2" stroke-linejoin="round">
+    <path fill="#F4EFE6" stroke="#F4EFE6" d="M5.938 1.309 10.65 4.03v5.44l-4.712 2.721L1.226 9.47V4.03Z"/>
+    <path fill="#F4EFE6" stroke="#F4EFE6" d="M18.062 1.309 22.774 4.03v5.44l-4.712 2.721L13.35 9.47V4.03Z"/>
+    <path fill="#F5A400" stroke="#F5A400" d="M12 11.809 16.712 14.53v5.44L12 22.691 7.288 19.97v-5.44Z"/>
+  </g>
+</svg>

@@ -1,10 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 64" width="600" height="128" role="img" aria-labelledby="t">
-  <title id="t">Kolmeia</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 244 64" width="488" height="128" role="img" aria-labelledby="t">
+  <title id="t">Kolmeia Solutions</title>
   <defs>
-    <style>@import url('https://fonts.googleapis.com/css2?family=Geologica:wght@600&amp;display=swap');</style>
+    <style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@600&amp;family=Space+Grotesk:wght@700&amp;display=swap');</style>
   </defs>
-  <path fill="#15171C" fill-rule="evenodd" d="M32 4 56 18v28L32 60 8 46V18Z M20 17h7v11l11.5-11H48L33.5 32 48 47h-9.5L27 36v11h-7Z"/>
-  <path fill="#E9A21B" d="M30.5 28 34 30v4l-3.5 2-3.5-2v-4Z"/>
-  <!-- Wordmark: Geologica 600, caixa baixa, tracking -2%. Em produção, converter o texto em curvas. -->
-  <text x="72" y="45" fill="#15171C" font-family="Geologica, 'Onest', system-ui, sans-serif" font-weight="600" font-size="40" letter-spacing="-0.8">kolmeia</text>
+  <g transform="translate(4 4) scale(2.3333)" stroke-width="1.2" stroke-linejoin="round">
+    <path fill="#1A1712" stroke="#1A1712" d="M5.938 1.309 10.65 4.03v5.44l-4.712 2.721L1.226 9.47V4.03Z"/>
+    <path fill="#1A1712" stroke="#1A1712" d="M18.062 1.309 22.774 4.03v5.44l-4.712 2.721L13.35 9.47V4.03Z"/>
+    <path fill="#F5A400" stroke="#F5A400" d="M12 11.809 16.712 14.53v5.44L12 22.691 7.288 19.97v-5.44Z"/>
+  </g>
+  <!-- Escrita: Space Grotesk 700, tracking -3%; "Solutions" em Inter 600, caixa alta, tracking 36%. Em produção, converter o texto em curvas. -->
+  <text x="72" y="39" fill="#1A1712" font-family="'Space Grotesk', Inter, system-ui, sans-serif" font-weight="700" font-size="40" letter-spacing="-1.2">Kolmeia</text>
+  <text x="74" y="56" fill="#57524A" font-family="Inter, system-ui, sans-serif" font-weight="600" font-size="10.5" letter-spacing="3.8">SOLUTIONS</text>
 </svg>

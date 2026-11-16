@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 244 64" width="488" height="128" role="img" aria-labelledby="t">
+  <title id="t">Kolmeia Solutions</title>
+  <defs>
+    <style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@600&amp;family=Space+Grotesk:wght@700&amp;display=swap');</style>
+  </defs>
+  <!-- Para fundo escuro (#1A1712). Em produção, converter o texto em curvas. -->
+  <g transform="translate(4 4) scale(2.3333)" stroke-width="1.2" stroke-linejoin="round">
+    <path fill="#F4EFE6" stroke="#F4EFE6" d="M5.938 1.309 10.65 4.03v5.44l-4.712 2.721L1.226 9.47V4.03Z"/>
+    <path fill="#F4EFE6" stroke="#F4EFE6" d="M18.062 1.309 22.774 4.03v5.44l-4.712 2.721L13.35 9.47V4.03Z"/>
+    <path fill="#F5A400" stroke="#F5A400" d="M12 11.809 16.712 14.53v5.44L12 22.691 7.288 19.97v-5.44Z"/>
+  </g>
+  <text x="72" y="39" fill="#F4EFE6" font-family="'Space Grotesk', Inter, system-ui, sans-serif" font-weight="700" font-size="40" letter-spacing="-1.2">Kolmeia</text>
+  <text x="74" y="56" fill="#C9C3B8" font-family="Inter, system-ui, sans-serif" font-weight="600" font-size="10.5" letter-spacing="3.8">SOLUTIONS</text>
+</svg>

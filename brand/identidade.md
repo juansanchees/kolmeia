@@ -1,10 +1,17 @@
 # Kolmeia: identidade visual (v0, para aprovar)
 
-## Logo
-- **Marca:** uma célula hexagonal em tinta com o **K vazado**. No encontro das hastes do K fica uma **célula âmbar pequena**: a mensagem que passa de uma caixa para outra. Colmeia sem desenho de abelha.
-- **Escrita:** `kolmeia` em caixa baixa, Geologica 600, espaçamento -2%.
-- Arquivos: `logo.svg` (marca + nome) e `logo-mark.svg` (só a marca). Em produção, converter o texto do `logo.svg` em curvas.
-- Tamanho mínimo da marca: 20 px. Área livre em volta: metade da largura da marca.
+## Logo (Favo, aprovado em 16/11/2026)
+- **Marca:** três células de favo com cantos suaves. Duas em tinta `#1A1712`, uma em mel `#F5A400`: o lead certo no meio de muitas empresas. Colmeia sem desenho de abelha.
+- **Escrita:** `Kolmeia` em Space Grotesk 700, espaçamento -3%; `SOLUTIONS` em Inter 600, caixa alta, espaçamento 36%, cor `#57524A`.
+- **Arquivos:**
+  - `logo.svg`: marca + nome, fundo claro.
+  - `logo-dark.svg`: marca + nome, fundo escuro `#1A1712` (células em `#F4EFE6`).
+  - `logo-mark.svg`: só a marca, de 32 px para cima.
+  - `logo-mark-small.svg`: só a marca, 24 px ou menos (mais respiro entre as células).
+  - `app-icon.svg`: ícone de app e favicon (cópia em `app/src/app/icon.svg`).
+- Em produção, converter o texto de `logo.svg` e `logo-dark.svg` em curvas.
+- Tamanho mínimo da marca: 16 px (versão reduzida). Área livre em volta: metade da largura da marca.
+- Cores e fontes do logo seguem `design-telas/SPEC.md`; as tabelas abaixo são da v0.
 
 ## Cores
 | Token | Claro | Escuro | Uso |
