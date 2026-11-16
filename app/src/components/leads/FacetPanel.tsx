@@ -9,7 +9,7 @@ const P = t.leads.facets;
 const F = t.leads.filters;
 const selectCls = "min-h-11 w-full min-w-0 border border-line bg-surface px-2.5 text-sm text-ink";
 
-function toggle<T>(list: T[], v: T, on: boolean): T[] {
+export function toggle<T>(list: T[], v: T, on: boolean): T[] {
   return on ? [...list.filter((x) => x !== v), v] : list.filter((x) => x !== v);
 }
 
