@@ -15,17 +15,17 @@ function toggle<T>(list: T[], v: T, on: boolean): T[] {
 
 function Check({ label, n, checked, onChange }: { label: string; n: number | null; checked: boolean; onChange: (on: boolean) => void }) {
   return (
-    <label className="flex min-h-9 items-center gap-2 text-sm">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="h-4 w-4" />
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      <span className="font-mono text-xs text-muted">{n ?? "—"}</span>
+    <label className="flex min-h-9 min-w-0 items-center gap-2 text-sm">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="h-4 w-4 shrink-0" />
+      <span className="min-w-0 flex-1 truncate" title={label}>{label}</span>
+      <span className="shrink-0 text-right font-mono text-xs text-muted">{n ?? "—"}</span>
     </label>
   );
 }
 
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <fieldset className="m-0 flex flex-col gap-0.5 border-0 border-b border-line p-0 pb-3 last:border-b-0">
+    <fieldset className="m-0 flex min-w-0 flex-col gap-0.5 border-0 border-b border-line p-0 pb-3 last:border-b-0">
       <legend className="mb-1 font-mono text-xs uppercase tracking-wide text-muted">{title}</legend>
       {children}
     </fieldset>
@@ -43,7 +43,7 @@ export function FacetPanel({ facets, f, set, agents, hasOneOff }: { facets: Lead
   const qualityN = new Map(facets.emailQuality.map((c) => [c.value, c.n]));
   const qualities = EMAIL_QUALITIES.filter((q) => qualityN.has(q) || f.emailQuality.includes(q));
   return (
-    <aside id="lead-filters" aria-label={P.label} className="grid gap-3 border border-line bg-surface p-3 md:grid-cols-3">
+    <aside id="lead-filters" aria-label={P.label} className="grid gap-3 border border-line bg-surface p-3 grid-cols-[minmax(0,1fr)] md:grid-cols-[repeat(3,minmax(0,1fr))]">
       <Group title={P.city}>
         {cities.map((c) => (
           <Check key={c} label={c} n={cityN.get(c) ?? null} checked={f.cities.includes(c)} onChange={(on) => set({ cities: toggle(f.cities, c, on) })} />

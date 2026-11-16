@@ -26,6 +26,10 @@ describe("leads list UI rework", () => {
     const p = read("src/components/leads/FacetPanel.tsx");
     for (const s of ["facets.lists", "noResearch", "agents"]) expect(p).toContain(s);
   });
+  test("facet rows truncate inside their column", () => {
+    const p = read("src/components/leads/FacetPanel.tsx");
+    for (const s of ["truncate", "minmax(0", "min-w-0", "shrink-0"]) expect(p).toContain(s);
+  });
   test("bulk results stay visible after the selection bar unmounts", () => {
     const bar = read("src/components/leads/SelectionBar.tsx");
     expect(table).toContain('role="status"');
