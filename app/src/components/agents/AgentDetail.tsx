@@ -8,6 +8,7 @@ import Link from "next/link";
 import { t } from "@/messages/pt";
 import { AgentPowerButton } from "./AgentPowerButton";
 import { ArchiveButton } from "./ArchiveButton";
+import { Paged } from "@/components/Pager";
 
 const A = t.agents;
 const R = A.review;
@@ -73,7 +74,7 @@ export function AgentDetail({ agent, setupRun, runs, now }: { agent: AgentRow; s
       {runs.length > 0 && (
         <div className="flex flex-col gap-1">
           <h3 className="text-base font-semibold">{A.detail.history}</h3>
-          <ul className="m-0 flex list-none flex-col p-0">
+          <Paged as="ul" className="m-0 flex list-none flex-col p-0">
             {runs.map((r) => (
               <li key={r.id} className="flex flex-wrap items-baseline gap-x-3 border-t border-line py-2 text-sm">
                 <Link href={`/agentes/pesquisa/${r.id}`} className="text-blue underline underline-offset-4">
@@ -84,7 +85,7 @@ export function AgentDetail({ agent, setupRun, runs, now }: { agent: AgentRow; s
                 </span>
               </li>
             ))}
-          </ul>
+          </Paged>
         </div>
       )}
       <p className="text-sm text-muted">{A.detail.turnOnHelp}</p>

@@ -8,6 +8,7 @@ import { Badge, Card, CardTitle } from "@/components/email/bits";
 import { SuppressionForm } from "@/components/email/forms";
 import { when } from "@/components/email/format";
 import { t } from "@/messages/pt";
+import { Paged } from "@/components/Pager";
 
 const B = t.email.blocked;
 
@@ -32,7 +33,7 @@ export default async function BlockedPage() {
         </CardTitle>
         <p className="text-sm">{B.intro}</p>
         {rows.length === 0 && <p className="text-sm text-muted">{B.none}</p>}
-        <ul className="m-0 flex list-none flex-col gap-2 p-0">
+        <Paged as="ul" className="m-0 flex list-none flex-col gap-2 p-0">
           {rows.map((r) => (
             <li key={r.id} className="flex min-w-0 flex-wrap items-center justify-between gap-2 border border-line p-3">
               <span className="flex min-w-0 flex-col gap-1">
@@ -47,7 +48,7 @@ export default async function BlockedPage() {
               {isOwner && <ActionButton action={removeSuppression.bind(null, r.id)} label={B.remove} variant="link" confirm={B.removeConfirm} />}
             </li>
           ))}
-        </ul>
+        </Paged>
         {!isOwner && rows.length > 0 && <p className="text-[13px] text-muted">{B.ownerOnly}</p>}
       </Card>
       <Card aria-labelledby="bl-add" className="flex-[1_1_280px]">

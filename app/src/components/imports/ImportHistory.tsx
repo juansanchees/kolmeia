@@ -7,6 +7,7 @@ import { TrainButton } from "@/components/profile/TrainButton";
 import { date } from "@/components/research/format";
 import type { ImportListItem } from "@/lib/imports/store";
 import { fill, t } from "@/messages/pt";
+import { Paged } from "@/components/Pager";
 
 const M = t.imports;
 
@@ -34,7 +35,7 @@ export function ImportHistory({ items, profiles = {}, trainEstimateUsd = 0 }: { 
       {items.length === 0 ? (
         <p className="text-sm text-muted">{M.historyEmpty}</p>
       ) : (
-        <ul className="m-0 flex list-none flex-col border border-line bg-surface p-0">
+        <Paged as="ul" className="m-0 flex list-none flex-col border border-line bg-surface p-0">
           {items.map((i) => {
             const result = undone[i.id];
             const status = result ? "undone" : i.status;
@@ -68,7 +69,7 @@ export function ImportHistory({ items, profiles = {}, trainEstimateUsd = 0 }: { 
               </li>
             );
           })}
-        </ul>
+        </Paged>
       )}
     </section>
   );

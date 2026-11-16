@@ -7,6 +7,7 @@ import { bodyProblem, subjectProblem } from "@/lib/email/compose";
 import type { MessageStatus, MessageVersion } from "@/lib/email/types";
 import { fill, t } from "@/messages/pt";
 import { Badge, btn, input, type Tone } from "./bits";
+import { Paged } from "@/components/Pager";
 
 const M = t.email;
 
@@ -193,7 +194,7 @@ export function ReviewList({ rows, campaignId }: { rows: ReviewRow[]; campaignId
   };
   return (
     <div className="flex flex-col gap-3">
-      <ul className="m-0 flex list-none flex-col gap-2 p-0">
+      <Paged as="ul" className="m-0 flex list-none flex-col gap-2 p-0">
         {rows.map((r, i) => {
           const drafts = r.messages.filter((m) => m.status === "draft").length;
           const approved = r.messages.filter((m) => m.status === "approved").length;
@@ -244,7 +245,7 @@ export function ReviewList({ rows, campaignId }: { rows: ReviewRow[]; campaignId
             </li>
           );
         })}
-      </ul>
+      </Paged>
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"

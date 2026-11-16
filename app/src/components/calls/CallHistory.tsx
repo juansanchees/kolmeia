@@ -1,6 +1,7 @@
 import { when } from "@/components/email/format";
 import type { CallLogRow } from "@/lib/calls/types";
 import { t } from "@/messages/pt";
+import { Paged } from "@/components/Pager";
 
 const C = t.calls;
 
@@ -13,7 +14,7 @@ export function CallHistory({ calls }: { calls: CallLogRow[] }) {
       {calls.length === 0 ? (
         <p className="text-[13px] text-muted">{C.noHistory}</p>
       ) : (
-        <ul className="m-0 flex list-none flex-col gap-2 p-0">
+        <Paged as="ul" className="m-0 flex list-none flex-col gap-2 p-0">
           {calls.map((c) => (
             <li key={c.id} className="flex flex-col gap-0.5 border border-line bg-surface p-3 text-sm">
               <span className="flex flex-wrap items-baseline justify-between gap-2">
@@ -30,7 +31,7 @@ export function CallHistory({ calls }: { calls: CallLogRow[] }) {
               )}
             </li>
           ))}
-        </ul>
+        </Paged>
       )}
     </section>
   );

@@ -17,6 +17,7 @@ import { FetchRepliesButton } from "@/components/email/ReplyControls";
 import { CampaignMailboxesForm, DelaysForm, ProspectEmailForm } from "@/components/email/forms";
 import { STATUS_TONE } from "@/components/email/MessageEditor";
 import { fill, t } from "@/messages/pt";
+import { Paged } from "@/components/Pager";
 
 const M = t.email;
 const C = M.campaign;
@@ -133,7 +134,7 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
             ))}
           </dl>
           {failed.length > 0 && s.canSend && (
-            <ul className="m-0 flex list-none flex-col gap-2 p-0">
+            <Paged as="ul" className="m-0 flex list-none flex-col gap-2 p-0">
               {failed.map((m) => {
                 // R9: a real claim whose result is unknown may already be in the inbox: retry only after checking
                 const unknown = m.error === "interrupted" && m.send_mode === "real";
@@ -155,7 +156,7 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
                   </li>
                 );
               })}
-            </ul>
+            </Paged>
           )}
           {s.canSend && !archived && (
             <div className="flex flex-wrap gap-2">
@@ -223,7 +224,7 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
         <CardTitle id="pros-title">
           {C.prospects} · {prospects.length}
         </CardTitle>
-        <ul className="m-0 flex list-none flex-col gap-2 p-0">
+        <Paged as="ul" className="m-0 flex list-none flex-col gap-2 p-0">
           {prospects.map((p) => {
             const steps = (byProspect.get(p.id) ?? []).filter((m) => m.kind === "sequence").sort((a, b) => (a.step ?? 0) - (b.step ?? 0));
             return (
@@ -283,7 +284,7 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
               </li>
             );
           })}
-        </ul>
+        </Paged>
       </Card>
     </div>
   );

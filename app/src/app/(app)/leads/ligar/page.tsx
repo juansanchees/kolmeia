@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isSender } from "@/lib/roles";
 import { getCurrentWorkspace } from "@/lib/workspace";
 import { t } from "@/messages/pt";
+import { Paged } from "@/components/Pager";
 
 const C = t.calls;
 
@@ -69,13 +70,13 @@ export default async function CallPage({ searchParams }: { searchParams: Promise
       )}
       <h2 className="text-2xl">{C.today}</h2>
       {rows.length === 0 && <p className="text-sm text-muted">{C.empty}</p>}
-      {todo.length > 0 && <ul className="m-0 flex list-none flex-col border border-line bg-surface p-0">{todo.map((r) => <Row key={r.item.id} r={r} />)}</ul>}
+      {todo.length > 0 && <Paged as="ul" className="m-0 flex list-none flex-col border border-line bg-surface p-0">{todo.map((r) => <Row key={r.item.id} r={r} />)}</Paged>}
       {done.length > 0 && (
         <section aria-labelledby="done-title" className="flex flex-col gap-2">
           <h3 id="done-title" className="text-base font-semibold">
             {C.done}
           </h3>
-          <ul className="m-0 flex list-none flex-col border border-line bg-surface p-0">{done.map((r) => <Row key={r.item.id} r={r} done />)}</ul>
+          <Paged as="ul" className="m-0 flex list-none flex-col border border-line bg-surface p-0">{done.map((r) => <Row key={r.item.id} r={r} done />)}</Paged>
         </section>
       )}
       <p className="text-sm text-muted">{C.b2bOnly}</p>

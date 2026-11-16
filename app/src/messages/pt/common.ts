@@ -1,5 +1,13 @@
 // Shared strings (app shell, login, onboarding, company profile). One file per area; see ./index.ts.
 export const common = {
+  paging: {
+    label: "Paginação",
+    perPage: "Por página",
+    prev: "Anterior",
+    next: "Próxima",
+    page: "Página {page} de {pages}",
+    showing: "Mostrando {from}–{to} de {total}",
+  },
   appName: "Prospecção",
   notConfigured: {
     title: "Banco não configurado",

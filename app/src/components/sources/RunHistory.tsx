@@ -4,6 +4,7 @@ import { Badge, type Tone } from "@/components/email/bits";
 import { date, usd } from "@/components/research/format";
 import { fill, t } from "@/messages/pt";
 import { runStatusLabel, runTitle } from "@/lib/sources/view";
+import { Paged } from "@/components/Pager";
 
 const Q = t.sources.search;
 
@@ -40,7 +41,7 @@ export function RunHistory({ runs }: { runs: RunView[] }) {
       {runs.length === 0 ? (
         <p className="text-sm text-muted">{Q.historyEmpty}</p>
       ) : (
-        <ul className="m-0 flex list-none flex-col border border-line bg-surface p-0">
+        <Paged as="ul" className="m-0 flex list-none flex-col border border-line bg-surface p-0">
           {runs.map((r) => (
             <li key={r.id} className="flex flex-col gap-1.5 border-b border-line px-3.5 py-3 last:border-b-0">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -67,7 +68,7 @@ export function RunHistory({ runs }: { runs: RunView[] }) {
               )}
             </li>
           ))}
-        </ul>
+        </Paged>
       )}
     </section>
   );

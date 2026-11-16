@@ -6,6 +6,7 @@ import { openTasks } from "@/lib/tasks/queries";
 import { TASK_TABS, taskTab, type TaskTab } from "@/lib/tasks/view";
 import { getCurrentWorkspace } from "@/lib/workspace";
 import { t } from "@/messages/pt";
+import { Paged } from "@/components/Pager";
 
 const T = t.tasks;
 const when = (iso: string) =>
@@ -48,7 +49,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
       {rows.length === 0 ? (
         <p className="text-sm text-muted">{T.empty[tab]}</p>
       ) : (
-        <ul className="m-0 flex list-none flex-col border border-line bg-surface p-0">
+        <Paged as="ul" resetKey={tab} className="m-0 flex list-none flex-col border border-line bg-surface p-0">
           {rows.map((r) => {
             const l = lead.get(r.lead_id);
             return (
@@ -67,7 +68,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
               </li>
             );
           })}
-        </ul>
+        </Paged>
       )}
     </div>
   );

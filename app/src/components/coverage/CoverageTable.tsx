@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { Pager, usePaged } from "@/components/Pager";
 import { MA_COUNTIES } from "@/lib/coverage/ma-towns";
 import { huntHref, type TownRow } from "@/lib/coverage/view";
 import { Badge } from "@/components/email/bits";
@@ -16,6 +17,7 @@ export function CoverageTable({ towns }: { towns: TownRow[] }) {
   const [county, setCounty] = useState("");
   const [onlyUncovered, setOnlyUncovered] = useState(false);
   const shown = towns.filter((x) => (!county || x.county === county) && (!onlyUncovered || !x.covered));
+  const { pageItems, pager } = usePaged(shown, `${county}|${onlyUncovered}`);
   const max = Math.max(1, ...towns.map((x) => x.leads));
 
   return (
@@ -48,7 +50,7 @@ export function CoverageTable({ towns }: { towns: TownRow[] }) {
               </tr>
             </thead>
             <tbody>
-              {shown.map((x) => {
+              {pageItems.map((x) => {
                 const filled = x.leads === 0 ? 0 : Math.max(1, Math.round((x.leads / max) * BAR));
                 return (
                   <tr key={x.name} className="border-b border-line align-middle">
@@ -76,6 +78,7 @@ export function CoverageTable({ towns }: { towns: TownRow[] }) {
           </table>
         </div>
       )}
+      <Pager pager={pager} />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Pager, usePaged } from "@/components/Pager";
 import { useMemo, useRef, useState, useTransition } from "react";
 import { createResearchList, setDecision } from "@/app/(app)/agentes/actions";
 import type { CandidateRow, JobRow, RunRow } from "@/lib/research/rows";
@@ -42,6 +43,7 @@ export function Results({ run, candidates, checks, jobs = [] }: Props) {
     [candidates, decisions],
   );
   const tabRows = useMemo(() => rows.filter((c) => inTab(c, tab)).sort(byTemperature), [rows, tab]);
+  const { pageItems: cardRows, pager: cardPager } = usePaged(tabRows, tab);
   const checksBy = useMemo(() => {
     const m = new Map<string, CheckWithEvidence[]>();
     for (const k of checks) m.set(k.candidate_id, [...(m.get(k.candidate_id) ?? []), k]);
@@ -131,9 +133,10 @@ export function Results({ run, candidates, checks, jobs = [] }: Props) {
         <div className="flex flex-wrap items-start gap-5">
           <section aria-label={L.tabs[tab]} className="flex min-w-0 flex-[2_1_480px] flex-col gap-4">
             {tabRows.length === 0 && <p className="border border-line bg-surface p-4 text-sm text-muted">{L.emptyTab}</p>}
-            {tabRows.map((c) => (
+            {cardRows.map((c) => (
               <Card key={c.id} c={c} selected={selected === c.id} onSelect={() => setSelected(c.id)} onDecide={(d) => decide(c.id, d)} />
             ))}
+            <Pager pager={cardPager} />
           </section>
           <aside aria-label={`${L.proof} · ${L.limits}`} className="flex min-w-0 flex-[1_1_280px] flex-col gap-4">
             <section aria-labelledby="proof-title" className="flex flex-col gap-3 border border-ink bg-surface p-4">
@@ -364,6 +367,7 @@ function Sheet({ rows, checksBy, onDecide }: { rows: CandidateRow[]; checksBy: M
     return out;
   }, [rows, q, ft, fc, sort]);
 
+  const { pageItems: viewPage, pager } = usePaged(view, JSON.stringify([q, ft, fc, sort]));
   const toggleSort = (col: Column) =>
     setSort((s) => (s?.id === col.id ? { id: col.id, dir: s.dir === 1 ? -1 : 1 } : { id: col.id, dir: col.kind === "text" || col.kind === "pill" || col.kind === "url" ? 1 : -1 }));
   const openRow = (id: string) => {
@@ -439,7 +443,7 @@ function Sheet({ rows, checksBy, onDecide }: { rows: CandidateRow[]; checksBy: M
                 </td>
               </tr>
             )}
-            {view.map((c) => (
+            {viewPage.map((c) => (
               <tr
                 key={c.id}
                 tabIndex={0}
@@ -481,6 +485,7 @@ function Sheet({ rows, checksBy, onDecide }: { rows: CandidateRow[]; checksBy: M
           </tbody>
         </table>
       </div>
+      <Pager pager={pager} />
       <p className="text-[13px] text-muted">{L.sortHint}</p>
 
       {openC && (
@@ -531,13 +536,14 @@ function jobCell(col: JobColumn, j: JobRow): string {
 }
 
 function Jobs({ jobs, mode }: { jobs: JobRow[]; mode: "cards" | "sheet" }) {
+  const { pageItems, pager } = usePaged(jobs);
   if (jobs.length === 0) return <p className="border border-line bg-surface p-4 text-sm text-muted">{J.empty}</p>;
   return (
     <section aria-label={L.tabs.jobs} className="flex flex-col gap-3">
       <p className="text-[13px] text-muted">{J.intro}</p>
       {mode === "cards" ? (
         <ul className="m-0 flex list-none flex-col gap-3 p-0">
-          {jobs.map((j) => (
+          {pageItems.map((j) => (
             <li key={j.id} className="flex flex-col gap-1.5 border border-line bg-surface p-4">
               <span className="text-[17px] font-semibold">{j.address ?? j.project_name}</span>
               {j.address && j.project_name && <span className="text-sm">{j.project_name}</span>}
@@ -567,7 +573,7 @@ function Jobs({ jobs, mode }: { jobs: JobRow[]; mode: "cards" | "sheet" }) {
               </tr>
             </thead>
             <tbody>
-              {jobs.map((j) => (
+              {pageItems.map((j) => (
                 <tr key={j.id} className="odd:bg-surface even:bg-[#fafbfc]">
                   {JOB_SHEET_COLUMNS.map((col) => {
                     const text = jobCell(col, j);
@@ -589,6 +595,7 @@ function Jobs({ jobs, mode }: { jobs: JobRow[]; mode: "cards" | "sheet" }) {
           </table>
         </div>
       )}
+      <Pager pager={pager} />
     </section>
   );
 }

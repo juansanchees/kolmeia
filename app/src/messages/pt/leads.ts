@@ -7,12 +7,6 @@ export const leads = {
   lastTouch: "Último contato",
   never: "Nunca",
   paging: {
-    label: "Paginação",
-    perPage: "Por página",
-    prev: "Anterior",
-    next: "Próxima",
-    page: "Página {page} de {pages}",
-    showing: "Mostrando {from}–{to} de {total}",
     selectPage: "Selecionar esta página",
   },
   facets: {

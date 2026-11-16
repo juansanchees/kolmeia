@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireSender } from "@/lib/workspace";
 import { fill, t } from "@/messages/pt";
 import { deleteMarkAction } from "./actions";
+import { Paged } from "@/components/Pager";
 
 const C = t.coverage;
 const LIST_MAX = 50;
@@ -28,7 +29,7 @@ export default async function CoveragePage() {
         {recent.length === 0 ? (
           <p className="text-sm text-muted">{C.noSearches}</p>
         ) : (
-          <ul className="m-0 flex list-none flex-col gap-2 p-0">
+          <Paged as="ul" className="m-0 flex list-none flex-col gap-2 p-0">
             {recent.map((s, i) => {
               const place = placesOf(s);
               return (
@@ -44,7 +45,7 @@ export default async function CoveragePage() {
                 </li>
               );
             })}
-          </ul>
+          </Paged>
         )}
       </Card>
 
@@ -59,7 +60,7 @@ export default async function CoveragePage() {
         <CardTitle id="manual-title">{C.manual}</CardTitle>
         <ManualMarkForm />
         {data.marks.length > 0 && (
-          <ul className="m-0 flex list-none flex-col gap-2 p-0">
+          <Paged as="ul" className="m-0 flex list-none flex-col gap-2 p-0">
             {data.marks.map((m) => (
               <li key={m.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                 <span className="font-mono text-xs text-muted">{date(m.searched_at)}</span>
@@ -70,7 +71,7 @@ export default async function CoveragePage() {
                 </form>
               </li>
             ))}
-          </ul>
+          </Paged>
         )}
       </Card>
     </div>

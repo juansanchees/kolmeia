@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PagedTable } from "@/components/Pager";
 import { NewListForm } from "@/components/lists/NewListForm";
 import { listStats } from "@/lib/lists/queries";
 import { createClient } from "@/lib/supabase/server";
@@ -23,35 +24,34 @@ export default async function ListsPage() {
       {rows.length === 0 ? (
         <p className="text-sm text-muted">{L.empty}</p>
       ) : (
-        <div className="overflow-x-auto border border-line bg-surface">
-          <table className="w-full min-w-[640px] border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-line text-left font-mono text-xs uppercase tracking-wide text-muted">
-                <th scope="col" className="px-3 py-2 font-normal">{L.columns.name}</th>
-                <th scope="col" className="px-3 py-2 text-right font-normal">{L.columns.leads}</th>
-                <th scope="col" className="px-3 py-2 text-right font-normal">{L.columns.contacted}</th>
-                <th scope="col" className="px-3 py-2 text-right font-normal">{L.columns.phone}</th>
-                <th scope="col" className="px-3 py-2 font-normal">{L.columns.actions}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} className="border-b border-line last:border-b-0">
-                  <th scope="row" className="px-3 py-2 text-left font-semibold">{r.name}</th>
-                  <td className="px-3 py-2 text-right font-mono">{r.leads}</td>
-                  <td className="px-3 py-2 text-right font-mono">{pct(r.contacted, r.leads)}</td>
-                  <td className="px-3 py-2 text-right font-mono">{r.with_phone}</td>
-                  <td className="px-3 py-2">
-                    <span className="flex flex-wrap gap-3">
-                      <Link href={`/leads?lista=${r.id}`} className="inline-flex min-h-11 items-center text-blue underline underline-offset-4">{L.open}</Link>
-                      <a href={`/api/leads/lists/${r.id}/csv`} download className="inline-flex min-h-11 items-center text-blue underline underline-offset-4">{L.csv}</a>
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <PagedTable
+          wrapClassName="overflow-x-auto border border-line bg-surface"
+          className="w-full min-w-[640px] border-collapse text-sm"
+          head={
+        <tr className="border-b border-line text-left font-mono text-xs uppercase tracking-wide text-muted">
+          <th scope="col" className="px-3 py-2 font-normal">{L.columns.name}</th>
+          <th scope="col" className="px-3 py-2 text-right font-normal">{L.columns.leads}</th>
+          <th scope="col" className="px-3 py-2 text-right font-normal">{L.columns.contacted}</th>
+          <th scope="col" className="px-3 py-2 text-right font-normal">{L.columns.phone}</th>
+          <th scope="col" className="px-3 py-2 font-normal">{L.columns.actions}</th>
+        </tr>
+          }
+        >
+          {rows.map((r) => (
+            <tr key={r.id} className="border-b border-line last:border-b-0">
+              <th scope="row" className="px-3 py-2 text-left font-semibold">{r.name}</th>
+              <td className="px-3 py-2 text-right font-mono">{r.leads}</td>
+              <td className="px-3 py-2 text-right font-mono">{pct(r.contacted, r.leads)}</td>
+              <td className="px-3 py-2 text-right font-mono">{r.with_phone}</td>
+              <td className="px-3 py-2">
+                <span className="flex flex-wrap gap-3">
+                  <Link href={`/leads?lista=${r.id}`} className="inline-flex min-h-11 items-center text-blue underline underline-offset-4">{L.open}</Link>
+                  <a href={`/api/leads/lists/${r.id}/csv`} download className="inline-flex min-h-11 items-center text-blue underline underline-offset-4">{L.csv}</a>
+                </span>
+              </td>
+            </tr>
+          ))}
+        </PagedTable>
       )}
       <p className="text-sm text-muted">{L.csvNote}</p>
     </div>

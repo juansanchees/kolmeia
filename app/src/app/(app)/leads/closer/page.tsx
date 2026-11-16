@@ -9,6 +9,7 @@ import { ActionButton } from "@/components/email/ActionButton";
 import { Badge, Label } from "@/components/email/bits";
 import { when } from "@/components/email/format";
 import { fill, t } from "@/messages/pt";
+import { Paged } from "@/components/Pager";
 
 const M = t.email;
 const C = M.closer;
@@ -39,7 +40,7 @@ export default async function CloserPage() {
   return (
     <div className="flex min-w-0 flex-col gap-5">
       {withCloser.length === 0 && <p className="text-sm text-muted">{H.noneYet}</p>}
-      <ul className="m-0 flex list-none flex-col gap-4 p-0">
+      <Paged as="ul" className="m-0 flex list-none flex-col gap-4 p-0">
         {withCloser.map((i) => {
           const b = parseCloserBrief(i.lead.closer_brief);
           return (
@@ -86,12 +87,12 @@ export default async function CloserPage() {
             </li>
           );
         })}
-      </ul>
+      </Paged>
       {s.canSend && (
         <>
       <p className="text-sm">{C.intro}</p>
       {rows.length === 0 && <p className="text-sm text-muted">{C.none}</p>}
-      <ul className="m-0 flex list-none flex-col gap-4 p-0">
+      <Paged as="ul" className="m-0 flex list-none flex-col gap-4 p-0">
         {rows.map((p) => {
           // stored jsonb: parsed defensively (bad shape -> "sem resumo"), links filtered (R15)
           const brief = parseCloserBrief(p.closer_brief);
@@ -145,7 +146,7 @@ export default async function CloserPage() {
           </li>
           );
         })}
-      </ul>
+      </Paged>
         </>
       )}
     </div>

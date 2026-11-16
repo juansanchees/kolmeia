@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { RunStatus } from "@/lib/research/types";
 import { t } from "@/messages/pt";
+import { Paged } from "@/components/Pager";
 
 export type RunListItem = { id: string; title: string; status: RunStatus; is_partial: boolean; created_at: string };
 
@@ -22,7 +23,7 @@ export function RunList({ runs }: { runs: RunListItem[] }) {
       <nav aria-label={M.yourResearch} className="border border-line bg-surface">
         <div className="border-b border-ink px-3.5 py-2.5 font-mono text-xs text-muted">{M.yourResearch}</div>
         {runs.length === 0 && <p className="px-3.5 py-3 text-sm text-muted">{M.empty}</p>}
-        <ul className="m-0 list-none p-0">
+        <Paged as="ul" className="m-0 list-none p-0">
           {runs.map((r) => {
             const current = pathname === `/agentes/pesquisa/${r.id}`;
             return (
@@ -41,7 +42,7 @@ export function RunList({ runs }: { runs: RunListItem[] }) {
               </li>
             );
           })}
-        </ul>
+        </Paged>
       </nav>
     </>
   );

@@ -7,6 +7,7 @@ import { Badge, NextStep, Panel } from "./bits";
 import { timeOf } from "./format";
 import { NewCampaignForm } from "./forms";
 import { fill, t } from "@/messages/pt";
+import { Paged } from "@/components/Pager";
 
 const M = t.email;
 const O = M.overview;
@@ -97,7 +98,7 @@ export function EmailOverview(d: OverviewData) {
       <div className="flex flex-wrap items-start gap-5">
         <Panel id="ov-lists" title={O.lists} hint={O.listsHint} className="flex-[1_1_260px]">
           {live.length === 0 && <p className="m-0 px-4 py-3.5 text-sm text-muted">{M.campaigns.none}</p>}
-          <ul className="m-0 flex list-none flex-col p-0">
+          <Paged as="ul" className="m-0 flex list-none flex-col p-0">
             {live.map((c) => {
               const sending = c.status === "active";
               return (
@@ -119,13 +120,13 @@ export function EmailOverview(d: OverviewData) {
                 </li>
               );
             })}
-          </ul>
+          </Paged>
           {archived.length > 0 && (
             <details className="border-b border-line px-4 py-3">
               <summary className="cursor-pointer text-sm text-muted">
                 {O.archived} · {archived.length}
               </summary>
-              <ul className="m-0 mt-2 flex list-none flex-col gap-1.5 p-0">
+              <Paged as="ul" className="m-0 mt-2 flex list-none flex-col gap-1.5 p-0">
                 {archived.map((c) => (
                   <li key={c.id}>
                     <Link href={`/campanhas/${c.id}`} className="break-words text-sm text-blue underline underline-offset-4">
@@ -133,7 +134,7 @@ export function EmailOverview(d: OverviewData) {
                     </Link>
                   </li>
                 ))}
-              </ul>
+              </Paged>
             </details>
           )}
           {s.canSend && ready && (
@@ -189,6 +190,7 @@ export function EmailOverview(d: OverviewData) {
                 </div>
               );
             })()}
+          <Paged>
           {queue.slice(1).map(([pid, ms]) => {
             const p = prospects.get(pid)!;
             return (
@@ -205,10 +207,12 @@ export function EmailOverview(d: OverviewData) {
               </div>
             );
           })}
+          </Paged>
         </Panel>
 
         <Panel id="ov-replies" title={O.replies} hint={fill(O.newN, { n: replies.length })} className="flex-[1_1_300px]">
           {replies.length === 0 && <p className="m-0 px-4 py-3.5 text-sm text-muted">{O.noReplies}</p>}
+          <Paged>
           {replies.map((r) => {
             const p = prospects.get(r.prospect_id!)!;
             const firstLine = r.body_text.split(/\n+/).find((l) => l.trim()) ?? r.subject;
@@ -230,6 +234,7 @@ export function EmailOverview(d: OverviewData) {
               </div>
             );
           })}
+          </Paged>
           <p className="m-0 px-4 py-3.5 text-[13px] text-muted">{O.unsubNote}</p>
         </Panel>
       </div>

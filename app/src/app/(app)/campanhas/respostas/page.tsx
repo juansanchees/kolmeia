@@ -10,6 +10,7 @@ import { when } from "@/components/email/format";
 import { MessageEditor } from "@/components/email/MessageEditor";
 import { FetchRepliesButton, ReplyLabelSelect, ReplySendButton } from "@/components/email/ReplyControls";
 import { fill, t } from "@/messages/pt";
+import { Paged } from "@/components/Pager";
 
 const M = t.email;
 const R = M.replies;
@@ -55,7 +56,7 @@ export default async function RepliesPage() {
         </Card>
       )}
       {replies.length === 0 && <p className="text-sm text-muted">{R.none}</p>}
-      <ul className="m-0 flex list-none flex-col gap-4 p-0">
+      <Paged as="ul" className="m-0 flex list-none flex-col gap-4 p-0">
         {replies.map((r) => {
           const p = r.prospect_id ? prospects.get(r.prospect_id) : undefined;
           const mine = answers.filter((a) => a.reply_to_id === r.id);
@@ -132,7 +133,7 @@ export default async function RepliesPage() {
             </li>
           );
         })}
-      </ul>
+      </Paged>
       {mailboxes.length > 0 && mailboxes.every((m) => m.status !== "ok") && <Notice>{M.send.outcomes.mailbox_not_verified}</Notice>}
     </div>
   );

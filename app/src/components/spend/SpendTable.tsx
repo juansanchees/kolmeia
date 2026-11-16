@@ -3,6 +3,7 @@ import { Badge } from "@/components/email/bits";
 import { usd } from "@/components/research/format";
 import type { SourceRow, SpendBy, SpendRow } from "@/lib/spend/view";
 import { t } from "@/messages/pt";
+import { Paged } from "@/components/Pager";
 
 const S = t.spend;
 
@@ -15,7 +16,7 @@ export function money(v: number): string {
 export function SpendTable({ rows, by }: { rows: SpendRow[]; by: SpendBy }) {
   if (rows.length === 0) return <p className="text-sm text-muted">{S.empty}</p>;
   return (
-    <ul className="m-0 flex list-none flex-col border border-line bg-surface p-0">
+    <Paged as="ul" resetKey={by} className="m-0 flex list-none flex-col border border-line bg-surface p-0">
       {rows.map((r) => (
         <li key={r.key} className="border-b border-line last:border-b-0">
           <details>
@@ -37,7 +38,7 @@ export function SpendTable({ rows, by }: { rows: SpendRow[]; by: SpendBy }) {
               {r.leads.length === 0 ? (
                 <span className="text-[13px] text-muted">{S.noLead}</span>
               ) : (
-                <ul className="m-0 flex list-none flex-col gap-1 p-0">
+                <Paged as="ul" resetKey={by} className="m-0 flex list-none flex-col gap-1 p-0">
                   {r.leads.map((l) => (
                     <li key={l.id} className="flex justify-between gap-3 text-[13px]">
                       <Link href={`/leads/${l.id}`} className="min-w-0 truncate text-blue underline underline-offset-4">
@@ -46,13 +47,13 @@ export function SpendTable({ rows, by }: { rows: SpendRow[]; by: SpendBy }) {
                       <span className="font-mono">US$ {money(l.usd)}</span>
                     </li>
                   ))}
-                </ul>
+                </Paged>
               )}
             </div>
           </details>
         </li>
       ))}
-    </ul>
+    </Paged>
   );
 }
 

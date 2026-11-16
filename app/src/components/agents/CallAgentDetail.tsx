@@ -10,6 +10,7 @@ import { ArchiveButton } from "./ArchiveButton";
 import type { AgentRow } from "@/lib/agents/types";
 import { callAgentConfigSchema } from "@/lib/calls/types";
 import { fill, t } from "@/messages/pt";
+import { Paged } from "@/components/Pager";
 
 const A = t.agents;
 const C = t.callAgent;
@@ -101,7 +102,7 @@ export function CallAgentDetail({
         {rows.length === 0 ? (
           <p className="text-sm text-muted">{t.calls.empty}</p>
         ) : (
-          <ul className="m-0 flex list-none flex-col p-0">
+          <Paged as="ul" className="m-0 flex list-none flex-col p-0">
             {rows.map((r) => (
               <li key={r.leadId} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line py-2 text-sm">
                 <Link href={`/leads/${r.leadId}`} className="font-semibold text-ink underline-offset-4 hover:underline">
@@ -112,7 +113,7 @@ export function CallAgentDetail({
                 {r.outcome && <span className="font-mono text-xs text-muted">{t.calls.outcomes[r.outcome as keyof typeof t.calls.outcomes]}</span>}
               </li>
             ))}
-          </ul>
+          </Paged>
         )}
       </div>
     </section>

@@ -17,7 +17,7 @@ import { UNKNOWN } from "@/components/research/format";
 import { TEMPERATURES } from "@/lib/research/types";
 import { TABS } from "@/lib/research/sheet";
 import { CONTACT_TABS, DEFAULT_LEAD_FILTERS, filterLeads, leadFacetsOf, leadInTab, leadsCsv, originLabel, type LeadFilters, type LeadTab } from "@/lib/leads/view";
-import { DEFAULT_PAGE_SIZE, PAGE_SIZES, pageBounds } from "@/lib/leads/paging";
+import { Pager, usePaged } from "@/components/Pager";
 import { LEAD_STATUSES, type LeadListItem } from "@/lib/leads/types";
 import { LevelBadge } from "@/components/qualifier/LevelBadge";
 import { QualifyControls, RowCheck } from "@/components/qualifier/QualifyControls";
@@ -67,12 +67,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
   const set = (patch: Partial<LeadFilters>) => setF((x) => ({ ...x, ...patch }));
   const filtered = useMemo(() => filterLeads(items, f), [items, f]);
   // Paging only slices what is rendered; any filter/size change goes back to page 1.
-  const [paging, setPaging] = useState({ page: 1, size: DEFAULT_PAGE_SIZE, key: "" });
-  const pagingKey = JSON.stringify(f);
-  if (paging.key !== pagingKey) setPaging({ page: 1, size: paging.size, key: pagingKey });
-  const pb = pageBounds(filtered.length, paging.page, paging.size);
-  const pageItems = useMemo(() => filtered.slice(pb.start, pb.end), [filtered, pb.start, pb.end]);
-  const goPage = (page: number) => setPaging((x) => ({ ...x, page }));
+  const { pageItems, pager } = usePaged(filtered, JSON.stringify(f));
   const pageAllPicked = pageItems.length > 0 && pageItems.every((i) => picked.has(i.lead.id));
   const togglePage = (on: boolean) =>
     setPicked((p) => {
@@ -337,22 +332,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
             </li>
           ))}
         </ul>
-        <nav aria-label={P.label} className="flex flex-wrap items-center justify-between gap-2">
-          <span className="font-mono text-xs text-muted">{fill(P.showing, { from: pb.start + 1, to: pb.end, total: filtered.length })}</span>
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="flex items-center gap-2 text-sm">
-              {P.perPage}
-              <select aria-label={P.perPage} value={paging.size} onChange={(e) => setPaging((x) => ({ ...x, page: 1, size: Number(e.target.value) }))} className={selectCls}>
-                {PAGE_SIZES.map((n) => (
-                  <option key={n} value={n}>{n}</option>
-                ))}
-              </select>
-            </label>
-            <button type="button" aria-label={P.prev} disabled={pb.page <= 1} onClick={() => goPage(pb.page - 1)} className="min-h-11 border border-blue bg-surface px-4 text-sm font-semibold text-blue hover:bg-blue-wash disabled:opacity-40">{P.prev}</button>
-            <span className="font-mono text-xs text-muted">{fill(P.page, { page: pb.page, pages: pb.pages })}</span>
-            <button type="button" aria-label={P.next} disabled={pb.page >= pb.pages} onClick={() => goPage(pb.page + 1)} className="min-h-11 border border-blue bg-surface px-4 text-sm font-semibold text-blue hover:bg-blue-wash disabled:opacity-40">{P.next}</button>
-          </div>
-        </nav>
+        <Pager pager={pager} />
         </>
       )}
       </div>
