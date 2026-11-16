@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AddToList } from "@/components/leads/AddToList";
+import { EmailBadge } from "@/components/leads/EmailBadge";
+import { EmailTools } from "@/components/leads/EmailTools";
 import { FacetPanel } from "@/components/leads/FacetPanel";
+import { NlSearch } from "@/components/leads/NlSearch";
 import { ViewBar } from "@/components/leads/ViewBar";
 import type { LeadView } from "@/lib/leads/queries";
 import { DarkChoice } from "@/components/research/controls";
@@ -57,6 +60,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
     return [...m.entries()];
   }, [items]);
   const hasOneOff = items.some((i) => i.lead.origin_kind === "one_off");
+  const cities = useMemo(() => [...new Set(items.map((i) => i.display.city?.trim()).filter((c): c is string => Boolean(c)))], [items]);
 
   const listBanner = list && (
     <p className="flex flex-wrap items-center gap-3 text-sm">
@@ -124,6 +128,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
       <div className="grid min-w-0 gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
       <FacetPanel facets={facets} f={f} set={set} />
       <div className="flex min-w-0 flex-col gap-4">
+      {canCreate && <NlSearch cities={cities} onApply={(nl) => set(nl)} />}
       <div className="flex flex-wrap gap-2">
         <input
           type="search"
@@ -197,6 +202,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
           }}
         />
       )}
+      {canCreate && <EmailTools selected={filtered.filter((i) => picked.has(i.lead.id)).map((i) => i.lead.id)} onDone={() => router.refresh()} />}
 
       {filtered.length === 0 ? (
         <p className="text-sm text-muted">{f.contact === "contacted" && facets.tabs.contacted === 0 ? t.leads.contactedEmpty : t.research.list.emptyTab}</p>
@@ -210,6 +216,12 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
                   <span className="sr-only">{t.leads.columns.company}: </span>
                   <span className="block truncate text-sm font-semibold">{i.display.name}</span>
                   {i.display.city && <span className="block truncate text-[13px] text-muted">{i.display.city}</span>}
+                  {i.emailQuality && (
+                    <span className="mt-0.5 block">
+                      <span className="sr-only">{t.leads.facets.emailQuality}: </span>
+                      <EmailBadge quality={i.emailQuality} />
+                    </span>
+                  )}
                 </span>
                 <span className="text-[13px]">
                   <span className="sr-only">{t.leads.columns.level}: </span>

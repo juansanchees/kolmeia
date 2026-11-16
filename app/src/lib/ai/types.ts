@@ -16,7 +16,8 @@ export type AiTask =
   | "email_closer_brief"
   | "qualify_light"
   | "qualify_deep"
-  | "profile_learn";
+  | "profile_learn"
+  | "lead_search";
 
 export type AiUsage = {
   inputTokens: number;

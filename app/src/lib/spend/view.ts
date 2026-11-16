@@ -54,6 +54,7 @@ export function stepLabel(task: string): string {
 export function agentLabel(c: SpendCall, runAgent: Map<string, string | null>): string {
   if (c.task.startsWith("qualify_")) return S.agents.qualifier;
   if (c.task === "profile_learn") return S.agents.learned;
+  if (c.task === "lead_search") return S.agents.leadSearch;
   if (c.task === "email_sequence") return S.agents.emailAgent;
   if (c.task.startsWith("email_")) return S.agents.email;
   const name = c.run_id ? runAgent.get(c.run_id) : null;
