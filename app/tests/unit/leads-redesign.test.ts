@@ -111,3 +111,37 @@ test("parseLeadFilters keeps stage, segment, lists and temperature 'none'", () =
   expect(parseLeadFilters({ stage: "archived", segment: "large", lists: ["X"] })).toEqual({ ...DEFAULT_LEAD_FILTERS, segment: "large", lists: ["X"] });
   expect(parseLeadFilters({ stage: "bogus" })).toEqual(DEFAULT_LEAD_FILTERS);
 });
+
+function prow(name: string, o: { phone?: string; email?: string; website?: string; temp?: "hot" | "warm" | "cold"; level?: number; status?: string; first?: string } = {}): FilterRow {
+  return {
+    lead: { id: name, status: o.status ?? "new", level: o.level ?? 0, origin_kind: "import", origin_agent_id: null, first_contacted_at: o.first ?? null, last_touch_at: null, segment: null },
+    best: o.temp ? ({ temperature: o.temp } as never) : null,
+    display: { name, city: null, phone: o.phone ?? null, website: o.website ?? null, email: o.email ?? null },
+    segment: null,
+    origins: [],
+  } as FilterRow;
+}
+
+test("filterLeads: default order is the fila do dia (phone, temperature, never contacted, Dados, e-mail, name; closed last)", () => {
+  const rs = [
+    prow("closed", { phone: "1", temp: "hot", status: "won" }),
+    prow("email-only", { email: "a@b.co", temp: "hot" }),
+    prow("phone-cold", { phone: "1", temp: "cold" }),
+    prow("phone-hot-contacted", { phone: "1", temp: "hot", first: "2026-11-01T00:00:00Z" }),
+    prow("phone-hot-new-l1", { phone: "1", temp: "hot", level: 1 }),
+    prow("phone-hot-new-l3", { phone: "1", temp: "hot", level: 3 }),
+    prow("phone-hot-new-l1-email", { phone: "1", temp: "hot", level: 1, email: "x@y.co" }),
+    prow("phone-hot-new-l1-b", { phone: "1", temp: "hot", level: 1, email: "x@y.co" }),
+  ];
+  expect(names({}, rs)).toEqual([
+    "phone-hot-new-l3", "phone-hot-new-l1-b", "phone-hot-new-l1-email", "phone-hot-new-l1", "phone-hot-contacted", "phone-cold", "email-only", "closed",
+  ]);
+});
+
+test("siteNoEmail facet: filters, counts, ignores its own filter in the count", () => {
+  const rs = [prow("a", { website: "a.com" }), prow("b", { website: "b.com", email: "x@b.com" }), prow("c"), prow("d", { website: " " })];
+  expect(names({ siteNoEmail: true }, rs)).toEqual(["a"]);
+  expect(leadFacetsOf(rs, DEFAULT_LEAD_FILTERS).siteNoEmail).toBe(1);
+  expect(leadFacetsOf(rs, { ...DEFAULT_LEAD_FILTERS, siteNoEmail: true }).siteNoEmail).toBe(1);
+  expect(activeFilterKeys({ ...DEFAULT_LEAD_FILTERS, siteNoEmail: true })).toEqual(["siteNoEmail"]);
+});

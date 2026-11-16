@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { AiQuestionPanel, answerText } from "@/components/leads/AiQuestionPanel";
 import type { AiQuestion } from "@/lib/ai-questions/types";
 import { EmailBadge } from "@/components/leads/EmailBadge";
@@ -11,9 +11,11 @@ import { SelectionBar, type BulkNotice } from "@/components/leads/SelectionBar";
 import { ViewBar } from "@/components/leads/ViewBar";
 import type { LeadView } from "@/lib/leads/queries";
 import { usd } from "@/components/research/format";
-import { activeFilterKeys, DEFAULT_LEAD_FILTERS, filterLeads, leadFacetsOf, type LeadFilters, type SegmentTab } from "@/lib/leads/view";
+import { activeFilterKeys, DEFAULT_LEAD_FILTERS, filterLeads, hasSiteNoEmail, leadFacetsOf, type LeadFilters, type SegmentTab } from "@/lib/leads/view";
 import { leadsCsvAction } from "@/app/(app)/leads/lead-actions";
 import { stageOf } from "@/lib/leads/classify";
+import { findEmailAction } from "@/app/(app)/leads/email-actions";
+import { summary as findSummary } from "@/components/leads/EmailTools";
 import { originText } from "@/lib/leads/table";
 import { Pager, usePaged } from "@/components/Pager";
 import { LEAD_STAGES, type LeadStage, type LeadTableRow } from "@/lib/leads/types";
@@ -36,6 +38,8 @@ const GRID_AI = "md:grid-cols-[minmax(0,2fr)_minmax(0,0.8fr)_minmax(0,0.6fr)_min
 const linkBtn = "inline-flex min-h-11 items-center border border-blue bg-surface px-4 text-sm font-semibold text-blue no-underline hover:bg-blue-wash";
 const tabCls = (on: boolean) => `-mb-px min-h-11 border-b-[3px] px-3 text-[15px] ${on ? "border-blue font-semibold text-ink" : "border-transparent text-muted hover:text-ink"}`;
 const countCls = "ml-1 bg-ground px-1.5 font-mono text-[13px]";
+/** Mirrors FIND_MAX_LEADS in email-actions.ts (a "use server" file cannot export it). */
+const FIND_BATCH = 25;
 const menuItem = "flex min-h-11 w-full items-center px-4 text-left text-sm text-ink no-underline hover:bg-ground";
 
 type Panel = "nl" | "ai" | "views" | "qualify";
@@ -156,6 +160,22 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
   const cities = useMemo(() => [...new Set(items.map((i) => i.display.city?.trim()).filter((c): c is string => Boolean(c)))], [items]);
   const aiQ = useMemo(() => questions.find((q) => q.id === f.aiQuestion) ?? null, [questions, f.aiQuestion]);
   const chips = activeFilterKeys(f);
+  // Leads already searched this visit: a guess never becomes the shown e-mail, so they would stay in the set and be sent again.
+  const [searched, setSearched] = useState<Set<string>>(new Set());
+  const [finding, startFind] = useTransition();
+  const findable = useMemo(() => filtered.filter((i) => hasSiteNoEmail(i) && !searched.has(i.lead.id)).map((i) => i.lead.id), [filtered, searched]);
+  const findEmails = () => {
+    setMenuOpen(false);
+    const ids = findable.slice(0, FIND_BATCH);
+    startFind(async () => {
+      const r = await findEmailAction(ids);
+      if (!r.ok) return setNotice({ ok: false, text: r.error });
+      setSearched((s) => new Set([...s, ...ids]));
+      const left = findable.length - ids.length;
+      setNotice({ ok: true, text: `${fill(TB.findEmailBulkRun, { done: ids.length, total: findable.length, summary: findSummary(r.results) })}${left > 0 ? ` ${TB.findEmailBulkMore}` : ""}` });
+      router.refresh();
+    });
+  };
 
   const listBanner = list && (
     <p className="flex flex-wrap items-center gap-3 text-sm">
@@ -280,6 +300,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
                 <Link href="/leads/subir" role="menuitem" className={menuItem}>{t.imports.button}</Link>
                 {sources.maps && <Link href="/leads/buscar#maps" role="menuitem" className={menuItem}>{t.sources.search.maps}</Link>}
                 {sources.apollo && <Link href="/leads/buscar#apollo" role="menuitem" className={menuItem}>{t.sources.search.apollo}</Link>}
+                <button type="button" role="menuitem" disabled={finding || findable.length === 0} onClick={findEmails} className={`${menuItem} disabled:text-muted`}>{fill(TB.findEmailBulk, { n: findable.length })}</button>
                 <button type="button" role="menuitem" onClick={download} className={menuItem}>{L.csv}</button>
                 <button type="button" role="menuitem" onClick={() => openFromMenu("nl")} className={menuItem}>{TB.aiSearch}</button>
                 <button type="button" role="menuitem" onClick={() => openFromMenu("ai")} className={menuItem}>{TB.aiQuestion}</button>
@@ -349,6 +370,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
 
       {notice && <p role="status" className={`m-0 text-sm ${notice.ok ? "text-ok" : "text-danger"}`}>{notice.text}</p>}
       <span className="font-mono text-xs text-muted">{filtered.length} / {items.length}</span>
+      <p className="m-0 text-xs text-muted">{TB.order}</p>
 
       {filtered.length === 0 ? (
         <p className="text-sm text-muted">{t.research.list.emptyTab}</p>

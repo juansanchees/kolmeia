@@ -1,13 +1,13 @@
 // Client-safe rules of the LEADS list: filters, origin label, stale proof, proof count, CSV.
 import type { CandidateRow } from "@/lib/research/rows";
-import { byTemperature, inTab, SHEET_COLUMNS, toCsv, type Column, type Tab } from "@/lib/research/sheet";
+import { inTab, SHEET_COLUMNS, toCsv, type Column, type Tab } from "@/lib/research/sheet";
 import type { CheckWithEvidence } from "@/lib/research/store";
 import { COMPANY_TYPES, type CompanyType, type Temperature } from "@/lib/research/types";
 import { z } from "zod";
 import { fill, t } from "@/messages/pt";
 import { matchesAnswer } from "@/lib/ai-questions/types";
 import { EMAIL_QUALITIES, type EmailQuality } from "./email-quality";
-import { effectiveTemperature, fold, stageOf } from "./classify";
+import { effectiveTemperature, fold, priorityOf, stageOf } from "./classify";
 import { LEAD_STAGES, SEGMENTS, type LeadDisplay, type LeadFieldRow, type LeadListItem, type LeadStage, type LeadStatus, type OriginList, type Segment, type TableBest, type TableLead } from "./types";
 
 export { fold };
@@ -36,7 +36,7 @@ export const LEAD_ORIGINS = ["import", "agent", "one_off"] as const;
 export type LeadOrigin = (typeof LEAD_ORIGINS)[number];
 
 /** The filters the left panel counts (leadFacetsOf). City/phone/e-mail are the displayed values (displayOf). */
-export type FacetFilters = { contact: ContactTab; cities: string[]; levels: number[]; hasPhone: boolean; hasEmail: boolean; origins: LeadOrigin[]; emailQuality: EmailQuality[]; lists: string[] };
+export type FacetFilters = { contact: ContactTab; cities: string[]; levels: number[]; hasPhone: boolean; hasEmail: boolean; siteNoEmail: boolean; origins: LeadOrigin[]; emailQuality: EmailQuality[]; lists: string[] };
 
 /** The type tabs ("none" = no type). */
 export type SegmentTab = Segment | "none";
@@ -74,7 +74,7 @@ export type LeadFilters = FacetFilters & {
 
 export const DEFAULT_LEAD_FILTERS: LeadFilters = {
   q: "", temperature: "all", agent: "all", status: "all", tab: "all", minLevel: 0, companyTypes: [], minPermitUsd: 0, aiQuestion: "", aiAnswer: "all",
-  contact: "all", cities: [], levels: [], hasPhone: false, hasEmail: false, origins: [], emailQuality: [], lists: [], segment: "all", stage: "all",
+  contact: "all", cities: [], levels: [], hasPhone: false, hasEmail: false, siteNoEmail: false, origins: [], emailQuality: [], lists: [], segment: "all", stage: "all",
 };
 
 export type FacetCount<T> = { value: T; n: number };
@@ -84,6 +84,7 @@ export type LeadFacets = {
   levels: FacetCount<number>[];
   phone: number;
   email: number;
+  siteNoEmail: number;
   origins: FacetCount<LeadOrigin>[];
   emailQuality: FacetCount<EmailQuality>[];
   stages: Record<LeadStage, number>;
@@ -103,6 +104,7 @@ const filtersSchema = z.object({
   levels: z.array(z.number().int().min(0).max(4)).max(5),
   hasPhone: z.boolean(),
   hasEmail: z.boolean(),
+  siteNoEmail: z.boolean(),
   origins: z.array(z.enum(LEAD_ORIGINS)).max(3),
   emailQuality: z.array(z.enum(EMAIL_QUALITIES)).max(4),
   companyTypes: z.array(z.enum(COMPANY_TYPES)).max(4),
@@ -121,6 +123,9 @@ export function parseLeadFilters(raw: unknown): LeadFilters {
   return r.success ? ({ ...DEFAULT_LEAD_FILTERS, ...r.data } as LeadFilters) : DEFAULT_LEAD_FILTERS;
 }
 
+/** A website on file and no e-mail: the leads "Achar e-mail" can work on. */
+export const hasSiteNoEmail = (i: Pick<FilterRow, "display">) => Boolean(i.display.website?.trim()) && !i.display.email?.trim();
+
 /** Left-panel and tab rules: trimmed display values (as lead_contact_values reads them), never-contacted = "new". */
 export function matchesFacets(i: FilterRow, f: FacetFilters): boolean {
   const contacted = i.lead.first_contacted_at !== null;
@@ -130,6 +135,7 @@ export function matchesFacets(i: FilterRow, f: FacetFilters): boolean {
   if (f.levels.length > 0 && !f.levels.includes(i.lead.level)) return false;
   if (f.hasPhone && !i.display.phone?.trim()) return false;
   if (f.hasEmail && !i.display.email?.trim()) return false;
+  if (f.siteNoEmail && !hasSiteNoEmail(i)) return false;
   if (f.origins.length > 0 && !f.origins.includes(i.lead.origin_kind)) return false;
   if (f.emailQuality.length > 0 && (!i.emailQuality || !f.emailQuality.includes(i.emailQuality))) return false;
   if (f.lists.length > 0 && !(i.origins ?? []).some((o) => f.lists.includes(o.name))) return false;
@@ -193,7 +199,7 @@ export function filterLeads<T extends FilterRow>(items: T[], f: LeadFilters): T[
   const other = otherFiltersOf(f);
   return items
     .filter((i) => other(i) && stageOk(i, f.stage) && segmentOk(i, f.segment) && matchesFacets(i, f))
-    .sort((a, b) => (a.best && b.best ? byTemperature(a.best, b.best) : a.best ? -1 : b.best ? 1 : a.display.name.localeCompare(b.display.name)));
+    .sort((a, b) => priorityOf(b) - priorityOf(a) || a.display.name.localeCompare(b.display.name));
 }
 
 function countBy<T>(rows: FilterRow[], key: (i: FilterRow) => T | null): FacetCount<T>[] {
@@ -251,6 +257,7 @@ export function leadFacetsOf<T extends FilterRow>(items: T[], f: LeadFilters): L
     levels: countBy(without({ levels: [] }), (i) => i.lead.level).sort((a, b) => b.value - a.value),
     phone: without({ hasPhone: false }).filter((i) => i.display.phone?.trim()).length,
     email: without({ hasEmail: false }).filter((i) => i.display.email?.trim()).length,
+    siteNoEmail: without({ siteNoEmail: false }).filter(hasSiteNoEmail).length,
     origins: countBy(without({ origins: [] }), (i) => i.lead.origin_kind).sort((a, b) => b.n - a.n || a.value.localeCompare(b.value)),
     emailQuality: countBy(without({ emailQuality: [] }), (i) => i.emailQuality ?? null),
     stages,

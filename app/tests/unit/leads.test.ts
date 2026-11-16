@@ -136,7 +136,7 @@ describe("F3a leads", () => {
     const hot = item({ name: "Hot Co", temperature: "hot", approach: "call" });
     const items = [imp, hot];
     const names = (f: Partial<typeof DEFAULT_LEAD_FILTERS>) => filterLeads(items, { ...DEFAULT_LEAD_FILTERS, ...f }).map((i) => i.display.name);
-    expect(names({})).toEqual(["Hot Co", "Acme Test Builders"]); // after leads with a temperature
+    expect(names({})).toEqual(["Acme Test Builders", "Hot Co"]); // fila do dia: the one with a phone comes first
     expect(names({ tab: "call" })).toEqual(["Hot Co"]);
     expect(names({ tab: "new" })).toEqual([]);
     expect(names({ temperature: "hot" })).toEqual(["Hot Co"]);

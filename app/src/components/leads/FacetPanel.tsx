@@ -58,6 +58,7 @@ export function FacetPanel({ facets, f, set, agents, hasOneOff }: { facets: Lead
       )}
       <Group title={P.contact}>
         <Check label={P.hasEmail} n={facets.email} checked={f.hasEmail} onChange={(on) => set({ hasEmail: on })} />
+        <Check label={P.siteNoEmail} n={facets.siteNoEmail} checked={f.siteNoEmail} onChange={(on) => set({ siteNoEmail: on })} />
         <Check label={P.hasPhone} n={facets.phone} checked={f.hasPhone} onChange={(on) => set({ hasPhone: on })} />
       </Group>
       {qualities.length > 0 && (
