@@ -6,6 +6,15 @@ export const leads = {
   contactedEmpty: "Nenhum lead contatado ainda. Um lead entra aqui sozinho quando você registra uma ligação, quando um e-mail da campanha sai de verdade ou quando você passa pra closer.",
   lastTouch: "Último contato",
   never: "Nunca",
+  paging: {
+    label: "Paginação",
+    perPage: "Por página",
+    prev: "Anterior",
+    next: "Próxima",
+    page: "Página {page} de {pages}",
+    showing: "Mostrando {from}–{to} de {total}",
+    selectPage: "Selecionar esta página",
+  },
   facets: {
     label: "Filtros",
     city: "Cidade",

@@ -17,6 +17,7 @@ import { UNKNOWN } from "@/components/research/format";
 import { TEMPERATURES } from "@/lib/research/types";
 import { TABS } from "@/lib/research/sheet";
 import { CONTACT_TABS, DEFAULT_LEAD_FILTERS, filterLeads, leadFacetsOf, leadInTab, leadsCsv, originLabel, type LeadFilters, type LeadTab } from "@/lib/leads/view";
+import { DEFAULT_PAGE_SIZE, PAGE_SIZES, pageBounds } from "@/lib/leads/paging";
 import { LEAD_STATUSES, type LeadListItem } from "@/lib/leads/types";
 import { LevelBadge } from "@/components/qualifier/LevelBadge";
 import { QualifyControls, RowCheck } from "@/components/qualifier/QualifyControls";
@@ -32,6 +33,7 @@ const GRID = "md:grid-cols-[minmax(0,2fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0
 // the same columns plus the AI question's (Tailwind needs both class names written out)
 const GRID_AI = "md:grid-cols-[minmax(0,2fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,1.6fr)]";
 const SC = t.leads.shortcuts;
+const P = t.leads.paging;
 
 const linkBtn = "inline-flex min-h-11 items-center border border-blue bg-surface px-4 text-sm font-semibold text-blue no-underline hover:bg-blue-wash";
 
@@ -64,6 +66,23 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
     });
   const set = (patch: Partial<LeadFilters>) => setF((x) => ({ ...x, ...patch }));
   const filtered = useMemo(() => filterLeads(items, f), [items, f]);
+  // Paging only slices what is rendered; any filter/size change goes back to page 1.
+  const [paging, setPaging] = useState({ page: 1, size: DEFAULT_PAGE_SIZE, key: "" });
+  const pagingKey = JSON.stringify(f);
+  if (paging.key !== pagingKey) setPaging({ page: 1, size: paging.size, key: pagingKey });
+  const pb = pageBounds(filtered.length, paging.page, paging.size);
+  const pageItems = useMemo(() => filtered.slice(pb.start, pb.end), [filtered, pb.start, pb.end]);
+  const goPage = (page: number) => setPaging((x) => ({ ...x, page }));
+  const pageAllPicked = pageItems.length > 0 && pageItems.every((i) => picked.has(i.lead.id));
+  const togglePage = (on: boolean) =>
+    setPicked((p) => {
+      const n = new Set(p);
+      for (const i of pageItems) {
+        if (on) n.add(i.lead.id);
+        else n.delete(i.lead.id);
+      }
+      return n;
+    });
   const facets = useMemo(() => leadFacetsOf(items, f), [items, f]);
   const agents = useMemo(() => {
     const m = new Map<string, string>();
@@ -256,8 +275,15 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
       {filtered.length === 0 ? (
         <p className="text-sm text-muted">{f.contact === "contacted" && facets.tabs.contacted === 0 ? t.leads.contactedEmpty : t.research.list.emptyTab}</p>
       ) : (
+        <>
+        {canCreate && (
+          <label className="flex min-h-11 items-center gap-2 text-sm">
+            <input type="checkbox" checked={pageAllPicked} onChange={(e) => togglePage(e.target.checked)} className="h-5 w-5" />
+            {P.selectPage}
+          </label>
+        )}
         <ul className="m-0 flex list-none flex-col border border-line bg-surface p-0">
-          {filtered.map((i) => (
+          {pageItems.map((i) => (
             <li key={i.lead.id} className="flex items-stretch border-b border-line last:border-b-0">
               {canCreate && <RowCheck checked={picked.has(i.lead.id)} name={i.display.name} onChange={(v) => toggle(i.lead.id, v)} />}
               <Link href={`/leads/${i.lead.id}`} className={`flex min-w-0 flex-1 flex-col gap-1 px-3.5 py-3 text-ink no-underline hover:bg-ground md:grid ${aiQ ? GRID_AI : GRID} md:items-center md:gap-3`}>
@@ -311,6 +337,23 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
             </li>
           ))}
         </ul>
+        <nav aria-label={P.label} className="flex flex-wrap items-center justify-between gap-2">
+          <span className="font-mono text-xs text-muted">{fill(P.showing, { from: pb.start + 1, to: pb.end, total: filtered.length })}</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2 text-sm">
+              {P.perPage}
+              <select aria-label={P.perPage} value={paging.size} onChange={(e) => setPaging((x) => ({ ...x, page: 1, size: Number(e.target.value) }))} className={selectCls}>
+                {PAGE_SIZES.map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            </label>
+            <button type="button" aria-label={P.prev} disabled={pb.page <= 1} onClick={() => goPage(pb.page - 1)} className="min-h-11 border border-blue bg-surface px-4 text-sm font-semibold text-blue hover:bg-blue-wash disabled:opacity-40">{P.prev}</button>
+            <span className="font-mono text-xs text-muted">{fill(P.page, { page: pb.page, pages: pb.pages })}</span>
+            <button type="button" aria-label={P.next} disabled={pb.page >= pb.pages} onClick={() => goPage(pb.page + 1)} className="min-h-11 border border-blue bg-surface px-4 text-sm font-semibold text-blue hover:bg-blue-wash disabled:opacity-40">{P.next}</button>
+          </div>
+        </nav>
+        </>
       )}
       </div>
       </div>
