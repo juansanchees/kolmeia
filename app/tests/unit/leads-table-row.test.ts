@@ -71,10 +71,15 @@ test("originListsOf merges imports and lists, skips undone imports, sorts by dat
 
 test("archive/segment/csv actions are sender-only, capped at 5000 and call the RPCs", () => {
   const code = read("src/app/(app)/leads/lead-actions.ts");
-  for (const fn of ["archiveLeadsAction", "unarchiveLeadsAction", "setLeadSegmentAction", "leadsCsvAction"]) {
-    const body = code.slice(code.indexOf(`export async function ${fn}`));
-    expect(body.slice(0, 1200)).toContain("requireSender");
-  }
+  // each body ends at the next function boundary, so one function's requireSender never counts for another
+  const bodyOf = (fn: string) => {
+    const m = new RegExp(`(?:export )?async function ${fn}\\b`).exec(code)!;
+    const rest = code.slice(m.index + m[0].length);
+    const next = rest.search(/\n(?:export )?async function /);
+    return next < 0 ? rest : rest.slice(0, next);
+  };
+  for (const fn of ["setArchived", "setLeadSegmentAction", "leadsCsvAction"]) expect(bodyOf(fn)).toContain("requireSender");
+  for (const fn of ["archiveLeadsAction", "unarchiveLeadsAction"]) expect(bodyOf(fn)).toContain("setArchived(");
   expect(code).toContain('"set_leads_archived"');
   expect(code).toContain('"set_leads_segment"');
   expect(code).toMatch(/\.max\(5000\)/);
