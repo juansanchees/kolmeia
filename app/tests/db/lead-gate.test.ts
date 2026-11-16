@@ -260,7 +260,8 @@ describe("0031 Fechado stops sequences; set_leads_status (bulk lost / discarded)
     expect(await leadStatus(a)).toBe("discarded");
     const c = await newLead("pat@f-c.example");
     expect(await bulk(UUID_A, [c], "lost")).toBe(1);
-    expect(await bulk(UUID_A, [c], "discarded")).toBe(1);
+    expect(await bulk(UUID_A, [c], "discarded")).toBe(0); // only open leads change: lost stays lost
+    expect(await leadStatus(c)).toBe("lost");
     await expect(bulk(UUID_A, [c], "won")).rejects.toThrow(/lost or discarded/);
     await expect(bulk(UUID_A, Array.from({ length: 5001 }, () => c), "lost")).rejects.toThrow(/5000/);
     // a lead of this workspace named with another workspace's id: nothing changes
@@ -268,6 +269,22 @@ describe("0031 Fechado stops sequences; set_leads_status (bulk lost / discarded)
     const other = (await db.query<{ id: string }>(as(UUID_A), "select public.create_workspace('Outra F7') as id"))[0].id;
     expect(await bulk(UUID_A, [d], "lost", other)).toBe(0);
     expect(await leadStatus(d)).toBe("new");
+  });
+
+  test("bulk lost / discarded never touches won, with_closer or meeting leads", async () => {
+    const w = await newLead("pat@f-won2.example");
+    const m = await newLead("pat@f-meet.example");
+    const h = await newLead("pat@f-hand.example");
+    const o = await newLead("pat@f-open.example");
+    await db.query(as(UUID_A), "select public.set_lead_status($1,'won')", [w]);
+    await db.admin("update public.leads set status = 'meeting' where id = $1", [m]);
+    await db.admin("update public.leads set status = 'with_closer' where id = $1", [h]);
+    for (const st of ["lost", "discarded"]) expect(await bulk(UUID_A, [w, m, h], st)).toBe(0);
+    expect(await leadStatus(w)).toBe("won");
+    expect(await leadStatus(m)).toBe("meeting");
+    expect(await leadStatus(h)).toBe("with_closer");
+    expect(await bulk(UUID_A, [w, m, h, o], "lost")).toBe(1);
+    expect(await leadStatus(o)).toBe("lost");
   });
 
   test("a closer cannot bulk-change status (42501)", async () => {

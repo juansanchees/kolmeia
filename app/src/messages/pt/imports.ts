@@ -43,7 +43,7 @@ export const imports = {
   statuses: { importing: "incompleta", done: "importada", undone: "desfeita" },
   historyCounts: "{rows} linhas · {new} novos · {merged} já existiam · {errors} com erro",
   undo: "Desfazer import",
-  undoConfirm: "Apagar os leads que esta lista criou? Dados de outras fontes ficam; leads já trabalhados ou com a closer ficam também.",
+  undoConfirm: "Apagar os leads que esta lista criou? Dados de outras fontes ficam; leads já trabalhados ou com o vendedor ficam também.",
   undoYes: "Sim, desfazer",
   undoNo: "Não",
   undoneCounts: "{deleted} leads apagados · {kept} ficaram (outras fontes ou já trabalhados)",

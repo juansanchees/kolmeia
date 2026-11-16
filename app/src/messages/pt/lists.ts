@@ -5,7 +5,7 @@ export const lists = {
   open: "Abrir",
   emptyList: "Esta lista ainda não tem leads que você possa ver.",
   csv: "Exportar CSV",
-  csvNote: "Exportar CSV: só o dono e o SDR. A closer vê só os leads que foram passados pra ela.",
+  csvNote: "Exportar CSV: só o dono e o SDR. O vendedor vê só os leads que foram passados para ele.",
   empty: "Nenhuma lista ainda. Na tela de Leads, marque leads e use \"Adicionar à lista\".",
   newList: "Nova lista",
   newName: "Nome da nova lista",

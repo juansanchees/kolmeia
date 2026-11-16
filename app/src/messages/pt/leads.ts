@@ -1,9 +1,9 @@
 export const leads = {
   title: "Leads",
   subtitle: "Todas as empresas que os agentes e as pesquisas acharam, sem repetir, com prova.",
-  nav: { label: "Seções de Leads", all: "Todos", closer: "Com a closer", tasks: "Tarefas", lists: "Listas" },
+  nav: { label: "Seções de Leads", all: "Todos", tasks: "Tarefas", lists: "Listas" },
   contactTabs: { label: "Contato", new: "Novos", contacted: "Contatados", all: "Todos" },
-  contactedEmpty: "Nenhum lead contatado ainda. Um lead entra aqui sozinho quando você registra uma ligação, quando um e-mail da campanha sai de verdade ou quando você passa pra closer.",
+  contactedEmpty: "Nenhum lead contatado ainda. Um lead entra aqui sozinho quando você registra uma ligação, quando um e-mail da campanha sai de verdade ou quando você passa para o vendedor.",
   lastTouch: "Último contato",
   never: "Nunca",
   paging: {
@@ -41,7 +41,7 @@ export const leads = {
     call_list: "na lista de ligação",
     in_campaign: "em campanha",
     replied: "respondeu",
-    with_closer: "com a closer",
+    with_closer: "com o vendedor",
     meeting: "reunião",
     won: "ganho",
     lost: "perdido",
@@ -61,6 +61,7 @@ export const leads = {
     confirmLost: "Marcar como Perdido? O lead vai para Fechado e para de receber os e-mails da sequência.",
     confirmDiscarded: "Marcar como Descartado? O lead vai para Fechado e não recebe mais nenhum e-mail.",
     done: "{n} lead(s) marcado(s) como {status}.",
+    none: "Nenhum lead mudou (já estavam fechados ou com o vendedor).",
     failed: "Não deu para mudar o status. Tente de novo.",
   },
   segmentPick: {

@@ -1,7 +1,7 @@
 -- 0031 LEADS: no archive (16/11 night). A finished lead is marked lost ("Perdido") or discarded ("Descartado") and
 --   lands in the "Fechado" stage. set_leads_status does it for many leads at once from the selection bar.
 --   * Sender-only (owner/sdr), at most 5000 ids, only this workspace's leads, only rows that actually change.
---   * 'lost' never touches a discarded lead (as set_lead_status of 0020: a discarded lead stays discarded).
+--   * Only open leads change (new, call_list, in_campaign, replied): never won, with_closer, meeting, lost or discarded.
 --   * E-mail: nothing new here. The 0022 trigger stop_email_on_lead_block already fires on every status change and
 --     lead_blocks_email (0021) already covers won, lost and discarded, so each changed lead's prospects are stopped and
 --     their waiting sequence steps cancelled (discarded also cancels waiting answers).
@@ -37,8 +37,7 @@ begin
          updated_at = now()
    where l.workspace_id = p_ws
      and l.id = any(p_leads)
-     and l.status <> p_status
-     and (p_status = 'discarded' or l.status <> 'discarded');
+     and l.status in ('new', 'call_list', 'in_campaign', 'replied');
   get diagnostics v_n = row_count;
   return v_n;
 end;

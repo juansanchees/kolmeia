@@ -25,10 +25,9 @@ export function settingsTabsFor(role: Role): readonly NavItem[] {
   return role === "owner" ? [...SETTINGS_TABS, { href: "/configuracoes/equipe", label: t.team.tab }] : SETTINGS_TABS;
 }
 
-/** Every role: Todos, Com a closer, Ligar and Tarefas (the closer sees her own call list and tasks there). */
+/** Every role: Todos, Ligar and Tarefas (the closer sees her own call list and tasks there). */
 export const LEADS_TABS: readonly NavItem[] = [
   { href: "/leads", label: t.leads.nav.all },
-  { href: "/leads/closer", label: t.leads.nav.closer },
   { href: "/leads/ligar", label: t.calls.tab },
   { href: "/leads/tarefas", label: t.leads.nav.tasks },
 ];

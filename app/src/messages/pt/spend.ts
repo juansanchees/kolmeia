@@ -31,7 +31,7 @@ export const spend = {
     email_sequence: "Agente E-mail: sequência",
     email_classify: "E-mail: classificar resposta",
     email_reply_draft: "E-mail: rascunho de resposta",
-    email_closer_brief: "E-mail: resumo para a closer",
+    email_closer_brief: "E-mail: resumo para o vendedor",
     research_questions: "Pesquisa: perguntas",
     research_plan: "Pesquisa: plano",
     research_discover: "Pesquisa: descobrir",

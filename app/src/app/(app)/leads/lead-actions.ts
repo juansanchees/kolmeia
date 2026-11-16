@@ -87,7 +87,9 @@ export async function setLeadsStatusAction(leadIds: string[], status: "lost" | "
   const { data, error } = await supabase.rpc("set_leads_status", { p_ws: ws.id, p_leads: ids.data, p_status: st.data });
   if (error) return fail(t.leads.close.failed);
   revalidatePath("/leads", "layout");
-  return ok(fill(t.leads.close.done, { n: typeof data === "number" ? data : ids.data.length, status: t.leads.close[st.data] }));
+  const n = typeof data === "number" ? data : ids.data.length;
+  if (n === 0) return ok(t.leads.close.none);
+  return ok(fill(t.leads.close.done, { n, status: t.leads.close[st.data] }));
 }
 
 /** Sets the manual type of leads; null = back to automatic. Owner/sdr only. */

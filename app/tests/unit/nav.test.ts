@@ -38,14 +38,12 @@ describe("F1 nav", () => {
   test("the LEADS tabs: Ligar and Tarefas for everyone, Listas, Funil and Cobertura for owner/sdr; Equipe only for the owner", () => {
     expect(leadsTabsFor("closer").map((i) => [i.label, i.href])).toEqual([
       ["Todos", "/leads"],
-      ["Com a closer", "/leads/closer"],
       ["Ligar", "/leads/ligar"],
       ["Tarefas", "/leads/tarefas"],
     ]);
     for (const role of ["owner", "sdr"] as const) {
       expect(leadsTabsFor(role).map((i) => [i.label, i.href])).toEqual([
         ["Todos", "/leads"],
-        ["Com a closer", "/leads/closer"],
         ["Ligar", "/leads/ligar"],
         ["Tarefas", "/leads/tarefas"],
         ["Listas", "/leads/listas"],
@@ -257,7 +255,7 @@ describe("F3c-1 upload screen", () => {
     const h = read("src/components/imports/ImportHistory.tsx");
     expect(h).toContain("statuses");
     expect(h).toContain("undoConfirm");
-    expect(read("src/messages/pt/imports.ts")).toContain("leads já trabalhados ou com a closer ficam");
+    expect(read("src/messages/pt/imports.ts")).toContain("leads já trabalhados ou com o vendedor ficam");
   });
   test("the wizard numbers rows from the data, not through its own counter", () => {
     expect(read("src/components/imports/ImportWizard.tsx")).toContain("mapGrid(");

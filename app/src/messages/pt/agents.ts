@@ -34,7 +34,7 @@ export const agents = {
     describe: "Descreva o que você quer...",
     hunter: "Acha leads com prova",
     email: "Escreve e envia após OK",
-    call: "Lista do dia para a closer",
+    call: "Lista do dia para o vendedor",
     aiCall: "Ligação por IA: em breve (desligada)",
     create: "Criar",
   },

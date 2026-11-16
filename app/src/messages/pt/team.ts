@@ -1,7 +1,7 @@
 // Configurações → Equipe and the invite page (F5).
 export const team = {
   tab: "Equipe",
-  invite: "Convidar closer",
+  invite: "Convidar vendedor",
   name: "Nome",
   email: "E-mail",
   link: "Link do convite (vale 7 dias, 1 uso):",
@@ -9,7 +9,7 @@ export const team = {
   sendYourself: "A Kolmeia não manda e-mail. Mande o link você mesmo.",
   revoke: "Cancelar convite",
   remove: "Remover",
-  roles: { owner: "dono", sdr: "SDR", closer: "closer" },
+  roles: { owner: "dono", sdr: "SDR", closer: "vendedor" },
   accept: "Entrar na equipe",
   signInFirst: "Entre ou crie sua conta com {email} para aceitar.",
   signInFirstGeneric: "Entre ou crie sua conta com o e-mail do convite para aceitar.",
@@ -25,5 +25,5 @@ export const team = {
   lastOwner: "Não dá para remover o último dono.",
   removeSelf: "Você não pode remover a si mesmo.",
   joinTitle: "Convite para a equipe",
-  joinAs: "Entrar em {workspace} como closer.",
+  joinAs: "Entrar em {workspace} como vendedor.",
 } as const;

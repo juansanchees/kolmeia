@@ -8,6 +8,7 @@ import { needsAdvance } from "@/lib/research/engine";
 import { createClient } from "@/lib/supabase/server";
 import { requireSender } from "@/lib/workspace";
 import { CallAgentDetail, type CallDetailRow } from "@/components/agents/CallAgentDetail";
+import { effectiveTemperature } from "@/lib/leads/classify";
 import { agentCallStats, todayList } from "@/lib/calls/list-queries";
 import type { Person } from "@/lib/team/types";
 import { AgentDetail } from "@/components/agents/AgentDetail";
@@ -63,7 +64,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
     const rows: CallDetailRow[] = list.map((r) => ({
       leadId: r.lead.lead.id,
       name: r.lead.display.name,
-      temperature: r.lead.best?.temperature ?? null,
+      temperature: effectiveTemperature(r.lead.lead.level, r.lead.best?.temperature ?? null),
       level: r.lead.lead.level,
       phone: r.lead.display.phone,
       outcome: r.calledToday ? (r.lastCall?.outcome ?? null) : null,

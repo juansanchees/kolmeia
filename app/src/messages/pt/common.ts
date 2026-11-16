@@ -32,7 +32,7 @@ export const common = {
   },
   signOut: "Sair",
   roles: {
-    closerNotice: "Você está como closer: vê os leads e o que passaram para você. Agentes, campanhas e configurações são do dono e do SDR.",
+    closerNotice: "Você está como vendedor: vê os leads e o que passaram para você. Agentes, campanhas e configurações são do dono e do SDR.",
   },
   nav: {
     label: "Principal",
