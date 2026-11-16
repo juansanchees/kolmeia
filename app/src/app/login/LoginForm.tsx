@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { authenticate } from "./actions";
 import { idle } from "@/lib/form-state";
 import { Button, Field, LinkButton, TextInput } from "@/components/ui";
+import { KolmeiaMark } from "@/components/Logo";
 import { t } from "@/messages/pt";
 
 export function LoginForm({ next = "/" }: { next?: string }) {
@@ -13,6 +14,10 @@ export function LoginForm({ next = "/" }: { next?: string }) {
 
   return (
     <form action={action} className="flex flex-col gap-5 border border-line bg-surface p-6" noValidate>
+      <p className="flex items-center gap-2 font-display text-2xl uppercase tracking-wide">
+        <KolmeiaMark size={40} />
+        Kolmeia
+      </p>
       <h1 className="text-3xl">{signup ? t.login.signUpTitle : t.login.title}</h1>
       <input type="hidden" name="mode" value={mode} />
       <input type="hidden" name="next" value={next} />

@@ -4,12 +4,14 @@ import { t } from "@/messages/pt";
 import { SETTINGS_HREF } from "@/lib/nav";
 import type { Role } from "@/lib/roles";
 import { NavLinks } from "./NavLinks";
+import { KolmeiaMark } from "./Logo";
 
 export function Header({ workspaceName, role }: { workspaceName: string; role: Role }) {
   return (
     <header className="border-b border-line bg-surface">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 py-3">
-        <Link href="/" className="font-display text-xl uppercase tracking-wide">
+        <Link href="/" className="flex items-center gap-2 font-display text-xl uppercase tracking-wide">
+          <KolmeiaMark />
           {workspaceName}
         </Link>
         <div className="flex items-center gap-2">

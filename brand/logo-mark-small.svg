@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="64" height="64" role="img" aria-labelledby="t">
+  <title id="t">Kolmeia</title>
+  <!-- Versão reduzida (24 px ou menos): mesmas células com mais respiro entre elas -->
+  <g stroke-width="1.2" stroke-linejoin="round">
+    <path fill="#1A1712" stroke="#1A1712" d="M5.938 1.713 10.3 4.232v5.036l-4.362 2.519-4.362-2.519V4.232Z"/>
+    <path fill="#1A1712" stroke="#1A1712" d="M18.062 1.713 22.424 4.232v5.036l-4.362 2.519L13.7 9.268V4.232Z"/>
+    <path fill="#F5A400" stroke="#F5A400" d="M12 12.213 16.362 14.732v5.036L12 22.287l-4.362-2.519v-5.036Z"/>
+  </g>
+</svg>
