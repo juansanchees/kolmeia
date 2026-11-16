@@ -24,6 +24,12 @@ test("segmentOf: Residencial rules, Grande wins a conflict", () => {
   expect(segmentOf(base)).toBeNull();
 });
 
+test("segmentOf: commercial job types are not Residencial", () => {
+  for (const t of ["Non-residential alteration", "Nonresidential", "Warehouse fit-out"])
+    expect(segmentOf({ ...base, biggestJobType: t, biggestPermitUsd: 120_000 })).toBeNull();
+  expect(segmentOf({ ...base, biggestJobType: "Single-family house", biggestPermitUsd: 120_000 })).toBe("residential");
+});
+
 test("segmentOf: manual override wins, null falls back to derived", () => {
   expect(segmentOf({ ...base, companyType: "developer", override: "residential" })).toBe("residential");
   expect(segmentOf({ ...base, override: "small" })).toBe("small");

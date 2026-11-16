@@ -26,7 +26,9 @@ export type SegmentInput = {
   listNames: string[];
 };
 
-const RESIDENTIAL_JOB = /resid|single[- ]?family|two[- ]?family|house|home/;
+const RESIDENTIAL_JOB = /resid|single[- ]?family|two[- ]?family|\bhouse\b|\bhome\b/;
+const NON_RESIDENTIAL_JOB = /non[- ]?resid/;
+const residentialJob = (type: string | null) => { const j = fold(type ?? ""); return !NON_RESIDENTIAL_JOB.test(j) && RESIDENTIAL_JOB.test(j); };
 
 const listHas = (names: string[], kws: readonly string[]) => names.some((n) => kws.some((k) => fold(n).includes(k)));
 
@@ -38,7 +40,7 @@ export function derivedSegmentOf(i: Omit<SegmentInput, "override">): Segment | n
     i.approach === "supplier_signup" || listHas(i.listNames, LIST_SEGMENT_KEYWORDS.large)
   ) return "large";
   // shortcut: only the biggest job's type is stored, upgrade when per-permit types exist
-  if (listHas(i.listNames, LIST_SEGMENT_KEYWORDS.residential) || (usd !== null && usd < BIG_PERMIT_USD && RESIDENTIAL_JOB.test(fold(i.biggestJobType ?? "")))) return "residential";
+  if (listHas(i.listNames, LIST_SEGMENT_KEYWORDS.residential) || (usd !== null && usd < BIG_PERMIT_USD && residentialJob(i.biggestJobType))) return "residential";
   return null;
 }
 
