@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { TestDb, anon, as, openGates, UUID_B, UUID_C } from "./helpers";
-import { CIPHER, createOwner } from "./scheduler-seed";
+import { CIPHER, createOwner, seedCampaign } from "./scheduler-seed";
 
 // Migration 0028 (Fase 2 items 6 and 7): e-mail checks, pattern guesses and the campaign rule. Fictional data only.
 let db: TestDb;
@@ -45,6 +45,9 @@ const check = (email: string, status: string, method = "mx", user = OWNER, w = w
     "insert into public.email_checks (workspace_id, email, status, method, detail) values ($1,$2,$3,$4,null) on conflict (workspace_id, email) do update set workspace_id = excluded.workspace_id, email = excluded.email, status = excluded.status, method = excluded.method, detail = excluded.detail",
     [w, email, status, method],
   );
+/** What a server-side verifier path writes (superuser here: no client role may call it). */
+const verifierSays = (email: string, status: string) => db.admin("select public.record_verifier_verdict($1,$2,$3,'fake')", [ws, email, status]);
+const HOLDER = "44444444-4444-4444-8444-444444444444";
 const guess = (lead: string, value: string, status = "unverified", user = OWNER) =>
   db.try(as(user), "insert into public.lead_fields (workspace_id, lead_id, field, value, source, source_ref, status) values ($1,$2,'email',$3,'pattern','first.last',$4)", [ws, lead, value, status]);
 
@@ -64,7 +67,7 @@ describe("0028 e-mail quality", () => {
     expect(await emailOf(camp, two)).toBe("old@live-mx.example");
     // catch_all and unknown still go in (the owner's call); only invalid is excluded
     const ca = await newLead([{ field: "name", value: "CA Co" }, { field: "email", value: "x@catchall-mx.example" }]);
-    await check("x@catchall-mx.example", "catch_all");
+    await verifierSays("x@catchall-mx.example", "catch_all");
     expect(await add(camp, [ca])).toMatchObject({ added: 1 });
   });
 
@@ -77,15 +80,15 @@ describe("0028 e-mail quality", () => {
     expect(rows).toEqual([{ company_name: "Ok Co", email: "ok@live-mx.example", email_source: "manual" }, { company_name: "Raw Co", email: null, email_source: null }]);
   });
 
-  test("pattern guesses: never sendable until the verifier says verified (an MX 'verified' is not enough)", async () => {
+  test("pattern guesses: never sendable until the verifier says verified (a domain_ok is not enough)", async () => {
     const camp = await newCampaign(`pat${++n}`);
     const lead = await newLead([{ field: "name", value: "Guess Co" }]);
     expect((await guess(lead, "pat.doe@guess.example")).error).toBeUndefined(); // a sender may add a guess (rolled back here)
     await db.query(as(OWNER), "insert into public.lead_fields (workspace_id, lead_id, field, value, source, source_ref, status) values ($1,$2,'email','pat.doe@guess.example','pattern','first.last','unverified')", [ws, lead]);
     expect(await add(camp, [lead])).toMatchObject({ added: 0, no_email: 1 });
-    await check("pat.doe@guess.example", "verified", "mx");
+    await check("pat.doe@guess.example", "domain_ok", "mx");
     expect(await add(camp, [lead])).toMatchObject({ added: 0, no_email: 1 });
-    await check("pat.doe@guess.example", "verified", "verifier");
+    await verifierSays("pat.doe@guess.example", "verified");
     expect(await add(camp, [lead])).toMatchObject({ added: 1 });
     expect(await emailOf(camp, lead)).toBe("pat.doe@guess.example");
   });
@@ -101,8 +104,8 @@ describe("0028 e-mail quality", () => {
   });
 
   test("RLS: senders read and write their workspace's checks; the closer, another workspace and anon get nothing", async () => {
-    await check("rls@acme-rls.example", "verified");
-    expect(await db.query(as(OWNER), "select status from public.email_checks where email = 'rls@acme-rls.example'")).toEqual([{ status: "verified" }]);
+    await check("rls@acme-rls.example", "domain_ok");
+    expect(await db.query(as(OWNER), "select status from public.email_checks where email = 'rls@acme-rls.example'")).toEqual([{ status: "domain_ok" }]);
     const stamped = await db.admin<{ checked_by: string }>("select checked_by from public.email_checks where workspace_id = $1 and email = 'rls@acme-rls.example'", [ws]);
     expect(stamped[0].checked_by).toBe(OWNER);
     expect(await db.query(as(UUID_C), "select 1 from public.email_checks")).toHaveLength(0);
@@ -115,6 +118,35 @@ describe("0028 e-mail quality", () => {
     expect((await guess(lead, "c@closer.example", "unverified", UUID_C)).error?.message).toMatch(/row-level security/);
     expect((await db.try(as(OWNER), "delete from public.email_checks where workspace_id = $1", [ws])).error?.message).toMatch(/permission denied/);
     expect(wsB).toBeTruthy();
+  });
+
+  test("an address checked invalid AFTER it entered a campaign is never claimed; typing an invalid address strips it", async () => {
+    const s = await seedCampaign(db, ws, `claim${++n}`, { userId: OWNER });
+    await check(s.emails[0], "invalid");
+    const claim = async () => (await db.query<{ r: { outcome: string } }>(as(OWNER), "select public.claim_next_email($1,$2) as r", [s.campaign, HOLDER]))[0].r;
+    expect((await claim()).outcome).toBe("nothing_due");
+    // control: once the verdict is gone, the same message is claimed
+    await db.admin("delete from public.email_checks where workspace_id = $1 and email = $2", [ws, s.emails[0]]);
+    expect((await claim()).outcome).toBe("claimed");
+    // UPDATE path: a person types an address already checked invalid -> the prospect keeps no address
+    await check("typed@dead4-mx.example", "invalid");
+    await db.query(as(OWNER), "update public.email_prospects set email = 'typed@dead4-mx.example' where id = $1", [s.prospects[0]]);
+    expect((await db.admin<{ email: string | null; email_source: string | null }>("select email, email_source from public.email_prospects where id = $1", [s.prospects[0]]))[0]).toEqual({ email: null, email_source: null });
+  });
+
+  test("verifier verdicts are server-side only: the browser cannot write method 'verifier', 'verified' or 'catch_all', nor call the RPC", async () => {
+    const up = (status: string, method: string) =>
+      db.try(as(OWNER), "insert into public.email_checks (workspace_id, email, status, method, detail) values ($1,'v@x-rls.example',$2,$3,null) on conflict (workspace_id, email) do update set workspace_id = excluded.workspace_id, email = excluded.email, status = excluded.status, method = excluded.method, detail = excluded.detail", [ws, status, method]);
+    expect((await up("verified", "verifier")).error?.message).toMatch(/row-level security/);
+    expect((await up("invalid", "verifier")).error?.message).toMatch(/row-level security/);
+    expect((await up("verified", "mx")).error?.message).toMatch(/row-level security/);
+    expect((await up("catch_all", "mx")).error?.message).toMatch(/row-level security/);
+    expect((await up("domain_ok", "mx")).error).toBeUndefined();
+    expect((await db.try(as(OWNER), "select public.record_verifier_verdict($1,'v@x-rls.example','verified','x')", [ws])).error?.message).toMatch(/permission denied/);
+    // a verifier verdict, once written server-side, cannot be overwritten by the free check from the browser
+    await verifierSays("w@x-rls.example", "verified");
+    await db.query(as(OWNER), "insert into public.email_checks (workspace_id, email, status, method) values ($1,'w@x-rls.example','invalid','mx') on conflict (workspace_id, email) do update set status = excluded.status, method = excluded.method", [ws]).catch(() => undefined);
+    expect((await db.admin<{ status: string; method: string }>("select status, method from public.email_checks where workspace_id = $1 and email = 'w@x-rls.example'", [ws]))[0]).toEqual({ status: "verified", method: "verifier" });
   });
 
   test("ai_calls accepts the lead_search task", async () => {
