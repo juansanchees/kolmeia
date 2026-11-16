@@ -19,8 +19,10 @@ import { calls } from "./calls";
 import { callAgent } from "./callAgent";
 import { funnel } from "./funnel";
 import { emailAgent } from "./emailAgent";
+import { lists } from "./lists";
+import { tasks } from "./tasks";
 
-export const pt = { ...common, ...areas, leads, agents, ai, research, email, imports, sources, qualifier, spend, profile, coverage, team, handoff, calls, callAgent, funnel, emailAgent } as const;
+export const pt = { ...common, ...areas, leads, agents, ai, research, email, imports, sources, qualifier, spend, profile, coverage, team, handoff, calls, callAgent, funnel, emailAgent, lists, tasks } as const;
 
 export type Messages = typeof pt;
 export const t = pt;

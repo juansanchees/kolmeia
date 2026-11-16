@@ -1,17 +1,44 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace } from "@/lib/workspace";
 import { isSender } from "@/lib/roles";
-import { listLeads } from "@/lib/leads/queries";
+import { leadFacets, listLeads, listViews } from "@/lib/leads/queries";
+import { DEFAULT_LEAD_FILTERS, EMPTY_FACETS, facetFiltersOf } from "@/lib/leads/view";
+import { listLeadIds, listNames } from "@/lib/lists/queries";
 import { connectedSources } from "@/lib/sources/queries";
 import { LeadsTable } from "@/components/leads/LeadsTable";
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // The unified list: one row per company. Read as the user (RLS: the closer only gets leads assigned to her).
-export default async function LeadsPage() {
+// ?lista=<id> shows one named list (owner/sdr). The list and the left-panel counts load in parallel.
+export default async function LeadsPage({ searchParams }: { searchParams: Promise<{ [k: string]: string | string[] | undefined }> }) {
   const supabase = await createClient();
   const workspace = await getCurrentWorkspace();
-  const items = supabase && workspace ? await listLeads(supabase, workspace.id) : [];
   const sender = isSender(workspace?.role ?? "closer");
-  // "Buscar" buttons: senders only, and only for sources the workspace connected (the closer never reads connections).
-  const conn = sender && supabase && workspace ? await connectedSources(supabase, workspace.id) : null;
-  return <LeadsTable items={items} canCreate={isSender(workspace?.role ?? "closer")} sources={{ maps: conn?.maps ?? false, apollo: conn?.apollo ?? false }} />;
+  if (!supabase || !workspace) return <LeadsTable items={[]} canCreate={false} initialFacets={EMPTY_FACETS} />;
+
+  const [views, lists] = await Promise.all([listViews(supabase, workspace.id), sender ? listNames(supabase, workspace.id) : []]);
+  const pick = (await searchParams).lista;
+  const list = typeof pick === "string" && UUID.test(pick) ? (lists.find((l) => l.id === pick) ?? null) : null;
+  // Senders open on "Novos" (never contacted); the closer's leads were all handed to her, so she opens on "Todos".
+  const initial = views.find((v) => v.is_default)?.filters ?? { ...DEFAULT_LEAD_FILTERS, contact: sender ? ("new" as const) : ("all" as const) };
+
+  const [items, facets, conn] = await Promise.all([
+    list ? listLeadIds(supabase, list.id).then((ids) => listLeads(supabase, workspace.id, { ids })) : listLeads(supabase, workspace.id),
+    leadFacets(supabase, workspace.id, facetFiltersOf(initial), list?.id ?? null),
+    // "Buscar" buttons: senders only, and only for sources the workspace connected (the closer never reads connections).
+    sender ? connectedSources(supabase, workspace.id) : null,
+  ]);
+  return (
+    <LeadsTable
+      items={items}
+      canCreate={isSender(workspace.role)}
+      sources={{ maps: conn?.maps ?? false, apollo: conn?.apollo ?? false }}
+      initialFilters={initial}
+      initialFacets={facets}
+      views={views}
+      lists={lists}
+      list={list}
+    />
+  );
 }

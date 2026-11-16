@@ -1,12 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { leadFacetsAction } from "@/app/(app)/leads/view-actions";
+import { AddToList } from "@/components/leads/AddToList";
+import { FacetPanel } from "@/components/leads/FacetPanel";
+import { ViewBar } from "@/components/leads/ViewBar";
+import type { LeadView } from "@/lib/leads/queries";
 import { DarkChoice } from "@/components/research/controls";
 import { UNKNOWN } from "@/components/research/format";
 import { TEMPERATURES } from "@/lib/research/types";
 import { TABS } from "@/lib/research/sheet";
-import { DEFAULT_LEAD_FILTERS, filterLeads, leadInTab, leadsCsv, originLabel, type LeadFilters, type LeadTab } from "@/lib/leads/view";
+import { CONTACT_TABS, DEFAULT_LEAD_FILTERS, facetFiltersOf, filterLeads, leadInTab, leadsCsv, originLabel, type LeadFacets, type LeadFilters, type LeadTab } from "@/lib/leads/view";
 import { LEAD_STATUSES, type LeadListItem } from "@/lib/leads/types";
 import { LevelBadge } from "@/components/qualifier/LevelBadge";
 import { QualifyControls, RowCheck } from "@/components/qualifier/QualifyControls";
@@ -20,8 +25,35 @@ const selectCls = "min-h-11 min-w-0 border border-line bg-surface px-2.5 text-sm
 
 const linkBtn = "inline-flex min-h-11 items-center border border-blue bg-surface px-4 text-sm font-semibold text-blue no-underline hover:bg-blue-wash";
 
-export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: false } }: { items: LeadListItem[]; canCreate: boolean; sources?: { maps: boolean; apollo: boolean } }) {
-  const [f, setF] = useState<LeadFilters>(DEFAULT_LEAD_FILTERS);
+type Props = {
+  items: LeadListItem[];
+  canCreate: boolean;
+  sources?: { maps: boolean; apollo: boolean };
+  initialFilters?: LeadFilters;
+  initialFacets: LeadFacets;
+  views?: LeadView[];
+  lists?: { id: string; name: string }[];
+  /** Showing one list only (/leads?lista=<id>). */
+  list?: { id: string; name: string } | null;
+};
+
+const lastTouch = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/New_York" }) : t.leads.never);
+
+export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: false }, initialFilters = DEFAULT_LEAD_FILTERS, initialFacets, views = [], lists = [], list = null }: Props) {
+  const [f, setF] = useState<LeadFilters>(initialFilters);
+  const [facets, setFacets] = useState<LeadFacets>(initialFacets);
+  // Counts follow the facet filters; the first render already has the server's counts. Only the newest answer is kept.
+  const facetKey = JSON.stringify(facetFiltersOf(f));
+  const firstKey = useRef(facetKey);
+  const asked = useRef(0);
+  useEffect(() => {
+    if (facetKey === firstKey.current) return;
+    firstKey.current = "";
+    const n = ++asked.current;
+    leadFacetsAction(JSON.parse(facetKey), list?.id ?? null).then((r) => {
+      if (r && n === asked.current) setFacets(r);
+    }, () => undefined);
+  }, [facetKey, list?.id]);
   const router = useRouter();
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const toggle = (id: string, on: boolean) =>
@@ -72,6 +104,29 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
+      <ViewBar views={views} filters={f} onPick={(v) => setF(v ?? initialFilters)} />
+      {list && (
+        <p className="flex flex-wrap items-center gap-3 text-sm">
+          <span className="font-semibold">{fill(t.leads.inList, { name: list.name })}</span>
+          <Link href="/leads" className="text-blue underline underline-offset-4">{t.leads.clearList}</Link>
+        </p>
+      )}
+      <div role="group" aria-label={t.leads.contactTabs.label} className="flex flex-wrap border-b border-line">
+        {CONTACT_TABS.map((x) => (
+          <button
+            key={x}
+            type="button"
+            aria-pressed={f.contact === x}
+            onClick={() => set({ contact: x })}
+            className={`-mb-px min-h-11 border-b-[3px] px-4 text-[15px] ${f.contact === x ? "border-blue font-semibold text-ink" : "border-transparent text-muted hover:text-ink"}`}
+          >
+            {t.leads.contactTabs[x]} <span className="ml-1 bg-ground px-1.5 font-mono text-[13px]">{facets.tabs[x]}</span>
+          </button>
+        ))}
+      </div>
+      <div className="grid min-w-0 gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
+      <FacetPanel facets={facets} f={f} set={set} />
+      <div className="flex min-w-0 flex-col gap-4">
       <div className="flex flex-wrap gap-2">
         <input
           type="search"
@@ -126,12 +181,15 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
           )}
           {canCreate && sources.maps && <Link href="/leads/buscar#maps" className={linkBtn}>{t.sources.search.maps}</Link>}
           {canCreate && sources.apollo && <Link href="/leads/buscar#apollo" className={linkBtn}>{t.sources.search.apollo}</Link>}
-          <button type="button" onClick={download} className="min-h-11 border border-blue bg-surface px-4 text-sm font-semibold text-blue hover:bg-blue-wash">
-            {t.leads.csv}
-          </button>
+          {canCreate && (
+            <button type="button" onClick={download} className="min-h-11 border border-blue bg-surface px-4 text-sm font-semibold text-blue hover:bg-blue-wash">
+              {t.leads.csv}
+            </button>
+          )}
         </div>
       </div>
 
+      {canCreate && <AddToList selected={filtered.filter((i) => picked.has(i.lead.id)).map((i) => i.lead.id)} lists={lists} />}
       {canCreate && (
         <QualifyControls
           filteredIds={filtered.map((i) => i.lead.id)}
@@ -144,13 +202,13 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
       )}
 
       {filtered.length === 0 ? (
-        <p className="text-sm text-muted">{t.research.list.emptyTab}</p>
+        <p className="text-sm text-muted">{f.contact === "contacted" && facets.tabs.contacted === 0 ? t.leads.contactedEmpty : t.research.list.emptyTab}</p>
       ) : (
         <ul className="m-0 flex list-none flex-col border border-line bg-surface p-0">
           {filtered.map((i) => (
             <li key={i.lead.id} className="flex items-stretch border-b border-line last:border-b-0">
               {canCreate && <RowCheck checked={picked.has(i.lead.id)} name={i.display.name} onChange={(v) => toggle(i.lead.id, v)} />}
-              <Link href={`/leads/${i.lead.id}`} className="flex min-w-0 flex-1 flex-col gap-1 px-3.5 py-3 text-ink no-underline hover:bg-ground md:grid md:grid-cols-[minmax(0,2fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,1.2fr)] md:items-center md:gap-3">
+              <Link href={`/leads/${i.lead.id}`} className="flex min-w-0 flex-1 flex-col gap-1 px-3.5 py-3 text-ink no-underline hover:bg-ground md:grid md:grid-cols-[minmax(0,2fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,1.2fr)_minmax(0,0.9fr)] md:items-center md:gap-3">
                 <span className="min-w-0">
                   <span className="sr-only">{t.leads.columns.company}: </span>
                   <span className="block truncate text-sm font-semibold">{i.display.name}</span>
@@ -180,11 +238,17 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
                   <span className="sr-only">{t.leads.columns.agent}: </span>
                   {originLabel(i)}
                 </span>
+                <span className="font-mono text-[13px] text-muted">
+                  <span className="sr-only">{t.leads.lastTouch}: </span>
+                  {lastTouch(i.lead.last_touch_at)}
+                </span>
               </Link>
             </li>
           ))}
         </ul>
       )}
+      </div>
+      </div>
     </div>
   );
 }

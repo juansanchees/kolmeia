@@ -3,6 +3,7 @@ import type { CandidateRow } from "@/lib/research/rows";
 import { byTemperature, inTab, SHEET_COLUMNS, toCsv, type Column, type Tab } from "@/lib/research/sheet";
 import type { CheckWithEvidence } from "@/lib/research/store";
 import type { Temperature } from "@/lib/research/types";
+import { z } from "zod";
 import { fill, t } from "@/messages/pt";
 import type { LeadDisplay, LeadFieldRow, LeadListItem, LeadStatus } from "./types";
 
@@ -24,7 +25,15 @@ export function proofCount(checks: Pick<CheckWithEvidence, "result" | "evidence"
 
 export type LeadTab = Exclude<Tab, "jobs">;
 
-export type LeadFilters = {
+export const CONTACT_TABS = ["new", "contacted", "all"] as const;
+export type ContactTab = (typeof CONTACT_TABS)[number];
+export const LEAD_ORIGINS = ["import", "agent", "one_off"] as const;
+export type LeadOrigin = (typeof LEAD_ORIGINS)[number];
+
+/** The filters the left panel counts (lead_facets, migration 0027, applies the same rules in SQL). */
+export type FacetFilters = { contact: ContactTab; cities: string[]; levels: number[]; hasPhone: boolean; hasEmail: boolean; origins: LeadOrigin[] };
+
+export type LeadFilters = FacetFilters & {
   q: string;
   temperature: Temperature | "all";
   agent: "all" | "one_off" | string;
@@ -33,7 +42,59 @@ export type LeadFilters = {
   minLevel: 0 | 1 | 2 | 3 | 4;
 };
 
-export const DEFAULT_LEAD_FILTERS: LeadFilters = { q: "", temperature: "all", agent: "all", status: "all", tab: "all", minLevel: 0 };
+export const DEFAULT_LEAD_FILTERS: LeadFilters = {
+  q: "", temperature: "all", agent: "all", status: "all", tab: "all", minLevel: 0,
+  contact: "all", cities: [], levels: [], hasPhone: false, hasEmail: false, origins: [],
+};
+
+export type FacetCount<T> = { value: T; n: number };
+export type LeadFacets = {
+  tabs: Record<ContactTab, number>;
+  cities: FacetCount<string>[];
+  levels: FacetCount<number>[];
+  phone: number;
+  email: number;
+  origins: FacetCount<LeadOrigin>[];
+};
+export const EMPTY_FACETS: LeadFacets = { tabs: { new: 0, contacted: 0, all: 0 }, cities: [], levels: [], phone: 0, email: 0, origins: [] };
+
+export function facetFiltersOf(f: LeadFilters): FacetFilters {
+  return { contact: f.contact, cities: f.cities, levels: f.levels, hasPhone: f.hasPhone, hasEmail: f.hasEmail, origins: f.origins };
+}
+
+const filtersSchema = z.object({
+  q: z.string().max(200),
+  temperature: z.string().max(20),
+  agent: z.string().max(60),
+  status: z.string().max(20),
+  tab: z.string().max(20),
+  minLevel: z.number().int().min(0).max(4),
+  contact: z.enum(CONTACT_TABS),
+  cities: z.array(z.string().max(120)).max(50),
+  levels: z.array(z.number().int().min(0).max(4)).max(5),
+  hasPhone: z.boolean(),
+  hasEmail: z.boolean(),
+  origins: z.array(z.enum(LEAD_ORIGINS)).max(3),
+}).partial();
+
+/** A saved view's filters over the defaults; anything unreadable falls back to the default. */
+export function parseLeadFilters(raw: unknown): LeadFilters {
+  const r = filtersSchema.safeParse(raw);
+  return r.success ? ({ ...DEFAULT_LEAD_FILTERS, ...r.data } as LeadFilters) : DEFAULT_LEAD_FILTERS;
+}
+
+/** The same rules as lead_contact_values / lead_facets: trimmed display values, never-contacted = "new". */
+export function matchesFacets(i: Pick<LeadListItem, "lead" | "display">, f: FacetFilters): boolean {
+  const contacted = i.lead.first_contacted_at !== null;
+  if (f.contact === "new" ? contacted : f.contact === "contacted" ? !contacted : false) return false;
+  const city = i.display.city?.trim() || null;
+  if (f.cities.length > 0 && (city === null || !f.cities.includes(city))) return false;
+  if (f.levels.length > 0 && !f.levels.includes(i.lead.level)) return false;
+  if (f.hasPhone && !i.display.phone?.trim()) return false;
+  if (f.hasEmail && !i.display.email?.trim()) return false;
+  if (f.origins.length > 0 && !f.origins.includes(i.lead.origin_kind)) return false;
+  return true;
+}
 
 function fold(s: string): string {
   return s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
@@ -69,6 +130,7 @@ export function filterLeads(items: LeadListItem[], f: LeadFilters): LeadListItem
   return items
     .filter(({ lead, best, display }) => {
       if (!leadInTab({ best }, f.tab)) return false;
+      if (!matchesFacets({ lead, display }, f)) return false;
       if (f.temperature !== "all" && (!best || best.temperature !== f.temperature)) return false;
       if (f.status !== "all" && lead.status !== f.status) return false;
       if (f.minLevel > 0 && lead.level < f.minLevel) return false;

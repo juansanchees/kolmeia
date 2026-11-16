@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { CANDIDATE_COLUMNS, normalizeCandidate, type CandidateRow } from "@/lib/research/rows";
 import type { CheckWithEvidence } from "@/lib/research/store";
-import { displayOf } from "./view";
+import { displayOf, EMPTY_FACETS, parseLeadFilters, type FacetFilters, type LeadFacets, type LeadFilters } from "./view";
 import { LEAD_COLUMNS, LEAD_FIELD_COLUMNS, type LeadDetail, type LeadFieldRow, type LeadListItem, type LeadRow } from "./types";
 
 /**
@@ -224,4 +224,20 @@ export async function emailBriefOf(db: SupabaseClient, leadId: string): Promise<
     .maybeSingle();
   if (error) throw new Error(`emailBriefOf: ${error.message}`);
   return data?.closer_brief ?? null;
+}
+
+/** Counts for the left panel and the Novos/Contatados/Todos tabs (lead_facets, migration 0027; RLS applies). */
+export async function leadFacets(db: SupabaseClient, workspaceId: string, filters: FacetFilters, listId: string | null = null): Promise<LeadFacets> {
+  const { data, error } = await db.rpc("lead_facets", { p_ws: workspaceId, p_filters: { ...filters, listId } });
+  if (error) throw new Error(`leadFacets: ${error.message}`);
+  return { ...EMPTY_FACETS, ...(data as Partial<LeadFacets> | null) };
+}
+
+export type LeadView = { id: string; name: string; filters: LeadFilters; is_default: boolean };
+
+/** The signed-in user's saved views of this workspace (RLS: own rows only). */
+export async function listViews(db: SupabaseClient, workspaceId: string): Promise<LeadView[]> {
+  const { data, error } = await db.from("lead_views").select("id, name, filters, is_default").eq("workspace_id", workspaceId).order("name").limit(100);
+  if (error) throw new Error(`listViews: ${error.message}`);
+  return (data ?? []).map((r) => ({ id: r.id as string, name: r.name as string, filters: parseLeadFilters(r.filters), is_default: r.is_default as boolean }));
 }

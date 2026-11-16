@@ -28,9 +28,12 @@ export type LeadRow = {
   /** C2: never called again; set by a do_not_call outcome. */
   do_not_call: boolean;
   do_not_call_at: string | null;
+  /** Set by the database (migration 0027) on the first call, real e-mail or hand-off; null = never contacted. */
+  first_contacted_at: string | null;
+  last_touch_at: string | null;
 };
 
-export const LEAD_COLUMNS = "id, workspace_id, best_candidate_id, status, origin_kind, origin_agent_id, origin_run_id, origin_import_id, owner_id, first_seen_at, last_seen_at, level, level_note, handed_off_at, handed_off_by, closer_brief, do_not_call, do_not_call_at";
+export const LEAD_COLUMNS = "id, workspace_id, best_candidate_id, status, origin_kind, origin_agent_id, origin_run_id, origin_import_id, owner_id, first_seen_at, last_seen_at, level, level_note, handed_off_at, handed_off_by, closer_brief, do_not_call, do_not_call_at, first_contacted_at, last_touch_at";
 
 export const LEAD_FIELD_NAMES = [
   "name", "phone", "email", "website", "address", "city", "state", "zip", "contact_name", "contact_title", "company_type", "note", "active_project", "place_id",
