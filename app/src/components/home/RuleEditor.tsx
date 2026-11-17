@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { btn } from "@/components/email/bits";
 import { DarkChoice } from "@/components/research/controls";
 import { saveHomeRuleAction } from "@/app/(app)/inicio/actions";
@@ -18,6 +19,7 @@ export function RuleEditor({ rule, rows, cities, origins }: { rule: HomeRule; ro
   const [draft, setDraft] = useState<HomeRule>(rule);
   const [error, setError] = useState<string | null>(null);
   const [saving, startSave] = useTransition();
+  const router = useRouter();
   const panel = useRef<HTMLDivElement>(null);
   const opener = useRef<HTMLButtonElement>(null);
   const set = (patch: Partial<HomeRule>) => setDraft((d) => ({ ...d, ...patch }));
@@ -47,6 +49,7 @@ export function RuleEditor({ rule, rows, cities, origins }: { rule: HomeRule; ro
     startSave(async () => {
       const r = await saveHomeRuleAction(draft);
       if (!r.ok) return setError(r.message ?? E.failed);
+      router.refresh();
       close();
     });
 
