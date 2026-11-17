@@ -94,22 +94,35 @@ export type RolePick = Role | "all";
 
 /** Contact-title keywords (folded: lower case, no accents), matched as whole words. "other" = a title none of these matched. */
 export const ROLE_KEYWORDS: Record<Exclude<Role, "other">, string[]> = {
-  owner: ["owner", "founder", "co-founder", "president", "principal", "ceo", "proprietor", "dono", "socio"],
-  pm: ["project manager", "pm", "project executive", "construction manager", "superintendent"],
   estimator: ["estimator", "estimating", "preconstruction", "pre-construction"],
+  pm: ["project manager", "pm", "project executive", "construction manager", "superintendent"],
+  owner: ["owner", "founder", "co-founder", "president", "principal", "ceo", "proprietor", "dono", "socio"],
 };
+// "Vice President" / "Assistant to the President" are not owners
+const NOT_OWNER = /(^|[^a-z])(vice|vp|assistant|asst)([^a-z]|$)/;
 const roleRe = Object.entries(ROLE_KEYWORDS).map(([r, kws]) => [r as Role, new RegExp(`(^|[^a-z])(${kws.map((k) => k.replace(/[-\s]/g, "[- ]")).join("|")})($|[^a-z])`)] as const);
 
 /** The role of a contact title; null = no title. */
 export function roleOf(title: string | null | undefined): Role | null {
   const x = fold((title ?? "").trim());
   if (!x) return null;
-  return roleRe.find(([, re]) => re.test(x))?.[0] ?? "other";
+  return roleRe.find(([r, re]) => re.test(x) && !(r === "owner" && NOT_OWNER.test(x)))?.[0] ?? "other";
 }
 
-/** Local midnight of today minus n days. */
+const NY = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hourCycle: "h23", year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric" });
+/** New York wall clock minus UTC, in ms, at that instant. */
+function nyOffsetMs(ms: number): number {
+  const p = Object.fromEntries(NY.formatToParts(ms).map((x) => [x.type, Number(x.value)]));
+  return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(ms / 1000) * 1000;
+}
+
+/** Midnight (America/New_York, the zone the table shows dates in) of today minus n days. */
 export function daysAgoStart(n: number, now: Date): Date {
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate() - n);
+  const o = nyOffsetMs(now.getTime());
+  const w = new Date(now.getTime() + o); // wall clock as UTC fields
+  const guess = Date.UTC(w.getUTCFullYear(), w.getUTCMonth(), w.getUTCDate() - n);
+  const first = guess - nyOffsetMs(guess);
+  return new Date(guess - nyOffsetMs(first)); // second pass settles a DST change between guess and midnight
 }
 
 const ENTERED_DAYS: Record<Exclude<EnteredPreset, "all">, number> = { today: 0, "7": 6, "30": 29 };
@@ -206,12 +219,12 @@ export function parseLeadFilters(raw: unknown): LeadFilters {
 export const hasSiteNoEmail = (i: Pick<FilterRow, "display" | "lead">) =>
   Boolean(i.display.website?.trim()) && !i.display.email?.trim() && !["won", "lost", "discarded"].includes(i.lead.status);
 
-/** Every origin a lead can show: its lists/imports, the agent that found it, a one-off search; "Sem origem" when none. */
+/** Every origin a lead can show, as the Origem column does: its lists/imports, else the origin label; plus the agent. "Sem origem" when none. */
 export function originKeysOf(i: Pick<FilterRow, "lead" | "origins" | "agentName" | "importName">): string[] {
   const k = new Set((i.origins ?? []).map((o) => o.name));
+  if (k.size === 0) k.add(originLabel({ lead: i.lead, agentName: i.agentName ?? null, importName: i.importName ?? null }));
   if (i.agentName) k.add(i.agentName);
-  else if (i.lead.origin_kind === "one_off") k.add(t.leads.oneOff);
-  if (i.importName) k.add(i.importName);
+  k.delete("");
   return k.size > 0 ? [...k] : [t.leads.origin.noneOption];
 }
 
@@ -264,8 +277,8 @@ function otherFiltersOf(f: LeadFilters): (i: FilterRow) => boolean {
   const q = fold(f.q.trim());
   const qDigits = f.q.replace(/\D/g, "");
   const nameQ = fold(f.nameQ.trim());
-  const now = new Date();
   return ({ lead, best, display, ai }) => {
+    const now = new Date();
     if (!enteredOk(lead.first_seen_at, f.entered, now) || !lastTouchOk(lead.last_touch_at, f.lastTouch, now)) return false;
     if (nameQ && fold(display.name).includes(nameQ) === f.nameNot) return false;
     if (f.hasContactName && !display.contactName?.trim()) return false;
@@ -321,8 +334,15 @@ export const TOP_CITIES = 12;
 export function activeFilterKeys(f: LeadFilters): (keyof LeadFilters)[] {
   const own = new Set<keyof LeadFilters>(["q", "segment", "stage", "aiQuestion", "nameNot"]);
   return (Object.keys(DEFAULT_LEAD_FILTERS) as (keyof LeadFilters)[]).filter(
-    (k) => !own.has(k) && JSON.stringify(f[k]) !== JSON.stringify(DEFAULT_LEAD_FILTERS[k]),
+    (k) => !own.has(k) && JSON.stringify(f[k]) !== JSON.stringify(DEFAULT_LEAD_FILTERS[k]) && !(k === "nameQ" && !f.nameQ.trim()),
   );
+}
+
+/** The patch that clears these chips; nameQ takes its contains/not-contains switch with it. */
+export function clearPatch(keys: (keyof LeadFilters)[]): Partial<LeadFilters> {
+  const p: Record<string, unknown> = Object.fromEntries(keys.map((k) => [k, DEFAULT_LEAD_FILTERS[k]]));
+  if (keys.includes("nameQ")) p.nameNot = false;
+  return p as Partial<LeadFilters>;
 }
 
 /**

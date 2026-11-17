@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { EMAIL_QUALITIES } from "@/lib/leads/email-quality";
 import { ENTERED_PRESETS, LAST_TOUCH_PICKS, ROLES, type LeadFacets, type LeadFilters } from "@/lib/leads/view";
 import { TEMPERATURES } from "@/lib/research/types";
@@ -21,6 +22,20 @@ function Check({ label, n, checked, onChange }: { label: string; n: number | nul
       <span className="shrink-0 text-right font-mono text-xs text-muted">{n ?? "—"}</span>
     </label>
   );
+}
+
+/** Typing stays local; the list updates 200 ms after the last keystroke (like the search box). */
+function NameBox({ value, set }: { value: string; set: (patch: Partial<LeadFilters>) => void }) {
+  const [q, setQ] = useState(value);
+  // the chip x or Limpar changes the value from outside: take it into the box
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => setQ(value), [value]);
+  useEffect(() => {
+    if (q === value) return;
+    const id = setTimeout(() => set({ nameQ: q }), 200);
+    return () => clearTimeout(id);
+  }, [q, value, set]);
+  return <input type="text" aria-label={P.nameQ} value={q} maxLength={100} onChange={(e) => setQ(e.target.value)} className={selectCls} />;
 }
 
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
@@ -49,7 +64,7 @@ export function FacetPanel({ facets, f, set, agents, hasOneOff }: { facets: Lead
           <Check key={c} label={c} n={cityN.get(c) ?? null} checked={f.cities.includes(c)} onChange={(on) => set({ cities: toggle(f.cities, c, on) })} />
         ))}
       </Group>
-      {lists.length > 0 && (
+      {lists.some((l) => l !== t.leads.origin.noneOption) && (
         <Group title={t.leads.origin.filter}>
           {lists.map((l) => (
             <Check key={l} label={l} n={listN.get(l) ?? null} checked={f.lists.includes(l)} onChange={(on) => set({ lists: toggle(f.lists, l, on) })} />
@@ -71,7 +86,7 @@ export function FacetPanel({ facets, f, set, agents, hasOneOff }: { facets: Lead
           <option value="yes">{P.nameContains}</option>
           <option value="not">{P.nameNotContains}</option>
         </select>
-        <input type="text" aria-label={P.nameQ} value={f.nameQ} maxLength={100} onChange={(e) => set({ nameQ: e.target.value })} className={selectCls} />
+        <NameBox value={f.nameQ} set={set} />
       </Group>
       <Group title={P.role}>
         <select aria-label={P.role} value={f.role} onChange={(e) => set({ role: e.target.value as LeadFilters["role"] })} className={selectCls}>

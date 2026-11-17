@@ -11,7 +11,7 @@ import { SelectionBar, type BulkNotice } from "@/components/leads/SelectionBar";
 import { ViewBar } from "@/components/leads/ViewBar";
 import type { LeadView } from "@/lib/leads/queries";
 import { usd } from "@/components/research/format";
-import { activeFilterKeys, DEFAULT_LEAD_FILTERS, filterLeads, hasSiteNoEmail, leadFacetsOf, sortRows, type LeadFilters, type SegmentTab, type Sort, type SortKey } from "@/lib/leads/view";
+import { activeFilterKeys, clearPatch, DEFAULT_LEAD_FILTERS, filterLeads, hasSiteNoEmail, leadFacetsOf, sortRows, type LeadFilters, type SegmentTab, type Sort, type SortKey } from "@/lib/leads/view";
 import { leadsCsvAction } from "@/app/(app)/leads/lead-actions";
 import { AI_TYPE_BATCH, AI_TYPE_MAX, stageOf } from "@/lib/leads/classify";
 import { classifyTypesAction } from "@/app/(app)/leads/lead-type-actions";
@@ -402,7 +402,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
             return (
               <span key={k} className="inline-flex min-h-9 max-w-full items-center gap-1 border border-blue bg-blue-wash pl-3 text-[13px] text-ink">
                 <span className="min-w-0 truncate">{label}</span>
-                <button type="button" aria-label={fill(TB.removeChip, { label })} onClick={() => set({ [k]: DEFAULT_LEAD_FILTERS[k] })} className="min-h-9 min-w-9 text-blue hover:bg-blue-soft">
+                <button type="button" aria-label={fill(TB.removeChip, { label })} onClick={() => set(clearPatch([k]))} className="min-h-9 min-w-9 text-blue hover:bg-blue-soft">
                   <span aria-hidden>×</span>
                 </button>
               </span>
@@ -410,7 +410,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
           })}
           <button
             type="button"
-            onClick={() => set(Object.fromEntries(chips.map((k) => [k, DEFAULT_LEAD_FILTERS[k]])))}
+            onClick={() => set(clearPatch(chips))}
             className="min-h-9 text-sm text-blue underline underline-offset-4"
           >
             {TB.clear}
@@ -488,11 +488,11 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
                       {originText(i)}
                     </span>
                     <span className="font-mono text-[13px] text-muted">
-                      <span className="sr-only">{COL.lastContact}: </span>
+                      <span className="md:hidden">{COL.lastContact}: </span>
                       {lastTouch(i.lead.last_touch_at)}
                     </span>
                     <span className="font-mono text-[13px] text-muted">
-                      <span className="sr-only">{COL.entered}: </span>
+                      <span className="md:hidden">{COL.entered}: </span>
                       {lastTouch(i.lead.first_seen_at)}
                     </span>
                     {aiQ && (
