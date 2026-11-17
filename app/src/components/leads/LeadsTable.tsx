@@ -327,7 +327,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
                 </Step>
               </div>
             )}
-            <div role="group" aria-label={L.stages.label} className="k-step flex flex-col gap-3">
+            <div role="group" aria-label={ST.stage} className="k-step flex flex-col gap-3">
               <Step n={++step} title={ST.stage}>
                 <div className="flex flex-wrap items-stretch gap-1.5">
                   {STAGE_TABS.map((x, n) => {
