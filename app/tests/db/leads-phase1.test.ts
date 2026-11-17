@@ -188,7 +188,8 @@ describe("0027 tasks", () => {
     expect(await db.query(as(t.closer), "update public.tasks set done_at = now() returning id")).toHaveLength(1);
     expect((await db.admin<{ n: number }>("select count(*)::int as n from public.tasks where done_at is not null and workspace_id = $1", [t.ws]))[0].n).toBe(1);
     expect((await db.try(as(t.sdr), "update public.tasks set title = 'x'")).error).toBeDefined();
-    expect((await db.try(as(t.sdr), "insert into public.tasks (workspace_id, lead_id, title, due_at) values ($1,$2,'x',now())", [t.ws, hers])).error).toBeDefined();
+    // since 0037 members create tasks, but never already done (done_at is not insertable)
+    expect((await db.try(as(t.sdr), "insert into public.tasks (workspace_id, lead_id, title, due_at, done_at) values ($1,$2,'x',now(),now())", [t.ws, hers])).error).toBeDefined();
     expect((await db.try(anon, "select * from public.tasks")).error).toBeDefined();
   });
 });

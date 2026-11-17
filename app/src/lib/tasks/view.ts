@@ -1,7 +1,7 @@
-// Client-safe rules of the Tarefas page (migration 0027).
+// Client-safe rules of the Tarefas page (migration 0027; 'meeting' since 0037, the Agenda's "Reunião").
 import { nyDay } from "@/lib/calls/ny-day";
 
-export const TASK_KINDS = ["call", "email", "follow_up", "other"] as const;
+export const TASK_KINDS = ["call", "email", "follow_up", "other", "meeting"] as const;
 export type TaskKind = (typeof TASK_KINDS)[number];
 export const TASK_TABS = ["today", "late", "next"] as const;
 export type TaskTab = (typeof TASK_TABS)[number];
