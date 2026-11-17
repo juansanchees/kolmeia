@@ -33,7 +33,7 @@ describe("0013 connections", () => {
     expect(list.map((c) => c.provider)).toEqual(["apify", "apollo"]);
     expect(list.map((c) => c.last4)).toEqual(["AB12", "CD34"]);
     expect(JSON.stringify(list)).not.toContain(SOURCE_CIPHER);
-    expect(Object.keys(list[0]).sort()).toEqual(["calls_today", "daily_calls", "daily_cap_usd", "last4", "provider", "spent_today_usd", "updated_at"]);
+    expect(Object.keys(list[0]).sort()).toEqual(["calls_today", "daily_calls", "daily_cap_usd", "last4", "monthly_records", "provider", "spent_today_usd", "updated_at", "used_month"]);
     expect(Number(list[0].daily_cap_usd)).toBe(2);
     expect(Number(list[1].daily_calls)).toBe(20);
     expect(Number(list[0].spent_today_usd)).toBe(0);
