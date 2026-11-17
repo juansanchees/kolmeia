@@ -225,11 +225,16 @@ describe("0027 re-runnable", () => {
     const b = await lead(t, { phone: "508-555-0152" });
     const c = await lead(t, { phone: "508-555-0153" });
     const due = new Date(Date.now() + 86_400_000).toISOString();
-    await logCall(t.sdr, a, "talked", "Primeira", due);
-    await logCall(t.sdr, a, "talked", "Segunda", due);
-    await logCall(t.sdr, b, "talked", "Antes", due);
-    await logCall(t.sdr, b, "do_not_call");
-    await logCall(t.sdr, c, "talked");
+    // each earlier call is pushed one minute back, so "latest" never depends on two calls landing on the same instant
+    const call = async (...args: Parameters<typeof logCall>) => {
+      await db.admin("update public.call_logs set called_at = called_at - interval '1 minute', created_at = created_at - interval '1 minute' where workspace_id = $1", [t.ws]);
+      await logCall(...args);
+    };
+    await call(t.sdr, a, "talked", "Primeira", due);
+    await call(t.sdr, a, "talked", "Segunda", due);
+    await call(t.sdr, b, "talked", "Antes", due);
+    await call(t.sdr, b, "do_not_call");
+    await call(t.sdr, c, "talked");
     // as if these calls were logged before 0027: no task rows yet
     await db.admin("delete from public.tasks where workspace_id = $1", [t.ws]);
     const sql = readFileSync(MIGRATION_PATHS.find((p) => p.includes("0027_"))!, "utf8");

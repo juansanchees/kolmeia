@@ -7,7 +7,7 @@ import { markItemAction, saveDayPlanAction } from "@/app/(app)/inicio/actions";
 import { HexIcon } from "@/components/leads/hex";
 import { nyDay } from "@/lib/calls/ny-day";
 import { AppointmentDialog, type LeadOption } from "@/components/tasks/AppointmentDialog";
-import { buildPlan, moveBlock, type BlockId, type DayPlan as Plan, type PlanInput, type PlanItem } from "@/lib/home/plan";
+import { blocksFor, buildPlan, moveBlock, type BlockId, type DayPlan as Plan, type PlanInput, type PlanItem } from "@/lib/home/plan";
 import { ruleInWords, type HomeRule } from "@/lib/home/rule";
 import type { Person } from "@/lib/team/types";
 import { fill, type Messages } from "@/lib/i18n";
@@ -77,6 +77,7 @@ export function DayPlan({ input, plan: savedPlan, rule: savedRule, dateLine, cit
   const built = useMemo(() => buildPlan({ ...input, marks }, plan, rule), [input, marks, plan, rule]);
   const visible = built.blocks.filter((b) => !b.hidden);
   const all = visible.flatMap((b) => b.items);
+  const firstBlock = plan.order.find((id) => blocksFor(input.sender).includes(id)) ?? "call";
 
   const toggle = (i: PlanItem) => {
     if (i.real) return;
@@ -89,12 +90,13 @@ export function DayPlan({ input, plan: savedPlan, rule: savedRule, dateLine, cit
       if (!r.ok) {
         setMarks(before);
         setError(r.message ?? P.failed);
-      } else router.refresh();
+      }
+      // success: the tick is already on screen, nothing to reload
     });
   };
   const move = (id: BlockId, dir: -1 | 1) => {
     const before = plan;
-    const next = { ...plan, order: moveBlock(plan.order, id, dir) };
+    const next = { ...plan, order: moveBlock(plan.order, id, dir, visible.map((b) => b.id)) };
     setPlan(next);
     setError(null);
     start(async () => {
@@ -122,7 +124,7 @@ export function DayPlan({ input, plan: savedPlan, rule: savedRule, dateLine, cit
     const cls = big ? "k-lift flex text-ink no-underline" : `k-btn inline-flex min-h-12 items-center gap-2 rounded-[12px] border-2 border-ink px-[18px] font-semibold no-underline ${primary ? "bg-ink text-white" : "bg-surface text-ink"}`;
     const name = itemWords(i, t).title;
     return i.action === "meeting" ? (
-      <button type="button" onClick={() => i.leadId && setMeeting({ id: i.leadId, name: i.name, city: i.city })} aria-label={big ? undefined : `${label}: ${name}`} className={cls}>
+      <button type="button" onClick={() => i.leadId && setMeeting({ id: i.leadId, name: i.name, city: i.city, owner: input.rows.find((r) => r.lead.id === i.leadId)?.lead.owner_id ?? null })} aria-label={big ? undefined : `${label}: ${name}`} className={cls}>
         {inner}
       </button>
     ) : (
@@ -177,7 +179,7 @@ export function DayPlan({ input, plan: savedPlan, rule: savedRule, dateLine, cit
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {next && openItem(next, true, true)}
-            <button type="button" onClick={() => setConfig(plan.order[0])} className="k-btn inline-flex min-h-12 items-center gap-2 rounded-[12px] border-2 border-white/50 px-4 font-semibold text-white">
+            <button type="button" onClick={() => setConfig(firstBlock)} className="k-btn inline-flex min-h-12 items-center gap-2 rounded-[12px] border-2 border-white/50 px-4 font-semibold text-white">
               <Icon d={ICON.sliders} />
               {P.setup}
             </button>
@@ -190,7 +192,7 @@ export function DayPlan({ input, plan: savedPlan, rule: savedRule, dateLine, cit
       {visible.map((b, bi) => {
         const B = P.blocks[b.id];
         const done = b.items.filter((i) => i.done).length;
-        const pos = plan.order.indexOf(b.id);
+        const pos = bi;
         const arrow = "k-btn inline-flex size-[42px] items-center justify-center rounded-[9px] bg-surface text-ink disabled:opacity-35";
         return (
           <HexCard key={b.id} aria-labelledby={`blk-${b.id}`} className="k-in" style={{ animationDelay: `${0.16 + bi * 0.07}s` }} innerClassName="flex flex-col gap-3.5 px-6 pb-5 pt-6 md:px-[38px]">
@@ -210,7 +212,7 @@ export function DayPlan({ input, plan: savedPlan, rule: savedRule, dateLine, cit
                   <button type="button" aria-label={fill(P.up, { name: B.title })} disabled={pos === 0} onClick={() => move(b.id, -1)} className={arrow}>
                     <Icon d={ICON.up} w={2.4} />
                   </button>
-                  <button type="button" aria-label={fill(P.down, { name: B.title })} disabled={pos === plan.order.length - 1} onClick={() => move(b.id, 1)} className={arrow}>
+                  <button type="button" aria-label={fill(P.down, { name: B.title })} disabled={pos === visible.length - 1} onClick={() => move(b.id, 1)} className={arrow}>
                     <Icon d={ICON.down} w={2.4} />
                   </button>
                 </div>
@@ -266,7 +268,7 @@ export function DayPlan({ input, plan: savedPlan, rule: savedRule, dateLine, cit
 
       <PlanConfig
         open={config !== null}
-        start={config ?? plan.order[0]}
+        start={config ?? firstBlock}
         onClose={() => setConfig(null)}
         onSaved={(p, r) => {
           setPlan(p);

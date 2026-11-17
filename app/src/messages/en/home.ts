@@ -116,6 +116,7 @@ export const home = {
     more: "More",
     preview: "Preview: {n} go into this part right now.",
     previewOne: "Preview: 1 goes into this part right now.",
+    noneShown: "Keep at least one part on today's plan.",
     reset: "Back to default",
     cancel: "Cancel",
     save: "Save my day",

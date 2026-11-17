@@ -29,12 +29,15 @@ const refresh = () => {
   revalidatePath("/leads/tarefas");
 };
 
-/** New York wall time -> instant, only from yesterday to two years ahead (a typo like 2062 never lands). */
-function dueOf(d: string, tm: string): string | null {
+/**
+ * New York wall time -> instant, only from yesterday to two years ahead (a typo like 2062 never lands). "gap" = a
+ * clock time that does not exist that day (the spring DST jump) or no real date.
+ */
+function dueOf(d: string, tm: string): { iso: string } | { err: "gap" | "range" } {
   const iso = nyLocalToIso(`${d}T${tm}`);
-  if (!iso) return null;
+  if (!iso) return { err: "gap" };
   const ms = Date.parse(iso);
-  return ms >= Date.now() - DAY && ms <= Date.now() + 730 * DAY ? iso : null;
+  return ms >= Date.now() - DAY && ms <= Date.now() + 730 * DAY ? { iso } : { err: "range" };
 }
 
 /**
@@ -47,7 +50,7 @@ export async function createTaskAction(input: unknown): Promise<Result> {
   const p = newSchema.safeParse(input);
   if (!p.success) return { ok: false, message: T.invalid };
   const due = dueOf(p.data.date, p.data.time);
-  if (!due) return { ok: false, message: T.badDate };
+  if ("err" in due) return { ok: false, message: due.err === "gap" ? T.badTime : T.badDate };
   const [workspace, supabase, user] = [await getCurrentWorkspace(), await createClient(), await getUser()];
   if (!workspace || !supabase || !user) return { ok: false, message: T.failed };
   const assignee = isSender(workspace.role) ? (p.data.assignee ?? user.id) : user.id;
@@ -55,7 +58,7 @@ export async function createTaskAction(input: unknown): Promise<Result> {
   if (!lead) return { ok: false, message: T.failed };
   const { error } = await supabase
     .from("tasks")
-    .insert({ workspace_id: workspace.id, lead_id: p.data.leadId, kind: p.data.kind, title: p.data.note, due_at: due, assignee_id: assignee });
+    .insert({ workspace_id: workspace.id, lead_id: p.data.leadId, kind: p.data.kind, title: p.data.note, due_at: due.iso, assignee_id: assignee });
   if (error) return { ok: false, message: T.failed };
   refresh();
   return { ok: true };
@@ -67,10 +70,10 @@ export async function rescheduleTaskAction(id: string, d: string, tm: string): P
   const p = z.object({ id: z.uuid(), d: date, tm: time }).safeParse({ id, d, tm });
   if (!p.success) return { ok: false, message: t.tasks.form.invalid };
   const due = dueOf(p.data.d, p.data.tm);
-  if (!due) return { ok: false, message: t.tasks.form.badDate };
-  const supabase = await createClient();
-  if (!supabase || !(await getCurrentWorkspace())) return { ok: false, message: t.tasks.failed };
-  const { data, error } = await supabase.from("tasks").update({ due_at: due }).eq("id", p.data.id).select("id");
+  if ("err" in due) return { ok: false, message: due.err === "gap" ? t.tasks.form.badTime : t.tasks.form.badDate };
+  const [supabase, workspace] = [await createClient(), await getCurrentWorkspace()];
+  if (!supabase || !workspace) return { ok: false, message: t.tasks.failed };
+  const { data, error } = await supabase.from("tasks").update({ due_at: due.iso }).eq("id", p.data.id).eq("workspace_id", workspace.id).select("id");
   if (error || !data?.length) return { ok: false, message: t.tasks.failed };
   refresh();
   return { ok: true };
@@ -80,9 +83,9 @@ export async function rescheduleTaskAction(id: string, d: string, tm: string): P
 export async function setTaskDoneAction(id: string, done: boolean): Promise<Result> {
   const t = await getT();
   const p = z.object({ id: z.uuid(), done: z.boolean() }).safeParse({ id, done });
-  const supabase = await createClient();
-  if (!p.success || !supabase || !(await getCurrentWorkspace())) return { ok: false, message: t.tasks.failed };
-  const { data, error } = await supabase.from("tasks").update({ done_at: p.data.done ? new Date().toISOString() : null }).eq("id", p.data.id).select("id");
+  const [supabase, workspace] = [await createClient(), await getCurrentWorkspace()];
+  if (!p.success || !supabase || !workspace) return { ok: false, message: t.tasks.failed };
+  const { data, error } = await supabase.from("tasks").update({ done_at: p.data.done ? new Date().toISOString() : null }).eq("id", p.data.id).eq("workspace_id", workspace.id).select("id");
   if (error || !data?.length) return { ok: false, message: t.tasks.failed };
   refresh();
   return { ok: true };

@@ -11,7 +11,7 @@ type ShortcutChip = { id: ShortcutId; key: keyof LeadFilters; on: (f: LeadFilter
 export const SHORTCUT_CHIPS: readonly ShortcutChip[] = [
   { id: "hasPhone", key: "hasPhone", on: (f) => f.hasPhone, patch: (on) => ({ hasPhone: on }) },
   { id: "hasEmail", key: "hasEmail", on: (f) => f.hasEmail, patch: (on) => ({ hasEmail: on }) },
-  { id: "hasContactName", key: "hasContactName", on: (f) => f.hasContactName, patch: (on) => ({ hasContactName: on }) },
+  { id: "hasContactName", key: "hasContactName", on: (f) => f.hasContactName, patch: (on) => ({ hasContactName: on, ...(on && { noContactName: false }) }) },
   { id: "never", key: "lastTouch", on: (f) => f.lastTouch === "never", patch: (on) => ({ lastTouch: on ? "never" : "all" }) },
   { id: "week", key: "entered", on: (f) => f.entered === "7", patch: (on) => ({ entered: on ? "7" : "all" }) },
 ];

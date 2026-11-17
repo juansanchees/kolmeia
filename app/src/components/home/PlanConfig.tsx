@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { saveDayPlanAction } from "@/app/(app)/inicio/actions";
 import {
+  blocksFor,
   buildPlan,
   COUNT_MAX,
   COUNT_MIN,
@@ -61,6 +62,10 @@ function Body({ start, onClose, onSaved, input, plan, rule, cities, origins }: P
   const set = (patch: Partial<DayPlan>) => setDraft((d) => ({ ...d, ...patch }));
   const setRule = (patch: Partial<HomeRule>) => setR((x) => ({ ...x, ...patch }));
   const shown = !draft.hidden.includes(cat);
+  const allowed = blocksFor(input.sender);
+  const list = draft.order.filter((id) => allowed.includes(id));
+  // at least one block stays on the plan (the schema refuses a plan with all hidden)
+  const noneShown = allowed.every((id) => draft.hidden.includes(id));
   const title = (id: BlockId) => t.home.plan.blocks[id].title;
   const withCurrent = (list: string[], v: string) => (v && !list.includes(v) ? [v, ...list] : list);
   const check = (on: boolean, onChange: (v: boolean) => void, label: string, hint = "", type: "checkbox" | "radio" = "checkbox", name?: string) => (
@@ -104,7 +109,7 @@ function Body({ start, onClose, onSaved, input, plan, rule, cities, origins }: P
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
         <nav aria-label={C.order} className="flex shrink-0 flex-col gap-1.5 border-b border-[#e3e6ec] bg-ground py-4 pl-5 pr-3 md:w-[300px] md:overflow-y-auto md:border-b-0 md:border-r md:pl-[26px]">
           <span className="px-1.5 pb-1.5 font-mono text-[13px] tracking-[0.06em] text-[#4a5361]">{C.order}</span>
-          {draft.order.map((id, i) => {
+          {list.map((id, i) => {
             const on = cat === id;
             const hidden = draft.hidden.includes(id);
             const arrow = "k-btn inline-flex h-11 w-10 items-center justify-center rounded-[10px] text-ink disabled:opacity-30";
@@ -120,10 +125,10 @@ function Body({ start, onClose, onSaved, input, plan, rule, cities, origins }: P
                     <span className="text-sm text-[#4a5361]">{hidden ? C.hidden : fill(C.perDay, { n: draft.counts[id] })}</span>
                   </span>
                 </button>
-                <button type="button" aria-label={fill(t.home.plan.up, { name: title(id) })} disabled={i === 0} onClick={() => set({ order: moveBlock(draft.order, id, -1) })} className={arrow}>
+                <button type="button" aria-label={fill(t.home.plan.up, { name: title(id) })} disabled={i === 0} onClick={() => set({ order: moveBlock(draft.order, id, -1, allowed) })} className={arrow}>
                   <Icon d={ICON.up} w={2.4} />
                 </button>
-                <button type="button" aria-label={fill(t.home.plan.down, { name: title(id) })} disabled={i === draft.order.length - 1} onClick={() => set({ order: moveBlock(draft.order, id, 1) })} className={`${arrow} mr-1`}>
+                <button type="button" aria-label={fill(t.home.plan.down, { name: title(id) })} disabled={i === list.length - 1} onClick={() => set({ order: moveBlock(draft.order, id, 1, allowed) })} className={`${arrow} mr-1`}>
                   <Icon d={ICON.down} w={2.4} />
                 </button>
               </div>
@@ -255,6 +260,7 @@ function Body({ start, onClose, onSaved, input, plan, rule, cities, origins }: P
           <p role="status" className="m-0 rounded-[14px] border-2 border-honey-edge bg-honey-soft px-4 py-3.5 text-base">
             {available === 1 ? C.previewOne : fill(C.preview, { n: available.toLocaleString(t.intl) })}
           </p>
+          {noneShown && <p role="alert" className="m-0 rounded-[12px] bg-warn-soft px-3 py-2.5 text-[15px] text-warn">{C.noneShown}</p>}
           {error && <p role="alert" className="m-0 rounded-[12px] bg-warn-soft px-3 py-2.5 text-[15px] text-warn">{error}</p>}
         </section>
       </div>
@@ -265,7 +271,7 @@ function Body({ start, onClose, onSaved, input, plan, rule, cities, origins }: P
         </button>
         <div className="flex flex-wrap items-center gap-2.5">
           <button type="button" onClick={onClose} className="k-btn inline-flex min-h-[52px] items-center rounded-[14px] border-2 border-line px-5 font-medium text-ink">{C.cancel}</button>
-          <button type="button" onClick={save} disabled={saving} className="k-lift flex text-lg disabled:opacity-60">
+          <button type="button" onClick={save} disabled={saving || noneShown} className="k-lift flex text-lg disabled:opacity-60">
             <HexCta dark>{saving ? C.saving : C.save}</HexCta>
           </button>
         </div>

@@ -33,6 +33,7 @@ export const tasks = {
     needLead: "Escolha a empresa.",
     invalid: "Confira os campos.",
     badDate: "Escolha um dia entre ontem e daqui a 2 anos.",
+    badTime: "Esse horário não existe nesse dia (o relógio pula na mudança de horário). Escolha outro.",
     failed: "Não deu certo salvar. Tente de novo.",
   },
 } as const;

@@ -115,10 +115,11 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
   const COL = t.leads.columns;
   const P = t.leads.paging;
   const search = useSearchParams();
-  // Home's "Analisar" links (?entered / ?segment / ?noName) set existing filters on first load; all stages, so the count matches
+  // Home's "Analisar" links (?entered / ?segment / ?noName) open on the plain filters (every stage, no saved view) plus
+  // these, so the list shows exactly what the Home counted
   const [f, setF] = useState<LeadFilters>(() => {
     const p = filtersFromParams((k) => search.get(k));
-    return Object.keys(p).length ? { ...initialFilters, stage: "all", ...p } : initialFilters;
+    return Object.keys(p).length ? { ...DEFAULT_LEAD_FILTERS, ...p } : initialFilters;
   });
   // bumped when a saved view replaces every filter, so the search box takes the view's text
   const [searchKey, setSearchKey] = useState(0);
@@ -139,13 +140,14 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
   // the last bulk result (status / type); kept here because a success unmounts the selection bar
   const [notice, setNotice] = useState<BulkNotice | null>(null);
   const router = useRouter();
-  // read once, then drop ?ia and the filter params from the URL (other params stay) so a reload or a lead link does not reopen the panel
+  // read once, then drop ?ia and the filter params from the URL (other params stay) so a reload or a lead link does not
+  // reopen the panel; history.replaceState, not router.replace: no server round trip that would re-read every lead
   useEffect(() => {
     if (!["ia", ...FILTER_PARAMS].some((k) => search.has(k))) return;
     const p = new URLSearchParams(search);
     for (const k of ["ia", ...FILTER_PARAMS]) p.delete(k);
-    router.replace(`${pathname}${p.size ? `?${p}` : ""}`, { scroll: false });
-  }, [search, pathname, router]);
+    window.history.replaceState(null, "", `${pathname}${p.size ? `?${p}` : ""}`);
+  }, [search, pathname]);
   // The lead opens as a modal over this list (?lead=): same page, so filters/pager/scroll stay.
   const leadHref = (id: string) => `?${new URLSearchParams({ ...Object.fromEntries(search), lead: id })}`;
   const [picked, setPicked] = useState<Set<string>>(new Set());

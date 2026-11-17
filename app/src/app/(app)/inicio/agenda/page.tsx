@@ -2,11 +2,9 @@ import { HomeTabs } from "@/components/home/HomeTabs";
 import { AgendaView } from "@/components/tasks/AgendaView";
 import { addDays, monthGrid, parseAgenda } from "@/lib/agenda/view";
 import { nyLocalToIso } from "@/lib/calls/call-input";
-import { stageOf } from "@/lib/leads/classify";
-import { listLeads } from "@/lib/leads/queries";
 import { isSender } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
-import { tasksBetween } from "@/lib/tasks/queries";
+import { leadOptionsOf, tasksBetween } from "@/lib/tasks/queries";
 import type { Person } from "@/lib/team/types";
 import { getCurrentWorkspace, getUser } from "@/lib/workspace";
 import { getT } from "@/lib/i18n/server";
@@ -27,15 +25,15 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
 
   const [tasks, items, people] = await Promise.all([
     tasksBetween(supabase, workspace.id, from, to),
-    listLeads(supabase, workspace.id),
+    leadOptionsOf(supabase, workspace.id),
     sender ? supabase.rpc("list_workspace_people", { p_ws: workspace.id }).then((r) => (r.data ?? []) as Person[]) : null,
   ]);
-  const lead = new Map(items.map((i) => [i.lead.id, i]));
-  const rows = tasks.map((x) => ({ ...x, name: lead.get(x.lead_id)?.display.name ?? t.tasks.lead }));
+  const lead = new Map(items.map((i) => [i.id, i]));
+  const rows = tasks.map((x) => ({ ...x, name: lead.get(x.lead_id)?.name ?? t.tasks.lead }));
   // the dialog's search: leads that are still open
   const leads = items
-    .filter((i) => stageOf(i.lead) !== "closed")
-    .map((i) => ({ id: i.lead.id, name: i.display.name, city: i.display.city?.trim() || null }))
+    .filter((i) => i.open)
+    .map(({ id, name, city, owner }) => ({ id, name, city, owner }))
     .sort((a, b) => a.name.localeCompare(b.name, t.intl));
 
   return (

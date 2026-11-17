@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { rescheduleTaskAction, setTaskDoneAction } from "@/app/(app)/inicio/agenda/actions";
 import { HexCard, HexCta, ICON, Icon } from "@/components/home/bits";
@@ -66,8 +66,11 @@ export function AgendaView({ state, grid, items, people, me, leads }: { state: A
   const hexNum = (day: string, size: string) =>
     `hxv inline-flex ${size} items-center justify-center ${day === state.today ? "bg-honey font-bold" : ""}`;
   const dayLabel = (day: string) => {
-    const n = on(day).length;
-    return [longDay(day, t), n === 1 ? A.itemsOne : fill(A.items, { n }), ...(day === state.today ? [A.todaySr] : []), ...(day === state.day ? [A.selected] : [])].join(", ");
+    const evs = on(day);
+    const n = evs.length;
+    // the first three, so a screen reader hears what is on the day without opening it
+    const what = evs.slice(0, 3).map((x) => `${nyTime(x.due_at)} ${A.kindLabels[kindGroup(x.kind)]} ${x.name}`);
+    return [longDay(day, t), n === 1 ? A.itemsOne : fill(A.items, { n }), ...what, ...(day === state.today ? [A.todaySr] : []), ...(day === state.day ? [A.selected] : [])].join(", ");
   };
 
   return (
@@ -240,6 +243,15 @@ function DayPanel({ day, today, items, whoLabel }: { day: string; today: string;
   const A = t.home.agenda;
   const router = useRouter();
   const [editing, setEditing] = useState<string | null>(null);
+  // focus goes into the reschedule form when it opens and back to its "Remarcar" button when it closes
+  const opener = useRef<HTMLButtonElement | null>(null);
+  const firstField = useRef<HTMLInputElement>(null);
+  const wasEditing = useRef(false);
+  useEffect(() => {
+    if (editing) firstField.current?.focus();
+    else if (wasEditing.current) opener.current?.focus();
+    wasEditing.current = editing !== null;
+  }, [editing]);
   const [when, setWhen] = useState({ d: "", tm: "" });
   const [error, setError] = useState<string | null>(null);
   const [busy, start] = useTransition();
@@ -288,7 +300,7 @@ function DayPanel({ day, today, items, whoLabel }: { day: string; today: string;
                 >
                   <label className="flex flex-col gap-1 text-sm text-[#4a5361]">
                     {A.date}
-                    <input type="date" required value={when.d} onChange={(e) => setWhen({ ...when, d: e.target.value })} className={field} />
+                    <input ref={firstField} type="date" required value={when.d} onChange={(e) => setWhen({ ...when, d: e.target.value })} className={field} />
                   </label>
                   <label className="flex flex-col gap-1 text-sm text-[#4a5361]">
                     {A.time}
@@ -303,8 +315,10 @@ function DayPanel({ day, today, items, whoLabel }: { day: string; today: string;
                   <button
                     type="button"
                     aria-label={fill(A.rescheduleFor, { name: x.name })}
-                    onClick={() => {
-                      setWhen({ d: nyDay(new Date(x.due_at)), tm: nyTime(x.due_at) });
+                    onClick={(e) => {
+                      opener.current = e.currentTarget;
+                      // an overdue one starts on today, not its old day (which the server would refuse)
+                      setWhen({ d: late ? today : nyDay(new Date(x.due_at)), tm: nyTime(x.due_at) });
                       setEditing(x.id);
                     }}
                     className="k-btn inline-flex min-h-11 items-center rounded-[11px] border-2 border-line bg-surface px-3.5 text-[15px] text-ink"

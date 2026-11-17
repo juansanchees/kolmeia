@@ -48,3 +48,11 @@ describe("Início screens render", () => {
     expect(html).not.toContain("De quem"); // the closer (no people list) has no "De quem"
   });
 });
+
+test("new appointment: 09:00 on another day, the next full hour today (New York), never past 23:00", async () => {
+  const { defaultTime } = await import("@/components/tasks/AppointmentDialog");
+  const now = new Date("2026-11-17T15:20:00Z"); // 10:20 in New York
+  expect(defaultTime("2026-11-18", now)).toBe("09:00");
+  expect(defaultTime("2026-11-17", now)).toBe("11:00");
+  expect(defaultTime("2026-11-17", new Date("2026-11-18T04:30:00Z"))).toBe("23:00"); // 23:30 on the 17th
+});

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "vitest";
-import { buildPlan, DEFAULT_PLAN, moveBlock, parsePlan, planSchema, type DayPlan, type PlanCalls, type PlanInput, type PlanTask } from "@/lib/home/plan";
+import { nyLocalToIso } from "@/lib/calls/call-input";
+import { suppressedOf } from "@/lib/home/queries";
+import { blocksFor, buildPlan, DEFAULT_PLAN, moveBlock, parsePlan, planSchema, type DayPlan, type PlanCalls, type PlanInput, type PlanTask } from "@/lib/home/plan";
 import { DEFAULT_HOME_RULE, type HomeRow } from "@/lib/home/rule";
 import type { Segment } from "@/lib/leads/types";
 
@@ -21,8 +23,8 @@ function row(o: { id?: string; status?: string; contacted?: string | null; dnc?:
     segment: o.segment === undefined ? "large" : o.segment,
   };
 }
-const task = (o: Partial<PlanTask> & { lead_id: string; due_at: string }): PlanTask => ({ id: `t-${++seq}`, kind: "call", title: "", done_at: null, assignee_id: ME, created_at: "2026-11-10T12:00:00Z", ...o });
-const calls = (o: Partial<PlanCalls>): PlanCalls => ({ noAnswer: 0, last: null, lastAt: null, byMeToday: false, ...o });
+const task = (o: Partial<PlanTask> & { lead_id: string; due_at: string }): PlanTask => ({ id: `t-${++seq}`, kind: "call", title: "", done_at: null, assignee_id: ME, ...o });
+const calls = (o: Partial<PlanCalls>): PlanCalls => ({ noAnswer: 0, last: null, byMeToday: false, ...o });
 const input = (o: Partial<PlanInput>): PlanInput => ({ now: NOW, userId: ME, sender: true, rows: [], tasks: [], calls: {}, emailedToday: [], suppressed: [], marks: [], ...o });
 const block = (p: ReturnType<typeof buildPlan>, id: string) => p.blocks.find((b) => b.id === id)!;
 const keys = (p: ReturnType<typeof buildPlan>, id: string) => block(p, id).items.map((i) => i.key);
@@ -90,16 +92,22 @@ describe("Retornos combinados", () => {
     expect(ids(false)).toEqual([`task:${onMine.id}`, `task:${assignedToMe.id}`]);
     expect(ids(true)).toEqual([`task:${assignedToMe.id}`]); // sender: "mine" stays assigned-to-me
   });
-  test("done: task done today, or a call on the lead after the task was written; a call before it does not count", () => {
+  test("done only when the task is done today or ticked by hand; a call on the lead does not tick it (the task stays open)", () => {
     const done = task({ lead_id: "a", due_at: "2026-11-17T16:00:00Z", done_at: "2026-11-17T14:30:00Z" });
-    const open = task({ lead_id: "a", due_at: "2026-11-17T17:00:00Z", created_at: "2026-11-17T14:00:00Z" });
-    const p1 = buildPlan(input({ rows: [a], tasks: [done, open], calls: { a: calls({ lastAt: "2026-11-17T13:00:00Z" }) } }), DEFAULT_PLAN, DEFAULT_HOME_RULE);
+    const open = task({ lead_id: "a", due_at: "2026-11-17T17:00:00Z" });
+    const p1 = buildPlan(input({ rows: [a], tasks: [done, open], calls: { a: calls({ byMeToday: true }) } }), DEFAULT_PLAN, DEFAULT_HOME_RULE);
     expect(block(p1, "returns").items.map((i) => [i.done, i.real])).toEqual([[true, true], [false, false]]);
-    const p2 = buildPlan(input({ rows: [a], tasks: [open], calls: { a: calls({ lastAt: "2026-11-17T14:45:00Z" }) } }), DEFAULT_PLAN, DEFAULT_HOME_RULE);
-    expect(block(p2, "returns").items[0].real).toBe(true);
+    const p2 = buildPlan(input({ rows: [a], tasks: [open], marks: [`task:${open.id}`] }), DEFAULT_PLAN, DEFAULT_HOME_RULE);
+    expect(block(p2, "returns").items.map((i) => [i.done, i.real])).toEqual([[true, false]]);
   });
-  test("a task on a lead the user cannot see (or a closed one: not in rows) is left out", () => {
-    const p = buildPlan(input({ rows: [], tasks: [task({ lead_id: "zz", due_at: "2026-11-17T16:00:00Z" })] }), DEFAULT_PLAN, DEFAULT_HOME_RULE);
+  test("a lead shows once: a task on a lead already in an earlier block stays out of Retornos", () => {
+    const fresh = row({ id: "f" });
+    const p = buildPlan(input({ rows: [fresh], tasks: [task({ lead_id: "f", due_at: "2026-11-17T16:00:00Z" })] }), { ...DEFAULT_PLAN, order: ["call", "returns", "email", "review"] }, DEFAULT_HOME_RULE);
+    expect(keys(p, "call")).toEqual(["call:f"]);
+    expect(keys(p, "returns")).toEqual([]);
+  });
+  test("a task on a lead the user cannot see, or on a closed one, is left out", () => {
+    const p = buildPlan(input({ rows: [row({ id: "won", status: "won", contacted: "2026-11-01T00:00:00Z" })], tasks: [task({ lead_id: "zz", due_at: "2026-11-17T16:00:00Z" }), task({ lead_id: "won", due_at: "2026-11-17T16:00:00Z" })] }), DEFAULT_PLAN, DEFAULT_HOME_RULE);
     expect(block(p, "returns").items).toEqual([]);
   });
 });
@@ -205,5 +213,54 @@ describe("the whole plan", () => {
   test("all done: no next item", () => {
     const p = buildPlan(input({ rows, marks: ["call:x", "call:y"] }), { ...DEFAULT_PLAN, hidden: ["review"] }, DEFAULT_HOME_RULE);
     expect([p.done, p.total, p.next]).toEqual([2, 2, null]);
+  });
+});
+
+describe("review fixes", () => {
+  const C = "2026-11-10T12:00:00Z";
+  test("the closer gets no e-mail block (she cannot see the blocked addresses): empty and hidden", () => {
+    const r = row({ id: "np", phone: null, email: "np@ex.example" });
+    const p = buildPlan(input({ rows: [r], sender: false }), DEFAULT_PLAN, DEFAULT_HOME_RULE);
+    expect(block(p, "email")).toMatchObject({ hidden: true, items: [], available: 0 });
+    expect(blocksFor(false)).toEqual(["returns", "call", "review"]);
+    expect(keys(buildPlan(input({ rows: [r] }), DEFAULT_PLAN, DEFAULT_HOME_RULE), "email")).toEqual(["email:np"]);
+  });
+  test("moving among the shown blocks skips the ones not shown", () => {
+    const order = ["returns", "email", "call", "review"] as const;
+    expect(moveBlock(order, "call", -1, blocksFor(false))).toEqual(["call", "email", "returns", "review"]);
+    expect(moveBlock(order, "returns", 1, blocksFor(false))).toEqual(["call", "email", "returns", "review"]);
+  });
+  test("at least one block stays: hiding all four is refused on write and falls back on read", () => {
+    expect(planSchema.safeParse({ ...DEFAULT_PLAN, hidden: ["returns", "call", "email", "review"] }).success).toBe(false);
+    expect(planSchema.safeParse({ ...DEFAULT_PLAN, hidden: ["call", "call"] }).success).toBe(false);
+    expect(parsePlan({ hidden: ["returns", "call", "email", "review"] }).hidden).toEqual([]);
+  });
+  test("Analisar counts take every lead, closed and do-not-call too, like the Leads list the link opens", () => {
+    const rows = [row({ id: "w", status: "won", contacted: C }), row({ id: "d", dnc: true }), row({ id: "n", segment: null, status: "lost", contacted: C })];
+    const r = block(buildPlan(input({ rows }), { ...DEFAULT_PLAN, hidden: ["call"] }, DEFAULT_HOME_RULE), "review").items;
+    expect(r.map((i) => [i.key, i.reason, i.href])).toEqual([
+      ["review:big", { t: "review", kind: "bigNoContact", n: 2 }, "/leads?segment=large&noName=1"],
+      ["review:notype", { t: "review", kind: "noType", n: 1 }, "/leads?segment=none"],
+    ]);
+  });
+  test("an unread blocked list blocks every lead with an e-mail", () => {
+    const rows = [row({ id: "a", email: "x@ex.example" }), row({ id: "b", email: "y@blocked.example" }), row({ id: "c" })];
+    expect(suppressedOf(rows, null)).toEqual(["a", "b"]);
+    expect(suppressedOf(rows, [{ kind: "domain", value: "Blocked.example " }])).toEqual(["b"]);
+  });
+});
+
+describe("New York day around the end of daylight saving (1 Nov 2026)", () => {
+  test("wall times on the 1st: 00:30 is EDT, 03:00 is EST", () => {
+    expect(nyLocalToIso("2026-11-01T00:30")).toBe("2026-11-01T04:30:00.000Z");
+    expect(nyLocalToIso("2026-11-01T03:00")).toBe("2026-11-01T08:00:00.000Z");
+    expect(nyLocalToIso("2026-03-08T02:30")).toBeNull(); // the spring jump: that time does not exist
+  });
+  test("on the 2nd, yesterday is the whole 25-hour 1st, and a task due on the 31st is 2 days late", () => {
+    const now = "2026-11-02T15:00:00.000Z";
+    const rows = [row({ id: "early", seen: "2026-11-01T04:30:00Z" }), row({ id: "late", seen: "2026-11-02T04:59:00Z" }), row({ id: "today", seen: "2026-11-02T05:00:00Z" }), row({ id: "before", seen: "2026-11-01T03:59:00Z" })];
+    const p = buildPlan(input({ now, rows, tasks: [task({ lead_id: "early", due_at: "2026-10-31T16:00:00Z" })] }), { ...DEFAULT_PLAN, hidden: ["call"] }, DEFAULT_HOME_RULE);
+    expect(block(p, "review").items.find((i) => i.key.startsWith("review:new"))).toMatchObject({ key: "review:new:2026-11-01", reason: { t: "review", kind: "newYesterday", n: 2 } });
+    expect(block(p, "returns").items[0].reason).toEqual({ t: "late", days: 2 });
   });
 });

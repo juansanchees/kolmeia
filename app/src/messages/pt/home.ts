@@ -114,6 +114,7 @@ export const home = {
     more: "Mais",
     preview: "Prévia: {n} entram nessa parte agora.",
     previewOne: "Prévia: 1 entra nessa parte agora.",
+    noneShown: "Deixe pelo menos uma parte no plano de hoje.",
     reset: "Voltar ao padrão",
     cancel: "Cancelar",
     save: "Salvar meu dia",

@@ -27,7 +27,8 @@ export const SILENT_DAYS = 7;
 const count = z.number().int().min(COUNT_MIN).max(COUNT_MAX);
 const parts = {
   order: z.array(z.enum(BLOCKS)).length(BLOCKS.length).refine((o) => new Set(o).size === BLOCKS.length),
-  hidden: z.array(z.enum(BLOCKS)).max(BLOCKS.length),
+  // at least one block stays on the plan
+  hidden: z.array(z.enum(BLOCKS)).max(BLOCKS.length - 1).refine((h) => new Set(h).size === h.length),
   counts: z.object({ returns: count, call: count, email: count, review: count }),
   returns: z.object({ late: z.boolean(), today: z.boolean(), tomorrow: z.boolean(), team: z.boolean() }),
   email: z.object({
@@ -65,11 +66,18 @@ export function parsePlan(raw: unknown): DayPlan {
   return { order: one("order"), hidden: one("hidden"), counts: one("counts"), returns: one("returns"), email: one("email"), review: one("review") };
 }
 
-/** A block one step up (-1) or down (+1) in the order; out of range = unchanged. */
-export function moveBlock(order: readonly BlockId[], id: BlockId, dir: -1 | 1): BlockId[] {
+/** The blocks a user can have: the closer gets no "Mandar e-mail" (she cannot see the blocked addresses, so it would not be safe). */
+export const blocksFor = (sender: boolean): readonly BlockId[] => (sender ? BLOCKS : BLOCKS.filter((b) => b !== "email"));
+
+/**
+ * A block one step up (-1) or down (+1) among the `shown` blocks (default: all), swapping with its shown neighbour;
+ * blocks not shown keep their place. Out of range = unchanged.
+ */
+export function moveBlock(order: readonly BlockId[], id: BlockId, dir: -1 | 1, shown: readonly BlockId[] = BLOCKS): BlockId[] {
   const o = [...order];
   const i = o.indexOf(id);
-  const j = i + dir;
+  let j = i + dir;
+  while (j >= 0 && j < o.length && !shown.includes(o[j])) j += dir;
   if (i < 0 || j < 0 || j >= o.length) return o;
   [o[i], o[j]] = [o[j], o[i]];
   return o;
@@ -77,18 +85,18 @@ export function moveBlock(order: readonly BlockId[], id: BlockId, dir: -1 | 1): 
 
 // ---------------------------------------------------------------- the data the builder reads
 
-export type PlanTask = Pick<TaskRow, "id" | "lead_id" | "kind" | "title" | "due_at" | "done_at" | "assignee_id"> & { created_at: string };
-/** One lead's calls: how many went unanswered (no answer / voicemail), the newest outcome and time, and whether the user called today. */
-export type PlanCalls = { noAnswer: number; last: CallOutcome | null; lastAt: string | null; byMeToday: boolean };
+export type PlanTask = Pick<TaskRow, "id" | "lead_id" | "kind" | "title" | "due_at" | "done_at" | "assignee_id">;
+/** One lead's calls: how many went unanswered (no answer / voicemail), the newest outcome, and whether the user called today. */
+export type PlanCalls = { noAnswer: number; last: CallOutcome | null; byMeToday: boolean };
 
 export type PlanInput = {
   /** ISO instant; the New York day of it is "today". */
   now: string;
   userId: string;
   sender: boolean;
-  /** The leads the user sees, closed ones left out (RLS: the closer only hers). */
+  /** Every lead the user sees, closed ones too (RLS: the closer only hers); the blocks leave closed ones out, the "Analisar" counts match the Leads list. */
   rows: HomeRow[];
-  /** Open tasks and tasks done today. */
+  /** Open tasks and tasks done today, due before the end of tomorrow, plus open meetings ahead. */
   tasks: PlanTask[];
   calls: Record<string, PlanCalls>;
   /** Leads a real e-mail went to today. */
@@ -151,10 +159,12 @@ export function buildPlan(input: PlanInput, plan: DayPlan, rule: HomeRule): Buil
   const marks = new Set(input.marks);
   const emailed = new Set(input.emailedToday);
   const suppressed = new Set(input.suppressed);
-  const byId = new Map(input.rows.map((r) => [r.lead.id, r]));
+  const open = input.rows.filter((r) => stageOf(r.lead) !== "closed");
+  const byId = new Map(open.map((r) => [r.lead.id, r]));
   const taken = new Set<string>();
-  const hidden = new Set(plan.hidden);
-  const calls = (id: string): PlanCalls => input.calls[id] ?? { noAnswer: 0, last: null, lastAt: null, byMeToday: false };
+  const allowed = blocksFor(input.sender);
+  const hidden = new Set([...plan.hidden, ...BLOCKS.filter((b) => !allowed.includes(b))]);
+  const calls = (id: string): PlanCalls => input.calls[id] ?? { noAnswer: 0, last: null, byMeToday: false };
   const free = (r: HomeRow) => !taken.has(r.lead.id);
 
   const leadItem = (block: BlockId, key: string, r: HomeRow, action: ItemAction, reason: Reason, real: boolean, extra: Partial<PlanItem> = {}): PlanItem => ({
@@ -169,7 +179,7 @@ export function buildPlan(input: PlanInput, plan: DayPlan, rule: HomeRule): Buil
       // "mine" = assigned to me; a closer also sees every task on the leads she owns, whoever it is assigned to
       const mine = !(c.team && input.sender);
       const picked = input.tasks
-        .filter((x) => RETURN_KINDS.includes(x.kind) && byId.has(x.lead_id) && (!mine || x.assignee_id === input.userId || (!input.sender && byId.get(x.lead_id)?.lead.owner_id === input.userId)))
+        .filter((x) => RETURN_KINDS.includes(x.kind) && byId.has(x.lead_id) && free(byId.get(x.lead_id)!) && (!mine || x.assignee_id === input.userId || (!input.sender && byId.get(x.lead_id)?.lead.owner_id === input.userId)))
         .map((x) => {
           const due = Date.parse(x.due_at);
           const when: "late" | "today" | "tomorrow" | null = due < startToday ? "late" : due < endToday ? "today" : due < endTomorrow ? "tomorrow" : null;
@@ -179,16 +189,13 @@ export function buildPlan(input: PlanInput, plan: DayPlan, rule: HomeRule): Buil
         .sort((a, b) => Date.parse(a.x.due_at) - Date.parse(b.x.due_at) || a.x.id.localeCompare(b.x.id));
       const items = picked.slice(0, n).map(({ x, when }) => {
         const r = byId.get(x.lead_id)!;
-        const k = calls(x.lead_id);
-        // a call on the lead after the task was written answers it, like the 0027 trigger does for call follow-ups
-        const calledAfter = k.lastAt !== null && nyDay(new Date(k.lastAt)) === today && Date.parse(k.lastAt) > Date.parse(x.created_at);
         const reason: Reason = when === "late" ? { t: "late", days: Math.max(1, dayNum(today) - dayNum(nyDay(new Date(x.due_at)))) } : { t: when, at: nyTime(x.due_at) };
-        return leadItem("returns", `task:${x.id}`, r, x.kind === "email" ? "email" : "call", reason, x.done_at !== null || calledAfter, { note: x.title, hot: when !== "tomorrow" });
+        return leadItem("returns", `task:${x.id}`, r, x.kind === "email" ? "email" : "call", reason, x.done_at !== null, { note: x.title, hot: when !== "tomorrow" });
       });
       return { items, available: picked.length };
     },
     call: (n) => {
-      const base = input.rows.filter(free);
+      const base = input.rows.filter(free); // closed ones too: a lead lost on today's call still counts as called
       const open = homeMatches(base, rule);
       // called today for the first time: they were in this morning's queue, so they stay on the plan, done
       const firstToday = base.filter((r) => calls(r.lead.id).byMeToday && r.lead.first_contacted_at && nyDay(new Date(r.lead.first_contacted_at)) === today);
@@ -202,10 +209,11 @@ export function buildPlan(input: PlanInput, plan: DayPlan, rule: HomeRule): Buil
       return { items: items.slice(0, n), available: items.length, rest: items.slice(n) };
     },
     email: (n) => {
+      if (!input.sender) return { items: [], available: 0 };
       const c = plan.email;
       const RANK = { noAnswer: 0, noPhone: 1, silent: 2 } as const;
       const picked: { r: HomeRow; reason: Reason }[] = [];
-      for (const r of input.rows) {
+      for (const r of open) {
         if (!free(r) || !r.display.email?.trim() || r.lead.do_not_call || r.emailQuality === "invalid" || suppressed.has(r.lead.id)) continue;
         if (c.segments.length > 0 && !c.segments.includes(r.segment ?? "none")) continue;
         const stage = stageOf(r.lead);
@@ -225,7 +233,6 @@ export function buildPlan(input: PlanInput, plan: DayPlan, rule: HomeRule): Buil
     },
     review: (n) => {
       const c = plan.review;
-      const open = input.rows.filter((r) => stageOf(r.lead) !== "closed");
       const meetingAhead = new Set(input.tasks.filter((x) => x.kind === "meeting" && !x.done_at && Date.parse(x.due_at) >= startToday).map((x) => x.lead_id));
       const items: PlanItem[] = [];
       const count = (kind: ReviewKind, key: string, rows: HomeRow[], href: string) => {
@@ -237,14 +244,15 @@ export function buildPlan(input: PlanInput, plan: DayPlan, rule: HomeRule): Buil
           items.push(leadItem("review", `review:meet:${r.lead.id}`, r, "meeting", { t: "review", kind: "meetingNoDate", n: 1 }, false, { hot: true, href: null }));
         }
       }
+      // the counts take every lead, like the Leads list the link opens (stage "Todos", default filters)
       if (c.newYesterday) {
-        count("newYesterday", `review:new:${nyDay(new Date(startYesterday))}`, open.filter((r) => {
+        count("newYesterday", `review:new:${nyDay(new Date(startYesterday))}`, input.rows.filter((r) => {
           const ms = Date.parse(r.lead.first_seen_at);
           return ms >= startYesterday && ms < startToday;
         }), "/leads?entered=yesterday");
       }
-      if (c.bigNoContact) count("bigNoContact", "review:big", open.filter((r) => r.segment === "large" && !r.display.contactName?.trim() && !r.lead.do_not_call), "/leads?segment=large&noName=1");
-      if (c.noType) count("noType", "review:notype", open.filter((r) => !r.segment), "/leads?segment=none");
+      if (c.bigNoContact) count("bigNoContact", "review:big", input.rows.filter((r) => r.segment === "large" && !r.display.contactName?.trim()), "/leads?segment=large&noName=1");
+      if (c.noType) count("noType", "review:notype", input.rows.filter((r) => !r.segment), "/leads?segment=none");
       return { items: items.slice(0, n), available: items.length };
     },
   };

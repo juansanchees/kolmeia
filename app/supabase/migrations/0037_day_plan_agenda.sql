@@ -5,9 +5,15 @@
 --   2 day_plan_marks: the items a user ticks "feito" by hand on the plan, per New York day. Own rows only.
 --   3 tasks: kind 'meeting' (Reunião); members create tasks ("Marcar retorno ou reunião") on leads they can see:
 --       owner/sdr on any lead of the workspace, assigned to any member (or nobody); the closer only on leads assigned
---       to her, and only for herself. Created rows can set workspace_id, lead_id, kind, title, due_at, assignee_id;
---       done_at / created_from_call_id stay out of reach, updates keep the 0027 columns (done_at, due_at).
--- Depends on 0001-0036. Re-runnable.
+--       to her, and only for herself. A sender may give a task to a closer only on a lead assigned to that closer
+--       (she would not see it otherwise). Created rows can set workspace_id, lead_id, kind, title, due_at,
+--       assignee_id; done_at / created_from_call_id stay out of reach, updates keep the 0027 columns (done_at, due_at).
+--   4 plan_call_stats(ws, since): one row per lead with calls: unanswered calls (no answer / voicemail), the newest
+--       outcome, and whether the caller called it since `since` (the start of the New York day). Invoker: RLS on
+--       call_logs decides (the closer gets her leads only). The plan reads this instead of every call row.
+-- Depends on 0001-0036. Re-runnable. One transaction: all or nothing.
+
+begin;
 
 -- ---------------------------------------------------------------- 1 the plan
 alter table public.home_rules add column if not exists plan jsonb not null default '{}'::jsonb;
@@ -56,8 +62,36 @@ create policy tasks_insert on public.tasks
       and exists (select 1 from public.leads l where l.id = tasks.lead_id and l.workspace_id = tasks.workspace_id)
       and (
         tasks.assignee_id is null
-        or exists (select 1 from public.workspace_members m where m.workspace_id = tasks.workspace_id and m.user_id = tasks.assignee_id)
+        or exists (
+          select 1 from public.workspace_members m
+           where m.workspace_id = tasks.workspace_id and m.user_id = tasks.assignee_id
+             -- a closer only sees the leads assigned to her
+             and (m.role <> 'closer'
+                  or exists (select 1 from public.leads o where o.id = tasks.lead_id and o.owner_id = tasks.assignee_id))
+        )
       )
     )
     or (public.lead_visible_to_assignee(lead_id, workspace_id) and tasks.assignee_id = auth.uid())
   );
+
+-- ---------------------------------------------------------------- 4 call totals for the plan
+create or replace function public.plan_call_stats(p_ws uuid, p_since timestamptz)
+returns table (lead_id uuid, no_answer integer, last_outcome text, by_me_since boolean)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select c.lead_id,
+         (count(*) filter (where c.outcome in ('no_answer', 'voicemail')))::integer,
+         (array_agg(c.outcome order by c.called_at desc, c.created_at desc, c.id desc))[1],
+         coalesce(bool_or(c.called_by = auth.uid() and c.called_at >= p_since), false)
+    from public.call_logs c
+   where c.workspace_id = p_ws
+   group by c.lead_id
+   order by c.lead_id;
+$$;
+revoke all on function public.plan_call_stats(uuid, timestamptz) from public, anon;
+grant execute on function public.plan_call_stats(uuid, timestamptz) to authenticated;
+
+commit;

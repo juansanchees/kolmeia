@@ -36,6 +36,7 @@ export const tasks = {
     needLead: "Choose the company.",
     invalid: "Check the fields.",
     badDate: "Pick a day between yesterday and 2 years from now.",
+    badTime: "That time does not exist on that day (the clock jumps for daylight saving). Pick another.",
     failed: "Could not save. Try again.",
   },
 } satisfies Widen<typeof pt>;

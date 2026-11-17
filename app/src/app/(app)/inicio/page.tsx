@@ -1,7 +1,7 @@
 import { DayPlan } from "@/components/home/DayPlan";
 import { HomeTabs } from "@/components/home/HomeTabs";
 import type { PlanInput } from "@/lib/home/plan";
-import { loadHomeSetup, loadPlanData } from "@/lib/home/queries";
+import { loadHomeSetup, loadPlanData, suppressedOf } from "@/lib/home/queries";
 import type { HomeRow } from "@/lib/home/rule";
 import { dateLineOf } from "@/lib/home/view";
 import { stageOf } from "@/lib/leads/classify";
@@ -24,15 +24,16 @@ export default async function HomePage() {
   const sender = isSender(workspace.role);
   const now = new Date();
 
-  const [items, setup, people] = await Promise.all([
+  const [items, setup, people, data] = await Promise.all([
     listLeads(supabase, workspace.id),
     loadHomeSetup(supabase, workspace.id, user.id),
     sender ? supabase.rpc("list_workspace_people", { p_ws: workspace.id }).then((r) => (r.data ?? []) as Person[]) : null,
+    loadPlanData(supabase, workspace.id, user.id, sender, now),
   ]);
-  // closed leads never enter the plan; the rest go to the browser slim (the setup dialog previews with the same builder)
-  const open = items.filter((i) => stageOf(i.lead) !== "closed");
-  const origins = sender ? await originListsOf(supabase, open.map((i) => i.lead.id)) : new Map();
-  const rows: HomeRow[] = open.map((i) => {
+  // every lead goes to the browser slim: the blocks skip closed ones, the "Analisar" counts match the Leads list, and
+  // the setup dialog previews with the same builder
+  const origins = sender ? await originListsOf(supabase, items.map((i) => i.lead.id)) : new Map();
+  const rows: HomeRow[] = items.map((i) => {
     const r = toTableRow(i, origins.get(i.lead.id) ?? []);
     return {
       ...r,
@@ -41,8 +42,8 @@ export default async function HomePage() {
       lead: { ...r.lead, do_not_call: i.lead.do_not_call },
     };
   });
-  const data = await loadPlanData(supabase, workspace.id, user.id, rows, now);
-  const input: PlanInput = { now: now.toISOString(), userId: user.id, sender, rows, ...data };
+  const { blocked, ...rest } = data;
+  const input: PlanInput = { now: now.toISOString(), userId: user.id, sender, rows, ...rest, suppressed: suppressedOf(rows, blocked) };
 
   // what the "Ligar agora" settings can pick from: only leads that could ever be on that list
   const candidates = rows.filter((r) => stageOf(r.lead) === "new" && !r.lead.do_not_call);
