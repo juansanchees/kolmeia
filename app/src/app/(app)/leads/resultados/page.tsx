@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace, getUser } from "@/lib/workspace";
 import { getT } from "@/lib/i18n/server";
 
-const when = (iso: string, intl: string) => new Date(iso).toLocaleString(intl, { timeZone: "America/New_York", weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const when = (iso: string, intl: string) => new Date(iso).toLocaleString(intl, { timeZone: "America/New_York", weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
 // Leads by the result of their last registered contact. Read as the user (RLS: the closer sees only her own leads and calls).
 export default async function ResultsPage({ searchParams }: { searchParams: Promise<{ [k: string]: string | string[] | undefined }> }) {

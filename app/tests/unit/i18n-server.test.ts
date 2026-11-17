@@ -29,8 +29,8 @@ describe("setLocaleAction (PT | EN switch)", () => {
     await setLocaleAction("en");
     await setLocaleAction("<script>");
     expect(jar.set).toEqual([
-      ["kolmeia_locale", "en", { path: "/", maxAge: 31_536_000, sameSite: "lax" }],
-      ["kolmeia_locale", "pt", { path: "/", maxAge: 31_536_000, sameSite: "lax" }],
+      ["kolmeia_locale", "en", { path: "/", maxAge: 31_536_000, sameSite: "lax", secure: process.env.NODE_ENV === "production" }],
+      ["kolmeia_locale", "pt", { path: "/", maxAge: 31_536_000, sameSite: "lax", secure: process.env.NODE_ENV === "production" }],
     ]);
   });
 });

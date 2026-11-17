@@ -24,4 +24,4 @@ export const ptMessages: Messages = pt;
 export const htmlLang = (locale: Locale) => (locale === "en" ? "en" : "pt-BR");
 
 /** The kolmeia_locale cookie: a year, whole site, sent on normal navigation. */
-export const LOCALE_COOKIE_OPTIONS = { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" } as const;
+export const LOCALE_COOKIE_OPTIONS = { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax", secure: process.env.NODE_ENV === "production" } as const;

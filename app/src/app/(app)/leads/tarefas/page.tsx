@@ -9,7 +9,7 @@ import { getT } from "@/lib/i18n/server";
 import { Paged } from "@/components/Pager";
 
 const when = (iso: string, intl: string) =>
-  new Date(iso).toLocaleString(intl, { timeZone: "America/New_York", weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  new Date(iso).toLocaleString(intl, { timeZone: "America/New_York", weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
 // Open tasks by New York day: Hoje / Atrasadas / Próximas. Read as the user (RLS: the closer sees those of her leads).
 export default async function TasksPage({ searchParams }: { searchParams: Promise<{ [k: string]: string | string[] | undefined }> }) {

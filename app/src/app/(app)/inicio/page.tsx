@@ -19,7 +19,7 @@ import { getT } from "@/lib/i18n/server";
 const label = "!font-mono text-sm font-medium uppercase tracking-wide text-muted";
 const ghost = "inline-flex min-h-12 items-center border border-edge bg-surface px-5 font-medium text-ink no-underline hover:border-ink";
 const num = "font-display text-[44px] font-extrabold leading-none";
-const day = (iso: string, intl: string) => new Date(iso).toLocaleDateString(intl, { timeZone: "America/New_York", day: "2-digit", month: "2-digit" });
+const day = (iso: string, intl: string) => new Date(iso).toLocaleDateString(intl, { timeZone: "America/New_York", day: "2-digit", month: "2-digit", hourCycle: "h23" });
 
 function Has({ on, yes, no, children }: { on: boolean; yes: string; no: string; children: React.ReactNode }) {
   return (
