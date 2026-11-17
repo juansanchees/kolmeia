@@ -3,7 +3,7 @@ import { t } from "@/messages/pt";
 import { en } from "@/messages/en";
 import { activeHref, leadsCards, leadsMoreLinks } from "@/lib/nav";
 import { DEFAULT_LEAD_FILTERS, type LeadFilters } from "@/lib/leads/view";
-import { clearAllPatch, extraFilterKeys, pickedIn, SHORTCUT_CHIPS, summaryOf } from "@/lib/leads/filter-ui";
+import { clearAllPatch, removableChipKeys, pickedIn, SHORTCUT_CHIPS, summaryOf } from "@/lib/leads/filter-ui";
 
 const f = (p: Partial<LeadFilters>): LeadFilters => ({ ...DEFAULT_LEAD_FILTERS, ...p });
 const chip = (id: string) => SHORTCUT_CHIPS.find((c) => c.id === id)!;
@@ -17,13 +17,17 @@ describe("summary sentence", () => {
     expect(summaryOf(DEFAULT_LEAD_FILTERS, 1, [], t)).toBe("1 empresa de todos os tamanhos · em qualquer etapa");
     expect(summaryOf(f({ segment: "none" }), 2, [], t)).toBe("2 empresas sem tipo · em qualquer etapa");
   });
+  it("an older last contact excludes the never-contacted, and 7 days is not a calendar week", () => {
+    expect(summaryOf(f({ lastTouch: "30" }), 2, [], t)).toContain("último contato há mais de 30 dias");
+    expect(summaryOf(f({ lastTouch: "30", entered: "7" }), 2, [], en)).toContain("last contacted over 30 days ago · added in the last 7 days");
+  });
   it("reads the same in English", () => {
     const s = summaryOf(f({ segment: "large", stage: "new", hasPhone: true, cities: ["Cambridge"] }), 93, [], en);
     expect(s).toBe("93 companies of size Large · at stage New · with a phone · in Cambridge");
   });
   it("covers panel filters, search and AI-only filters", () => {
     const s = summaryOf(f({ q: "acme", lastTouch: "never", entered: "7", nameQ: "development", nameNot: true, temperature: "none", agent: "a1", minLevel: 2 }), 5, [["a1", "Caçador X"]], t);
-    for (const p of ['buscando "acme"', "nunca contatadas", "que entraram nesta semana", 'sem "development" no nome', "sem pesquisa", "Agente: Caçador X", "Dados mínimos: 2"]) expect(s).toContain(p);
+    for (const p of ['buscando "acme"', "nunca contatadas", "que entraram nos últimos 7 dias", 'sem "development" no nome', "sem pesquisa", "Agente: Caçador X", "Dados mínimos: 2"]) expect(s).toContain(p);
   });
 });
 
@@ -45,13 +49,19 @@ describe("shortcut chips mirror the filters", () => {
 });
 
 describe("panel helpers", () => {
-  it("counts picked options per category and keeps AI-only filters as extras", () => {
+  it("counts picked options per category", () => {
     const x = f({ cities: ["A", "B"], hasEmail: true, hasPhone: true, minPermitUsd: 10, entered: "today" });
     expect(pickedIn("city", x)).toBe(2);
     expect(pickedIn("contact", x)).toBe(2);
     expect(pickedIn("entered", x)).toBe(1);
     expect(pickedIn("agent", x)).toBe(0);
-    expect(extraFilterKeys(x)).toEqual(["minPermitUsd"]);
+  });
+  it("every active filter is removable, except the ones a shortcut chip already shows on", () => {
+    expect([...removableChipKeys(f({ cities: ["A"], lists: ["L"], hasPhone: true, lastTouch: "never", entered: "30", minPermitUsd: 10 }))].sort()).toEqual(["cities", "entered", "lists", "minPermitUsd"]);
+    expect(removableChipKeys(f({ lastTouch: "30", entered: "7" }))).toEqual(["lastTouch"]);
+  });
+  it("Limpar tudo also resets the name not-contains switch", () => {
+    expect(clearAllPatch(f({ nameNot: true })).nameNot).toBe(false);
   });
   it("Limpar tudo resets filters, search, size and stage but keeps the AI column", () => {
     const x = f({ q: "a", segment: "large", stage: "new", cities: ["A"], nameQ: "b", nameNot: true, aiQuestion: "q1" });

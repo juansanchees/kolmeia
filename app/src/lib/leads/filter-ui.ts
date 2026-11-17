@@ -5,15 +5,15 @@ import { fill, type Messages } from "@/lib/i18n";
 import { activeFilterKeys, clearPatch, originKeyLabel, type LeadFilters } from "./view";
 
 export type ShortcutId = "hasPhone" | "hasEmail" | "hasContactName" | "never" | "week";
-type ShortcutChip = { id: ShortcutId; on: (f: LeadFilters) => boolean; patch: (on: boolean) => Partial<LeadFilters> };
+type ShortcutChip = { id: ShortcutId; key: keyof LeadFilters; on: (f: LeadFilters) => boolean; patch: (on: boolean) => Partial<LeadFilters> };
 
 /** "Atalhos": each chip is one existing filter value; its state is read from the filters, so the panel and the chip agree. */
 export const SHORTCUT_CHIPS: readonly ShortcutChip[] = [
-  { id: "hasPhone", on: (f) => f.hasPhone, patch: (on) => ({ hasPhone: on }) },
-  { id: "hasEmail", on: (f) => f.hasEmail, patch: (on) => ({ hasEmail: on }) },
-  { id: "hasContactName", on: (f) => f.hasContactName, patch: (on) => ({ hasContactName: on }) },
-  { id: "never", on: (f) => f.lastTouch === "never", patch: (on) => ({ lastTouch: on ? "never" : "all" }) },
-  { id: "week", on: (f) => f.entered === "7", patch: (on) => ({ entered: on ? "7" : "all" }) },
+  { id: "hasPhone", key: "hasPhone", on: (f) => f.hasPhone, patch: (on) => ({ hasPhone: on }) },
+  { id: "hasEmail", key: "hasEmail", on: (f) => f.hasEmail, patch: (on) => ({ hasEmail: on }) },
+  { id: "hasContactName", key: "hasContactName", on: (f) => f.hasContactName, patch: (on) => ({ hasContactName: on }) },
+  { id: "never", key: "lastTouch", on: (f) => f.lastTouch === "never", patch: (on) => ({ lastTouch: on ? "never" : "all" }) },
+  { id: "week", key: "entered", on: (f) => f.entered === "7", patch: (on) => ({ entered: on ? "7" : "all" }) },
 ];
 
 /** The "Mais filtros" categories, in panel order, and the filter keys each one sets. */
@@ -47,11 +47,11 @@ const PANEL_KEYS = new Set<keyof LeadFilters>(Object.values(PANEL_CATEGORIES).fl
 /** Active filters the panel controls ("Limpar todos os filtros" inside it). */
 export const panelFilterKeys = (f: LeadFilters) => activeFilterKeys(f).filter((k) => PANEL_KEYS.has(k));
 
-/** Active filters the panel has no control for (set by AI search, the AI question or a shortcut from Início): shown as removable chips. */
-export const extraFilterKeys = (f: LeadFilters) => activeFilterKeys(f).filter((k) => !PANEL_KEYS.has(k));
+/** Every active filter gets a removable chip, except one whose shortcut chip is already on (that chip turns it off). */
+export const removableChipKeys = (f: LeadFilters) => activeFilterKeys(f).filter((k) => !SHORTCUT_CHIPS.some((c) => c.key === k && c.on(f)));
 
 /** "Limpar tudo": every filter, the search, size and stage; the AI column the person picked stays. */
-export const clearAllPatch = (f: LeadFilters): Partial<LeadFilters> => clearPatch([...activeFilterKeys(f), "q", "segment", "stage"]);
+export const clearAllPatch = (f: LeadFilters): Partial<LeadFilters> => clearPatch([...activeFilterKeys(f), "q", "segment", "stage", "nameNot"]);
 
 /** The value part of an active-filter chip ("" = the label says it all). */
 export function chipValue(k: keyof LeadFilters, f: LeadFilters, agents: [string, string][], t: Messages): string {
@@ -96,10 +96,13 @@ function phraseOf(k: keyof LeadFilters, f: LeadFilters, agents: [string, string]
   }
 }
 
+/** "93 empresas" / "1 empresa". */
+export const countOf = (n: number, t: Messages) => (n === 1 ? t.leads.summary.one : fill(t.leads.summary.many, { n: n.toLocaleString(t.intl) }));
+
 /** "93 empresas de tamanho Grande · na etapa Novo · com telefone · em Cambridge": every active filter, in words. */
 export function summaryOf(f: LeadFilters, n: number, agents: [string, string][], t: Messages): string {
   const S = t.leads.summary;
-  const count = n === 1 ? S.one : fill(S.many, { n: n.toLocaleString(t.intl) });
+  const count = countOf(n, t);
   const size = f.segment === "all" ? S.sizeAll : f.segment === "none" ? S.sizeNone : fill(S.size, { v: t.leads.segments[f.segment] });
   const parts = [`${count} ${size}`, f.stage === "all" ? S.stageAll : fill(S.stage, { v: t.leads.stages[f.stage] })];
   if (f.q.trim()) parts.push(fill(S.q, { v: f.q.trim() }));
