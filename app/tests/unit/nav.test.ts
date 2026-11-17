@@ -59,8 +59,9 @@ describe("F1 nav", () => {
 });
 
 describe("F1 shell", () => {
-  test("the menu has exactly the 3 areas, in order", () => {
+  test("the menu has Início first, then the 3 areas, in order", () => {
     expect(MAIN_AREAS.map((i) => [i.label, i.href])).toEqual([
+      ["Início", "/inicio"],
       ["Agentes", "/agentes"],
       ["Leads", "/leads"],
       ["Campanhas de e-mail", "/campanhas"],
@@ -117,8 +118,8 @@ describe("settings pages for senders only", () => {
 });
 
 describe("F2 roles", () => {
-  test("J2 the closer's menu is LEADS only; owner and sdr see the 3 areas", () => {
-    expect(areasFor("closer").map((i) => i.href)).toEqual(["/leads"]);
+  test("J2 the closer's menu is Início and LEADS only; owner and sdr see every area", () => {
+    expect(areasFor("closer").map((i) => i.href)).toEqual(["/inicio", "/leads"]);
     expect(areasFor("owner")).toEqual(MAIN_AREAS);
     expect(areasFor("sdr")).toEqual(MAIN_AREAS);
     expect([isSender("owner"), isSender("sdr"), isSender("closer")]).toEqual([true, true, false]);

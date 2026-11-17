@@ -61,6 +61,7 @@ export async function importBatchAction(importId: string, rows: unknown): Promis
   try {
     const r = await importRows(s.db, importId, checked);
     revalidatePath("/leads", "layout");
+    revalidatePath("/inicio");
     return { ok: true, ...r };
   } catch {
     return generic;
@@ -73,6 +74,7 @@ export async function finishImportAction(importId: string): Promise<{ ok: true }
   try {
     await finishImport(s.db, importId);
     revalidatePath("/leads", "layout");
+    revalidatePath("/inicio");
     return { ok: true };
   } catch {
     return generic;
@@ -85,6 +87,7 @@ export async function undoImportAction(importId: string): Promise<{ ok: true; de
   try {
     const r = await undoImport(s.db, importId);
     revalidatePath("/leads", "layout");
+    revalidatePath("/inicio");
     return { ok: true, ...r };
   } catch {
     return generic;

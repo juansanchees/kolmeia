@@ -52,13 +52,16 @@ export const CAMPAIGN_TABS: readonly NavItem[] = [
 
 export const SETTINGS_HREF = "/configuracoes";
 
+export const HOME_HREF = "/inicio";
+
 export const MAIN_AREAS: readonly NavItem[] = [
+  { href: HOME_HREF, label: t.home.nav },
   { href: "/agentes", label: t.nav.agents },
   { href: "/leads", label: t.nav.leads },
   { href: "/campanhas", label: t.nav.campaigns },
 ];
 
-/** The closer sees only LEADS; owner and sdr see every area. */
+/** The closer sees only Início and LEADS; owner and sdr see every area. */
 export function areasFor(role: Role): readonly NavItem[] {
-  return role === "closer" ? MAIN_AREAS.filter((a) => a.href === "/leads") : MAIN_AREAS;
+  return role === "closer" ? MAIN_AREAS.filter((a) => a.href === HOME_HREF || a.href === "/leads") : MAIN_AREAS;
 }

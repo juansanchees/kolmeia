@@ -12,7 +12,7 @@ export function effectiveTemperature(level: number, temperature: Temperature | n
   return level >= ACTIVE_WORK_LEVEL && temperature !== "very_hot" ? "hot" : temperature;
 }
 
-const TEMP_SCORE: Record<string, number> = { very_hot: 4, hot: 3, warm: 2, cold: 1 };
+export const TEMP_SCORE: Record<string, number> = { very_hot: 4, hot: 3, warm: 2, cold: 1 };
 
 /**
  * "Fila do dia": higher = call first. Weights are lexicographic (phone > temperature > fits the approved profile >

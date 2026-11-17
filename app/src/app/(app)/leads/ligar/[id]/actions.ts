@@ -46,5 +46,6 @@ export async function recordContactAction(input: Input): Promise<FormState & { s
   revalidatePath("/leads/ligar");
   revalidatePath("/leads");
   revalidatePath("/leads/tarefas"); // "Ligar depois" became a task (0027)
+  revalidatePath("/inicio"); // the called lead leaves "Ligar primeiro" and the next one comes in
   return { status: "success", status_after: data as LeadStatus, next: await nextInList(supabase, user.id, d.leadId) };
 }

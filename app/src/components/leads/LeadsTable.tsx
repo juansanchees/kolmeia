@@ -131,12 +131,14 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
   const [searchKey, setSearchKey] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [openPanel, setOpenPanel] = useState<Panel | null>(null);
+  const search = useSearchParams();
+  // The Home's "Quem você quer achar hoje?" sends ?ia=<text>: open "Busca com IA" with it (senders only, like the menu item)
+  const iaText = canCreate ? search.get("ia")?.slice(0, 200) ?? null : null;
+  const [openPanel, setOpenPanel] = useState<Panel | null>(iaText === null ? null : "nl");
   const [csvError, setCsvError] = useState<string | null>(null);
   // the last bulk result (status / type); kept here because a success unmounts the selection bar
   const [notice, setNotice] = useState<BulkNotice | null>(null);
   const router = useRouter();
-  const search = useSearchParams();
   // The lead opens as a modal over this list (?lead=): same page, so filters/pager/scroll stay.
   const leadHref = (id: string) => `?${new URLSearchParams({ ...Object.fromEntries(search), lead: id })}`;
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -365,7 +367,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
 
       {showFilters && <FacetPanel facets={facets} f={f} set={set} agents={agents} hasOneOff={hasOneOff} />}
 
-      {canCreate && openPanel === "nl" && <NlSearch cities={cities} onApply={(nl) => set(nl)} />}
+      {canCreate && openPanel === "nl" && <NlSearch cities={cities} initialText={iaText ?? ""} onApply={(nl) => set(nl)} />}
       {canCreate && openPanel === "ai" && (
         <AiQuestionPanel
           questions={questions}

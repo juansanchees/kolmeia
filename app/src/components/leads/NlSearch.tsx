@@ -30,8 +30,8 @@ export function nlChips(f: NlFilters): string[] {
  * which replaces the rules' result. Each keystroke aborts the previous AI request. Nothing is applied until
  * "Aplicar filtros".
  */
-export function NlSearch({ cities, onApply }: { cities: string[]; onApply: (f: NlFilters) => void }) {
-  const [text, setText] = useState("");
+export function NlSearch({ cities, onApply, initialText = "" }: { cities: string[]; onApply: (f: NlFilters) => void; initialText?: string }) {
+  const [text, setText] = useState(initialText);
   const [found, setFound] = useState<NlFilters | null>(null);
   const [thinking, setThinking] = useState(false);
   const [aiOff, setAiOff] = useState(false);

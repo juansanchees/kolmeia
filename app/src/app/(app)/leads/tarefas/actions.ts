@@ -25,5 +25,6 @@ export async function taskAction(id: string, what: "done" | "postpone"): Promise
   const { data, error } = await supabase.from("tasks").update(patch).eq("id", p.data.id).select("id");
   if (error || !data?.length) return { ok: false, message: t.tasks.failed };
   revalidatePath("/leads/tarefas");
+  revalidatePath("/inicio");
   return { ok: true };
 }

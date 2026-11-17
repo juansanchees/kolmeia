@@ -44,6 +44,7 @@ export async function handOffLeadAction(
   });
   if (error) return fail(error.code === "55000" ? H.leadClosed : error.code === "22023" ? H.closerLeft : H.failed);
   revalidatePath("/leads", "layout");
+  revalidatePath("/inicio");
   return ok(H.statusDone);
 }
 
@@ -57,6 +58,7 @@ export async function setLeadStatusAction(leadId: string, status: "won" | "lost"
   const { error } = await supabase.rpc("set_lead_status", { p_lead: parsed.data.leadId, p_status: parsed.data.status });
   if (error) return fail(H.failed);
   revalidatePath("/leads", "layout");
+  revalidatePath("/inicio");
   return ok(H.statusDone);
 }
 
@@ -70,6 +72,7 @@ export async function addToCallListAction(leadId: string, agentId: string): Prom
   const { error } = await supabase.rpc("add_to_call_list", { p_lead: parsed.data.leadId, p_agent: parsed.data.agentId });
   if (error) return fail(H.failed);
   revalidatePath("/leads", "layout");
+  revalidatePath("/inicio");
   return ok(H.added);
 }
 
@@ -87,6 +90,7 @@ export async function setLeadsStatusAction(leadIds: string[], status: "lost" | "
   const { data, error } = await supabase.rpc("set_leads_status", { p_ws: ws.id, p_leads: ids.data, p_status: st.data });
   if (error) return fail(t.leads.close.failed);
   revalidatePath("/leads", "layout");
+  revalidatePath("/inicio");
   const n = typeof data === "number" ? data : ids.data.length;
   if (n === 0) return ok(t.leads.close.none);
   return ok(fill(t.leads.close.done, { n, status: t.leads.close[st.data] }));
@@ -104,6 +108,7 @@ export async function setLeadSegmentAction(leadIds: string[], segment: Segment |
   const { data, error } = await supabase.rpc("set_leads_segment", { p_ws: ws.id, p_leads: ids.data, p_segment: seg.data });
   if (error) return fail(t.leads.segmentPick.failed);
   revalidatePath("/leads", "layout");
+  revalidatePath("/inicio");
   return ok(fill(t.leads.segmentPick.saved, { n: typeof data === "number" ? data : ids.data.length }));
 }
 
