@@ -2,8 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { createInviteAction } from "@/app/(app)/configuracoes/equipe/actions";
-import { btn } from "@/components/email/bits";
-import { Field, TextInput } from "@/components/ui";
+import { Button, Field, HexButton, TextInput } from "@/components/ui";
 import { idle, type FormState } from "@/lib/form-state";
 import { useT } from "@/lib/i18n/client";
 
@@ -35,13 +34,13 @@ export function InviteForm() {
           <TextInput id="invite-email" name="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" required />
         </Field>
         {state.status === "error" && <p role="alert" className="text-sm text-danger">{state.message}</p>}
-        <button type="submit" className={btn.primary} disabled={pending}>{t.team.invite}</button>
+        <div><HexButton type="submit" disabled={pending}>{t.team.invite}</HexButton></div>
       </form>
       {link && (
-        <div className="flex flex-col gap-2 border border-line p-3" aria-live="polite">
-          <label htmlFor="invite-link" className="font-mono text-xs uppercase tracking-wide">{t.team.link}</label>
-          <input id="invite-link" readOnly value={link} className="w-full border border-line bg-surface px-3 py-2 text-sm" onFocus={(e) => e.currentTarget.select()} />
-          <button type="button" className={btn.ghost} onClick={copy}>{t.team.copy}{copied ? " ✓" : ""}</button>
+        <div className="flex flex-col gap-2 rounded-[14px] border-2 border-honey-edge bg-honey-soft p-4" aria-live="polite">
+          <label htmlFor="invite-link" className="font-mono text-[13px] font-medium uppercase tracking-wide">{t.team.link}</label>
+          <TextInput id="invite-link" readOnly value={link} className="text-sm" onFocus={(e) => e.currentTarget.select()} />
+          <Button type="button" variant="secondary" size="sm" onClick={copy}>{t.team.copy}{copied ? " ✓" : ""}</Button>
           <p className="text-sm">{t.team.sendYourself}</p>
         </div>
       )}

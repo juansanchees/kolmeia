@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import { saveProfile } from "./actions";
 import { idle } from "@/lib/form-state";
 import { WANTED_WORK, type ProfileInput } from "@/lib/profile-schema";
-import { Button, Field, TextArea } from "@/components/ui";
+import { Button, Field, HexPanel, TextArea } from "@/components/ui";
 import { useT } from "@/lib/i18n/client";
 
 export function ProfileForm({ initial, readOnly }: { initial: ProfileInput; readOnly: boolean }) {
@@ -17,7 +17,8 @@ export function ProfileForm({ initial, readOnly }: { initial: ProfileInput; read
   const describe = (id: string) => (err[id] ? `${id}-error` : undefined);
 
   return (
-    <form action={action} className="flex flex-col gap-6 border border-line bg-surface p-6" noValidate>
+    <HexPanel as="div" className="py-7" wrapClassName="k-in">
+    <form action={action} className="flex flex-col gap-6" noValidate>
       <fieldset disabled={readOnly} className="m-0 flex min-w-0 flex-col gap-6 border-0 p-0">
       <Field label={t.company.whatWeDo} htmlFor="what_we_do" error={err.what_we_do}>
         <TextArea id="what_we_do" name="what_we_do" value={v.what_we_do} onChange={(e) => set("what_we_do", e.target.value)} maxLength={2000} required aria-invalid={Boolean(err.what_we_do)} aria-describedby={describe("what_we_do")} />
@@ -27,7 +28,7 @@ export function ProfileForm({ initial, readOnly }: { initial: ProfileInput; read
       </Field>
 
       <fieldset className="m-0 min-w-0 border-0 p-0" aria-describedby={describe("wanted_work")}>
-        <legend className="mb-2 font-mono text-xs uppercase tracking-wide">{t.company.wantedWork}</legend>
+        <legend className="mb-2 font-mono text-[13px] font-medium uppercase tracking-wide">{t.company.wantedWork}</legend>
         <div className="flex flex-wrap gap-2">
           {WANTED_WORK.map((key) => (
             <label key={key} className="relative cursor-pointer">
@@ -39,7 +40,7 @@ export function ProfileForm({ initial, readOnly }: { initial: ProfileInput; read
                 onChange={(e) => set("wanted_work", e.target.checked ? [...v.wanted_work, key] : v.wanted_work.filter((w) => w !== key))}
                 className="peer absolute inset-0 h-full w-full cursor-pointer opacity-0"
               />
-              <span className="block border border-line bg-surface px-3 py-2 text-sm peer-checked:border-blue peer-checked:bg-blue peer-checked:text-white peer-focus-visible:outline peer-focus-visible:outline-[3px] peer-focus-visible:outline-offset-2 peer-focus-visible:outline-blue">
+              <span className="k-btn flex min-h-11 items-center rounded-full border-2 border-line bg-surface px-4 text-base hover:border-ink peer-checked:border-honey-edge peer-checked:bg-honey-light peer-checked:font-semibold peer-focus-visible:outline peer-focus-visible:outline-[3px] peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ink">
                 {t.wantedWorkOptions[key]}
               </span>
             </label>
@@ -60,10 +61,11 @@ export function ProfileForm({ initial, readOnly }: { initial: ProfileInput; read
       <div className="flex flex-wrap items-center gap-4">
         {!readOnly && <Button type="submit" disabled={pending}>{pending ? t.company.saving : t.company.save}</Button>}
         <div aria-live="polite">
-          {state.status === "success" && <p className="font-mono text-sm text-blue">{state.message}</p>}
+          {state.status === "success" && <p className="font-mono text-sm text-ok">{state.message}</p>}
           {state.status === "error" && state.message && <p role="alert" className="text-sm text-danger">{state.message}</p>}
         </div>
       </div>
     </form>
+    </HexPanel>
   );
 }

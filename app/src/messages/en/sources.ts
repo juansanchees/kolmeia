@@ -3,6 +3,13 @@ import type { Widen } from "../widen";
 
 export const sources = {
   title: "Connected sources",
+  settingsSubtitle: "Your company details, search keys, mailboxes and team.",
+  status: { connected: "Connected", off: "Not connected", paused: "Cap reached" },
+  usageLabel: "Usage",
+  stepKey: "Access key",
+  stepKeyHint: "Paste the source key. It is stored and never shown again.",
+  stepCap: "Usage cap",
+  stepCapHint: "The most this source may spend. Past it, searches stop.",
   intro: "Each workspace uses its own keys. The key is stored encrypted and never shown again.",
   mapsTerms: "Google Maps collection follows Google's terms. The workspace owner is responsible.",
   apolloTerms: "Apollo data stays in this workspace only. We do not resell or share it.",

@@ -1,6 +1,10 @@
 // Configurações → Equipe and the invite page (F5).
 export const team = {
   tab: "Equipe",
+  subtitle: "Quem usa a Kolmeia com você. Convide um vendedor e mande o link.",
+  peopleHint: "Todos com acesso a este workspace.",
+  inviteHint: "Gere um link de convite. A pessoa entra com o próprio e-mail.",
+  noPendingHint: "Convites que você gerar aparecem aqui até serem usados.",
   invite: "Convidar vendedor",
   name: "Nome",
   email: "E-mail",

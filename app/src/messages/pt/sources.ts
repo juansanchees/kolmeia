@@ -1,6 +1,13 @@
 // Fontes conectadas (F3d): copy for the connections screen. Short and simple.
 export const sources = {
   title: "Fontes conectadas",
+  settingsSubtitle: "Dados da sua empresa, chaves de busca, caixas de e-mail e equipe.",
+  status: { connected: "Conectada", off: "Não conectada", paused: "Teto atingido" },
+  usageLabel: "Uso",
+  stepKey: "Chave de acesso",
+  stepKeyHint: "Cole a chave da fonte. Ela fica guardada e nunca aparece de novo.",
+  stepCap: "Teto de uso",
+  stepCapHint: "O limite que a fonte pode gastar. Passou disso, as buscas param.",
   intro: "Cada workspace usa as próprias chaves. A chave fica guardada com criptografia e nunca aparece de novo.",
   mapsTerms: "A coleta do Google Maps segue os termos do Google. O responsável é o dono do workspace.",
   apolloTerms: "Os dados do Apollo ficam só neste workspace. Não revendemos nem compartilhamos.",

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AutoRefresh } from "@/components/AutoRefresh";
-import { Badge, type Tone } from "@/components/email/bits";
+import { Badge, type BadgeTone, EmptyState, StepTitle } from "@/components/ui";
 import { date, usd } from "@/components/research/format";
 import { fill, type Messages } from "@/lib/i18n";
 import { getT } from "@/lib/i18n/server";
@@ -21,7 +21,7 @@ export type RunView = {
   created_at: string;
 };
 
-const tone = (s: string): Tone => (s === "imported" ? "ok" : s === "failed" || s === "refused" ? "warn" : s === "running" ? "blue" : "cold");
+const tone = (s: string): BadgeTone => (s === "imported" ? "ok" : s === "failed" || s === "refused" ? "warn" : s === "running" ? "honey" : "neutral");
 const open = (s: string) => s === "queued" || s === "running";
 
 function cost(r: RunView, t: Messages): string {
@@ -39,20 +39,20 @@ export async function RunHistory({ runs }: { runs: RunView[] }) {
   return (
     <section aria-labelledby="run-history" className="flex flex-col gap-3">
       {runs.some((r) => open(r.status)) && <AutoRefresh seconds={15} />}
-      <h2 id="run-history" className="text-2xl">{Q.historyTitle}</h2>
+      <div id="run-history"><StepTitle n={3}>{Q.historyTitle}</StepTitle></div>
       {runs.length === 0 ? (
-        <p className="text-sm text-muted">{Q.historyEmpty}</p>
+        <EmptyState title={Q.historyEmpty} className="py-6" />
       ) : (
-        <Paged as="ul" className="m-0 flex list-none flex-col border border-line bg-surface p-0">
+        <Paged as="ul" className="m-0 flex list-none flex-col gap-2 p-0">
           {runs.map((r) => (
-            <li key={r.id} className="flex flex-col gap-1.5 border-b border-line px-3.5 py-3 last:border-b-0">
+            <li key={r.id} className="k-in flex flex-col gap-1.5 rounded-[14px] border-2 border-line bg-surface px-4 py-3 hover:border-honey-edge hover:bg-[#fffaeb]">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <span className="min-w-0 truncate text-sm font-semibold">
+                <span className="min-w-0 truncate text-base font-semibold">
                   {r.kind === "maps" ? Q.kindMaps : r.kind === "shovels" ? Q.kindShovels : r.kind === "b2b" ? Q.kindB2b : Q.kindApollo} · {runTitle(r, t)}
                 </span>
                 <span className="font-mono text-xs text-muted">{date(r.created_at, t.intl)}</span>
               </div>
-              <div className="flex flex-wrap items-center gap-2 text-[13px]">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
                 <Badge tone={tone(r.status)}>{runStatusLabel(r, t)}</Badge>
                 <span className="text-muted">
                   {r.status === "imported" || r.found !== null
@@ -63,7 +63,7 @@ export async function RunHistory({ runs }: { runs: RunView[] }) {
               </div>
               {r.import_id && (
                 <div>
-                  <Link href={`/leads/subir#import-${r.import_id}`} className="text-sm text-blue underline underline-offset-4">
+                  <Link href={`/leads/subir#import-${r.import_id}`} className="text-base font-medium text-ink underline decoration-honey decoration-2 underline-offset-4">
                     {Q.seeImport}
                   </Link>
                 </div>

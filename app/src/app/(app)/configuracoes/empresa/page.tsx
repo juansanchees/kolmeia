@@ -3,6 +3,7 @@ import { getCurrentWorkspace } from "@/lib/workspace";
 import { isSender } from "@/lib/roles";
 import { WANTED_WORK, type ProfileInput } from "@/lib/profile-schema";
 import { getT } from "@/lib/i18n/server";
+import { StepTitle } from "@/components/ui";
 import { ProfileForm } from "./ProfileForm";
 
 export default async function CompanyPage() {
@@ -32,8 +33,7 @@ export default async function CompanyPage() {
 
   return (
     <section className="flex flex-col gap-4">
-      <h2 className="text-3xl">{t.company.title}</h2>
-      <p className="text-sm">{t.company.intro}</p>
+      <StepTitle n={1} hint={t.company.intro}>{t.company.title}</StepTitle>
       <ProfileForm initial={initial} readOnly={!workspace || !isSender(workspace.role)} />
     </section>
   );

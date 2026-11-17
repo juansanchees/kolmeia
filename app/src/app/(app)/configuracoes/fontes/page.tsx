@@ -3,7 +3,7 @@ import { ConnectionCard, type ConnectionView } from "@/components/sources/Connec
 import { isSender } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace } from "@/lib/workspace";
-import { Notice } from "@/components/email/bits";
+import { Notice, StepTitle } from "@/components/ui";
 import { getT } from "@/lib/i18n/server";
 
 type Row = {
@@ -30,8 +30,8 @@ export default async function SourcesPage() {
   if (!supabase || error) {
     return (
       <section className="flex flex-col gap-4">
-        <h2 className="text-3xl">{t.sources.title}</h2>
-        <Notice role="alert">{t.sources.errors.generic}</Notice>
+        <StepTitle n={1}>{t.sources.title}</StepTitle>
+        <Notice tone="warn" role="alert">{t.sources.errors.generic}</Notice>
       </section>
     );
   }
@@ -47,8 +47,7 @@ export default async function SourcesPage() {
 
   return (
     <section className="flex flex-col gap-4">
-      <h2 className="text-3xl">{t.sources.title}</h2>
-      <p className="text-sm">{t.sources.intro}</p>
+      <StepTitle n={1} hint={t.sources.intro}>{t.sources.title}</StepTitle>
       <div className="flex flex-wrap items-start gap-5">
         {views.map((v) => (
           <ConnectionCard key={v.provider} view={v} isOwner={workspace.role === "owner"} />

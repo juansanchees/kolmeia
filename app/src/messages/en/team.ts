@@ -3,6 +3,10 @@ import type { Widen } from "../widen";
 
 export const team = {
   tab: "Team",
+  subtitle: "Who uses Kolmeia with you. Invite a salesperson and send them the link.",
+  peopleHint: "Everyone with access to this workspace.",
+  inviteHint: "Generate an invite link. The person joins with their own e-mail.",
+  noPendingHint: "Invites you create show up here until they are used.",
   invite: "Invite sales rep",
   name: "Name",
   email: "Email",

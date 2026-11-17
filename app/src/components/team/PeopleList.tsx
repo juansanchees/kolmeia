@@ -2,7 +2,7 @@
 
 import { revokeInviteAction, removeMemberAction } from "@/app/(app)/configuracoes/equipe/actions";
 import { ActionButton } from "@/components/email/ActionButton";
-import { Badge } from "@/components/email/bits";
+import { Badge, EmptyState, StepTitle } from "@/components/ui";
 import type { InviteRow, Person } from "@/lib/team/types";
 import { useT } from "@/lib/i18n/client";
 import { Paged } from "@/components/Pager";
@@ -15,10 +15,10 @@ export function PeopleList({ people, invites }: { people: Person[]; invites: Inv
     <div className="flex flex-col gap-4">
       <Paged as="ul" className="m-0 flex list-none flex-col gap-2 p-0">
         {people.map((p) => (
-          <li key={p.user_id} className="flex min-w-0 flex-wrap items-center justify-between gap-2 border border-line p-3">
+          <li key={p.user_id} className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-[14px] border-2 border-line p-3 hover:border-honey-edge hover:bg-[#fffaeb]">
             <span className="flex min-w-0 items-center gap-2">
               <span className="break-words font-semibold">{p.label}</span>
-              <Badge>{t.team.roles[p.role]}</Badge>
+              <Badge tone={p.role === "owner" ? "navy" : p.role === "sdr" ? "honey" : "neutral"}>{t.team.roles[p.role]}</Badge>
             </span>
             {p.role !== "owner" && (
               <ActionButton
@@ -35,11 +35,11 @@ export function PeopleList({ people, invites }: { people: Person[]; invites: Inv
         ))}
       </Paged>
 
-      <h3 className="text-xl">{t.team.pending}</h3>
-      {invites.length === 0 && <p className="text-sm text-muted">{t.team.noPending}</p>}
+      <StepTitle as="h3" n={3}>{t.team.pending}</StepTitle>
+      {invites.length === 0 && <EmptyState title={t.team.noPending} className="py-6">{t.team.noPendingHint}</EmptyState>}
       <Paged as="ul" className="m-0 flex list-none flex-col gap-2 p-0">
         {invites.map((i) => (
-          <li key={i.id} className="flex min-w-0 flex-wrap items-center justify-between gap-2 border border-line p-3">
+          <li key={i.id} className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-[14px] border-2 border-line p-3 hover:border-honey-edge hover:bg-[#fffaeb]">
             <span className="flex min-w-0 flex-col">
               <span className="break-words font-semibold">{i.name}</span>
               <span className="break-all text-sm">{i.email}</span>

@@ -6,13 +6,14 @@ import { loadMailboxes, loadSender } from "@/lib/email/queries";
 import { emailSession } from "@/lib/email/session";
 import { clearMailboxPause, removeMailbox, reverifyMailbox, sendTestMessage } from "@/app/(app)/campanhas/actions";
 import { ActionButton } from "@/components/email/ActionButton";
-import { Badge, Card, CardTitle, Label, Notice } from "@/components/email/bits";
+import { Label } from "@/components/email/bits";
+import { Badge, EmptyState, HexPanel, Notice, StepTitle } from "@/components/ui";
 import { ConnectMailboxForm, MailboxLimitForm, SenderForm } from "@/components/email/forms";
 import { when } from "@/components/email/format";
 import { fill } from "@/lib/i18n";
 import { getT } from "@/lib/i18n/server";
 
-const STATUS_TONE = { unverified: "cold", ok: "ok", error: "danger" } as const;
+const STATUS_TONE = { unverified: "neutral", ok: "ok", error: "danger" } as const;
 
 /** E4 (0024): mailbox_usage also answers the real limit of today (warm-up ramp). */
 type UsageWithRamp = { real_limit?: number } | null;
@@ -29,21 +30,20 @@ export default async function MailboxPage() {
 
   return (
     <div className="flex flex-wrap items-start gap-5">
-      <Card aria-labelledby="sender-title" className="flex-[1_1_320px]">
-        <CardTitle id="sender-title">{M.sender.title}</CardTitle>
-        <p className="text-sm">{M.sender.intro}</p>
+      <HexPanel as="section" aria-labelledby="sender-title" wrapClassName="k-in flex-[1_1_320px]" className="flex flex-col gap-4 py-6">
+        <div id="sender-title"><StepTitle n={1} hint={M.sender.intro}>{M.sender.title}</StepTitle></div>
         {!senderComplete(sender) && <Notice>{M.sender.incomplete}</Notice>}
         <SenderForm initial={sender} disabled={!s.canSend} />
-      </Card>
+      </HexPanel>
 
       <div className="flex min-w-0 flex-[1_1_380px] flex-col gap-5">
-        <Card aria-labelledby="mb-title">
-          <CardTitle id="mb-title">{M.mailbox.title}</CardTitle>
-          {!keyOk && <Notice>{M.keyMissing}</Notice>}
-          {mailboxes.length === 0 && <p className="text-sm text-muted">{M.mailbox.none}</p>}
+        <HexPanel as="section" aria-labelledby="mb-title" wrapClassName="k-in" className="flex flex-col gap-4 py-6">
+          <div id="mb-title"><StepTitle n={2}>{M.mailbox.title}</StepTitle></div>
+          {!keyOk && <Notice tone="warn">{M.keyMissing}</Notice>}
+          {mailboxes.length === 0 && <EmptyState title={M.mailbox.none} className="py-6" />}
           <ul className="m-0 flex list-none flex-col gap-3 p-0">
             {mailboxes.map((m) => (
-              <li key={m.id} className="flex min-w-0 flex-col gap-3 border border-line p-4">
+              <li key={m.id} className="flex min-w-0 flex-col gap-3 rounded-[14px] border-2 border-line p-4 hover:border-honey-edge hover:bg-[#fffaeb]">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="break-all font-semibold">{m.email}</span>
                   <span className="flex flex-wrap gap-2">
@@ -53,7 +53,7 @@ export default async function MailboxPage() {
                 </div>
                 {m.health_status === "paused_bounce" && (
                   <div className="flex flex-col gap-2">
-                    <Notice role="alert">
+                    <Notice tone="warn" role="alert">
                       {M.mailbox.pausedHint}
                       {m.paused_reason ? ` (${m.paused_reason}${m.paused_at ? ` · ${when(m.paused_at, t.intl)}` : ""})` : ""}
                     </Notice>
@@ -96,21 +96,21 @@ export default async function MailboxPage() {
               </li>
             ))}
           </ul>
-        </Card>
+        </HexPanel>
 
         {s.canSend && keyOk && (
-          <Card aria-labelledby="connect-title">
-            <CardTitle id="connect-title">{M.mailbox.connectTitle}</CardTitle>
-            <ol className="m-0 flex list-decimal flex-col gap-1.5 pl-5 text-sm">
+          <HexPanel as="section" aria-labelledby="connect-title" wrapClassName="k-in" className="flex flex-col gap-4 py-6">
+            <div id="connect-title"><StepTitle n={3}>{M.mailbox.connectTitle}</StepTitle></div>
+            <ol className="m-0 flex list-decimal flex-col gap-1.5 pl-5 text-base">
               {M.mailbox.steps.map((step) => (
                 <li key={step}>{step}</li>
               ))}
             </ol>
-            <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-sm text-blue underline underline-offset-4">
+            <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-base font-medium text-ink underline decoration-honey decoration-2 underline-offset-4">
               {M.mailbox.appPasswordLink} ↗
             </a>
             <ConnectMailboxForm />
-          </Card>
+          </HexPanel>
         )}
       </div>
     </div>

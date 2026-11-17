@@ -4,7 +4,7 @@ import { emailSession } from "@/lib/email/session";
 import type { SuppressionRow } from "@/lib/email/types";
 import { removeSuppression } from "@/app/(app)/campanhas/actions";
 import { ActionButton } from "@/components/email/ActionButton";
-import { Badge, Card, CardTitle } from "@/components/email/bits";
+import { Badge, CountPill, EmptyState, HexPanel, StepTitle } from "@/components/ui";
 import { SuppressionForm } from "@/components/email/forms";
 import { when } from "@/components/email/format";
 import { getT } from "@/lib/i18n/server";
@@ -27,34 +27,34 @@ export default async function BlockedPage() {
 
   return (
     <div className="flex flex-wrap items-start gap-5">
-      <Card aria-labelledby="bl-list" className="flex-[2_1_380px]">
-        <CardTitle id="bl-list">
-          {B.title} · {rows.length}
-        </CardTitle>
-        <p className="text-sm">{B.intro}</p>
-        {rows.length === 0 && <p className="text-sm text-muted">{B.none}</p>}
+      <HexPanel as="section" aria-labelledby="bl-list" wrapClassName="k-in flex-[2_1_380px]" className="flex flex-col gap-4 py-6">
+        <div id="bl-list" className="flex flex-wrap items-start justify-between gap-2">
+          <StepTitle n={1} hint={B.intro}>{B.title}</StepTitle>
+          <CountPill tone="soft">{rows.length}</CountPill>
+        </div>
+        {rows.length === 0 && <EmptyState title={B.none} className="py-6" />}
         <Paged as="ul" className="m-0 flex list-none flex-col gap-2 p-0">
           {rows.map((r) => (
-            <li key={r.id} className="flex min-w-0 flex-wrap items-center justify-between gap-2 border border-line p-3">
+            <li key={r.id} className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-[14px] border-2 border-line p-3 hover:border-honey-edge hover:bg-[#fffaeb]">
               <span className="flex min-w-0 flex-col gap-1">
                 <span className="break-all font-semibold">{r.value}</span>
                 <span className="flex flex-wrap items-center gap-1.5">
                   <Badge>{B.kind[r.kind]}</Badge>
-                  <Badge tone={r.reason === "manual" ? "cold" : "warn"}>{B.reasons[r.reason]}</Badge>
-                  <span className="font-mono text-xs text-muted">{when(r.created_at, t.intl)}</span>
+                  <Badge tone={r.reason === "manual" ? "neutral" : "warn"}>{B.reasons[r.reason]}</Badge>
+                  <span className="font-mono text-sm text-muted">{when(r.created_at, t.intl)}</span>
                 </span>
-                {r.note && <span className="text-[13px] text-muted">{r.note}</span>}
+                {r.note && <span className="text-sm text-muted">{r.note}</span>}
               </span>
               {isOwner && <ActionButton action={removeSuppression.bind(null, r.id)} label={B.remove} variant="link" confirm={B.removeConfirm} />}
             </li>
           ))}
         </Paged>
-        {!isOwner && rows.length > 0 && <p className="text-[13px] text-muted">{B.ownerOnly}</p>}
-      </Card>
-      <Card aria-labelledby="bl-add" className="flex-[1_1_280px]">
-        <CardTitle id="bl-add">{B.add}</CardTitle>
+        {!isOwner && rows.length > 0 && <p className="text-sm text-muted">{B.ownerOnly}</p>}
+      </HexPanel>
+      <HexPanel as="section" aria-labelledby="bl-add" wrapClassName="k-in flex-[1_1_280px]" className="flex flex-col gap-4 py-6">
+        <div id="bl-add"><StepTitle n={2}>{B.add}</StepTitle></div>
         <SuppressionForm />
-      </Card>
+      </HexPanel>
     </div>
   );
 }
