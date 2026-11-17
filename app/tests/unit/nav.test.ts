@@ -40,12 +40,14 @@ describe("F1 nav", () => {
       ["Todos", "/leads"],
       ["Ligar", "/leads/ligar"],
       ["Tarefas", "/leads/tarefas"],
+      ["Resultados", "/leads/resultados"],
     ]);
     for (const role of ["owner", "sdr"] as const) {
       expect(leadsTabsFor(role).map((i) => [i.label, i.href])).toEqual([
         ["Todos", "/leads"],
         ["Ligar", "/leads/ligar"],
         ["Tarefas", "/leads/tarefas"],
+      ["Resultados", "/leads/resultados"],
         ["Listas", "/leads/listas"],
         ["Funil", "/leads/funil"],
         ["Cobertura", "/leads/cobertura"],
