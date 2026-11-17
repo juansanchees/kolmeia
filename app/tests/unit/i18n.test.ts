@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { pt } from "@/messages/pt";
 import { en } from "@/messages/en";
 import { fill, htmlLang, messagesFor, parseLocale } from "@/lib/i18n";
@@ -73,5 +73,24 @@ describe("origin filter keys", () => {
     expect(originKeyLabel("Importado · Planilha Y", en)).toBe("Imported · Planilha Y");
     expect(originKeyLabel("Lista 1", en)).toBe("Lista 1");
     expect(originKeyLabel("Sem origem", pt)).toBe("Sem origem");
+  });
+});
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+vi.mock("@/lib/i18n/actions", () => ({ setLocaleAction: vi.fn() }));
+
+describe("LocaleSwitch", () => {
+  it("renders PT | EN as a pressed-state group with 44px targets, in the current locale", async () => {
+    const { createElement } = await import("react");
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { LocaleProvider } = await import("@/lib/i18n/client");
+    const { LocaleSwitch } = await import("@/components/LocaleSwitch");
+    const html = (locale: "pt" | "en") => renderToStaticMarkup(createElement(LocaleProvider, { locale, children: createElement(LocaleSwitch) }));
+    expect(html("en")).toContain('aria-label="Language"');
+    expect(html("en")).toMatch(/aria-label="English"[^>]*aria-pressed="true"/);
+    expect(html("en")).toMatch(/aria-label="Português"[^>]*aria-pressed="false"/);
+    expect(html("pt")).toContain('aria-label="Idioma"');
+    expect(html("pt")).toMatch(/aria-label="Português"[^>]*aria-pressed="true"/);
+    expect(html("pt").match(/min-h-11 min-w-11/g)).toHaveLength(2);
   });
 });

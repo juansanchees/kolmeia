@@ -5,6 +5,7 @@ import { SETTINGS_HREF } from "@/lib/nav";
 import type { Role } from "@/lib/roles";
 import { NavLinks } from "./NavLinks";
 import { KolmeiaMark } from "./Logo";
+import { LocaleSwitch } from "./LocaleSwitch";
 
 export async function Header({ workspaceName, role }: { workspaceName: string; role: Role }) {
   const t = await getT();
@@ -16,6 +17,7 @@ export async function Header({ workspaceName, role }: { workspaceName: string; r
           {workspaceName}
         </Link>
         <div className="flex items-center gap-2">
+          <LocaleSwitch />
           <Link
             href={SETTINGS_HREF}
             aria-label={t.nav.settings}

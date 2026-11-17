@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { hasSupabase } from "@/lib/env";
 import { getCurrentWorkspace, getUser } from "@/lib/workspace";
 import { NotConfigured } from "@/components/NotConfigured";
+import { LocaleSwitch } from "@/components/LocaleSwitch";
 import { OnboardingForm } from "./OnboardingForm";
 
 // Session-dependent: never prerender.
@@ -13,6 +14,9 @@ export default async function OnboardingPage() {
   if (await getCurrentWorkspace()) redirect("/");
   return (
     <main className="mx-auto max-w-md px-4 py-16">
+      <div className="mb-6 flex justify-end">
+        <LocaleSwitch />
+      </div>
       <OnboardingForm />
     </main>
   );

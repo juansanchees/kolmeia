@@ -31,6 +31,7 @@ export const common = {
     },
   },
   signOut: "Sair",
+  locale: { label: "Idioma" },
   roles: {
     closerNotice: "Você está como vendedor: vê os leads e o que passaram para você. Agentes, campanhas e configurações são do dono e do SDR.",
   },

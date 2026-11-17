@@ -33,6 +33,7 @@ export const common = {
     },
   },
   signOut: "Sign out",
+  locale: { label: "Language" },
   roles: {
     closerNotice: "You are signed in as a sales rep: you see the leads and what was handed to you. Agents, campaigns and settings belong to the owner and the SDR.",
   },

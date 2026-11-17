@@ -7,6 +7,9 @@ export { fill } from "@/messages/fill";
 export type { Messages };
 
 export type Locale = "pt" | "en";
+export const LOCALES: readonly Locale[] = ["pt", "en"];
+/** Each language named in itself (never translated). */
+export const LOCALE_NAMES: Record<Locale, string> = { pt: "Português", en: "English" };
 export const LOCALE_COOKIE = "kolmeia_locale";
 
 /** Cookie value to locale: only "en" switches; missing or anything else is Portuguese. */
@@ -19,3 +22,6 @@ export const ptMessages: Messages = pt;
 
 /** Value for <html lang>. */
 export const htmlLang = (locale: Locale) => (locale === "en" ? "en" : "pt-BR");
+
+/** The kolmeia_locale cookie: a year, whole site, sent on normal navigation. */
+export const LOCALE_COOKIE_OPTIONS = { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" } as const;
