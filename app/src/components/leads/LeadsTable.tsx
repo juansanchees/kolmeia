@@ -427,7 +427,8 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
                   </p>
                 </div>
                 <p aria-live="polite" className="sr-only">{`${t.leads.summary.label} ${countOf(filtered.length, t)}`}</p>
-                <button type="button" onClick={clearAll} className="k-btn min-h-12 rounded-[12px] border-2 border-ink bg-surface px-5 font-semibold text-ink">
+                <button type="button" onClick={clearAll} className="k-btn inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-transparent px-3 text-[15px] font-medium text-ink hover:bg-[#FFE7A3]/60 hover:underline decoration-[#F5A400] decoration-2 underline-offset-4">
+                  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 3l8 8M11 3l-8 8" /></svg>
                   {ST.clearAll}
                 </button>
               </div>

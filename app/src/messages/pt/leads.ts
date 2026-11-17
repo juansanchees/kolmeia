@@ -313,7 +313,7 @@ export const leads = {
     moreFiltersHint: "(cidade, origem, data…)",
     shortcuts: "Atalhos:",
     chips: { hasPhone: "Tem telefone", hasEmail: "Tem e-mail", hasContactName: "Tem nome do contato", never: "Nunca contatado", week: "Entrou nos últimos 7 dias" },
-    clearAll: "Limpar tudo",
+    clearAll: "Limpar filtros",
     filtersLabel: "Filtros",
     companies: "Empresas",
   },
