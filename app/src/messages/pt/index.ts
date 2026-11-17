@@ -1,5 +1,6 @@
 // Every user-facing string lives in this folder, one file per area, so later phases add files instead of
-// editing one big dictionary. English can be added later as a sibling folder.
+// editing one big dictionary. English lives in ../en with the same keys; app code picks one through @/lib/i18n.
+import type { Widen } from "../widen";
 import { agents } from "./agents";
 import { ai } from "./ai";
 import { areas } from "./areas";
@@ -24,12 +25,10 @@ import { lists } from "./lists";
 import { tasks } from "./tasks";
 import { home } from "./home";
 
-export const pt = { ...common, ...areas, leads, agents, ai, research, email, imports, sources, qualifier, spend, profile, coverage, team, handoff, calls, results, callAgent, funnel, emailAgent, lists, tasks, home } as const;
+export const pt = { intl: "pt-BR", ...common, ...areas, leads, agents, ai, research, email, imports, sources, qualifier, spend, profile, coverage, team, handoff, calls, results, callAgent, funnel, emailAgent, lists, tasks, home } as const;
 
-export type Messages = typeof pt;
+/** The shape every language fills (string values widened). `intl` is the BCP 47 tag for dates and numbers. */
+export type Messages = Widen<typeof pt>;
+/** Portuguese messages; only tests and @/lib/i18n import this directly. */
 export const t = pt;
-
-/** Replaces {name} placeholders. */
-export function fill(template: string, values: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (m, k: string) => (k in values ? String(values[k]) : m));
-}
+export { fill } from "../fill";

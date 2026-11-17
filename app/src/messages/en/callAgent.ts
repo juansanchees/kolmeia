@@ -1,0 +1,31 @@
+import type { callAgent as pt } from "../pt/callAgent";
+import type { Widen } from "../widen";
+
+export const callAgent = {
+  create: "Create",
+  caller: "Who calls",
+  perDay: "How many per day",
+  minLevel: "Minimum data",
+  temperatures: "Temperature",
+  any: "Any",
+  build: "Build today's list",
+  metrics: { inList: "in list", called: "called", answered: "answered", meetings: "meetings booked" },
+  name: "Name",
+  defaultName: "Daily calls",
+  qFilter: "Which companies go on the list?",
+  qPerDay: "How many per day?",
+  qCaller: "Who calls?",
+  levelOption: "data {n} or more",
+  perDayHint: "From 1 to 50.",
+  noPeople: "No one on the team to call.",
+  perDayValue: "{n} per day",
+  filterValue: "data {level}+ · {temps}",
+  built: "List built: {n} new.",
+  buildNone: "No new companies for today's list.",
+  buildNeedsRunning: "Turn the agent on to build the list.",
+  failed: "Could not save. Try again.",
+  invalid: "Check the fields.",
+  allAgents: "All lists",
+  noPhone: "no phone",
+  agentLists: "Agent lists",
+} satisfies Widen<typeof pt>;

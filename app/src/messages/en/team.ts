@@ -1,0 +1,31 @@
+import type { team as pt } from "../pt/team";
+import type { Widen } from "../widen";
+
+export const team = {
+  tab: "Team",
+  invite: "Invite sales rep",
+  name: "Name",
+  email: "Email",
+  link: "Invite link (valid 7 days, 1 use):",
+  copy: "Copy link",
+  sendYourself: "Kolmeia does not send email. Send the link yourself.",
+  revoke: "Cancel invite",
+  remove: "Remove",
+  roles: { owner: "owner", sdr: "SDR", closer: "sales rep" },
+  accept: "Join the team",
+  signInFirst: "Sign in or create your account with {email} to accept.",
+  signInFirstGeneric: "Sign in or create your account with the invite email to accept.",
+  wrongEmail: "This invite is for another email.",
+  hasWorkspace: "This account already has a workspace. Use another email.",
+  expired: "Invite expired or already used.",
+  people: "People",
+  pending: "Pending invites",
+  noPending: "No pending invites.",
+  until: "expires",
+  invalid: "Check the name and the email.",
+  generic: "That did not work. Try again.",
+  lastOwner: "You cannot remove the last owner.",
+  removeSelf: "You cannot remove yourself.",
+  joinTitle: "Team invite",
+  joinAs: "Join {workspace} as a sales rep.",
+} satisfies Widen<typeof pt>;

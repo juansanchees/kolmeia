@@ -1,0 +1,35 @@
+import type { coverage as pt } from "../pt/coverage";
+import type { Widen } from "../widen";
+
+export const coverage = {
+  tab: "Coverage",
+  title: "Massachusetts coverage",
+  searches: "Searches done",
+  towns: "Towns (MA)",
+  uncovered: "not covered",
+  covered: "covered",
+  hunt: "Hunt ▸",
+  summary: "{covered} covered · {uncovered} not searched",
+  outside: "outside MA",
+  statewide: "whole state",
+  onlyUncovered: "Not searched only",
+  county: "County",
+  allCounties: "All",
+  manual: "I already searched here outside the app",
+  imported: "imported",
+  noSearches: "No searches yet.",
+  window: "A town counts as covered for 90 days after the last search.",
+  kinds: { hunter: "Hunter", research: "Research", import: "List", manual: "Mark" },
+  rowsNew: "{rows} rows · {new} new",
+  found: "{n} found",
+  columns: { town: "Town", leads: "Leads", searches: "Searches", last: "Last", status: "Status" },
+  townsEmpty: "No towns in this filter.",
+  form: { town: "Town", date: "Search date", note: "Note (optional)", add: "Mark", delete: "Delete" },
+  errors: {
+    town: "Pick a Massachusetts town.",
+    date: "Use today's date or a past one.",
+    note: "The note is 200 characters max.",
+    failed: "Could not save. Try again.",
+  },
+  saved: "Mark saved.",
+} satisfies Widen<typeof pt>;
