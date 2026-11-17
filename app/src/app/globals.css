@@ -151,7 +151,10 @@ h2 {
   .k-lift:hover .hx-fill {
     background: var(--color-honey-hover) !important;
   }
+  /* an SVG path: turn around its own centre, the number beside it stays still */
   .k-hex {
+    transform-box: fill-box;
+    transform-origin: center;
     transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
   .k-step:hover .k-hex {
@@ -180,16 +183,20 @@ h2 {
     transform: rotate(90deg);
   }
   .k-in {
-    animation: k-up 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation: k-up 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
   }
   .k-fade {
-    animation: k-fade 0.35s ease both;
+    animation: k-fade 0.35s ease backwards;
   }
   .k-pop {
     animation: k-pop 0.32s cubic-bezier(0.3, 1.5, 0.5, 1) both;
   }
   .k-panel {
     animation: k-slide 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  /* the page behind the open "Mais filtros" dialog does not scroll */
+  body:has(dialog.k-panel[open]) {
+    overflow: hidden;
   }
   .k-panel::backdrop {
     background: rgba(15, 27, 61, 0.45);

@@ -14,7 +14,7 @@ import { ViewBar } from "@/components/leads/ViewBar";
 import type { LeadView } from "@/lib/leads/queries";
 import { usd } from "@/components/research/format";
 import { clearPatch, DEFAULT_LEAD_FILTERS, filterLeads, hasSiteNoEmail, leadFacetsOf, sortRows, type LeadFilters, type SegmentTab, type Sort, type SortKey } from "@/lib/leads/view";
-import { chipValue, clearAllPatch, extraFilterKeys, panelFilterKeys, SHORTCUT_CHIPS, summaryOf } from "@/lib/leads/filter-ui";
+import { chipValue, clearAllPatch, countOf, panelFilterKeys, removableChipKeys, SHORTCUT_CHIPS, summaryOf } from "@/lib/leads/filter-ui";
 import { leadsCsvAction } from "@/app/(app)/leads/lead-actions";
 import { AI_TYPE_BATCH, AI_TYPE_MAX, stageOf } from "@/lib/leads/classify";
 import { classifyTypesAction } from "@/app/(app)/leads/lead-type-actions";
@@ -100,7 +100,7 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
   return (
     <>
       <h2 className="flex items-center gap-2.5 font-body text-lg font-semibold normal-case tracking-normal">
-        <HexIcon n={n} className="k-hex" />
+        <HexIcon n={n} turn />
         {title}
       </h2>
       {children}
@@ -180,7 +180,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
   const nameById = useMemo(() => new Map(items.map((i) => [i.lead.id, i.display.name])), [items]);
   const cities = useMemo(() => [...new Set(items.map((i) => i.display.city?.trim()).filter((c): c is string => Boolean(c)))], [items]);
   const aiQ = useMemo(() => questions.find((q) => q.id === f.aiQuestion) ?? null, [questions, f.aiQuestion]);
-  const chips = extraFilterKeys(f);
+  const chips = removableChipKeys(f);
   const summary = useMemo(() => summaryOf(f, filtered.length, agents, t), [f, filtered.length, agents, t]);
   // Leads already searched this visit: a guess never becomes the shown e-mail, so they would stay in the set and be sent again.
   const [searched, setSearched] = useState<Set<string>>(new Set());
@@ -278,6 +278,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
   const openFromMenu = (p: Panel) => {
     setMenuOpen(false);
     setOpenPanel((x) => (x === p ? null : p));
+    requestAnimationFrame(() => document.getElementById("lead-panel")?.scrollIntoView({ block: "nearest" }));
   };
   // the bar sits at the bottom of the screen; the qualifier opens up in the toolbar, so bring it into view
   const openQualifier = () => {
@@ -299,7 +300,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
 
   const ST = L.steps;
   const clearAll = () => {
-    pickTab(clearAllPatch(f));
+    set(clearAllPatch(f));
     setSearchKey((k) => k + 1);
   };
   const closeFilters = () => {
@@ -311,9 +312,40 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
   return (
     <div className="flex min-w-0 flex-col gap-5">
       {listBanner}
+      {/* the open tool (AI search, AI question, views, qualifier) sits above the filters, where the eye lands; ?ia= from Início opens it here */}
+      <div id="lead-panel" className="flex scroll-mt-4 flex-col gap-3 empty:hidden">
+      {canCreate && openPanel === "nl" && <NlSearch cities={cities} initialText={iaText ?? ""} onApply={(nl) => set(nl)} />}
+      {canCreate && openPanel === "ai" && (
+        <AiQuestionPanel
+          questions={questions}
+          f={f}
+          set={set}
+          selected={selected}
+          filtered={filteredIds}
+          reserveUsd={answerReserveUsd}
+          nameOf={(id) => nameById.get(id) ?? id}
+          onDone={() => router.refresh()}
+        />
+      )}
+      {canCreate && openPanel === "views" && (
+        <ViewBar
+          views={views}
+          filters={f}
+          onPick={(v) => {
+            setF(v ?? initialFilters);
+            setSearchKey((k) => k + 1);
+          }}
+        />
+      )}
+      {canCreate && openPanel === "qualify" && (
+        <div id="lead-qualify">
+          <QualifyControls filteredIds={filteredIds} selected={selected} onDone={clearSelection} />
+        </div>
+      )}
+      </div>
       <div className="k-in drop-shadow-[0_16px_22px_rgba(15,27,61,0.09)] [animation-delay:.3s]">
-        <div className="hx bg-[#e3e6ec] p-[1.5px] [--c:22px]">
-          <section aria-label={ST.filtersLabel} className="hx flex flex-col gap-[26px] bg-surface px-6 py-7 [--c:21.4px] md:px-[38px]">
+        <div className="hx bg-[#e3e6ec] p-[1.5px] [--c:10px] md:[--c:22px]">
+          <section aria-label={ST.filtersLabel} className="hx flex flex-col gap-[26px] bg-surface px-7 py-7 [--c:9.4px] md:px-[38px] md:[--c:21.4px]">
             {canCreate && (
               <div role="group" aria-label={L.segments.label} className="k-step flex flex-col gap-3">
                 <Step n={++step} title={L.segments.label}>
@@ -368,7 +400,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
                   {SHORTCUT_CHIPS.map((c) => {
                     const on = c.on(f);
                     return (
-                      <button key={c.id} type="button" aria-pressed={on} onClick={() => pickTab(c.patch(!on))} className={`k-btn inline-flex min-h-[46px] items-center gap-2 rounded-full border-2 pr-[18px] text-base text-ink ${on ? "border-honey bg-honey-light pl-2.5 font-semibold" : "border-line bg-surface pl-[18px]"}`}>
+                      <button key={c.id} type="button" aria-pressed={on} onClick={() => set(c.patch(!on))} className={`k-btn inline-flex min-h-[46px] items-center gap-2 rounded-full border-2 pr-[18px] text-base text-ink ${on ? "border-honey bg-honey-light pl-2.5 font-semibold" : "border-line bg-surface pl-[18px]"}`}>
                         {on && (
                           <span aria-hidden className="k-pop inline-flex size-6 items-center justify-center rounded-full bg-ink text-white">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
@@ -384,16 +416,17 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
               </Step>
             </div>
 
-            <div className="hx bg-honey-edge p-[2px] [--c:16px]">
-              <div className="hx flex flex-wrap items-center justify-between gap-3 bg-honey-soft py-4 pl-8 pr-[30px] [--c:15.4px]">
+            <div className="hx bg-honey-edge p-[2px] [--c:10px] md:[--c:16px]">
+              <div className="hx flex flex-wrap items-center justify-between gap-3 bg-honey-soft py-5 pl-8 pr-[30px] [--c:9.4px] md:[--c:15.4px]">
                 <div className="flex min-w-0 flex-[1_1_300px] items-center gap-3">
                   <HexIcon size={26} />
-                  <p aria-live="polite" className="m-0 min-w-0 text-lg">
+                  <p className="m-0 min-w-0 text-lg">
                     <span key={summary} className="k-fade inline-block">
                       <b className="font-semibold">{t.leads.summary.label}</b> {summary}
                     </span>
                   </p>
                 </div>
+                <p aria-live="polite" className="sr-only">{`${t.leads.summary.label} ${countOf(filtered.length, t)}`}</p>
                 <button type="button" onClick={clearAll} className="k-btn min-h-12 rounded-[12px] border-2 border-ink bg-surface px-5 font-semibold text-ink">
                   {ST.clearAll}
                 </button>
@@ -470,42 +503,13 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
         )}
         {typing && <p role="status" className="m-0 text-sm text-muted">{TB.aiTypeRunning}</p>}
 
-        {canCreate && openPanel === "nl" && <NlSearch cities={cities} initialText={iaText ?? ""} onApply={(nl) => set(nl)} />}
-        {canCreate && openPanel === "ai" && (
-          <AiQuestionPanel
-            questions={questions}
-            f={f}
-            set={set}
-            selected={selected}
-            filtered={filteredIds}
-            reserveUsd={answerReserveUsd}
-            nameOf={(id) => nameById.get(id) ?? id}
-            onDone={() => router.refresh()}
-          />
-        )}
-        {canCreate && openPanel === "views" && (
-          <ViewBar
-            views={views}
-            filters={f}
-            onPick={(v) => {
-              setF(v ?? initialFilters);
-              setSearchKey((k) => k + 1);
-            }}
-          />
-        )}
-        {canCreate && openPanel === "qualify" && (
-          <div id="lead-qualify">
-            <QualifyControls filteredIds={filteredIds} selected={selected} onDone={clearSelection} />
-          </div>
-        )}
-
         {notice && <p role="status" className={`m-0 text-sm ${notice.ok ? "text-ok" : "text-danger"}`}>{notice.text}</p>}
 
         {filtered.length === 0 ? (
           <p className={`text-base ${MUTED}`}>{t.research.list.emptyTab}</p>
         ) : (
           <>
-            <div className="drop-shadow-[0_14px_18px_rgba(15,27,61,0.08)]">
+            <div>
               <div className="hx bg-[#e3e6ec] p-[1.5px] [--c:18px]">
                 {/* side padding keeps every cell clear of the clipped points */}
                 <div className="hx overflow-x-auto bg-surface px-[18px] [--c:17.4px]">
@@ -519,7 +523,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
                           const on = sort?.key === h.key;
                           return (
                             <span key={n} role="columnheader" aria-sort={on ? (sort.dir === "asc" ? "ascending" : "descending") : "none"} className="min-w-0">
-                              <button type="button" aria-label={fill(L.facets.sortBy, { col: h.label })} onClick={() => setSort(nextSort(sort, h.key))} className="min-h-9 max-w-full truncate text-left hover:text-ink">
+                              <button type="button" aria-label={fill(L.facets.sortBy, { col: h.label })} onClick={() => setSort(nextSort(sort, h.key))} className="min-h-11 max-w-full truncate text-left hover:text-ink">
                                 {h.label}{on ? (sort.dir === "asc" ? " ▲" : " ▼") : ""}
                               </button>
                             </span>

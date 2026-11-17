@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { EMAIL_QUALITIES } from "@/lib/leads/email-quality";
 import { ENTERED_PRESETS, fold, LAST_TOUCH_PICKS, originKeyLabel, ROLES, type LeadFacets, type LeadFilters } from "@/lib/leads/view";
 import { PANEL_CATEGORIES, pickedIn, type PanelCategory } from "@/lib/leads/filter-ui";
@@ -38,6 +38,18 @@ function NameBox({ value, set }: { value: string; set: (patch: Partial<LeadFilte
     const id = setTimeout(() => set({ nameQ: q }), 200);
     return () => clearTimeout(id);
   }, [q, value, set]);
+  // the dialog unmounts this box on Esc or "Ver as N empresas": a word typed in the last 200 ms still applies
+  const latest = useRef({ q, value, set });
+  useEffect(() => {
+    latest.current = { q, value, set };
+  });
+  useEffect(
+    () => () => {
+      const l = latest.current;
+      if (l.q !== l.value) l.set({ nameQ: l.q });
+    },
+    [],
+  );
   return (
     <label className="flex flex-col gap-1.5 font-semibold">
       {P.word}
@@ -69,9 +81,15 @@ export function FacetPanel({ facets, f, set, agents, hasOneOff }: { facets: Lead
   );
   const [cat, setCat] = useState<PanelCategory>(() => shown.find((c) => pickedIn(c, f) > 0) ?? "city");
   const [find, setFind] = useState("");
+  const optionsRef = useRef<HTMLElement>(null);
   const pick = (c: PanelCategory) => {
     setCat(c);
     setFind("");
+    // on a phone the options sit under the category list: bring them into view
+    if (window.matchMedia("(max-width: 767px)").matches) {
+      const smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      requestAnimationFrame(() => optionsRef.current?.scrollIntoView({ block: "start", behavior: smooth ? "smooth" : "auto" }));
+    }
   };
   const q = fold(find.trim());
   const found = (label: string) => !q || fold(label).includes(q);
@@ -162,7 +180,7 @@ export function FacetPanel({ facets, f, set, agents, hasOneOff }: { facets: Lead
           );
         })}
       </nav>
-      <section aria-label={PN.labels[cat]} className="min-w-0 flex-1 md:overflow-auto">
+      <section ref={optionsRef} aria-label={PN.labels[cat]} className="min-w-0 flex-1 md:overflow-auto">
         <div key={cat} className="k-fade flex flex-col gap-3.5 px-5 py-6 md:pl-7 md:pr-10">
           <h3 className="m-0 text-[22px] font-semibold">{PN.labels[cat]}</h3>
           <p className="m-0 text-base text-[#4a5361]">{PN.help[cat]}</p>

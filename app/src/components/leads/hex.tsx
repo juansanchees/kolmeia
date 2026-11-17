@@ -1,8 +1,9 @@
 /** The honey hexagon of the logo, optionally with a step number (navy on honey, never white). */
-export function HexIcon({ n, size = 32, className = "" }: { n?: number; size?: number; className?: string }) {
+/** `turn`: the hexagon (never the number) rotates when its .k-step is hovered. */
+export function HexIcon({ n, size = 32, className = "", turn = false }: { n?: number; size?: number; className?: string; turn?: boolean }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden className={`shrink-0 ${className}`}>
-      <path className="fill-honey stroke-honey" strokeWidth="1.6" strokeLinejoin="round" d="M12 2 20.7 7v10L12 22 3.3 17V7Z" />
+      <path className={`fill-honey stroke-honey ${turn ? "k-hex" : ""}`} strokeWidth="1.6" strokeLinejoin="round" d="M12 2 20.7 7v10L12 22 3.3 17V7Z" />
       {n !== undefined && (
         <text x="12" y="16" textAnchor="middle" fontSize="11" fontWeight="700" className="fill-ink">
           {n}
