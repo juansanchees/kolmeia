@@ -10,7 +10,7 @@ describe("leads list UI rework", () => {
     for (const s of ["SHORTCUTS", "CONTACT_TABS", "LEAD_TABS", "t.leads.columns.proof", "t.leads.columns.approach"]) expect(table).not.toContain(s);
   });
   test("new layout pieces are wired", () => {
-    for (const s of ["LEAD_STAGES", "facets.stages", "facets.segments", "activeFilterKeys(", "SelectionBar", "originText(", "openedFromList", "usePaged(", "leadsCsvAction"]) expect(table).toContain(s);
+    for (const s of ["LEAD_STAGES", "facets.stages", "facets.segments", "extraFilterKeys(", "summaryOf(", "SHORTCUT_CHIPS", "FilterDialog", "SelectionBar", "originText(", "openedFromList", "usePaged(", "leadsCsvAction"]) expect(table).toContain(s);
     expect(table).toMatch(/setTimeout\([\s\S]{0,200}?200\)/); // 200 ms debounce
   });
   test("counts and lookups are memoized, not recomputed in JSX", () => {

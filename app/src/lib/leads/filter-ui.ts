@@ -44,6 +44,9 @@ export function pickedIn(cat: PanelCategory, f: LeadFilters): number {
 
 const PANEL_KEYS = new Set<keyof LeadFilters>(Object.values(PANEL_CATEGORIES).flat());
 
+/** Active filters the panel controls ("Limpar todos os filtros" inside it). */
+export const panelFilterKeys = (f: LeadFilters) => activeFilterKeys(f).filter((k) => PANEL_KEYS.has(k));
+
 /** Active filters the panel has no control for (set by AI search, the AI question or a shortcut from Início): shown as removable chips. */
 export const extraFilterKeys = (f: LeadFilters) => activeFilterKeys(f).filter((k) => !PANEL_KEYS.has(k));
 

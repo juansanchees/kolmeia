@@ -1,17 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { AiQuestionPanel, answerText } from "@/components/leads/AiQuestionPanel";
 import type { AiQuestion } from "@/lib/ai-questions/types";
 import { EmailBadge } from "@/components/leads/EmailBadge";
 import { FacetPanel } from "@/components/leads/FacetPanel";
+import { FilterDialog } from "@/components/leads/FilterDialog";
+import { Chevron, HexIcon } from "@/components/leads/hex";
 import { NlSearch } from "@/components/leads/NlSearch";
 import { SelectionBar, type BulkNotice } from "@/components/leads/SelectionBar";
 import { ViewBar } from "@/components/leads/ViewBar";
 import type { LeadView } from "@/lib/leads/queries";
 import { usd } from "@/components/research/format";
-import { activeFilterKeys, clearPatch, DEFAULT_LEAD_FILTERS, filterLeads, hasSiteNoEmail, leadFacetsOf, originKeyLabel, sortRows, type LeadFilters, type SegmentTab, type Sort, type SortKey } from "@/lib/leads/view";
+import { clearPatch, DEFAULT_LEAD_FILTERS, filterLeads, hasSiteNoEmail, leadFacetsOf, sortRows, type LeadFilters, type SegmentTab, type Sort, type SortKey } from "@/lib/leads/view";
+import { chipValue, clearAllPatch, extraFilterKeys, panelFilterKeys, SHORTCUT_CHIPS, summaryOf } from "@/lib/leads/filter-ui";
 import { leadsCsvAction } from "@/app/(app)/leads/lead-actions";
 import { AI_TYPE_BATCH, AI_TYPE_MAX, stageOf } from "@/lib/leads/classify";
 import { classifyTypesAction } from "@/app/(app)/leads/lead-type-actions";
@@ -26,16 +29,18 @@ import { openedFromList } from "@/components/leads/LeadModal";
 import { fill, type Messages } from "@/lib/i18n";
 import { useT } from "@/lib/i18n/client";
 
-const SEGMENT_TABS: (SegmentTab | "all")[] = ["residential", "small", "large", "none", "all"];
+const SEGMENT_TABS: (SegmentTab | "all")[] = ["all", "large", "small", "residential", "none"];
 const STAGE_TABS: (LeadStage | "all")[] = [...LEAD_STAGES, "all"];
 
-const GRID = "md:grid-cols-[minmax(0,2fr)_minmax(0,0.8fr)_minmax(0,0.6fr)_minmax(0,0.9fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.8fr)]";
+const GRID = "md:grid-cols-[minmax(0,2fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.8fr)]";
 // the same columns plus the AI question's (Tailwind needs both class names written out)
-const GRID_AI = "md:grid-cols-[minmax(0,2fr)_minmax(0,0.8fr)_minmax(0,0.6fr)_minmax(0,0.9fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_minmax(0,1.6fr)]";
+const GRID_AI = "md:grid-cols-[minmax(0,2fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_minmax(0,1.6fr)]";
 
 const linkBtn = "inline-flex min-h-11 items-center border border-blue bg-surface px-4 text-sm font-semibold text-blue no-underline hover:bg-blue-wash";
-const tabCls = (on: boolean) => `-mb-px min-h-11 border-b-[3px] px-3 text-[15px] ${on ? "border-blue font-semibold text-ink" : "border-transparent text-muted hover:text-ink"}`;
-const countCls = "ml-1 bg-ground px-1.5 font-mono text-[13px]";
+/** Size and stage buttons: navy when picked, the count in a pill (honey when picked; text on honey stays navy). */
+const pickCls = (on: boolean) => `k-btn border-2 text-left ${on ? "border-ink bg-ink text-white" : "border-line bg-surface text-ink"}`;
+const pillCls = (on: boolean) => `rounded-full px-2 font-mono text-sm font-normal ${on ? "bg-honey text-ink" : "bg-cold text-[#4a5361]"}`;
+const MUTED = "text-[#4a5361]";
 /** Mirrors FIND_MAX_LEADS in email-actions.ts (a "use server" file cannot export it). */
 const FIND_BATCH = 25;
 const menuItem = "flex min-h-11 w-full items-center px-4 text-left text-sm text-ink no-underline hover:bg-ground";
@@ -68,33 +73,6 @@ const headers = (COL: Messages["leads"]["columns"]): ({ key: SortKey; label: str
 /** none -> A-Z/oldest first -> reverse -> back to the default order. */
 const nextSort = (s: Sort, key: SortKey): Sort => (s?.key !== key ? { key, dir: "asc" } : s.dir === "asc" ? { key, dir: "desc" } : null);
 
-/** The value part of an active-filter chip ("" = the label says it all). */
-function chipValue(k: keyof LeadFilters, f: LeadFilters, agents: [string, string][], t: Messages): string {
-  const L = t.leads;
-  const TB = t.leads.toolbar;
-  switch (k) {
-    case "contact": return L.contactTabs[f.contact];
-    case "cities": return f.cities.join(", ");
-    case "lists": return f.lists.map((l) => originKeyLabel(l, t)).join(", ");
-    case "entered": return L.facets.enteredOpts[f.entered];
-    case "nameQ": return `${f.nameNot ? L.facets.nameNotContains : L.facets.nameContains} "${f.nameQ}"`;
-    case "role": return L.facets.roleOpts[f.role];
-    case "lastTouch": return L.facets.lastTouchOpts[f.lastTouch];
-    case "levels": return f.levels.map((l) => L.facets.levelName[l as 0 | 1 | 2 | 3 | 4]).join(", ");
-    case "origins": return f.origins.map((o) => L.facets.origins[o]).join(", ");
-    case "emailQuality": return f.emailQuality.map((q) => L.emailQuality.labels[q]).join(", ");
-    case "temperature": return f.temperature === "none" ? TB.noResearch : f.temperature === "all" ? "" : t.research.labels.temperature[f.temperature];
-    case "agent": return f.agent === "one_off" ? L.oneOff : (agents.find(([id]) => id === f.agent)?.[1] ?? f.agent);
-    case "status": return f.status === "all" ? "" : L.statuses[f.status];
-    case "tab": return t.research.list.tabs[f.tab];
-    case "minLevel": return String(f.minLevel);
-    case "companyTypes": return f.companyTypes.map((c) => L.nlSearch.types[c]).join(", ");
-    case "minPermitUsd": return usd(f.minPermitUsd, t.intl);
-    case "aiAnswer": return (L.aiQuestion.answers as Record<string, string>)[f.aiAnswer] ?? f.aiAnswer;
-    default: return "";
-  }
-}
-
 /** Typing stays local; the filter (and the whole list) only updates 200 ms after the last keystroke. */
 function SearchBox({ value, set }: { value: string; set: (patch: Partial<LeadFilters>) => void }) {
   const t = useT();
@@ -106,22 +84,26 @@ function SearchBox({ value, set }: { value: string; set: (patch: Partial<LeadFil
     return () => clearTimeout(id);
   }, [q, value, set]);
   return (
-    <input
-      type="search"
-      value={q}
-      onChange={(e) => setQ(e.target.value)}
-      placeholder={L.filters.search}
-      aria-label={L.filters.search}
-      className="min-h-11 min-w-0 flex-[1_1_160px] border border-line bg-surface px-3 text-sm text-ink"
-    />
+    <label className="k-field flex min-h-[58px] min-w-0 flex-[999_1_420px] items-center gap-3 rounded-[16px] border-2 border-line bg-surface px-[18px]">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4A5361" strokeWidth="2" strokeLinecap="round" aria-hidden className="shrink-0">
+        <circle cx="11" cy="11" r="7" />
+        <path d="M20 20l-3.5-3.5" />
+      </svg>
+      <span className="sr-only">{L.steps.searchLabel}</span>
+      <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={L.filters.search} className="min-w-0 flex-1 bg-transparent text-ink" />
+    </label>
   );
 }
 
-function ContactIcon({ on, glyph, yes, no }: { on: boolean; glyph: string; yes: string; no: string }) {
+/** A numbered step of the filter card; the hexagon turns when the step is hovered. */
+function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
     <>
-      <span aria-hidden className={on ? "text-blue" : "text-muted opacity-40"}>{glyph}</span>
-      <span className="sr-only">{on ? yes : no} </span>
+      <h2 className="flex items-center gap-2.5 font-body text-lg font-semibold normal-case tracking-normal">
+        <HexIcon n={n} className="k-hex" />
+        {title}
+      </h2>
+      {children}
     </>
   );
 }
@@ -136,6 +118,13 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
   // bumped when a saved view replaces every filter, so the search box takes the view's text
   const [searchKey, setSearchKey] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
+  const moreBtn = useRef<HTMLButtonElement>(null);
+  // rows fade up on the first paint only, not on every filter change
+  const [intro, setIntro] = useState(true);
+  useEffect(() => {
+    const id = setTimeout(() => setIntro(false), 1500);
+    return () => clearTimeout(id);
+  }, []);
   const [menuOpen, setMenuOpen] = useState(false);
   const search = useSearchParams();
   // The Home's "Quem você quer achar hoje?" sends ?ia=<text>: open "Busca com IA" with it (senders only, like the menu item)
@@ -191,7 +180,8 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
   const nameById = useMemo(() => new Map(items.map((i) => [i.lead.id, i.display.name])), [items]);
   const cities = useMemo(() => [...new Set(items.map((i) => i.display.city?.trim()).filter((c): c is string => Boolean(c)))], [items]);
   const aiQ = useMemo(() => questions.find((q) => q.id === f.aiQuestion) ?? null, [questions, f.aiQuestion]);
-  const chips = activeFilterKeys(f);
+  const chips = extraFilterKeys(f);
+  const summary = useMemo(() => summaryOf(f, filtered.length, agents, t), [f, filtered.length, agents, t]);
   // Leads already searched this visit: a guess never becomes the shown e-mail, so they would stay in the set and be sent again.
   const [searched, setSearched] = useState<Set<string>>(new Set());
   const [finding, startFind] = useTransition();
@@ -307,225 +297,310 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
     set(patch);
   };
 
-  return (
-    <div className="flex min-w-0 flex-col gap-4">
-      {listBanner}
-      {canCreate && (
-        <div role="group" aria-label={L.segments.label} className="flex flex-wrap border-b border-line">
-          {SEGMENT_TABS.map((x) => (
-            <button key={x} type="button" aria-pressed={f.segment === x} onClick={() => pickTab({ segment: x })} className={tabCls(f.segment === x)}>
-              {L.segments[x]} <span className={countCls}>{facets.segments[x]}</span>
-            </button>
-          ))}
-        </div>
-      )}
-      <div role="group" aria-label={L.stages.label} className="flex flex-wrap items-stretch border-b border-line">
-        {STAGE_TABS.map((x) => (
-          <button key={x} type="button" aria-pressed={f.stage === x} onClick={() => pickTab({ stage: x })} className={tabCls(f.stage === x)}>
-            {x === "all" ? L.filters.all : L.stages[x]} <span className={countCls}>{x === "all" ? activeTotal : facets.stages[x]}</span>
-          </button>
-        ))}
-      </div>
+  const ST = L.steps;
+  const clearAll = () => {
+    pickTab(clearAllPatch(f));
+    setSearchKey((k) => k + 1);
+  };
+  const closeFilters = () => {
+    setShowFilters(false);
+    moreBtn.current?.focus();
+  };
+  let step = 0;
 
-      <div className="flex flex-wrap items-start gap-2">
-        <SearchBox key={searchKey} value={f.q} set={set} />
-        <button
-          type="button"
-          aria-expanded={showFilters}
-          aria-controls="lead-filters"
-          onClick={() => setShowFilters((x) => !x)}
-          className="min-h-11 border border-line bg-surface px-4 text-sm font-semibold text-ink hover:border-ink"
-        >
-          {TB.filters} <span aria-hidden>▾</span>
-        </button>
-        {canCreate && (
-          <div className="relative" onKeyDown={(e) => e.key === "Escape" && setMenuOpen(false)}>
-            <button
-              type="button"
-              aria-label={TB.more}
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              onClick={() => setMenuOpen((x) => !x)}
-              className="min-h-11 min-w-11 border border-line bg-surface px-3 text-lg text-ink hover:border-ink"
-            >
-              <span aria-hidden>⋯</span>
-            </button>
-            {menuOpen && canCreate && (
-              <div role="menu" aria-label={TB.more} className="absolute right-0 z-20 mt-1 flex w-64 max-w-[calc(100vw-2rem)] flex-col border border-line bg-surface py-1">
-                <Link href="/leads/subir" role="menuitem" className={menuItem}>{t.imports.button}</Link>
-                {sources.maps && <Link href="/leads/buscar#maps" role="menuitem" className={menuItem}>{t.sources.search.maps}</Link>}
-                {sources.apollo && <Link href="/leads/buscar#apollo" role="menuitem" className={menuItem}>{t.sources.search.apollo}</Link>}
-                {sources.shovels && <Link href="/leads/buscar#shovels" role="menuitem" className={menuItem}>{t.sources.search.shovels}</Link>}
-                {sources.rapidapi && <Link href="/leads/buscar#b2b" role="menuitem" className={menuItem}>{t.sources.search.b2b}</Link>}
-                <button type="button" role="menuitem" disabled={finding || findable.length === 0} onClick={findEmails} className={`${menuItem} disabled:text-muted`}>{fill(TB.findEmailBulk, { n: findable.length })}</button>
-                <button type="button" role="menuitem" disabled={typing || untypedIds.length === 0} onClick={() => { setMenuOpen(false); setConfirmType(true); }} className={`${menuItem} disabled:text-muted`}>{fill(TB.aiType, { n: untypedIds.length })}</button>
-                <button type="button" role="menuitem" onClick={download} className={menuItem}>{L.csv}</button>
-                <button type="button" role="menuitem" onClick={() => openFromMenu("nl")} className={menuItem}>{TB.aiSearch}</button>
-                <button type="button" role="menuitem" onClick={() => openFromMenu("ai")} className={menuItem}>{TB.aiQuestion}</button>
-                <button type="button" role="menuitem" onClick={() => openFromMenu("views")} className={menuItem}>{TB.views}</button>
-                <button type="button" role="menuitem" onClick={() => openFromMenu("qualify")} className={menuItem}>{TB.qualifier}</button>
+  return (
+    <div className="flex min-w-0 flex-col gap-5">
+      {listBanner}
+      <div className="k-in drop-shadow-[0_16px_22px_rgba(15,27,61,0.09)] [animation-delay:.3s]">
+        <div className="hx bg-[#e3e6ec] p-[1.5px] [--c:22px]">
+          <section aria-label={ST.filtersLabel} className="hx flex flex-col gap-[26px] bg-surface px-6 py-7 [--c:21.4px] md:px-[38px]">
+            {canCreate && (
+              <div role="group" aria-label={L.segments.label} className="k-step flex flex-col gap-3">
+                <Step n={++step} title={L.segments.label}>
+                  <div className="flex flex-wrap gap-2">
+                    {SEGMENT_TABS.map((x) => (
+                      <button key={x} type="button" aria-pressed={f.segment === x} onClick={() => pickTab({ segment: x })} className={`${pickCls(f.segment === x)} inline-flex min-h-[52px] items-center gap-2.5 rounded-[14px] px-[18px] font-medium`}>
+                        {L.segments[x]} <span className={pillCls(f.segment === x)}>{facets.segments[x]}</span>
+                      </button>
+                    ))}
+                  </div>
+                </Step>
               </div>
             )}
+            <div role="group" aria-label={L.stages.label} className="k-step flex flex-col gap-3">
+              <Step n={++step} title={ST.stage}>
+                <div className="flex flex-wrap items-stretch gap-1.5">
+                  {STAGE_TABS.map((x, n) => {
+                    const on = f.stage === x;
+                    return (
+                      <div key={x} className="flex items-center gap-1.5">
+                        <button type="button" aria-pressed={on} onClick={() => pickTab({ stage: x })} className={`${pickCls(on)} flex min-h-[68px] min-w-[132px] flex-col items-start justify-center rounded-[16px] px-4 py-2`}>
+                          <span className="flex items-center gap-2 font-semibold">
+                            {x === "all" ? ST.stageAll : L.stages[x]} <span className={pillCls(on)}>{x === "all" ? activeTotal : facets.stages[x]}</span>
+                          </span>
+                          <span className={`text-sm ${on ? "text-[#d5dae6]" : MUTED}`}>{ST.stageHints[x]}</span>
+                        </button>
+                        {n < LEAD_STAGES.length - 1 && <Chevron className="shrink-0 text-[#b3bac6]" />}
+                      </div>
+                    );
+                  })}
+                </div>
+              </Step>
+            </div>
+            <div className="k-step flex flex-col gap-3">
+              <Step n={++step} title={ST.search}>
+                <div className="flex flex-wrap gap-2.5">
+                  <SearchBox key={searchKey} value={f.q} set={set} />
+                  <button ref={moreBtn} type="button" aria-haspopup="dialog" aria-expanded={showFilters} aria-controls="lead-filters" onClick={() => setShowFilters(true)} className="k-lift flex flex-[1_1_220px] font-semibold text-ink">
+                    <span className="hx flex flex-1 bg-ink p-[2px] [--c:14px]">
+                      <span className="hx hx-fill inline-flex min-h-[54px] flex-1 flex-wrap items-center justify-center gap-x-2.5 bg-surface px-[30px] [--c:13.4px]">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                          <path d="M4 6h16M7 12h10M10 18h4" />
+                        </svg>
+                        {ST.moreFilters} <span className={`font-normal ${MUTED}`}>{ST.moreFiltersHint}</span>
+                        <Chevron className="k-arrow" />
+                      </span>
+                    </span>
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`mr-1 text-base ${MUTED}`}>{ST.shortcuts}</span>
+                  {SHORTCUT_CHIPS.map((c) => {
+                    const on = c.on(f);
+                    return (
+                      <button key={c.id} type="button" aria-pressed={on} onClick={() => pickTab(c.patch(!on))} className={`k-btn inline-flex min-h-[46px] items-center gap-2 rounded-full border-2 pr-[18px] text-base text-ink ${on ? "border-honey bg-honey-light pl-2.5 font-semibold" : "border-line bg-surface pl-[18px]"}`}>
+                        {on && (
+                          <span aria-hidden className="k-pop inline-flex size-6 items-center justify-center rounded-full bg-ink text-white">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M5 12l5 5L20 7" />
+                            </svg>
+                          </span>
+                        )}
+                        {ST.chips[c.id]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </Step>
+            </div>
+
+            <div className="hx bg-honey-edge p-[2px] [--c:16px]">
+              <div className="hx flex flex-wrap items-center justify-between gap-3 bg-honey-soft py-4 pl-8 pr-[30px] [--c:15.4px]">
+                <div className="flex min-w-0 flex-[1_1_300px] items-center gap-3">
+                  <HexIcon size={26} />
+                  <p aria-live="polite" className="m-0 min-w-0 text-lg">
+                    <span key={summary} className="k-fade inline-block">
+                      <b className="font-semibold">{t.leads.summary.label}</b> {summary}
+                    </span>
+                  </p>
+                </div>
+                <button type="button" onClick={clearAll} className="k-btn min-h-12 rounded-[12px] border-2 border-ink bg-surface px-5 font-semibold text-ink">
+                  {ST.clearAll}
+                </button>
+              </div>
+            </div>
+
+            {chips.length > 0 && (
+              <div className="-mt-3 flex flex-wrap items-center gap-2">
+                {chips.map((k) => {
+                  const value = chipValue(k, f, agents, t);
+                  const label = `${L.chips[k as keyof typeof L.chips]}${value ? `: ${value}` : ""}`;
+                  return (
+                    <span key={k} className="inline-flex min-h-11 max-w-full items-center gap-1 rounded-full border-2 border-honey bg-honey-light pl-4 text-[15px] text-ink">
+                      <span className="min-w-0 truncate">{label}</span>
+                      <button type="button" aria-label={fill(TB.removeChip, { label })} onClick={() => set(clearPatch([k]))} className="k-btn min-h-11 min-w-11 rounded-full text-lg">
+                        <span aria-hidden>×</span>
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
+
+      <FilterDialog open={showFilters} onClose={closeFilters} n={filtered.length} onClear={() => set(clearPatch(panelFilterKeys(f)))}>
+        <FacetPanel facets={facets} f={f} set={set} agents={agents} hasOneOff={hasOneOff} />
+      </FilterDialog>
+
+      <section aria-label={ST.companies} className="k-in flex min-w-0 flex-col gap-3 [animation-delay:.38s]">
+        <div className="flex flex-wrap items-center justify-between gap-2.5">
+          <p className={`m-0 text-base ${MUTED}`}>
+            {TB.order} <span className="font-mono text-sm">· {filtered.length} / {items.length}</span>
+          </p>
+          {canCreate && (
+            <div className="relative" onKeyDown={(e) => e.key === "Escape" && setMenuOpen(false)}>
+              <button
+                type="button"
+                aria-label={TB.more}
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                onClick={() => setMenuOpen((x) => !x)}
+                className="k-btn min-h-12 min-w-12 rounded-[12px] border-2 border-line bg-surface px-3 text-xl text-ink"
+              >
+                <span aria-hidden>⋯</span>
+              </button>
+              {menuOpen && canCreate && (
+                <div role="menu" aria-label={TB.more} className="absolute right-0 z-20 mt-1 flex w-72 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-[12px] border border-line bg-surface py-1 shadow-[0_12px_28px_-12px_rgba(15,27,61,0.4)]">
+                  <Link href="/leads/subir" role="menuitem" className={menuItem}>{t.imports.button}</Link>
+                  {sources.maps && <Link href="/leads/buscar#maps" role="menuitem" className={menuItem}>{t.sources.search.maps}</Link>}
+                  {sources.apollo && <Link href="/leads/buscar#apollo" role="menuitem" className={menuItem}>{t.sources.search.apollo}</Link>}
+                  {sources.shovels && <Link href="/leads/buscar#shovels" role="menuitem" className={menuItem}>{t.sources.search.shovels}</Link>}
+                  {sources.rapidapi && <Link href="/leads/buscar#b2b" role="menuitem" className={menuItem}>{t.sources.search.b2b}</Link>}
+                  <button type="button" role="menuitem" disabled={finding || findable.length === 0} onClick={findEmails} className={`${menuItem} disabled:text-muted`}>{fill(TB.findEmailBulk, { n: findable.length })}</button>
+                  <button type="button" role="menuitem" disabled={typing || untypedIds.length === 0} onClick={() => { setMenuOpen(false); setConfirmType(true); }} className={`${menuItem} disabled:text-muted`}>{fill(TB.aiType, { n: untypedIds.length })}</button>
+                  <button type="button" role="menuitem" onClick={download} className={menuItem}>{L.csv}</button>
+                  <button type="button" role="menuitem" onClick={() => openFromMenu("nl")} className={menuItem}>{TB.aiSearch}</button>
+                  <button type="button" role="menuitem" onClick={() => openFromMenu("ai")} className={menuItem}>{TB.aiQuestion}</button>
+                  <button type="button" role="menuitem" onClick={() => openFromMenu("views")} className={menuItem}>{TB.views}</button>
+                  <button type="button" role="menuitem" onClick={() => openFromMenu("qualify")} className={menuItem}>{TB.qualifier}</button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        {csvError && <p role="alert" className="m-0 text-sm text-danger">{csvError}</p>}
+        {canCreate && confirmType && typeTarget.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border border-line bg-surface p-3">
+            <p className="m-0 min-w-0 flex-[1_1_240px] text-sm text-ink">{fill(TB.aiTypeEstimate, { usd: `US$ ${usd(typeEstimate, t.intl)}`, n: typeTarget.length })}</p>
+            <button type="button" onClick={classifyTypes} className={linkBtn}>{TB.aiTypeRun}</button>
+            <button type="button" onClick={() => setConfirmType(false)} className="min-h-11 px-3 text-sm text-blue underline underline-offset-4">{TB.aiTypeCancel}</button>
           </div>
         )}
-      </div>
-      {csvError && <p role="alert" className="m-0 text-sm text-danger">{csvError}</p>}
-      {canCreate && confirmType && typeTarget.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 border border-line bg-surface p-3">
-          <p className="m-0 min-w-0 flex-[1_1_240px] text-sm text-ink">{fill(TB.aiTypeEstimate, { usd: `US$ ${usd(typeEstimate, t.intl)}`, n: typeTarget.length })}</p>
-          <button type="button" onClick={classifyTypes} className={linkBtn}>{TB.aiTypeRun}</button>
-          <button type="button" onClick={() => setConfirmType(false)} className="min-h-11 px-3 text-sm text-blue underline underline-offset-4">{TB.aiTypeCancel}</button>
-        </div>
-      )}
-      {typing && <p role="status" className="m-0 text-sm text-muted">{TB.aiTypeRunning}</p>}
+        {typing && <p role="status" className="m-0 text-sm text-muted">{TB.aiTypeRunning}</p>}
 
-      {showFilters && <FacetPanel facets={facets} f={f} set={set} agents={agents} hasOneOff={hasOneOff} />}
-
-      {canCreate && openPanel === "nl" && <NlSearch cities={cities} initialText={iaText ?? ""} onApply={(nl) => set(nl)} />}
-      {canCreate && openPanel === "ai" && (
-        <AiQuestionPanel
-          questions={questions}
-          f={f}
-          set={set}
-          selected={selected}
-          filtered={filteredIds}
-          reserveUsd={answerReserveUsd}
-          nameOf={(id) => nameById.get(id) ?? id}
-          onDone={() => router.refresh()}
-        />
-      )}
-      {canCreate && openPanel === "views" && (
-        <ViewBar
-          views={views}
-          filters={f}
-          onPick={(v) => {
-            setF(v ?? initialFilters);
-            setSearchKey((k) => k + 1);
-          }}
-        />
-      )}
-      {canCreate && openPanel === "qualify" && (
-        <div id="lead-qualify">
-          <QualifyControls filteredIds={filteredIds} selected={selected} onDone={clearSelection} />
-        </div>
-      )}
-
-      {chips.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          {chips.map((k) => {
-            const value = chipValue(k, f, agents, t);
-            const label = `${L.chips[k as keyof typeof L.chips]}${value ? `: ${value}` : ""}`;
-            return (
-              <span key={k} className="inline-flex min-h-9 max-w-full items-center gap-1 border border-blue bg-blue-wash pl-3 text-[13px] text-ink">
-                <span className="min-w-0 truncate">{label}</span>
-                <button type="button" aria-label={fill(TB.removeChip, { label })} onClick={() => set(clearPatch([k]))} className="min-h-9 min-w-9 text-blue hover:bg-blue-soft">
-                  <span aria-hidden>×</span>
-                </button>
-              </span>
-            );
-          })}
-          <button
-            type="button"
-            onClick={() => set(clearPatch(chips))}
-            className="min-h-9 text-sm text-blue underline underline-offset-4"
-          >
-            {TB.clear}
-          </button>
-        </div>
-      )}
-
-      {notice && <p role="status" className={`m-0 text-sm ${notice.ok ? "text-ok" : "text-danger"}`}>{notice.text}</p>}
-      <span className="font-mono text-xs text-muted">{filtered.length} / {items.length}</span>
-      <p className="m-0 text-xs text-muted">{TB.order}</p>
-      {filtered.length > 0 && (
-        <div className="hidden md:flex" role="row">
-          {canCreate && <span className="w-11 shrink-0" />}
-          <div className={`grid min-w-0 flex-1 px-3.5 ${aiQ ? GRID_AI : GRID} gap-3 font-mono text-xs uppercase tracking-wide text-muted`}>
-            {headers(t.leads.columns).map((h, n) => {
-              if (!h) return <span key={n} />;
-              const on = sort?.key === h.key;
-              return (
-                <span key={n} role="columnheader" aria-sort={on ? (sort.dir === "asc" ? "ascending" : "descending") : "none"} className="min-w-0">
-                  <button type="button" aria-label={fill(L.facets.sortBy, { col: h.label })} onClick={() => setSort(nextSort(sort, h.key))} className="min-h-9 max-w-full truncate text-left uppercase hover:text-ink">
-                    {h.label}{on ? (sort.dir === "asc" ? " ▲" : " ▼") : ""}
-                  </button>
-                </span>
-              );
-            })}
-            {aiQ && <span />}
+        {canCreate && openPanel === "nl" && <NlSearch cities={cities} initialText={iaText ?? ""} onApply={(nl) => set(nl)} />}
+        {canCreate && openPanel === "ai" && (
+          <AiQuestionPanel
+            questions={questions}
+            f={f}
+            set={set}
+            selected={selected}
+            filtered={filteredIds}
+            reserveUsd={answerReserveUsd}
+            nameOf={(id) => nameById.get(id) ?? id}
+            onDone={() => router.refresh()}
+          />
+        )}
+        {canCreate && openPanel === "views" && (
+          <ViewBar
+            views={views}
+            filters={f}
+            onPick={(v) => {
+              setF(v ?? initialFilters);
+              setSearchKey((k) => k + 1);
+            }}
+          />
+        )}
+        {canCreate && openPanel === "qualify" && (
+          <div id="lead-qualify">
+            <QualifyControls filteredIds={filteredIds} selected={selected} onDone={clearSelection} />
           </div>
-        </div>
-      )}
+        )}
 
-      {filtered.length === 0 ? (
-        <p className="text-sm text-muted">{t.research.list.emptyTab}</p>
-      ) : (
-        <>
-          {canCreate && (
-            <label className="flex min-h-11 items-center gap-2 text-sm">
-              <input type="checkbox" checked={pageAllPicked} onChange={(e) => togglePage(e.target.checked)} className="h-5 w-5" />
-              {P.selectPage}
-            </label>
-          )}
-          <ul className="m-0 flex list-none flex-col border border-line bg-surface p-0">
-            {pageItems.map((i) => {
-              const hasEmail = Boolean(i.display.email?.trim());
-              const hasPhone = Boolean(i.display.phone?.trim());
-              return (
-                <li key={i.lead.id} className="flex items-stretch border-b border-line last:border-b-0">
-                  {canCreate && <RowCheck checked={picked.has(i.lead.id)} name={i.display.name} onChange={(v) => toggle(i.lead.id, v)} />}
-                  <Link href={leadHref(i.lead.id)} scroll={false} onClick={() => (openedFromList.value = true)} className={`flex min-w-0 flex-1 flex-col gap-1 px-3.5 py-3 text-ink no-underline hover:bg-ground md:grid ${aiQ ? GRID_AI : GRID} md:items-center md:gap-3`}>
-                    <span className="min-w-0">
-                      <span className="sr-only">{COL.company}: </span>
-                      <span className="block truncate text-sm font-semibold">{i.display.name}</span>
-                      {i.display.city && <span className="block truncate text-[13px] text-muted">{i.display.city}</span>}
-                      {i.emailQuality && (
-                        <span className="mt-0.5 block">
-                          <span className="sr-only">{L.facets.emailQuality}: </span>
-                          <EmailBadge quality={i.emailQuality} />
-                        </span>
-                      )}
-                    </span>
-                    <span className="text-[13px]">
-                      <span className="sr-only">{COL.type}: </span>
-                      {L.segments[i.segment ?? "none"]}
-                    </span>
-                    <span className="flex gap-2 text-[15px]">
-                      <span className="sr-only">{COL.contact}: </span>
-                      <ContactIcon on={hasEmail} glyph="✉" yes={L.contactIcons.email} no={L.contactIcons.noEmail} />
-                      <ContactIcon on={hasPhone} glyph="☎" yes={L.contactIcons.phone} no={L.contactIcons.noPhone} />
-                    </span>
-                    <span className="text-[13px]">
-                      <span className="sr-only">{COL.stage}: </span>
-                      {L.stages[stageOf(i.lead)]}
-                    </span>
-                    <span className="truncate text-[13px] text-muted" title={i.origins.length > 0 ? i.origins.map((o) => o.name).join(", ") : undefined}>
-                      <span className="sr-only">{COL.origin}: </span>
-                      {originText(i, t)}
-                    </span>
-                    <span className="font-mono text-[13px] text-muted">
-                      <span className="md:hidden">{COL.lastContact}: </span>
-                      {lastTouch(i.lead.last_touch_at, t)}
-                    </span>
-                    <span className="font-mono text-[13px] text-muted">
-                      <span className="md:hidden">{COL.entered}: </span>
-                      {lastTouch(i.lead.first_seen_at, t)}
-                    </span>
-                    {aiQ && (
-                      <span className="min-w-0 text-[13px]">
-                        <span className="sr-only">{aiQ.question}: </span>
-                        <span className="font-semibold">{answerText(i.ai?.[aiQ.id], t)}</span>
-                        {i.ai?.[aiQ.id]?.excerpt && <span className="block truncate text-muted" title={i.ai[aiQ.id].excerpt ?? undefined}>“{i.ai[aiQ.id].excerpt}” · {i.ai[aiQ.id].label}</span>}
-                      </span>
-                    )}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-          <Pager pager={pager} />
-        </>
-      )}
+        {notice && <p role="status" className={`m-0 text-sm ${notice.ok ? "text-ok" : "text-danger"}`}>{notice.text}</p>}
+
+        {filtered.length === 0 ? (
+          <p className={`text-base ${MUTED}`}>{t.research.list.emptyTab}</p>
+        ) : (
+          <>
+            <div className="drop-shadow-[0_14px_18px_rgba(15,27,61,0.08)]">
+              <div className="hx bg-[#e3e6ec] p-[1.5px] [--c:18px]">
+                {/* side padding keeps every cell clear of the clipped points */}
+                <div className="hx overflow-x-auto bg-surface px-[18px] [--c:17.4px]">
+                  <div className="md:min-w-[880px]">
+                    <div className="hidden border-b border-[#e3e6ec] md:flex" role="row">
+                      {canCreate && <span className="w-11 shrink-0" />}
+                      <div className={`grid min-w-0 flex-1 px-3.5 py-3 ${aiQ ? GRID_AI : GRID} gap-3 text-[15px] font-semibold ${MUTED}`}>
+                        {headers(t.leads.columns).map((h, n) => {
+                          const label = [COL.company, COL.type, COL.contact, COL.stage, COL.origin, COL.lastContact, COL.entered][n];
+                          if (!h) return <span key={n} role="columnheader">{label}</span>;
+                          const on = sort?.key === h.key;
+                          return (
+                            <span key={n} role="columnheader" aria-sort={on ? (sort.dir === "asc" ? "ascending" : "descending") : "none"} className="min-w-0">
+                              <button type="button" aria-label={fill(L.facets.sortBy, { col: h.label })} onClick={() => setSort(nextSort(sort, h.key))} className="min-h-9 max-w-full truncate text-left hover:text-ink">
+                                {h.label}{on ? (sort.dir === "asc" ? " ▲" : " ▼") : ""}
+                              </button>
+                            </span>
+                          );
+                        })}
+                        {aiQ && <span role="columnheader">{aiQ.question}</span>}
+                      </div>
+                    </div>
+                    <ul className="m-0 flex list-none flex-col p-0">
+                      {pageItems.map((i, n) => {
+                        const hasEmail = Boolean(i.display.email?.trim());
+                        const hasPhone = Boolean(i.display.phone?.trim());
+                        return (
+                          <li key={i.lead.id} className={`k-row flex items-stretch border-b border-[#eef0f3] last:border-b-0 ${intro && n < 12 ? "k-in" : ""}`} style={intro && n < 12 ? { animationDelay: `${0.45 + n * 0.04}s` } : undefined}>
+                            {canCreate && <RowCheck checked={picked.has(i.lead.id)} name={i.display.name} onChange={(v) => toggle(i.lead.id, v)} />}
+                            <Link href={leadHref(i.lead.id)} scroll={false} onClick={() => (openedFromList.value = true)} className={`flex min-w-0 flex-1 flex-col gap-1.5 px-3.5 py-4 text-ink no-underline md:grid ${aiQ ? GRID_AI : GRID} md:items-center md:gap-3`}>
+                              <span className="min-w-0">
+                                <span className="sr-only">{COL.company}: </span>
+                                <span className="block truncate text-[17px] font-semibold">{i.display.name}</span>
+                                {i.display.city && <span className={`block truncate text-[15px] ${MUTED}`}>{i.display.city}</span>}
+                                {i.emailQuality && (
+                                  <span className="mt-0.5 block">
+                                    <span className="sr-only">{L.facets.emailQuality}: </span>
+                                    <EmailBadge quality={i.emailQuality} />
+                                  </span>
+                                )}
+                              </span>
+                              <span>
+                                <span className="sr-only">{COL.type}: </span>
+                                <span className="inline-block rounded-full bg-cold px-3 py-1 text-[15px] font-medium">{L.segments[i.segment ?? "none"]}</span>
+                              </span>
+                              <span className="flex flex-col text-[15px]">
+                                <span className="sr-only">{COL.contact}: </span>
+                                <span className={hasPhone ? "" : "text-[#5e6775]"}>{hasPhone ? L.contactIcons.phone : L.contactIcons.noPhone}</span>
+                                <span className={hasEmail ? "" : "text-[#5e6775]"}>{hasEmail ? L.contactIcons.email : L.contactIcons.noEmail}</span>
+                              </span>
+                              <span>
+                                <span className="sr-only">{COL.stage}: </span>
+                                <span className="inline-flex items-center gap-1.5 rounded-full bg-honey-pill py-1 pl-2.5 pr-3 text-[15px] font-medium">
+                                  <span aria-hidden className="size-2 rounded-full bg-honey" />
+                                  {L.stages[stageOf(i.lead)]}
+                                </span>
+                              </span>
+                              <span className="truncate text-[15px]" title={i.origins.length > 0 ? i.origins.map((o) => o.name).join(", ") : undefined}>
+                                <span className="sr-only">{COL.origin}: </span>
+                                {originText(i, t)}
+                              </span>
+                              <span className="text-[15px]">
+                                <span className="md:hidden">{COL.lastContact}: </span>
+                                {lastTouch(i.lead.last_touch_at, t)}
+                              </span>
+                              <span className="font-mono text-[15px]">
+                                <span className="md:hidden">{COL.entered}: </span>
+                                {lastTouch(i.lead.first_seen_at, t)}
+                              </span>
+                              {aiQ && (
+                                <span className="min-w-0 text-[15px]">
+                                  <span className="sr-only">{aiQ.question}: </span>
+                                  <span className="font-semibold">{answerText(i.ai?.[aiQ.id], t)}</span>
+                                  {i.ai?.[aiQ.id]?.excerpt && <span className={`block truncate ${MUTED}`} title={i.ai[aiQ.id].excerpt ?? undefined}>“{i.ai[aiQ.id].excerpt}” · {i.ai[aiQ.id].label}</span>}
+                                </span>
+                              )}
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {canCreate && (
+              <label className="flex min-h-12 items-center gap-2.5 text-base">
+                <input type="checkbox" checked={pageAllPicked} onChange={(e) => togglePage(e.target.checked)} className="size-[22px] accent-ink" />
+                {P.selectPage}
+              </label>
+            )}
+            <Pager pager={pager} />
+          </>
+        )}
+      </section>
 
       {canCreate && selected.length > 0 && (
         <div className="sticky bottom-0 z-10">
