@@ -22,6 +22,14 @@
   --color-cta: #ff7a1a;
   --color-cta-edge: #c85a00;
   --color-cta-ink: #1a0e00;
+  /* Honey (logo hexagon). Text on honey is always ink, never white. */
+  --color-honey: #f5a400;
+  --color-honey-soft: #fff6db;
+  --color-honey-light: #ffe7a3;
+  --color-honey-edge: #f5c64d;
+  --color-honey-hover: #fffaeb;
+  --color-honey-pill: #fff1c7;
+  --color-honey-glow: #ffd666;
   --font-display: var(--font-archivo-narrow), "Arial Narrow", sans-serif;
   --font-body: var(--font-plex-sans), system-ui, sans-serif;
   --font-mono: var(--font-plex-mono), ui-monospace, monospace;
@@ -54,4 +62,164 @@ h2 {
 :focus-visible {
   outline: 3px solid var(--color-blue);
   outline-offset: 2px;
+}
+
+/* Hexagons: .hx points left and right (--c = how deep the points are), .hxv points up and down. */
+@utility hx {
+  clip-path: polygon(var(--c) 0, calc(100% - var(--c)) 0, 100% 50%, calc(100% - var(--c)) 100%, var(--c) 100%, 0 50%);
+}
+@utility hxv {
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+
+@layer components {
+  .k-btn {
+    transition: background-color 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), color 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .k-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 22px -12px rgba(15, 27, 61, 0.45);
+  }
+  .k-btn:active:not(:disabled) {
+    transform: translateY(0) scale(0.98);
+    box-shadow: 0 2px 6px -3px rgba(15, 27, 61, 0.3);
+    transition-duration: 0.08s;
+  }
+  .k-btn:focus-visible,
+  .k-link:focus-visible,
+  .k-opt:focus-within,
+  .k-cat:focus-visible {
+    outline: 3px solid var(--color-ink);
+    outline-offset: 3px;
+    box-shadow: 0 0 0 8px rgba(245, 164, 0, 0.35);
+  }
+  .k-link {
+    color: var(--color-ink);
+    text-decoration-color: var(--color-honey);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 5px;
+    transition: color 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), text-underline-offset 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .k-link:hover {
+    color: #7a4e00;
+    text-underline-offset: 8px;
+  }
+  .k-field {
+    transition: border-color 0.2s ease, box-shadow 0.25s ease;
+  }
+  .k-field:hover {
+    border-color: var(--color-edge);
+  }
+  .k-field:focus-within {
+    border-color: var(--color-ink);
+    box-shadow: 0 0 0 5px rgba(245, 164, 0, 0.3);
+  }
+  .k-field input:focus-visible {
+    outline: none;
+  }
+  .k-row {
+    transition: background-color 0.18s ease;
+  }
+  .k-row:hover {
+    background: var(--color-honey-hover);
+  }
+  .k-arrow {
+    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .k-btn:hover .k-arrow,
+  .k-lift:hover .k-arrow {
+    transform: translateX(3px);
+  }
+  .k-lift {
+    transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), filter 0.25s ease;
+  }
+  .k-lift:hover {
+    transform: translateY(-2px);
+  }
+  .k-lift:active {
+    transform: translateY(0) scale(0.985);
+    transition-duration: 0.08s;
+  }
+  /* hexagons are clipped, so the focus ring is a drop shadow that follows the shape */
+  .k-lift:focus-visible {
+    outline: none;
+    filter: drop-shadow(0 0 2px var(--color-ink)) drop-shadow(0 0 6px rgba(245, 164, 0, 0.9)) !important;
+  }
+  .hx-fill {
+    transition: background-color 0.22s ease;
+  }
+  .k-lift:hover .hx-fill {
+    background: var(--color-honey-hover) !important;
+  }
+  .k-hex {
+    transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .k-step:hover .k-hex {
+    transform: rotate(60deg);
+  }
+  .k-cat {
+    transition: background-color 0.22s ease, color 0.22s ease, box-shadow 0.25s ease;
+  }
+  .k-cat:hover {
+    background: var(--color-surface);
+  }
+  .k-opt {
+    transition: background-color 0.18s ease;
+  }
+  .k-opt:hover {
+    background: var(--color-honey-hover);
+  }
+  .k-opt input {
+    accent-color: var(--color-ink);
+  }
+  .k-close {
+    transition: background-color 0.2s ease, transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .k-close:hover {
+    background: var(--color-cold);
+    transform: rotate(90deg);
+  }
+  .k-in {
+    animation: k-up 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .k-fade {
+    animation: k-fade 0.35s ease both;
+  }
+  .k-pop {
+    animation: k-pop 0.32s cubic-bezier(0.3, 1.5, 0.5, 1) both;
+  }
+  .k-panel {
+    animation: k-slide 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .k-panel::backdrop {
+    background: rgba(15, 27, 61, 0.45);
+  }
+}
+
+@keyframes k-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes k-fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes k-pop {
+  from { opacity: 0; transform: scale(0.4); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes k-slide {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .k-btn, .k-link, .k-field, .k-row, .k-arrow, .k-lift, .hx-fill, .k-hex, .k-cat, .k-opt, .k-close,
+  .k-in, .k-fade, .k-pop, .k-panel {
+    animation: none !important;
+    transition: none !important;
+  }
+  .k-btn:hover, .k-lift:hover, .k-step:hover .k-hex, .k-close:hover, .k-btn:hover .k-arrow, .k-lift:hover .k-arrow {
+    transform: none !important;
+  }
 }
