@@ -374,4 +374,9 @@ export const leads = {
       agent: "The agent that found the company.",
     },
   },
+  detail: {
+    close: "Close",
+    actionsTitle: "What to do with this lead",
+    groups: { lists: "Call list and campaign", email: "Email", close: "Close the lead" },
+  },
 } satisfies Widen<typeof pt>;

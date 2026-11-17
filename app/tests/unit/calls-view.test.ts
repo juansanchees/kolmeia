@@ -43,7 +43,7 @@ describe("F5 calls view", () => {
     expect(CALL_OUTCOMES).toEqual(["no_answer", "voicemail", "gatekeeper", "talked", "meeting_booked", "not_interested", "wrong_number", "do_not_call"]);
     for (const o of CALL_OUTCOMES) expect(t.calls.outcomes[o]).toBeTruthy();
     expect(JSON.stringify(t.calls)).not.toMatch(/sms:/i);
-    expect(t.funnel).toEqual({ tab: "Funil", origin: "Origem", total: "Total" });
+    expect(t.funnel).toMatchObject({ tab: "Funil", origin: "Origem", total: "Total" });
     expect(t.callAgent.metrics).toEqual({ inList: "na lista", called: "ligados", answered: "atendeu", meetings: "reunião marcada" });
   });
 

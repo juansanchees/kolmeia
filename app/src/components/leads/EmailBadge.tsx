@@ -18,7 +18,7 @@ export function EmailBadge({ quality }: { quality: EmailQuality | null | undefin
   const Q = t.leads.emailQuality;
   if (!quality) return null;
   return (
-    <span title={Q.hints[quality]} className={`inline-block whitespace-nowrap px-1.5 py-0.5 font-mono text-xs ${CLS[quality]}`}>
+    <span title={Q.hints[quality]} className={`inline-block whitespace-nowrap rounded-full px-2.5 py-0.5 text-[13px] font-medium ${CLS[quality]}`}>
       {Q.labels[quality]}
     </span>
   );

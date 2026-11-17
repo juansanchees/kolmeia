@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { Notice } from "@/components/email/bits";
+import { Button, HexPanel, Notice, Select, StepTitle } from "@/components/ui";
 import { ProfileCard } from "@/components/profile/ProfileCard";
 import { isUuid } from "@/lib/profile/view";
 import { getProfile, listHunters, profileBaseline } from "@/lib/profile/queries";
@@ -30,24 +30,24 @@ export default async function ProfilePage({ params, searchParams }: { params: Pr
   return (
     <div className="flex min-w-0 flex-col gap-6">
       <ProfileCard profile={profile} hunters={hunters} />
-      <section aria-labelledby="compare-title" className="flex min-w-0 flex-col gap-3 border border-line bg-surface p-5">
-        <h2 id="compare-title" className="text-xl">{M.compareTitle}</h2>
-        <form method="get" className="flex flex-wrap items-end gap-2">
-          <label className="flex min-w-0 flex-col gap-1 text-sm">
-            {M.compareHunter}
-            <select name="cacador" defaultValue={agentId ?? ""} className="w-full min-w-0 border border-line bg-surface px-3 py-2 text-base text-ink">
+      <HexPanel as="section" aria-labelledby="compare-title" c={20} cSm={10} className="flex min-w-0 flex-col gap-4 py-6" wrapClassName="k-in [animation-delay:.22s]">
+        <StepTitle n={profile.status === "proposed" ? 4 : 3} hint={M.compareHint}><span id="compare-title">{M.compareTitle}</span></StepTitle>
+        <form method="get" className="flex flex-wrap items-end gap-3">
+          <label className="flex min-w-0 flex-[0_1_22rem] flex-col gap-1.5">
+            <span className="font-mono text-[13px] font-medium uppercase tracking-wide">{M.compareHunter}</span>
+            <Select name="cacador" defaultValue={agentId ?? ""}>
               <option value="" disabled>{M.compareChoose}</option>
               {hunters.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
-            </select>
+            </Select>
           </label>
-          <button type="submit" className="inline-flex min-h-11 items-center justify-center border border-edge bg-surface px-4 text-[15px] font-medium text-ink hover:border-ink">{M.compareRun}</button>
+          <Button type="submit" variant="secondary">{M.compareRun}</Button>
         </form>
         {agentId && (report ? (
           <Notice tone="info">{fill(M.compareResult, { precision: pct(report.all.precision), coverage: pct(report.all.coverage), matched: report.all.matched, gold: report.all.gold })}</Notice>
         ) : (
           <Notice tone="info">{M.compareNone}</Notice>
         ))}
-      </section>
+      </HexPanel>
     </div>
   );
 }

@@ -2,8 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { addMarkAction } from "@/app/(app)/leads/cobertura/actions";
-import { btn } from "@/components/email/bits";
-import { Field, TextInput } from "@/components/ui";
+import { Button, Field, TextInput } from "@/components/ui";
 import { MA_TOWNS } from "@/lib/coverage/ma-towns";
 import { idle, type FormState } from "@/lib/form-state";
 import { useT } from "@/lib/i18n/client";
@@ -33,9 +32,9 @@ function Fields({ state, pending }: { state: FormState; pending: boolean }) {
         <TextInput id="mark-note" name="note" maxLength={200} value={note} onChange={(e) => setNote(e.target.value)} />
       </Field>
       <div className="flex flex-wrap items-center gap-3">
-        <button type="submit" disabled={pending} className={btn.primary}>{F.add}</button>
-        {state.status === "error" && state.message && <p role="alert" className="text-sm text-danger">{state.message}</p>}
-        {state.status === "success" && state.message && <p role="status" className="text-sm text-ok">{state.message}</p>}
+        <Button type="submit" disabled={pending}>{F.add}</Button>
+        {state.status === "error" && state.message && <p role="alert" className="m-0 text-base text-danger">{state.message}</p>}
+        {state.status === "success" && state.message && <p role="status" className="m-0 text-base text-ok">{state.message}</p>}
       </div>
     </>
   );
@@ -49,7 +48,7 @@ export function ManualMarkForm() {
     return r;
   }, idle);
   return (
-    <form action={action} className="flex max-w-md flex-col gap-3" noValidate>
+    <form action={action} className="flex max-w-xl flex-col gap-4" noValidate>
       <Fields key={saved} state={state} pending={pending} />
     </form>
   );

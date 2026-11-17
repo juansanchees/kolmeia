@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { summarizeWhyHotAction } from "@/app/(app)/leads/why-hot-actions";
-import { btn, Notice } from "@/components/email/bits";
+import { Button, HexIcon, Notice } from "@/components/ui";
+import { BlockTitle } from "@/components/leads/SectionIntro";
 import { host, usd } from "@/components/research/format";
 import type { WhyFact } from "@/lib/leads/why-hot";
 import { fill } from "@/lib/i18n";
@@ -17,43 +18,48 @@ export function WhyHot({ leadId, facts, canSummarize, reserveUsd }: { leadId: st
   const [pending, start] = useTransition();
   const thin = facts.length <= 1;
   return (
-    <section aria-labelledby="why-title" className="flex flex-col gap-2 border border-line bg-surface p-4">
-      <h2 id="why-title" className="text-xl">{W.title}</h2>
-      <ol className="m-0 flex flex-col gap-1 pl-6 text-sm">
+    <section aria-labelledby="why-title" className="flex min-w-0 flex-col gap-4 rounded-2xl border border-[#e3e6ec] bg-surface p-5 shadow-[0_6px_14px_-8px_rgba(15,27,61,0.12)] md:p-6">
+      <BlockTitle id="why-title">{W.title}</BlockTitle>
+      <ol className="m-0 flex list-none flex-col gap-2.5 p-0 text-base">
         {facts.map((f, n) => (
-          <li key={`${n}-${f.text}`}>
-            {f.text}
-            {f.url && (
-              <>
-                {" "}
-                <a href={f.url} target="_blank" rel="noopener noreferrer nofollow" className="text-[13px] text-blue underline underline-offset-2">{host(f.url)} ↗</a>
-              </>
-            )}
+          <li key={`${n}-${f.text}`} className="flex items-start gap-3">
+            <HexIcon n={n + 1} size={28} />
+            <span className="min-w-0 pt-0.5">
+              {f.text}
+              {f.url && (
+                <>
+                  {" "}
+                  <a href={f.url} target="_blank" rel="noopener noreferrer nofollow" className="k-link text-[15px] underline">{host(f.url)} ↗</a>
+                </>
+              )}
+            </span>
           </li>
         ))}
       </ol>
-      {thin && <p className="m-0 text-[13px] text-muted">{W.none}</p>}
+      {thin && <p className="m-0 text-[15px] text-[#4a5361]">{W.none}</p>}
       {canSummarize && !thin && !summary && (
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
           disabled={pending}
           onClick={() => start(async () => {
             const r = await summarizeWhyHotAction(leadId);
             if (r.ok) setSummary(r.summary);
             else setError(r.error);
           })}
-          className={`${btn.ghost} w-fit`}
+          className="w-fit"
         >
           {fill(W.summarize, { usd: `US$ ${usd(reserveUsd, t.intl)}` })}
-        </button>
+        </Button>
       )}
       {summary && (
-        <div className="flex flex-col gap-1 border-l-2 border-blue pl-3">
-          <span className="font-mono text-xs text-muted">{W.summary}</span>
-          <p className="m-0 text-sm">{summary}</p>
+        <div className="k-fade flex flex-col gap-1 rounded-[14px] border-l-4 border-honey bg-honey-soft px-4 py-3">
+          <span className="font-mono text-[13px] font-medium uppercase tracking-wide text-[#4a5361]">{W.summary}</span>
+          <p className="m-0 text-base">{summary}</p>
         </div>
       )}
-      {error && <Notice tone="warn" role="alert">{error}</Notice>}
+      {error && <Notice tone="danger" role="alert">{error}</Notice>}
     </section>
   );
 }

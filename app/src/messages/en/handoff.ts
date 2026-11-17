@@ -32,4 +32,9 @@ export const handoff = {
   brief: "Summary for the sales rep",
   noBrief: "No summary.",
   noneYet: "No leads with the sales rep.",
+  page: {
+    subtitle: "Leads handed to the sales rep, with the summary and the next step.",
+    noneHint: "Open a lead and use Hand off to sales rep.",
+    emailTitle: "Handed off from email campaigns",
+  },
 } satisfies Widen<typeof pt>;

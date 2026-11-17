@@ -24,7 +24,8 @@ import { displayOf, isStaleProof, originLabel, proofCount } from "@/lib/leads/vi
 import { count, date, host, money, UNKNOWN } from "@/components/research/format";
 import { Hook, ProofList } from "@/components/research/proof";
 import { Pill } from "@/components/research/controls";
-import { Notice } from "@/components/email/bits";
+import { Badge, buttonClass, Notice } from "@/components/ui";
+import { BlockTitle } from "@/components/leads/SectionIntro";
 import { LevelBadge } from "@/components/qualifier/LevelBadge";
 import { LevelNote } from "@/components/qualifier/LevelNote";
 import { levelReason, nextStepLabel } from "@/lib/qualifier/view";
@@ -37,6 +38,10 @@ import { fill } from "@/lib/i18n";
 import { getT } from "@/lib/i18n/server";
 
 const CLOSED = ["won", "lost", "discarded"];
+/** Every section of the lead is a rounded card (the modal scrolls: no hexagon clipping here). */
+const CARD = "flex min-w-0 flex-col gap-4 rounded-2xl border border-[#e3e6ec] bg-surface p-5 shadow-[0_6px_14px_-8px_rgba(15,27,61,0.12)] md:p-6";
+const LABEL = "font-mono text-[13px] font-medium uppercase tracking-wide text-[#4a5361]";
+const MUTED = "text-[#4a5361]";
 
 // One lead, read-only in F3a. Read as the user, so a closer only opens a lead assigned to her (RLS); anything else is a 404.
 export async function LeadDetail({ id, modal = false }: { id: string; modal?: boolean }) {
@@ -113,17 +118,17 @@ export async function LeadDetail({ id, modal = false }: { id: string; modal?: bo
   );
 
   return (
-    <div className="flex min-w-0 flex-col gap-5">
+    <div className="flex min-w-0 flex-col gap-4">
       {!modal && (
-        <Link href="/leads" className="font-mono text-xs text-blue underline underline-offset-4">
+        <Link href="/leads" className="k-link inline-flex min-h-11 w-fit items-center rounded-[10px] px-1 text-base font-medium underline">
           ← {t.leads.title}
         </Link>
       )}
 
-      <section className="flex flex-col gap-3.5 border border-line bg-surface p-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 id="lead-modal-title" className="text-[22px]">{display.name}</h2>
-          <span className="flex flex-wrap items-center gap-1.5">
+      <section aria-labelledby="lead-modal-title" className={`k-in ${CARD}`}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="lead-modal-title" className="min-w-0 break-words text-[30px] md:text-[36px]">{display.name}</h2>
+          <span className="flex flex-wrap items-center gap-2">
             <LevelBadge level={lead.level} />
             {temp && <Pill tone={temp}>{LB.temperature[temp]}</Pill>}
             {best?.second_pass === "refuted" && <Pill tone="no">{L.refuted}</Pill>}
@@ -131,21 +136,16 @@ export async function LeadDetail({ id, modal = false }: { id: string; modal?: bo
             {lead.do_not_call && <Pill tone="no">{H.doNotCall}</Pill>}
           </span>
         </div>
-        <p className="text-[13px] text-muted">
-          {[
-            t.leads.statuses[lead.status],
-            originLabel({ lead, agentName, importName }, t),
-            fill(t.leads.firstSeen, { date: date(lead.first_seen_at, t.intl) }),
-          ]
-            .filter(Boolean)
-            .join(" · ")}
+        <p className={`m-0 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-base ${MUTED}`}>
+          <Badge tone="honey" dot>{t.leads.statuses[lead.status]}</Badge>
+          {[originLabel({ lead, agentName, importName }, t), fill(t.leads.firstSeen, { date: date(lead.first_seen_at, t.intl) })].filter(Boolean).join(" · ")}
         </p>
-        <p className="text-[13px] text-muted">
+        <p className={`m-0 text-base ${MUTED}`}>
           <span className="font-semibold text-ink">{t.qualifier.levelLabel} {lead.level}</span> · {levelReason(fields, lead.level, t)}
           {queue && <> · {nextStepLabel(queue.next_step, queue.done_reason, t)}</>}
         </p>
         {sender && (
-          <p className="text-[13px] text-muted">
+          <p className={`m-0 text-base ${MUTED}`}>
             <span className="font-semibold text-ink">{t.leads.origin.cameFrom}</span>{" "}
             {origins.length > 0 ? origins.map((o) => fill(t.leads.origin.item, { name: o.name, date: date(o.at, t.intl) })).join(", ") : t.leads.origin.none}
           </p>
@@ -160,57 +160,57 @@ export async function LeadDetail({ id, modal = false }: { id: string; modal?: bo
         {best && (
           <>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-0.5">
-                <span className="font-mono text-xs text-muted">{L.askFor}</span>
-                <span className="text-[15px] font-semibold">
+              <div className="flex flex-col gap-0.5 rounded-[14px] bg-ground px-4 py-3">
+                <span className={LABEL}>{L.askFor}</span>
+                <span className="text-lg font-semibold">
                   {best.ask_for_name ? `${best.ask_for_name}${best.ask_for_title ? ` · ${best.ask_for_title}` : ""}` : UNKNOWN}
                 </span>
                 {best.name_confidence && (
-                  <span className="text-[13px] text-muted">
+                  <span className={`text-[15px] ${MUTED}`}>
                     {L.confidence} {LB.confidence[best.name_confidence]}
                   </span>
                 )}
                 {best.name_source_url && (
-                  <a href={best.name_source_url} target="_blank" rel="noopener noreferrer" className="text-[13px] text-blue underline underline-offset-2">
+                  <a href={best.name_source_url} target="_blank" rel="noopener noreferrer" className="k-link w-fit text-[15px] underline">
                     {host(best.name_source_url)}
                   </a>
                 )}
               </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="font-mono text-xs text-muted">{L.contact}</span>
-                <span className="text-[15px] font-semibold">
+              <div className="flex flex-col gap-0.5 rounded-[14px] bg-ground px-4 py-3">
+                <span className={LABEL}>{L.contact}</span>
+                <span className="font-mono text-lg font-semibold">
                   {best.phone ?? UNKNOWN}
-                  {best.phone && !best.phone_source_url && <span className="ml-1.5 text-[13px] font-normal text-muted">{L.unverified}</span>}
+                  {best.phone && !best.phone_source_url && <span className={`ml-2 font-body text-[15px] font-normal ${MUTED}`}>{L.unverified}</span>}
                 </span>
                 {best.phone_source_url && (
-                  <a href={best.phone_source_url} target="_blank" rel="noopener noreferrer" className="text-[13px] text-blue underline underline-offset-2">
+                  <a href={best.phone_source_url} target="_blank" rel="noopener noreferrer" className="k-link w-fit text-[15px] underline">
                     {host(best.phone_source_url)}
                   </a>
                 )}
               </div>
             </div>
 
-            <dl className="m-0 grid grid-cols-3 gap-2 border-y border-line py-2.5">
+            <dl className="m-0 grid grid-cols-3 gap-2 rounded-[14px] border-2 border-honey-edge bg-honey-soft px-4 py-3">
               {[
                 [L.permits, count(best.permit_count, t.intl)],
                 [L.totalValue, money(best.total_value_usd, t.intl)],
                 [L.lastPermit, date(best.last_permit_date, t.intl)],
               ].map(([k, v]) => (
                 <div key={k} className="flex min-w-0 flex-col">
-                  <dt className="font-mono text-xs text-muted">{k}</dt>
+                  <dt className="truncate text-[13px] text-[#4a5361]">{k}</dt>
                   <dd className="m-0 font-display text-xl font-bold sm:text-2xl">{v}</dd>
                 </div>
               ))}
             </dl>
 
             {best.biggest_job_address && (
-              <p className="text-sm">
+              <p className="m-0 text-base">
                 <span className="font-semibold">{L.biggestJob}</span> {best.biggest_job_address} · {money(best.biggest_job_value_usd, t.intl)}
               </p>
             )}
             {best.hook && <Hook text={best.hook} />}
             {(best.name_note || best.notes) && (
-              <p className="text-[13px] text-muted">
+              <p className={`m-0 text-[15px] ${MUTED}`}>
                 <span className="font-semibold text-ink">{L.note}</span> {[best.name_note, best.notes].filter(Boolean).join(" ")}
               </p>
             )}
@@ -218,19 +218,17 @@ export async function LeadDetail({ id, modal = false }: { id: string; modal?: bo
         )}
       </section>
 
-      <section aria-labelledby="research-title" className="flex flex-col gap-2 border border-line bg-surface p-4">
-        <h2 id="research-title" className="text-xl">
-          {t.leads.research.title}
-        </h2>
-        <dl className="m-0 grid grid-cols-3 gap-2">
+      <section aria-labelledby="research-title" className={CARD}>
+        <BlockTitle id="research-title">{t.leads.research.title}</BlockTitle>
+        <dl className="m-0 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
           {[
             [t.leads.research.temperature, temp ? LB.temperature[temp] : t.leads.research.none],
             [t.leads.research.approach, best?.approach ? LB.approach[best.approach] : t.leads.research.none],
             [t.leads.research.proof, best ? fill(t.leads.proofCount, { n: proofCount(checks.filter((k) => k.candidate_id === best.id)) }) : t.leads.unproven],
           ].map(([k, v]) => (
-            <div key={k} className="flex min-w-0 flex-col">
-              <dt className="font-mono text-xs text-muted">{k}</dt>
-              <dd className="m-0 text-[15px] font-semibold">{v}</dd>
+            <div key={k} className="flex min-w-0 flex-col gap-0.5 rounded-[14px] bg-ground px-4 py-3">
+              <dt className={LABEL}>{k}</dt>
+              <dd className="m-0 text-base font-semibold">{v}</dd>
             </div>
           ))}
         </dl>
@@ -239,15 +237,13 @@ export async function LeadDetail({ id, modal = false }: { id: string; modal?: bo
       <WhyHot leadId={lead.id} facts={whyHotFacts({ level: lead.level, best, fields, checks }, t)} canSummarize={sender} reserveUsd={reserveFor(explainDef)} />
 
       {brief && (
-        <section aria-labelledby="brief-title" className="flex flex-col gap-2 border border-ink bg-surface p-4">
-          <h2 id="brief-title" className="text-xl">
-            {H.brief}
-          </h2>
-          <p className="m-0 text-sm"><span className="font-mono text-xs">{H.who}</span> {brief.who}</p>
-          <p className="m-0 text-sm"><span className="font-mono text-xs">{H.said}</span> {brief.what_they_said}</p>
-          <p className="m-0 border-l-2 border-blue pl-3 text-sm font-semibold">{brief.next_step}</p>
+        <section aria-labelledby="brief-title" className="flex min-w-0 flex-col gap-3 rounded-2xl border-2 border-honey-edge bg-honey-soft p-5 md:p-6">
+          <BlockTitle id="brief-title">{H.brief}</BlockTitle>
+          <p className="m-0 text-base"><span className={LABEL}>{H.who}</span> {brief.who}</p>
+          <p className="m-0 text-base"><span className={LABEL}>{H.said}</span> {brief.what_they_said}</p>
+          <p className="m-0 border-l-4 border-honey pl-3 text-base font-semibold">{brief.next_step}</p>
           {brief.evidence_urls.map((u) => (
-            <a key={u} href={u} target="_blank" rel="noopener noreferrer nofollow" className="break-all text-[13px] text-blue underline underline-offset-4">
+            <a key={u} href={u} target="_blank" rel="noopener noreferrer nofollow" className="k-link break-all text-[15px] underline">
               {u} ↗
             </a>
           ))}
@@ -255,52 +251,61 @@ export async function LeadDetail({ id, modal = false }: { id: string; modal?: bo
       )}
 
       {sender && phone && open && !lead.do_not_call && (
-        <section aria-labelledby="contact-title" className="flex flex-col gap-3 border border-line bg-surface p-4">
-          <h2 id="contact-title" className="text-xl">
-            {t.calls.record.title}
-          </h2>
+        <section aria-labelledby="contact-title" className={CARD}>
+          <BlockTitle id="contact-title" hint={t.calls.recordHint}>{t.calls.record.title}</BlockTitle>
           <ContactRecord leadId={lead.id} afterSave="stay" />
         </section>
       )}
       {sender && calls.length > 0 && <CallHistory calls={calls} />}
 
       {open && (sender || mine) && (
-        <section aria-labelledby="actions-title" className="flex flex-col gap-4 border border-line bg-surface p-4">
-          <h2 id="actions-title" className="sr-only">
-            {H.button}
-          </h2>
-          {sender && draft && <HandOffForm leadId={lead.id} closers={people} draft={draft} />}
-          {sender && callable && <AddToCallList leadId={lead.id} agents={callAgents} />}
-          {sender && !lead.do_not_call && <AddToCampaign leadIds={[lead.id]} campaigns={campaigns} />}
-          {sender && <EmailTools selected={[lead.id]} single />}
+        <section aria-labelledby="actions-title" className={CARD}>
+          <BlockTitle id="actions-title">{t.leads.detail.actionsTitle}</BlockTitle>
+          {sender && draft && (
+            <div className="flex flex-col gap-3">
+              <h3 className={LABEL}>{H.button}</h3>
+              <HandOffForm leadId={lead.id} closers={people} draft={draft} />
+            </div>
+          )}
+          {sender && (callable || !lead.do_not_call) && (
+            <div className="flex flex-col gap-3 border-t border-[#e3e6ec] pt-4">
+              <h3 className={LABEL}>{t.leads.detail.groups.lists}</h3>
+              {callable && <AddToCallList leadId={lead.id} agents={callAgents} />}
+              {sender && !lead.do_not_call && <AddToCampaign leadIds={[lead.id]} campaigns={campaigns} />}
+            </div>
+          )}
+          {sender && (
+            <div className="flex flex-col gap-3 border-t border-[#e3e6ec] pt-4">
+              <h3 className={LABEL}>{t.leads.detail.groups.email}</h3>
+              <EmailTools selected={[lead.id]} single />
+            </div>
+          )}
           {mine && !sender && !lead.do_not_call && display.phone && (
-            <Link href={`/leads/ligar/${lead.id}`} className="inline-flex min-h-11 w-fit items-center border border-blue bg-surface px-4 text-sm font-semibold text-blue no-underline hover:bg-blue-wash">
+            <Link href={`/leads/ligar/${lead.id}`} className={`${buttonClass("primary")} w-fit`}>
               {H.callNow}
             </Link>
           )}
-          <StatusButtons leadId={lead.id} />
+          <div className="flex flex-col gap-3 border-t border-[#e3e6ec] pt-4">
+            <h3 className={LABEL}>{t.leads.detail.groups.close}</h3>
+            <StatusButtons leadId={lead.id} />
+          </div>
         </section>
       )}
 
       {fields.length > 0 && (
-        <section aria-labelledby="fields-title" className="flex flex-col gap-3">
-          <h2 id="fields-title" className="text-2xl">
-            {t.leads.fieldsTitle}
-          </h2>
+        <section aria-labelledby="fields-title" className={CARD}>
+          <BlockTitle id="fields-title">{t.leads.fieldsTitle}</BlockTitle>
           <FieldList fields={fields} importNames={importNames} emailQuality={emailQuality} />
         </section>
       )}
 
       {candidates.length > 0 && (
-        <section aria-labelledby="proof-title" className="flex flex-col gap-3">
-          <h2 id="proof-title" className="text-2xl">
-            {t.leads.proofTitle}
-          </h2>
-          <p className="text-[13px] text-muted">{fill(t.leads.seenIn, { n: candidates.length })}</p>
+        <section aria-labelledby="proof-title" className={CARD}>
+          <BlockTitle id="proof-title" hint={fill(t.leads.seenIn, { n: candidates.length })}>{t.leads.proofTitle}</BlockTitle>
           {stale && <Notice tone="warn">{t.leads.staleHint}</Notice>}
           {candidates.map((c) => (
-            <div key={c.id} className="flex flex-col gap-2 border border-line bg-surface p-4">
-              <span className="font-mono text-xs text-muted">
+            <div key={c.id} className="flex flex-col gap-2 rounded-[14px] bg-ground p-4">
+              <span className="font-mono text-sm text-[#4a5361]">
                 {c.run_title || UNKNOWN} · {date(c.run_created_at, t.intl)}
               </span>
               <ProofList c={c} checks={checks.filter((k) => k.candidate_id === c.id)} now={now} />

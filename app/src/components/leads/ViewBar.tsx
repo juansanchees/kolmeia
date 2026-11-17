@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { saveViewAction } from "@/app/(app)/leads/view-actions";
-import { btn } from "@/components/email/bits";
+import { Button, LinkButton, Select, TextInput } from "@/components/ui";
 import type { LeadView } from "@/lib/leads/queries";
 import type { LeadFilters } from "@/lib/leads/view";
 import { useT } from "@/lib/i18n/client";
@@ -31,16 +31,16 @@ export function ViewBar({ views, filters, onPick }: { views: LeadView[]; filters
     });
 
   return (
-    <div className="flex flex-wrap items-end gap-2">
-      <label className="flex flex-col gap-1">
-        <span className="font-mono text-xs uppercase tracking-wide">{V.label}</span>
-        <select
+    <div className="k-fade flex flex-wrap items-end gap-3 rounded-2xl border border-[#e3e6ec] bg-surface p-4 shadow-[0_6px_14px_-8px_rgba(15,27,61,0.12)]">
+      <label className="flex flex-col gap-1.5">
+        <span className="font-mono text-[13px] font-medium uppercase tracking-wide">{V.label}</span>
+        <Select
           value={picked}
           onChange={(e) => {
             setPicked(e.target.value);
             onPick(views.find((v) => v.id === e.target.value)?.filters ?? null);
           }}
-          className="min-h-11 min-w-0 border border-line bg-surface px-2.5 text-sm text-ink"
+          className="w-auto! min-w-56"
         >
           <option value="">{V.none}</option>
           {views.map((v) => (
@@ -48,31 +48,31 @@ export function ViewBar({ views, filters, onPick }: { views: LeadView[]; filters
               {v.name}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       {open ? (
-        <div className="flex flex-wrap items-end gap-2">
-          <label className="flex flex-col gap-1">
-            <span className="font-mono text-xs uppercase tracking-wide">{V.name}</span>
-            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={60} className="min-h-11 border border-line bg-surface px-3 text-sm text-ink" />
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1.5">
+            <span className="font-mono text-[13px] font-medium uppercase tracking-wide">{V.name}</span>
+            <TextInput value={name} onChange={(e) => setName(e.target.value)} maxLength={60} className="w-auto! min-w-48" />
           </label>
-          <label className="flex min-h-11 items-center gap-2 text-sm">
-            <input type="checkbox" checked={makeDefault} onChange={(e) => setMakeDefault(e.target.checked)} className="h-4 w-4" />
+          <label className="flex min-h-12 items-center gap-2.5 text-base">
+            <input type="checkbox" checked={makeDefault} onChange={(e) => setMakeDefault(e.target.checked)} className="size-5 accent-ink" />
             {V.makeDefault}
           </label>
-          <button type="button" className={btn.ghost} disabled={pending || !name.trim()} onClick={save}>
+          <Button type="button" disabled={pending || !name.trim()} onClick={save}>
             {V.save}
-          </button>
-          <button type="button" className={btn.link} onClick={() => setOpen(false)}>
+          </Button>
+          <LinkButton type="button" onClick={() => setOpen(false)}>
             {V.cancel}
-          </button>
+          </LinkButton>
         </div>
       ) : (
-        <button type="button" className={btn.ghost} onClick={() => setOpen(true)}>
+        <Button type="button" variant="secondary" onClick={() => setOpen(true)}>
           {V.save}
-        </button>
+        </Button>
       )}
-      {msg && <span role="status" className="text-sm text-muted">{msg}</span>}
+      {msg && <span role="status" className="text-base text-[#4a5361]">{msg}</span>}
     </div>
   );
 }

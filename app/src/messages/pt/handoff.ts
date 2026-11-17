@@ -30,4 +30,9 @@ export const handoff = {
   brief: "Resumo para o vendedor",
   noBrief: "Sem resumo.",
   noneYet: "Nenhum lead com o vendedor.",
+  page: {
+    subtitle: "Leads passados para o vendedor, com o resumo e o próximo passo.",
+    noneHint: "Abra um lead e use Passar para o vendedor.",
+    emailTitle: "Passados pela campanha de e-mail",
+  },
 } as const;

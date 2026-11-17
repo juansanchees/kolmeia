@@ -58,4 +58,8 @@ export const calls = {
     noPhone: "Esse lead não tem telefone para ligar.",
     denied: "Você não pode registrar ligação neste lead.",
   },
+  queueSubtitle: "Quem ligar agora. Toque em Ligar para abrir a tela da ligação.",
+  emptyHint: "Os leads com telefone entram aqui sozinhos quando vão para a lista de ligação.",
+  recordHint: "Toque no que aconteceu. A nota é opcional.",
+  recordMore: "Outros:",
 } as const;

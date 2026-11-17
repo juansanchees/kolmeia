@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { addToListAction } from "@/app/(app)/leads/view-actions";
-import { btn } from "@/components/email/bits";
+import { Button, LinkButton, Select, TextInput } from "@/components/ui";
 import { fill } from "@/lib/i18n";
 import { useT } from "@/lib/i18n/client";
 
@@ -32,44 +32,44 @@ export function AddToList({ selected, lists }: { selected: string[]; lists: { id
   if (!open) {
     return (
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className={btn.ghost} disabled={selected.length === 0} onClick={() => setOpen(true)}>
+        <Button type="button" variant="secondary" size="sm" disabled={selected.length === 0} onClick={() => setOpen(true)}>
           {A.button}
           {selected.length > 0 ? ` (${selected.length})` : ""}
-        </button>
-        {msg && <span role="status" className="text-sm text-muted">{msg}</span>}
+        </Button>
+        {msg && <span role="status" className="text-base text-[#4a5361]">{msg}</span>}
       </div>
     );
   }
   return (
-    <div role="group" aria-label={fill(A.title, { n: selected.length })} className="flex flex-wrap items-end gap-2 border border-line bg-surface p-3">
-      <p className="w-full text-sm font-semibold">{fill(A.title, { n: selected.length })}</p>
+    <div role="group" aria-label={fill(A.title, { n: selected.length })} className="k-fade flex flex-wrap items-end gap-3 rounded-2xl border border-[#e3e6ec] bg-surface p-4">
+      <p className="m-0 w-full text-base font-semibold">{fill(A.title, { n: selected.length })}</p>
       {lists.length > 0 && (
         <>
-          <label className="flex flex-col gap-1">
-            <span className="font-mono text-xs uppercase tracking-wide">{A.existing}</span>
-            <select value={listId} onChange={(e) => setListId(e.target.value)} className="min-h-11 min-w-0 border border-line bg-surface px-2.5 text-sm text-ink">
+          <label className="flex flex-col gap-1.5">
+            <span className="font-mono text-[13px] font-medium uppercase tracking-wide">{A.existing}</span>
+            <Select value={listId} onChange={(e) => setListId(e.target.value)} className="w-auto! min-w-48">
               <option value="">{A.pickOne}</option>
               {lists.map((l) => (
                 <option key={l.id} value={l.id}>
                   {l.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
-          <span className="pb-3 text-sm text-muted">{A.or}</span>
+          <span className="pb-3 text-base text-[#4a5361]">{A.or}</span>
         </>
       )}
-      <label className="flex flex-col gap-1">
-        <span className="font-mono text-xs uppercase tracking-wide">{A.newName}</span>
-        <input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} className="min-h-11 border border-line bg-surface px-3 text-sm text-ink" />
+      <label className="flex flex-col gap-1.5">
+        <span className="font-mono text-[13px] font-medium uppercase tracking-wide">{A.newName}</span>
+        <TextInput value={name} onChange={(e) => setName(e.target.value)} maxLength={120} className="w-auto! min-w-48" />
       </label>
-      <button type="button" className={btn.ghost} disabled={pending || (!name.trim() && !listId)} onClick={run}>
+      <Button type="button" disabled={pending || (!name.trim() && !listId)} onClick={run}>
         {A.confirm}
-      </button>
-      <button type="button" className={btn.link} onClick={() => setOpen(false)}>
+      </Button>
+      <LinkButton type="button" onClick={() => setOpen(false)}>
         {A.cancel}
-      </button>
-      {msg && <span role="status" className="text-sm text-muted">{msg}</span>}
+      </LinkButton>
+      {msg && <span role="status" className="text-base text-[#4a5361]">{msg}</span>}
     </div>
   );
 }

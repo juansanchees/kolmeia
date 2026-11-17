@@ -2,11 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { setQualifierAction } from "@/app/(app)/agentes/qualifier-actions";
-import { btn, Notice } from "@/components/email/bits";
+import { Button, Notice, TextInput } from "@/components/ui";
 import type { QualifierStatus } from "@/lib/qualifier/view";
 import { useT } from "@/lib/i18n/client";
 
-const input = "min-h-11 w-32 border border-line bg-surface px-3 text-sm text-ink";
 
 /** "5,5" and "5.5" both work; anything else is null. */
 function parseUsd(v: string): number | null {
@@ -41,29 +40,29 @@ export function QualifierCapForm({ status }: { status: Pick<QualifierStatus, "da
   };
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-3 border border-line bg-surface p-4" aria-labelledby="caps-title">
-      <h2 id="caps-title" className="text-2xl">
+    <form onSubmit={submit} className="flex flex-col gap-4 rounded-2xl border border-[#e3e6ec] bg-surface p-5 shadow-[0_6px_14px_-8px_rgba(15,27,61,0.12)]" aria-labelledby="caps-title">
+      <h2 id="caps-title" className="font-body text-xl font-semibold normal-case tracking-normal">
         {C.title}
       </h2>
       <div className="flex flex-wrap items-end gap-4">
-        <label className="flex flex-col gap-1 text-sm">
-          {C.daily}
-          <input inputMode="decimal" value={daily} onChange={(e) => setDaily(e.target.value)} className={input} />
+        <label className="flex flex-col gap-1.5">
+          <span className="font-mono text-[13px] font-medium uppercase tracking-wide">{C.daily}</span>
+          <TextInput inputMode="decimal" value={daily} onChange={(e) => setDaily(e.target.value)} className="w-36!" />
         </label>
-        <label className="flex flex-col gap-1 text-sm">
-          {C.lead}
-          <input inputMode="decimal" value={lead} onChange={(e) => setLead(e.target.value)} className={input} />
+        <label className="flex flex-col gap-1.5">
+          <span className="font-mono text-[13px] font-medium uppercase tracking-wide">{C.lead}</span>
+          <TextInput inputMode="decimal" value={lead} onChange={(e) => setLead(e.target.value)} className="w-36!" />
         </label>
       </div>
-      <label className="flex min-h-11 items-center gap-2 text-sm">
-        <input type="checkbox" checked={autoDeep} onChange={(e) => setAutoDeep(e.target.checked)} className="h-5 w-5" />
+      <label className="flex min-h-11 items-center gap-2.5 text-base">
+        <input type="checkbox" checked={autoDeep} onChange={(e) => setAutoDeep(e.target.checked)} className="size-5 accent-ink" />
         {C.autoDeep}
       </label>
       <div className="flex flex-wrap items-center gap-3">
-        <button type="submit" disabled={pending} className={btn.primary}>
+        <Button type="submit" disabled={pending}>
           {C.save}
-        </button>
-        {msg && <Notice tone={msg.tone} role={msg.tone === "warn" ? "alert" : "status"}>{msg.text}</Notice>}
+        </Button>
+        {msg && <Notice tone={msg.tone === "warn" ? "danger" : "ok"} role={msg.tone === "warn" ? "alert" : "status"}>{msg.text}</Notice>}
       </div>
     </form>
   );

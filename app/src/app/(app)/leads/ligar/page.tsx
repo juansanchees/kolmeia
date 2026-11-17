@@ -7,6 +7,11 @@ import { isSender } from "@/lib/roles";
 import { getCurrentWorkspace } from "@/lib/workspace";
 import { getT } from "@/lib/i18n/server";
 import { Paged } from "@/components/Pager";
+import { SectionIntro } from "@/components/leads/SectionIntro";
+import { Badge, buttonClass, Chevron, CountPill, EmptyState, HexPanel, Icon, segItemCls, segWrapCls } from "@/components/ui";
+
+const PHONE =
+  "M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z";
 
 async function Row({ r, done }: { r: TodayRow; done?: boolean }) {
   const t = await getT();
@@ -14,23 +19,22 @@ async function Row({ r, done }: { r: TodayRow; done?: boolean }) {
   const best = r.lead.best;
   const temp = effectiveTemperature(r.lead.lead.level, best?.temperature ?? null);
   return (
-    <li className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-4 py-3 last:border-b-0">
+    <li className="k-row flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-[#eef0f3] px-3 py-4 last:border-b-0">
       <div className="flex min-w-0 flex-[1_1_220px] flex-col gap-0.5">
-        <Link href={`/leads/${r.lead.lead.id}`} className="font-semibold text-ink underline-offset-4 hover:underline">
+        <Link href={`/leads/${r.lead.lead.id}`} className="k-link truncate text-[17px] font-semibold underline-offset-4 hover:underline">
           {r.lead.display.name}
         </Link>
-        <span className="font-mono text-xs text-muted">{r.lead.display.phone ?? t.callAgent.noPhone}</span>
+        <span className="font-mono text-[15px] text-[#4a5361]">{r.lead.display.phone ?? t.callAgent.noPhone}</span>
       </div>
       {temp && <Pill tone={temp}>{t.research.labels.temperature[temp]}</Pill>}
-      <span className="font-mono text-xs text-muted">N{r.lead.lead.level}</span>
+      <span className="font-mono text-sm text-[#4a5361]">N{r.lead.lead.level}</span>
       {done ? (
-        <span className="font-mono text-xs">{r.lastCall ? C.outcomes[r.lastCall.outcome] : ""}</span>
+        r.lastCall ? <Badge tone="honey">{C.outcomes[r.lastCall.outcome]}</Badge> : null
       ) : (
-        <Link
-          href={`/leads/ligar/${r.lead.lead.id}`}
-          className="inline-flex min-h-11 items-center border border-edge bg-surface px-4 text-[15px] font-medium text-ink no-underline hover:border-ink"
-        >
-          {C.call} ▸
+        <Link href={`/leads/ligar/${r.lead.lead.id}`} className={buttonClass("primary", "sm")}>
+          <Icon d={PHONE} size={18} />
+          {C.call}
+          <Chevron size={16} className="k-arrow" />
         </Link>
       )}
     </li>
@@ -60,30 +64,38 @@ export default async function CallPage({ searchParams }: { searchParams: Promise
 
   return (
     <div className="flex min-w-0 flex-col gap-5">
+      <SectionIntro id="today-title" title={<span className="inline-flex items-center gap-3">{C.today} <CountPill tone="honey" className="text-base">{todo.length}</CountPill></span>} subtitle={C.queueSubtitle} />
       {sender && agents.length > 0 && (
-        <nav aria-label={t.callAgent.agentLists} className="flex flex-wrap gap-2 text-sm">
-          <Link href="/leads/ligar" aria-current={agentId ? undefined : "page"} className="border border-line px-3 py-1.5 no-underline aria-[current=page]:border-ink">
+        <nav aria-label={t.callAgent.agentLists} className={`k-in ${segWrapCls} [animation-delay:.15s]`}>
+          <Link href="/leads/ligar" aria-current={agentId ? undefined : "page"} className={segItemCls(!agentId)}>
             {t.callAgent.allAgents}
           </Link>
           {agents.map((a) => (
-            <Link key={a.id} href={`/leads/ligar?agente=${a.id}`} aria-current={agentId === a.id ? "page" : undefined} className="border border-line px-3 py-1.5 no-underline aria-[current=page]:border-ink">
+            <Link key={a.id} href={`/leads/ligar?agente=${a.id}`} aria-current={agentId === a.id ? "page" : undefined} className={segItemCls(agentId === a.id)}>
               {a.name}
             </Link>
           ))}
         </nav>
       )}
-      <h2 className="text-2xl">{C.today}</h2>
-      {rows.length === 0 && <p className="text-sm text-muted">{C.empty}</p>}
-      {todo.length > 0 && <Paged as="ul" className="m-0 flex list-none flex-col border border-line bg-surface p-0">{todo.map((r) => <Row key={r.item.id} r={r} />)}</Paged>}
+      {rows.length === 0 && (
+        <EmptyState icon={PHONE} title={C.empty}>
+          {C.emptyHint}
+        </EmptyState>
+      )}
+      {todo.length > 0 && (
+        <HexPanel as="section" aria-labelledby="today-title" c={18} cSm={10} className="py-3" wrapClassName="k-in [animation-delay:.2s]">
+          <Paged as="ul" className="m-0 flex list-none flex-col p-0">{todo.map((r) => <Row key={r.item.id} r={r} />)}</Paged>
+        </HexPanel>
+      )}
       {done.length > 0 && (
-        <section aria-labelledby="done-title" className="flex flex-col gap-2">
-          <h3 id="done-title" className="text-base font-semibold">
-            {C.done}
+        <section aria-labelledby="done-title" className="k-in flex flex-col gap-3 [animation-delay:.28s]">
+          <h3 id="done-title" className="flex items-center gap-2.5 text-lg font-semibold">
+            {C.done} <CountPill tone="cold">{done.length}</CountPill>
           </h3>
-          <Paged as="ul" className="m-0 flex list-none flex-col border border-line bg-surface p-0">{done.map((r) => <Row key={r.item.id} r={r} done />)}</Paged>
+          <Paged as="ul" className="m-0 flex list-none flex-col rounded-2xl border border-[#e3e6ec] bg-surface px-2">{done.map((r) => <Row key={r.item.id} r={r} done />)}</Paged>
         </section>
       )}
-      <p className="text-sm text-muted">{C.b2bOnly}</p>
+      <p className="m-0 text-base text-[#4a5361]">{C.b2bOnly}</p>
     </div>
   );
 }

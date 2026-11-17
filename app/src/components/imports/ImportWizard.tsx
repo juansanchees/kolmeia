@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { finishImportAction, undoImportAction, importBatchAction, previewBatchAction, startImportAction } from "@/app/(app)/leads/subir/actions";
-import { btn, input, Notice } from "@/components/email/bits";
+import { Button, Chevron, HexButton, HexLink, HexPanel, Notice, Select, StepTitle, TextInput } from "@/components/ui";
+import { SectionIntro } from "@/components/leads/SectionIntro";
 import { detectMapping, hasIdColumn, IMPORT_FIELDS, type ImportField, type Mapping } from "@/lib/imports/fields";
 import { ImportFileError, IMPORT_LIMITS, readFileGrid } from "@/lib/imports/parse";
 import { mapGrid, previewOutcomes, rowErrorText, type ImportRow, type RowError } from "@/lib/imports/rows";
@@ -158,128 +159,154 @@ export function ImportWizard() {
   const locked = importId !== null; // the import row already holds the list name and the training choice
   const noId = grid.length > 0 && !hasIdColumn(mapping);
 
+  const mono = "font-mono text-[13px] font-medium uppercase tracking-wide";
   return (
-    <section aria-labelledby="import-title" className="flex min-w-0 flex-col gap-4">
-      <h2 id="import-title" className="text-2xl">{M.title}</h2>
-      <ol className="m-0 flex list-none flex-wrap gap-2 p-0 font-mono text-xs">
-        {STEPS.map((s, i) => (
-          <li key={s} aria-current={s === step ? "step" : undefined} className={`border px-2.5 py-1 ${s === step ? "border-blue text-blue" : "border-line text-muted"}`}>
-            {i + 1}. {M.steps[s]}
-          </li>
-        ))}
+    <section aria-labelledby="import-title" className="flex min-w-0 flex-col gap-5">
+      <SectionIntro id="import-title" title={M.title} subtitle={M.subtitle} />
+      <ol className="k-in m-0 flex list-none flex-wrap items-center gap-x-2 gap-y-2 p-0 [animation-delay:.15s]">
+        {STEPS.map((s, i) => {
+          const now = s === step;
+          const past = i < stepIdx;
+          return (
+            <li key={s} aria-current={now ? "step" : undefined} className="flex items-center gap-2">
+              <span className={`inline-flex min-h-11 items-center gap-2 rounded-full py-1 pl-1.5 pr-4 text-base ${now ? "bg-ink font-semibold text-white" : past ? "bg-honey-pill text-ink" : "bg-cold text-[#4a5361]"}`}>
+                <svg width="30" height="30" viewBox="0 0 24 24" aria-hidden className="shrink-0">
+                  <path className={now || past ? "fill-honey stroke-honey" : "fill-surface stroke-line"} strokeWidth="1.6" strokeLinejoin="round" d="M12 2 20.7 7v10L12 22 3.3 17V7Z" />
+                  <text x="12" y="16" textAnchor="middle" fontSize="11" fontWeight="700" className={now || past ? "fill-ink" : "fill-[#4a5361]"}>{i + 1}</text>
+                </svg>
+                {M.steps[s]}
+              </span>
+              {i < STEPS.length - 1 && <Chevron size={16} className="text-[#b3bac6]" />}
+            </li>
+          );
+        })}
       </ol>
-      {error && <Notice tone="warn" role="alert">{error}</Notice>}
 
-      {step === "file" && (
-        <label
-          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(e) => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) void load(f); }}
-          className={`flex min-h-40 cursor-pointer flex-col items-center justify-center gap-3 border border-dashed p-6 text-center text-sm ${dragging ? "border-blue bg-blue-wash" : "border-edge bg-surface"}`}
-        >
-          <span>{M.drop}</span>
-          <span className={btn.ghost}>{M.choose}</span>
-          <input type="file" accept=".csv,.xlsx,text/csv" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; if (f) void load(f); e.target.value = ""; }} />
-        </label>
-      )}
+      <HexPanel c={22} cSm={12} className="flex min-w-0 flex-col gap-5 py-7" wrapClassName="k-in [animation-delay:.22s]">
+        <div key={step} className="k-fade flex min-w-0 flex-col gap-5">
+          <StepTitle n={stepIdx + 1} hint={M.stepHints[step]}>{M.steps[step]}</StepTitle>
+          {error && <Notice tone="danger" role="alert">{error}</Notice>}
 
-      {step === "columns" && (
-        <div className="flex flex-col gap-4">
-          {sheets.length > 1 && (
-            <label className="flex flex-col gap-1 text-sm">
-              {M.sheet}
-              <select value={sheet ?? ""} onChange={(e) => file && void load(file, e.target.value)} className={input}>
-                {sheets.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
+          {step === "file" && (
+            <label
+              onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={(e) => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) void load(f); }}
+              className={`flex min-h-48 cursor-pointer flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed p-6 text-center text-lg transition-colors has-[input:focus-visible]:border-ink has-[input:focus-visible]:shadow-[0_0_0_5px_rgba(245,164,0,0.3)] ${dragging ? "border-honey bg-honey-soft" : "border-line bg-ground hover:border-edge"}`}
+            >
+              <span>{M.drop}</span>
+              <span className="inline-flex drop-shadow-[0_8px_12px_rgba(15,27,61,0.22)]">
+                <span className="hx inline-flex min-h-[54px] items-center justify-center gap-2.5 bg-ink px-[30px] text-[17px] font-semibold text-white [--c:14px]">
+                  {M.choose} <Chevron />
+                </span>
+              </span>
+              <input type="file" accept=".csv,.xlsx,text/csv" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; if (f) void load(f); e.target.value = ""; }} />
             </label>
           )}
-          <label className="flex flex-col gap-1 text-sm">
-            {M.listName}
-            <input value={listName} maxLength={80} readOnly={locked} onChange={(e) => setListName(e.target.value)} className={input} />
-          </label>
-          {locked && <p className="m-0 text-sm text-muted">{M.lockedNote}</p>}
-          <ul className="m-0 flex list-none flex-col border border-line bg-surface p-0">
-            {grid[0].map((h, i) => (
-              <li key={i} className="grid min-w-0 gap-2 border-b border-line px-3.5 py-2.5 last:border-b-0 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] md:items-center">
-                <span className="min-w-0 truncate text-sm font-semibold" title={h}>{h || `(${i + 1})`}</span>
-                <span className="min-w-0 truncate font-mono text-xs text-muted" title={grid[1]?.[i]}>{grid[1]?.[i] ?? ""}</span>
-                <select aria-label={`${M.columnMaps}: ${h}`} value={mapping[i] ?? ""} onChange={(e) => setColumn(i, (e.target.value || null) as ImportField | null)} className={input}>
-                  <option value="">{M.ignore}</option>
-                  {IMPORT_FIELDS.map((f) => <option key={f} value={f}>{M.fields[f]}</option>)}
-                </select>
-              </li>
-            ))}
-          </ul>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="flex items-center gap-2">
-              <input type="checkbox" checked={training} disabled={locked} onChange={(e) => setTraining(e.target.checked)} className="size-5" />
-              {M.training}
-            </span>
-            <span className="text-muted">{M.trainingHelp}</span>
-          </label>
-          {noId && <Notice tone="warn" role="alert">{M.fileErrors.noIdColumn}</Notice>}
-          {!listName.trim() && <p className="m-0 text-sm text-muted">{M.listNameRequired}</p>}
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={back} className={btn.ghost}>{M.back}</button>
-            <button type="button" disabled={busy || noId || !listName.trim()} onClick={() => void toPreview()} className={btn.primary}>
-              {busy ? M.previewLoading : M.next}
-            </button>
-          </div>
-        </div>
-      )}
 
-      {step === "preview" && (
-        <div className="flex flex-col gap-4">
-          <p className="m-0 font-mono text-sm" role="status">
-            {fill(M.previewCounts, { rows: entries.length, new: previewNew, merged: valid.length - previewNew, errors: errs.length })}
-          </p>
-          <table className="w-full border-collapse text-left text-[13px]">
-            <thead>
-              <tr className="border-b border-line text-muted">
-                <th className="py-1.5 pr-2 font-medium">{M.previewTable.row}</th>
-                <th className="py-1.5 pr-2 font-medium">{M.previewTable.company}</th>
-                <th className="py-1.5 font-medium">{M.previewTable.status}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.slice(0, 20).map((e) => (
-                <tr key={e.row} className="border-b border-line">
-                  <td className="py-1.5 pr-2 font-mono">{e.row}</td>
-                  <td className="max-w-0 truncate py-1.5 pr-2">{isError(e) ? (e.data.name ?? "") : e.name}</td>
-                  <td className="py-1.5">{isError(e) ? M.outcomes.error : M.outcomes[outcomes.get(e.row) ?? "new"]}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {errs.length > 0 && (
-            <div className="flex flex-col gap-1">
-              <h3 className="m-0 text-base">{M.errorsTitle}</h3>
-              <ul className="m-0 list-none p-0 text-[13px]">
-                {errs.slice(0, 50).map((e) => <li key={e.row}>{rowErrorText(e.row, e.error, t)}</li>)}
+          {step === "columns" && (
+            <div className="flex flex-col gap-5">
+              <div className="grid gap-4 md:grid-cols-2">
+                {sheets.length > 1 && (
+                  <label className="flex flex-col gap-1.5">
+                    <span className={mono}>{M.sheet}</span>
+                    <Select value={sheet ?? ""} onChange={(e) => file && void load(file, e.target.value)}>
+                      {sheets.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </Select>
+                  </label>
+                )}
+                <label className="flex flex-col gap-1.5">
+                  <span className={mono}>{M.listName}</span>
+                  <TextInput value={listName} maxLength={80} readOnly={locked} onChange={(e) => setListName(e.target.value)} />
+                </label>
+              </div>
+              {locked && <p className="m-0 text-base text-[#4a5361]">{M.lockedNote}</p>}
+              <ul className="m-0 flex list-none flex-col rounded-2xl border border-[#e3e6ec] bg-surface p-0">
+                {grid[0].map((h, i) => (
+                  <li key={i} className="k-row grid min-w-0 gap-2 border-b border-[#eef0f3] px-4 py-3 last:border-b-0 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] md:items-center">
+                    <span className="min-w-0 truncate text-base font-semibold" title={h}>{h || `(${i + 1})`}</span>
+                    <span className="min-w-0 truncate font-mono text-sm text-[#4a5361]" title={grid[1]?.[i]}>{grid[1]?.[i] ?? ""}</span>
+                    <Select aria-label={`${M.columnMaps}: ${h}`} value={mapping[i] ?? ""} onChange={(e) => setColumn(i, (e.target.value || null) as ImportField | null)}>
+                      <option value="">{M.ignore}</option>
+                      {IMPORT_FIELDS.map((f) => <option key={f} value={f}>{M.fields[f]}</option>)}
+                    </Select>
+                  </li>
+                ))}
               </ul>
-              {errs.length > 50 && <p className="m-0 text-[13px] text-muted">{fill(M.moreErrors, { n: errs.length - 50 })}</p>}
+              <label className="flex cursor-pointer flex-col gap-1 rounded-[14px] bg-honey-soft px-4 py-3 text-base">
+                <span className="flex items-center gap-2.5 font-semibold">
+                  <input type="checkbox" checked={training} disabled={locked} onChange={(e) => setTraining(e.target.checked)} className="size-5 accent-ink" />
+                  {M.training}
+                </span>
+                <span className="pl-[30px] text-[#4a5361]">{M.trainingHelp}</span>
+              </label>
+              {noId && <Notice tone="warn" role="alert">{M.fileErrors.noIdColumn}</Notice>}
+              {!listName.trim() && <p className="m-0 text-base text-[#4a5361]">{M.listNameRequired}</p>}
+              <div className="flex flex-wrap items-center gap-3">
+                <HexButton type="button" disabled={busy || noId || !listName.trim()} onClick={() => void toPreview()}>
+                  {busy ? M.previewLoading : M.next} <Chevron className="k-arrow" />
+                </HexButton>
+                <Button type="button" variant="secondary" onClick={back}>{M.back}</Button>
+              </div>
             </div>
           )}
-          {busy && <p role="status" className="m-0 font-mono text-sm">{fill(M.progress, { done: progress, total: entries.length })}</p>}
-          <div className="flex flex-wrap gap-2">
-            <button type="button" disabled={busy || sent > 0} onClick={() => setStep("columns")} className={btn.ghost}>{M.back}</button>
-            <button type="button" disabled={busy || entries.length === 0} onClick={() => void run()} className={btn.primary}>
-              {error && sent > 0 ? M.retry : M.import}
-            </button>
-          </div>
-        </div>
-      )}
 
-      {step === "done" && (
-        <div className="flex flex-col gap-4">
-          <p className="m-0 text-base" role="status">{fill(M.doneCounts, counts)}</p>
-          <div className="flex flex-wrap gap-2">
-            <Link href="/leads" className={`${btn.primary} no-underline`}>{M.seeLeads}</Link>
-            <button type="button" onClick={reset} className={btn.ghost}>{M.another}</button>
-          </div>
-          <Link href="/agentes" className="text-sm text-blue underline underline-offset-4">{t.qualifier.started}</Link>
+          {step === "preview" && (
+            <div className="flex flex-col gap-5">
+              <p className="m-0 rounded-[14px] bg-honey-soft px-4 py-3 font-mono text-base" role="status">
+                {fill(M.previewCounts, { rows: entries.length, new: previewNew, merged: valid.length - previewNew, errors: errs.length })}
+              </p>
+              <div className="overflow-x-auto rounded-2xl border border-[#e3e6ec] px-2">
+                <table className="w-full border-collapse text-left text-base">
+                  <thead>
+                    <tr className="border-b-2 border-[#e3e6ec] text-[15px] text-[#4a5361]">
+                      <th className="px-2 py-2.5 font-semibold">{M.previewTable.row}</th>
+                      <th className="px-2 py-2.5 font-semibold">{M.previewTable.company}</th>
+                      <th className="px-2 py-2.5 font-semibold">{M.previewTable.status}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {entries.slice(0, 20).map((e) => (
+                      <tr key={e.row} className="border-b border-[#eef0f3] last:border-b-0">
+                        <td className="px-2 py-2 font-mono text-sm">{e.row}</td>
+                        <td className="max-w-0 truncate px-2 py-2">{isError(e) ? (e.data.name ?? "") : e.name}</td>
+                        <td className={`px-2 py-2 ${isError(e) ? "font-medium text-danger" : ""}`}>{isError(e) ? M.outcomes.error : M.outcomes[outcomes.get(e.row) ?? "new"]}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {errs.length > 0 && (
+                <div className="flex flex-col gap-1.5 rounded-[14px] border-2 border-[#f1b0ab] bg-[#fde8e7] px-4 py-3">
+                  <h3 className="m-0 text-base font-semibold text-danger">{M.errorsTitle}</h3>
+                  <ul className="m-0 list-none p-0 text-[15px]">
+                    {errs.slice(0, 50).map((e) => <li key={e.row}>{rowErrorText(e.row, e.error, t)}</li>)}
+                  </ul>
+                  {errs.length > 50 && <p className="m-0 text-[15px] text-[#4a5361]">{fill(M.moreErrors, { n: errs.length - 50 })}</p>}
+                </div>
+              )}
+              {busy && <p role="status" className="m-0 font-mono text-base">{fill(M.progress, { done: progress, total: entries.length })}</p>}
+              <div className="flex flex-wrap items-center gap-3">
+                <HexButton type="button" disabled={busy || entries.length === 0} onClick={() => void run()}>
+                  {error && sent > 0 ? M.retry : M.import} <Chevron className="k-arrow" />
+                </HexButton>
+                <Button type="button" variant="secondary" disabled={busy || sent > 0} onClick={() => setStep("columns")}>{M.back}</Button>
+              </div>
+            </div>
+          )}
+
+          {step === "done" && (
+            <div className="flex flex-col gap-5">
+              <p className="m-0 rounded-[14px] bg-ok-soft px-4 py-3 text-lg font-semibold text-ok" role="status">{fill(M.doneCounts, counts)}</p>
+              <div className="flex flex-wrap items-center gap-3">
+                <HexLink href="/leads">{M.seeLeads} <Chevron className="k-arrow" /></HexLink>
+                <Button type="button" variant="secondary" onClick={reset}>{M.another}</Button>
+              </div>
+              <Link href="/agentes" className="k-link w-fit text-base font-medium underline">{t.qualifier.started}</Link>
+            </div>
+          )}
         </div>
-      )}
+      </HexPanel>
       <span className="sr-only">{stepIdx + 1}/{STEPS.length}</span>
     </section>
   );

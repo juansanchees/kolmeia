@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { undoImportAction } from "@/app/(app)/leads/subir/actions";
-import { btn } from "@/components/email/bits";
+import { Badge, Button, LinkButton } from "@/components/ui";
+import { BlockTitle } from "@/components/leads/SectionIntro";
 import { TrainButton } from "@/components/profile/TrainButton";
 import { date } from "@/components/research/format";
 import type { ImportListItem } from "@/lib/imports/store";
@@ -30,23 +31,26 @@ export function ImportHistory({ items, profiles = {}, trainEstimateUsd = 0 }: { 
     });
 
   return (
-    <section aria-labelledby="import-history" className="flex flex-col gap-3">
-      <h2 id="import-history" className="text-2xl">{M.history}</h2>
-      {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+    <section aria-labelledby="import-history" className="k-in flex flex-col gap-3 [animation-delay:.3s]">
+      <BlockTitle id="import-history">{M.history}</BlockTitle>
+      {error && <p role="alert" className="m-0 text-base text-danger">{error}</p>}
       {items.length === 0 ? (
-        <p className="text-sm text-muted">{M.historyEmpty}</p>
+        <p className="m-0 text-base text-[#4a5361]">{M.historyEmpty}</p>
       ) : (
-        <Paged as="ul" className="m-0 flex list-none flex-col border border-line bg-surface p-0">
+        <Paged as="ul" className="m-0 flex list-none flex-col gap-2.5 p-0">
           {items.map((i) => {
             const result = undone[i.id];
             const status = result ? "undone" : i.status;
             return (
-              <li key={i.id} id={`import-${i.id}`} className="flex flex-col gap-2 border-b border-line px-3.5 py-3 last:border-b-0">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="min-w-0 truncate text-sm font-semibold">{i.list_name}</span>
-                  <span className="font-mono text-xs text-muted">{date(i.created_at, t.intl)} · {M.statuses[status]}</span>
+              <li key={i.id} id={`import-${i.id}`} className="flex flex-col gap-2.5 rounded-2xl border border-[#e3e6ec] bg-surface px-4 py-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="min-w-0 truncate text-[17px] font-semibold">{i.list_name}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="font-mono text-sm text-[#4a5361]">{date(i.created_at, t.intl)}</span>
+                    <Badge tone={status === "done" ? "ok" : status === "undone" ? "neutral" : "honey"}>{M.statuses[status]}</Badge>
+                  </span>
                 </div>
-                <p className="m-0 text-[13px] text-muted">
+                <p className="m-0 font-mono text-sm text-[#4a5361]">
                   {fill(M.historyCounts, { rows: i.row_count, new: i.new_count, merged: i.merged_count, errors: i.error_count })}
                 </p>
                 {i.use_as_training && status === "done" && (
@@ -54,17 +58,17 @@ export function ImportHistory({ items, profiles = {}, trainEstimateUsd = 0 }: { 
                     <TrainButton importId={i.id} estimateUsd={trainEstimateUsd} knownProfileId={profiles[i.id] ?? null} />
                   </div>
                 )}
-                {result && <p role="status" className="m-0 text-[13px]">{fill(M.undoneCounts, result)}</p>}
+                {result && <p role="status" className="m-0 text-[15px]">{fill(M.undoneCounts, result)}</p>}
                 {!result && status !== "undone" &&
                   (asking === i.id ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm">{M.undoConfirm}</span>
-                      <button type="button" disabled={pending} onClick={() => undo(i.id)} className={btn.danger}>{M.undoYes}</button>
-                      <button type="button" disabled={pending} onClick={() => setAsking(null)} className={btn.ghost}>{M.undoNo}</button>
+                    <div className="flex flex-wrap items-center gap-2.5 rounded-[14px] border-2 border-[#f1b0ab] bg-[#fde8e7] px-3 py-2.5">
+                      <span className="text-base text-danger">{M.undoConfirm}</span>
+                      <Button type="button" variant="danger" size="sm" disabled={pending} onClick={() => undo(i.id)}>{M.undoYes}</Button>
+                      <Button type="button" variant="secondary" size="sm" disabled={pending} onClick={() => setAsking(null)}>{M.undoNo}</Button>
                     </div>
                   ) : (
                     <div>
-                      <button type="button" onClick={() => { setError(null); setAsking(i.id); }} className={btn.ghost}>{M.undo}</button>
+                      <LinkButton type="button" onClick={() => { setError(null); setAsking(i.id); }}>{M.undo}</LinkButton>
                     </div>
                   ))}
               </li>

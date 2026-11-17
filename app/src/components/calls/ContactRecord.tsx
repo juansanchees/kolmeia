@@ -3,12 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { recordContactAction } from "@/app/(app)/leads/ligar/[id]/actions";
-import { btn, input, Notice } from "@/components/email/bits";
+import { Button, LinkButton, Notice, TextInput } from "@/components/ui";
 import { callBackRange, chipLocal, CONTACT_EXTRA_OUTCOMES, CONTACT_OUTCOMES, type ContactOutcome } from "@/lib/calls/call-input";
 import { fill } from "@/lib/i18n";
 import { useT } from "@/lib/i18n/client";
 
-const tap = "inline-flex min-h-11 items-center justify-center border px-2 text-center text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60";
+/** Big outcome buttons: navy text on white, honey when picked (never white on honey), red text for "Não ligar mais". */
+const tap = "k-btn inline-flex min-h-16 items-center justify-center gap-2 rounded-[14px] border-2 px-3 text-center text-base font-semibold disabled:cursor-not-allowed disabled:opacity-60";
+const CHECK = "M5 12l5 5L20 7";
 
 /**
  * "Registrar contato": one tap per contact, an optional one-line note. "Ligar depois" asks the day (default today + 3),
@@ -46,9 +48,9 @@ export function ContactRecord({ leadId, afterSave }: { leadId: string; afterSave
   const choose = (o: ContactOutcome) => (o === "talked" || o === "do_not_call" ? setPick(pick === o ? null : o) : save(o));
 
   return (
-    <div className="flex flex-col gap-2">
-      <input aria-label={R.note} placeholder={R.note} value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} className={input} />
-      <div role="group" aria-label={R.title} className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+    <div className="flex flex-col gap-4">
+      <TextInput aria-label={R.note} placeholder={R.note} value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} />
+      <div role="group" aria-label={R.title} className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
         {CONTACT_OUTCOMES.map((o) => (
           <button
             key={o}
@@ -56,43 +58,51 @@ export function ContactRecord({ leadId, afterSave }: { leadId: string; afterSave
             disabled={pending}
             aria-pressed={pick === o}
             onClick={() => choose(o)}
-            className={`${tap} ${pick === o ? "border-blue bg-blue-wash text-blue-ink" : o === "do_not_call" ? "border-danger bg-surface text-danger hover:bg-warn-soft" : "border-edge bg-surface text-ink hover:border-ink"}`}
+            className={`${tap} ${pick === o ? "border-honey bg-honey-light text-ink" : o === "do_not_call" ? "border-line bg-surface text-danger hover:border-danger" : "border-line bg-surface text-ink hover:border-ink"}`}
           >
+            {pick === o && (
+              <span aria-hidden className="k-pop inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-ink text-white">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d={CHECK} />
+                </svg>
+              </span>
+            )}
             {R.buttons[o]}
           </button>
         ))}
       </div>
-      <div className="flex flex-wrap gap-x-4 gap-y-1">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-base">
+        <span className="text-[#4a5361]">{C.recordMore}</span>
         {CONTACT_EXTRA_OUTCOMES.map((o) => (
-          <button key={o} type="button" disabled={pending} onClick={() => save(o)} className={`${btn.link} min-h-11`}>
+          <LinkButton key={o} type="button" disabled={pending} onClick={() => save(o)} className="disabled:opacity-60">
             {R.buttons[o]}
-          </button>
+          </LinkButton>
         ))}
       </div>
       {pick === "talked" && (
-        <div className="flex flex-wrap items-end gap-2">
-          <label className="flex flex-col gap-1 text-sm">
-            {R.callBackOn}
-            <input type="date" value={day} min={range.min} max={range.max} onChange={(e) => setDay(e.target.value)} className={input} />
+        <div className="k-fade flex flex-wrap items-end gap-3 rounded-[14px] bg-honey-soft p-4">
+          <label className="flex flex-col gap-1.5">
+            <span className="font-mono text-[13px] font-medium uppercase tracking-wide">{R.callBackOn}</span>
+            <TextInput type="date" value={day} min={range.min} max={range.max} onChange={(e) => setDay(e.target.value)} />
           </label>
-          <button type="button" disabled={pending || !day} onClick={() => save("talked")} className={btn.primary}>
+          <Button type="button" disabled={pending || !day} onClick={() => save("talked")}>
             {pending ? R.saving : R.save}
-          </button>
+          </Button>
         </div>
       )}
       {pick === "do_not_call" && (
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="m-0 w-full text-sm text-muted">{R.dncHint}</p>
-          <button type="button" disabled={pending} onClick={() => save("do_not_call")} className={btn.danger}>
+        <div className="k-fade flex flex-wrap items-center gap-3 rounded-[14px] border-2 border-[#f1b0ab] bg-[#fde8e7] p-4">
+          <p className="m-0 w-full text-base text-danger">{R.dncHint}</p>
+          <Button type="button" variant="danger" disabled={pending} onClick={() => save("do_not_call")}>
             {pending ? R.saving : R.confirmDnc}
-          </button>
-          <button type="button" disabled={pending} onClick={() => setPick(null)} className={btn.link}>
+          </Button>
+          <LinkButton type="button" disabled={pending} onClick={() => setPick(null)}>
             {R.cancel}
-          </button>
+          </LinkButton>
         </div>
       )}
       {msg && (
-        <Notice tone={msg.ok ? "ok" : "warn"} role={msg.ok ? "status" : "alert"}>
+        <Notice tone={msg.ok ? "ok" : "danger"} role={msg.ok ? "status" : "alert"}>
           {msg.text}
         </Notice>
       )}

@@ -60,4 +60,8 @@ export const calls = {
     noPhone: "This lead has no phone to call.",
     denied: "You cannot log a call on this lead.",
   },
+  queueSubtitle: "Who to call now. Tap Call to open the call screen.",
+  emptyHint: "Leads with a phone land here on their own when they join the call list.",
+  recordHint: "Tap what happened. The note is optional.",
+  recordMore: "Other:",
 } satisfies Widen<typeof pt>;

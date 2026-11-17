@@ -43,10 +43,12 @@ describe("draftBrief", () => {
 });
 
 describe("hand-off screens", () => {
-  it('only "Passar pra closer" is orange', () => {
-    expect(src("components/leads/HandOffForm.tsx")).toContain("btn.cta");
-    expect(src("components/leads/StatusButtons.tsx")).not.toContain("cta");
-    expect(src("components/leads/AddToCallList.tsx")).not.toContain("cta");
+  it('only "Passar para o vendedor" is the hexagon CTA', () => {
+    expect(src("components/leads/HandOffForm.tsx")).toContain("<HexButton");
+    for (const f of ["components/leads/StatusButtons.tsx", "components/leads/AddToCallList.tsx"]) {
+      expect(src(f)).not.toContain("cta");
+      expect(src(f)).not.toContain("HexButton");
+    }
   });
 
   it("the hand-off action is sender-only and needs a next step", () => {

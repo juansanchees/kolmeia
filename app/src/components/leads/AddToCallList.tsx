@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { addToCallListAction } from "@/app/(app)/leads/lead-actions";
 import { ActionButton } from "@/components/email/ActionButton";
-import { Field } from "@/components/ui";
+import { Field, Select } from "@/components/ui";
 import { useT } from "@/lib/i18n/client";
 
 /** Puts the lead on the list of a running call agent. */
@@ -11,17 +11,17 @@ export function AddToCallList({ leadId, agents }: { leadId: string; agents: { id
   const t = useT();
   const H = t.handoff;
   const [agentId, setAgentId] = useState(agents[0]?.id ?? "");
-  if (agents.length === 0) return <p className="text-sm text-muted">{H.noCallAgent}</p>;
+  if (agents.length === 0) return <p className="m-0 text-base text-[#4a5361]">{H.noCallAgent}</p>;
   return (
-    <div className="flex flex-wrap items-end gap-2">
+    <div className="flex flex-wrap items-end gap-3">
       <Field label={H.listAgent} htmlFor="call-agent">
-        <select id="call-agent" value={agentId} onChange={(e) => setAgentId(e.target.value)} className="min-h-11 min-w-0 border border-line bg-surface px-2.5 text-sm text-ink">
+        <Select id="call-agent" value={agentId} onChange={(e) => setAgentId(e.target.value)} className="w-auto! min-w-56">
           {agents.map((a) => (
             <option key={a.id} value={a.id}>
               {a.name}
             </option>
           ))}
-        </select>
+        </Select>
       </Field>
       <ActionButton
         action={async () => {

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { trainProfileAction } from "@/app/(app)/leads/perfil/actions";
-import { btn } from "@/components/email/bits";
+import { Button } from "@/components/ui";
 import { usd } from "@/components/research/format";
 import { fill } from "@/lib/i18n";
 import { useT } from "@/lib/i18n/client";
@@ -31,11 +31,11 @@ export function TrainButton({ importId, estimateUsd, knownProfileId = null }: { 
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <button type="button" disabled={pending} onClick={train} className={btn.ghost}>
+      <Button type="button" variant="secondary" size="sm" disabled={pending} onClick={train}>
         {pending ? t.profile.working : fill(t.profile.train, { usd: usd(estimateUsd, t.intl) })}
-      </button>
-      {profileId && <Link href={`/leads/perfil/${profileId}`} className={btn.link}>{t.profile.see}</Link>}
-      {error && <p role="alert" className="m-0 w-full text-sm text-danger">{error}</p>}
+      </Button>
+      {profileId && <Link href={`/leads/perfil/${profileId}`} className="k-link inline-flex min-h-11 items-center rounded-[10px] px-1 text-base font-medium underline">{t.profile.see}</Link>}
+      {error && <p role="alert" className="m-0 w-full text-base text-danger">{error}</p>}
     </div>
   );
 }

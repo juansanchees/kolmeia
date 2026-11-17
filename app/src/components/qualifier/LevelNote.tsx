@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { ackLevelNoteAction } from "@/app/(app)/agentes/qualifier-actions";
-import { btn, Notice } from "@/components/email/bits";
+import { Button, Notice } from "@/components/ui";
 import { noteFieldLabel } from "@/lib/qualifier/view";
 import { fill } from "@/lib/i18n";
 import { useT } from "@/lib/i18n/client";
@@ -17,10 +17,11 @@ export function LevelNote({ leadId, note }: { leadId: string; note: { from: numb
       <div className="min-w-0 flex-1">
         <Notice tone="warn">{fill(t.qualifier.levelDrop, { from: note.from, to: note.to, field: noteFieldLabel(note.field, t) })}</Notice>
       </div>
-      <button
+      <Button
         type="button"
+        variant="secondary"
+        size="sm"
         disabled={pending}
-        className={btn.ghost}
         onClick={() =>
           start(async () => {
             setError(null);
@@ -30,9 +31,9 @@ export function LevelNote({ leadId, note }: { leadId: string; note: { from: numb
         }
       >
         {t.qualifier.levelDropOk}
-      </button>
+      </Button>
       {error && (
-        <span role="alert" className="text-sm text-danger">
+        <span role="alert" className="text-base text-danger">
           {error}
         </span>
       )}

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { checkEmailsAction, findEmailAction } from "@/app/(app)/leads/email-actions";
-import { btn, Notice } from "@/components/email/bits";
+import { Button, Notice } from "@/components/ui";
 import type { FindEmailResult } from "@/lib/leads/email-cascade";
 import { fill, type Messages } from "@/lib/i18n";
 import { useT } from "@/lib/i18n/client";
@@ -63,15 +63,15 @@ export function EmailTools({ selected, onDone, single = false }: { selected: str
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" disabled={pending || none} onClick={check} className={btn.ghost}>
+        <Button type="button" variant="secondary" size="sm" disabled={pending || none} onClick={check}>
           {pending ? Q.checking : `${Q.check}${count}`}
-        </button>
-        <button type="button" disabled={pending || none} onClick={find} className={btn.ghost}>
+        </Button>
+        <Button type="button" variant="secondary" size="sm" disabled={pending || none} onClick={find}>
           {pending ? FE.finding : `${FE.button}${count}`}
-        </button>
+        </Button>
       </div>
       {msg && (
-        <Notice tone={msg.tone} role={msg.tone === "warn" ? "alert" : "status"}>
+        <Notice tone={msg.tone === "warn" ? "danger" : msg.tone} role={msg.tone === "warn" ? "alert" : "status"}>
           {msg.node}
         </Notice>
       )}

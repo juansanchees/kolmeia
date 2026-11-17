@@ -48,4 +48,6 @@ export const imports = {
   undoNo: "Não",
   undoneCounts: "{deleted} leads apagados · {kept} ficaram (outras fontes ou já trabalhados)",
   fields: { name: "Empresa", website: "Site", phone: "Telefone", email: "E-mail", address: "Endereço", city: "Cidade", state: "Estado", zip: "ZIP", contact_name: "Contato", contact_title: "Cargo", note: "Nota" },
+  subtitle: "Suba um CSV ou XLSX em 4 passos. Nada entra antes da prévia.",
+  stepHints: { file: "Escolha o arquivo da lista.", columns: "Diga o que cada coluna é.", preview: "Confira antes de importar.", done: "A lista entrou." },
 } as const;

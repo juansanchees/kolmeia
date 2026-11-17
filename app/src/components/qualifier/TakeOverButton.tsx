@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { takeOverChargeAction } from "@/app/(app)/agentes/qualifier-actions";
-import { btn } from "@/components/email/bits";
+import { Button } from "@/components/ui";
 import { useT } from "@/lib/i18n/client";
 
 /** "Assumir a cobrança": shown to the owner only, next to the no_access pause notice. */
@@ -13,10 +13,10 @@ export function TakeOverButton() {
   const [error, setError] = useState<string | null>(null);
   return (
     <span className="flex flex-col items-start gap-1">
-      <button
+      <Button
         type="button"
+        size="sm"
         disabled={pending}
-        className={btn.primary}
         title={Q.takeOverHelp}
         onClick={() =>
           start(async () => {
@@ -27,9 +27,9 @@ export function TakeOverButton() {
         }
       >
         {Q.takeOver}
-      </button>
+      </Button>
       {error && (
-        <span role="alert" className="text-sm text-danger">
+        <span role="alert" className="text-base text-danger">
           {error}
         </span>
       )}

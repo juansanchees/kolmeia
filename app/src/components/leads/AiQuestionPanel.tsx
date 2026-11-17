@@ -2,14 +2,15 @@
 
 import { useRef, useState, useTransition } from "react";
 import { archiveQuestionAction, createQuestionAction, enqueueQuestionAction, stepQuestionAction, testQuestionAction } from "@/app/(app)/leads/ai-question-actions";
-import { btn, Notice } from "@/components/email/bits";
+import { Button, HexPanel, LinkButton, Notice, Select, TextArea } from "@/components/ui";
+import { BlockTitle } from "@/components/leads/SectionIntro";
 import { usd } from "@/components/research/format";
 import { ANSWER_TYPES, answerFilterValues, QUESTION_MAX, QUESTION_SOURCES, RUN_MAX, TEST_LEADS, type AiCell, type AiQuestion, type AnswerType, type QuestionSource } from "@/lib/ai-questions/types";
 import type { LeadFilters } from "@/lib/leads/view";
 import { fill, type Messages } from "@/lib/i18n";
 import { useT } from "@/lib/i18n/client";
 
-const selectCls = "min-h-11 min-w-0 border border-line bg-surface px-2.5 text-sm text-ink";
+const LABEL = "font-mono text-[13px] font-medium uppercase tracking-wide";
 
 /** How a cell reads in the list: "Sim", "Não sei", "na fila…", a score or the short text. */
 export function answerText(cell: AiCell | undefined, t: Messages): string {
@@ -106,94 +107,96 @@ export function AiQuestionPanel({ questions, f, set, selected, filtered, reserve
 
   const busy = pending || running;
   return (
-    <section aria-labelledby="ai-q-title" className="flex flex-col gap-3 border border-line bg-surface p-3.5">
-      <div className="flex flex-wrap items-end gap-2">
-        <h3 id="ai-q-title" className="m-0 mr-auto text-base">{A.title}</h3>
-        <label className="flex flex-col gap-1">
-          <span className="font-mono text-xs text-muted">{A.column}</span>
-          <select value={f.aiQuestion} onChange={(e) => set({ aiQuestion: e.target.value, aiAnswer: "all" })} className={selectCls}>
+    <HexPanel as="section" aria-labelledby="ai-q-title" c={20} cSm={10} className="flex flex-col gap-4 py-6" wrapClassName="k-in">
+      <BlockTitle id="ai-q-title" as="h3" hint={A.intro}>{A.title}</BlockTitle>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="flex min-w-0 flex-col gap-1.5">
+          <span className={LABEL}>{A.column}</span>
+          <Select value={f.aiQuestion} onChange={(e) => set({ aiQuestion: e.target.value, aiAnswer: "all" })} className="w-auto! min-w-56 max-w-full">
             <option value="">{A.none}</option>
             {questions.map((x) => (
               <option key={x.id} value={x.id}>{x.question}</option>
             ))}
-          </select>
+          </Select>
         </label>
         {q && (
-          <label className="flex flex-col gap-1">
-            <span className="font-mono text-xs text-muted">{A.filter}</span>
-            <select value={f.aiAnswer} onChange={(e) => set({ aiAnswer: e.target.value })} className={selectCls}>
+          <label className="flex min-w-0 flex-col gap-1.5">
+            <span className={LABEL}>{A.filter}</span>
+            <Select value={f.aiAnswer} onChange={(e) => set({ aiAnswer: e.target.value })} className="w-auto! min-w-40">
               <option value="all">{A.all}</option>
               {answerFilterValues(q.answer_type).map((v) => (
                 <option key={v} value={v}>{(A.answers as Record<string, string>)[v] ?? v}</option>
               ))}
-            </select>
+            </Select>
           </label>
         )}
-        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className={btn.ghost}>
+        <Button type="button" variant="secondary" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
           {A.newTitle}
-        </button>
+        </Button>
       </div>
-      <p className="m-0 text-[13px] text-muted">{A.intro}</p>
 
       {open && (
-        <div className="flex flex-col gap-3 border-t border-line pt-3">
-          <label className="flex flex-col gap-1">
-            <span className="font-mono text-xs text-muted">{A.question}</span>
-            <textarea value={text} onChange={(e) => setText(e.target.value)} maxLength={QUESTION_MAX} rows={2} placeholder={A.placeholder} className="border border-line bg-surface px-3 py-2 text-sm text-ink" />
-            <span className="font-mono text-xs text-muted">{text.length}/{QUESTION_MAX}</span>
+        <div className="k-fade flex flex-col gap-4 rounded-[14px] bg-ground p-4">
+          <label className="flex flex-col gap-1.5">
+            <span className={LABEL}>{A.question}</span>
+            <TextArea value={text} onChange={(e) => setText(e.target.value)} maxLength={QUESTION_MAX} rows={2} placeholder={A.placeholder} />
+            <span className="font-mono text-sm text-[#4a5361]">{text.length}/{QUESTION_MAX}</span>
           </label>
-          <fieldset className="m-0 flex flex-wrap gap-3 border-0 p-0">
-            <legend className="mb-1 font-mono text-xs text-muted">{A.answerType}</legend>
+          <fieldset className="m-0 flex flex-wrap gap-2 border-0 p-0">
+            <legend className={`${LABEL} mb-2`}>{A.answerType}</legend>
             {ANSWER_TYPES.map((x) => (
-              <label key={x} className="flex min-h-11 items-center gap-2 text-sm">
-                <input type="radio" name="ai-q-type" checked={type === x} onChange={() => setType(x)} />
+              <label key={x} className="k-opt flex min-h-11 items-center gap-2 rounded-full border-2 border-line bg-surface px-4 text-base">
+                <input type="radio" name="ai-q-type" checked={type === x} onChange={() => setType(x)} className="size-[18px]" />
                 {A.types[x]}
               </label>
             ))}
           </fieldset>
-          <fieldset className="m-0 flex flex-wrap gap-3 border-0 p-0">
-            <legend className="mb-1 font-mono text-xs text-muted">{A.sources}</legend>
+          <fieldset className="m-0 flex flex-wrap gap-2 border-0 p-0">
+            <legend className={`${LABEL} mb-2`}>{A.sources}</legend>
             {QUESTION_SOURCES.map((x) => (
-              <label key={x} className="flex min-h-11 items-center gap-2 text-sm">
-                <input type="checkbox" checked={sources.includes(x)} onChange={(e) => setSources((s) => (e.target.checked ? [...s, x] : s.filter((y) => y !== x)))} />
+              <label key={x} className="k-opt flex min-h-11 items-center gap-2 rounded-full border-2 border-line bg-surface px-4 text-base">
+                <input type="checkbox" checked={sources.includes(x)} onChange={(e) => setSources((s) => (e.target.checked ? [...s, x] : s.filter((y) => y !== x)))} className="size-[18px]" />
                 {A.sourceLabels[x]}
               </label>
             ))}
           </fieldset>
-          <p className="m-0 text-[13px] text-muted">{A.noWeb}</p>
-          <button type="button" disabled={busy || text.trim().length < 3 || sources.length === 0} onClick={create} className={`${btn.primary} w-fit`}>
+          <p className="m-0 text-[15px] text-[#4a5361]">{A.noWeb}</p>
+          <Button type="button" disabled={busy || text.trim().length < 3 || sources.length === 0} onClick={create} className="w-fit">
             {A.create}
-          </button>
+          </Button>
         </div>
       )}
 
       {q && (
-        <div className="flex flex-col gap-2 border-t border-line pt-3">
-          <span className="font-mono text-xs text-muted">{A.before}</span>
-          <ol className="m-0 flex list-none flex-col gap-1 p-0 text-[13px]">
-            <li>{A.step1}</li>
-            <li>{fill(A.estimate, { n: target.length, usd: `US$ ${usd(Math.ceil(target.length * reserveUsd * 100) / 100, t.intl)}` })}</li>
-            <li>{A.step3}</li>
+        <div className="flex flex-col gap-3 border-t border-[#e3e6ec] pt-4">
+          <span className={LABEL}>{A.before}</span>
+          <ol className="m-0 flex list-none flex-col gap-2 p-0 text-base">
+            {[A.step1, fill(A.estimate, { n: target.length, usd: `US$ ${usd(Math.ceil(target.length * reserveUsd * 100) / 100, t.intl)}` }), A.step3].map((line, n) => (
+              <li key={n} className="flex items-start gap-2.5">
+                <span aria-hidden className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-honey-light font-mono text-sm">{n + 1}</span>
+                <span className="min-w-0">{line}</span>
+              </li>
+            ))}
           </ol>
-          {target.length === 0 && <p className="m-0 text-[13px] text-muted">{A.noLeads}</p>}
-          <div className="flex flex-wrap gap-2">
-            <button type="button" disabled={busy || testIds.length === 0} onClick={test} className={btn.ghost}>
+          {target.length === 0 && <p className="m-0 text-[15px] text-[#4a5361]">{A.noLeads}</p>}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <Button type="button" variant="secondary" disabled={busy || testIds.length === 0} onClick={test}>
               {fill(A.test, { n: testIds.length || TEST_LEADS })}
-            </button>
-            <button type="button" disabled={busy || target.length === 0} onClick={run} className={btn.ghost}>
+            </Button>
+            <Button type="button" disabled={busy || target.length === 0} onClick={run}>
               {fill(A.run, { n: target.length })}
-            </button>
+            </Button>
             {running && (
-              <button type="button" onClick={() => (cancel.current = true)} className={btn.link}>
+              <LinkButton type="button" onClick={() => (cancel.current = true)}>
                 {t.spend.qualify.cancel}
-              </button>
+              </LinkButton>
             )}
-            <button type="button" disabled={busy} onClick={() => start(async () => { await archiveQuestionAction(q.id); set({ aiQuestion: "", aiAnswer: "all" }); })} className={btn.link}>
+            <LinkButton type="button" disabled={busy} onClick={() => start(async () => { await archiveQuestionAction(q.id); set({ aiQuestion: "", aiAnswer: "all" }); })} className="disabled:opacity-60">
               {A.archive}
-            </button>
+            </LinkButton>
           </div>
           {tested.length > 0 && (
-            <ul className="m-0 flex list-none flex-col gap-1 p-0 text-sm">
+            <ul className="m-0 flex list-none flex-col gap-1.5 rounded-[14px] bg-ground px-4 py-3 text-base">
               {tested.map((x) => (
                 <li key={x.leadId}>
                   <span className="font-semibold">{nameOf(x.leadId)}</span>: {answerText({ status: x.answer === null ? "failed" : "done", answer: x.answer, url: null, excerpt: null, label: null }, t)}
@@ -204,6 +207,6 @@ export function AiQuestionPanel({ questions, f, set, selected, filtered, reserve
         </div>
       )}
       <div aria-live="polite">{msg && <Notice tone={msg.tone}>{msg.text}</Notice>}</div>
-    </section>
+    </HexPanel>
   );
 }

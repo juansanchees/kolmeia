@@ -1,12 +1,15 @@
 import Link from "next/link";
-import { PagedTable } from "@/components/Pager";
+import { Paged } from "@/components/Pager";
 import { NewListForm } from "@/components/lists/NewListForm";
+import { SectionIntro } from "@/components/leads/SectionIntro";
+import { buttonClass, Chevron, EmptyState } from "@/components/ui";
 import { listStats } from "@/lib/lists/queries";
 import { createClient } from "@/lib/supabase/server";
 import { requireSender } from "@/lib/workspace";
 import { getT } from "@/lib/i18n/server";
 
 const pct = (n: number, of: number) => (of > 0 ? `${Math.round((100 * n) / of)}%` : "—");
+const LIST_ICON = "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01";
 
 // Named lists of leads. Owner/sdr only (the closer is sent back to LEADS; RLS gives her no list rows anyway).
 export default async function ListsPage() {
@@ -16,45 +19,44 @@ export default async function ListsPage() {
   const supabase = await createClient();
   const rows = supabase ? await listStats(supabase, workspace.id) : [];
   return (
-    <div className="flex min-w-0 flex-col gap-4">
-      <header className="flex flex-col gap-1">
-        <h2 className="text-2xl">{L.title}</h2>
-        <p className="text-sm text-muted">{L.subtitle}</p>
-      </header>
+    <div className="flex min-w-0 flex-col gap-5">
+      <SectionIntro title={L.title} subtitle={L.subtitle} />
       <NewListForm />
       {rows.length === 0 ? (
-        <p className="text-sm text-muted">{L.empty}</p>
+        <EmptyState icon={LIST_ICON} title={L.empty} />
       ) : (
-        <PagedTable
-          wrapClassName="overflow-x-auto border border-line bg-surface"
-          className="w-full min-w-[640px] border-collapse text-sm"
-          head={
-        <tr className="border-b border-line text-left font-mono text-xs uppercase tracking-wide text-muted">
-          <th scope="col" className="px-3 py-2 font-normal">{L.columns.name}</th>
-          <th scope="col" className="px-3 py-2 text-right font-normal">{L.columns.leads}</th>
-          <th scope="col" className="px-3 py-2 text-right font-normal">{L.columns.contacted}</th>
-          <th scope="col" className="px-3 py-2 text-right font-normal">{L.columns.phone}</th>
-          <th scope="col" className="px-3 py-2 font-normal">{L.columns.actions}</th>
-        </tr>
-          }
-        >
+        <Paged as="ul" className="m-0 grid list-none gap-3.5 p-0 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
           {rows.map((r) => (
-            <tr key={r.id} className="border-b border-line last:border-b-0">
-              <th scope="row" className="px-3 py-2 text-left font-semibold">{r.name}</th>
-              <td className="px-3 py-2 text-right font-mono">{r.leads}</td>
-              <td className="px-3 py-2 text-right font-mono">{pct(r.contacted, r.leads)}</td>
-              <td className="px-3 py-2 text-right font-mono">{r.with_phone}</td>
-              <td className="px-3 py-2">
-                <span className="flex flex-wrap gap-3">
-                  <Link href={`/leads?lista=${r.id}`} className="inline-flex min-h-11 items-center text-blue underline underline-offset-4">{L.open}</Link>
-                  <a href={`/api/leads/lists/${r.id}/csv`} download className="inline-flex min-h-11 items-center text-blue underline underline-offset-4">{L.csv}</a>
+            <li key={r.id} className="k-in flex min-w-0 flex-col gap-4 rounded-2xl border border-[#e3e6ec] bg-surface p-5 shadow-[0_6px_14px_-8px_rgba(15,27,61,0.12)]">
+              <h3 className="m-0 flex min-w-0 items-center gap-2.5 text-lg font-semibold">
+                <span aria-hidden className="hxv inline-flex h-[38px] w-[34px] shrink-0 items-center justify-center bg-honey-soft text-ink">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={LIST_ICON} /></svg>
                 </span>
-              </td>
-            </tr>
+                <span className="min-w-0 break-words">{r.name}</span>
+              </h3>
+              <dl className="m-0 grid grid-cols-3 gap-2 rounded-[14px] bg-ground px-3 py-2.5">
+                {[
+                  [L.columns.leads, String(r.leads)],
+                  [L.columns.contacted, pct(r.contacted, r.leads)],
+                  [L.columns.phone, String(r.with_phone)],
+                ].map(([k, v]) => (
+                  <div key={k} className="flex min-w-0 flex-col">
+                    <dt className="truncate text-[13px] text-[#4a5361]">{k}</dt>
+                    <dd className="m-0 font-mono text-xl font-semibold">{v}</dd>
+                  </div>
+                ))}
+              </dl>
+              <span className="mt-auto flex flex-wrap gap-2">
+                <Link href={`/leads?lista=${r.id}`} className={buttonClass("primary", "sm")}>
+                  {L.open} <Chevron size={16} className="k-arrow" />
+                </Link>
+                <a href={`/api/leads/lists/${r.id}/csv`} download className={buttonClass("secondary", "sm")}>{L.csv}</a>
+              </span>
+            </li>
           ))}
-        </PagedTable>
+        </Paged>
       )}
-      <p className="text-sm text-muted">{L.csvNote}</p>
+      <p className="m-0 text-base text-[#4a5361]">{L.csvNote}</p>
     </div>
   );
 }

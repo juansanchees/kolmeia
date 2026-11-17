@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { btn } from "@/components/email/bits";
+import { Button, HexPanel } from "@/components/ui";
 import { isEmptyNl, parseLeadQuery, type NlFilters } from "@/lib/leads/nl-search";
 import { fill, type Messages } from "@/lib/i18n";
 import { useT } from "@/lib/i18n/client";
@@ -78,36 +78,44 @@ export function NlSearch({ cities, onApply, initialText = "" }: { cities: string
   const chips = active && found ? nlChips(found, t) : [];
   const settled = active && found !== null && !thinking;
   return (
-    <div className="flex flex-col gap-2">
-      <label className="flex flex-col gap-1">
-        <span className="font-mono text-xs text-muted">{N.label}</span>
-        <input
-          type="search"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder={N.placeholder}
-          maxLength={200}
-          className="min-h-11 min-w-0 border border-line bg-surface px-3 text-sm text-ink"
-        />
+    <HexPanel tone="honey" c={20} cSm={10} className="flex flex-col gap-3 py-5" wrapClassName="k-in">
+      <label className="flex flex-col gap-2">
+        <span className="flex items-center gap-2.5 text-lg font-semibold">
+          <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden className="shrink-0">
+            <path className="fill-honey stroke-honey" strokeWidth="1.6" strokeLinejoin="round" d="M12 2 20.7 7v10L12 22 3.3 17V7Z" />
+            <path d="M9 10.5a3 3 0 1 0 6 0 3 3 0 1 0-6 0M14.2 12.7 16 14.5" className="fill-none stroke-ink" strokeWidth="1.6" strokeLinecap="round" />
+          </svg>
+          {N.label}
+        </span>
+        <span className="k-field flex min-h-[58px] items-center rounded-[16px] border-2 border-line bg-surface px-[18px]">
+          <input
+            type="search"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={N.placeholder}
+            maxLength={200}
+            className="min-w-0 flex-1 bg-transparent text-[17px] text-ink placeholder:text-[#4a5361]"
+          />
+        </span>
       </label>
       <div aria-live="polite" className="flex flex-col gap-2">
-        {active && thinking && <p className="text-[13px] text-muted">{N.thinking}</p>}
+        {active && thinking && <p className="m-0 text-base text-[#4a5361]">{N.thinking}</p>}
         {chips.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-xs text-muted">{N.detected}</span>
+          <div className="k-fade flex flex-wrap items-center gap-2">
+            <span className="mr-1 text-base text-[#4a5361]">{N.detected}</span>
             {chips.map((c) => (
-              <span key={c} className="border border-blue bg-blue-wash px-2 py-0.5 text-[13px] text-blue-ink">
+              <span key={c} className="inline-flex min-h-10 items-center rounded-full border-2 border-honey bg-honey-light px-4 text-[15px] font-medium text-ink">
                 {c}
               </span>
             ))}
-            <button type="button" onClick={() => found && onApply(found)} className={btn.primary}>
+            <Button type="button" onClick={() => found && onApply(found)} className="ml-auto">
               {N.apply}
-            </button>
+            </Button>
           </div>
         )}
-        {settled && chips.length > 0 && aiOff && <p className="text-[13px] text-muted">{N.aiOff}</p>}
-        {settled && chips.length === 0 && <p className="text-[13px] text-muted">{N.nothing}</p>}
+        {settled && chips.length > 0 && aiOff && <p className="m-0 text-[15px] text-[#4a5361]">{N.aiOff}</p>}
+        {settled && chips.length === 0 && <p className="m-0 text-[15px] text-[#4a5361]">{N.nothing}</p>}
       </div>
-    </div>
+    </HexPanel>
   );
 }

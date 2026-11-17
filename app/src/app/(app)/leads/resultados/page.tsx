@@ -6,6 +6,8 @@ import { listLeads } from "@/lib/leads/queries";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace, getUser } from "@/lib/workspace";
 import { getT } from "@/lib/i18n/server";
+import { SectionIntro } from "@/components/leads/SectionIntro";
+import { Badge, CountPill, EmptyState, HexPanel, segItemCls, segWrapCls } from "@/components/ui";
 
 const when = (iso: string, intl: string) => new Date(iso).toLocaleString(intl, { timeZone: "America/New_York", weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
@@ -39,52 +41,46 @@ export default async function ResultsPage({ searchParams }: { searchParams: Prom
   };
 
   return (
-    <div className="flex min-w-0 flex-col gap-4">
-      <header className="flex flex-col gap-1">
-        <h2 className="text-2xl">{R.title}</h2>
-        <p className="text-sm text-muted">{R.subtitle}</p>
-      </header>
-      <nav aria-label={R.tabs.label} className="flex flex-wrap border-b border-line">
+    <div className="flex min-w-0 flex-col gap-5">
+      <SectionIntro title={R.title} subtitle={R.subtitle} />
+      <nav aria-label={R.tabs.label} className={`k-in ${segWrapCls} [animation-delay:.15s]`}>
         {OUTCOME_GROUPS.map((g) => (
-          <Link
-            key={g}
-            href={`/leads/resultados?aba=${g}`}
-            aria-current={g === tab ? "page" : undefined}
-            className={`-mb-px inline-flex min-h-11 items-center border-b-[3px] px-4 text-[15px] no-underline ${g === tab ? "border-blue font-semibold text-ink" : "border-transparent text-muted hover:text-ink"}`}
-          >
+          <Link key={g} href={`/leads/resultados?aba=${g}`} aria-current={g === tab ? "page" : undefined} className={segItemCls(g === tab)}>
             {R.tabs[g]}
-            <span className="ml-1.5 bg-ground px-1.5 font-mono text-[13px]">{groups[g].length}</span>
+            <CountPill tone={g === tab ? "honey" : "cold"}>{groups[g].length}</CountPill>
           </Link>
         ))}
       </nav>
-      {total === 0 ? (
-        <p className="text-sm text-muted">{R.empty}</p>
-      ) : rows.length === 0 ? (
-        <p className="text-sm text-muted">{R.emptyGroup}</p>
-      ) : (
-        <Paged as="ul" resetKey={tab} className="m-0 flex list-none flex-col border border-line bg-surface p-0">
-          {rows.map((r) => {
-            const l = lead.get(r.lead_id);
-            return (
-              <li key={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line px-4 py-3 last:border-b-0">
-                <span className="flex min-w-0 flex-[1_1_220px] flex-col gap-0.5">
-                  <Link href={`/leads?lead=${r.lead_id}`} className="font-semibold text-ink underline-offset-4 hover:underline">{l?.display.name ?? t.tasks.lead}</Link>
-                  {l?.display.city && <span className="text-sm text-muted">{l.display.city}</span>}
-                </span>
-                <span className="min-w-[96px] bg-blue-wash px-2.5 py-1 text-center font-mono text-xs uppercase tracking-wide">
-                  {r.outcome === "gatekeeper" ? t.calls.outcomes.gatekeeper : R.tabs[tab]}
-                </span>
-                <span title={r.notes} className="min-w-0 flex-[2_1_220px] truncate text-sm text-muted">{r.notes || R.unknown}</span>
-                <span className="text-sm">{who(r.called_by)}</span>
-                <span className="flex flex-col font-mono text-[13px] text-muted">
-                  <span>{when(r.called_at, t.intl)}</span>
-                  {tab === "call_back" && r.next_step_at && <span className="text-ink">{R.callBack} {when(r.next_step_at, t.intl)}</span>}
-                </span>
-              </li>
-            );
-          })}
-        </Paged>
-      )}
+      <div key={tab} className="k-fade flex min-w-0 flex-col gap-3">
+        {total === 0 ? (
+          <EmptyState title={R.empty} />
+        ) : rows.length === 0 ? (
+          <EmptyState title={R.emptyGroup} />
+        ) : (
+          <HexPanel as="section" aria-label={R.tabs[tab]} c={18} cSm={10} className="py-3">
+            <Paged as="ul" resetKey={tab} className="m-0 flex list-none flex-col p-0">
+              {rows.map((r) => {
+                const l = lead.get(r.lead_id);
+                return (
+                  <li key={r.id} className="k-row flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-[#eef0f3] px-3 py-4 last:border-b-0">
+                    <span className="flex min-w-0 flex-[1_1_220px] flex-col gap-0.5">
+                      <Link href={`/leads?lead=${r.lead_id}`} className="k-link truncate text-[17px] font-semibold underline-offset-4 hover:underline">{l?.display.name ?? t.tasks.lead}</Link>
+                      {l?.display.city && <span className="text-[15px] text-[#4a5361]">{l.display.city}</span>}
+                    </span>
+                    <Badge tone="honey" dot>{r.outcome === "gatekeeper" ? t.calls.outcomes.gatekeeper : R.tabs[tab]}</Badge>
+                    <span title={r.notes} className="min-w-0 flex-[2_1_220px] truncate text-[15px] text-[#4a5361]">{r.notes || R.unknown}</span>
+                    <span className="text-[15px]">{who(r.called_by)}</span>
+                    <span className="flex flex-col font-mono text-sm text-[#4a5361]">
+                      <span>{when(r.called_at, t.intl)}</span>
+                      {tab === "call_back" && r.next_step_at && <span className="font-semibold text-ink">{R.callBack} {when(r.next_step_at, t.intl)}</span>}
+                    </span>
+                  </li>
+                );
+              })}
+            </Paged>
+          </HexPanel>
+        )}
+      </div>
     </div>
   );
 }

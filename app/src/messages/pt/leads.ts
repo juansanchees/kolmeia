@@ -371,4 +371,9 @@ export const leads = {
       agent: "O agente que achou a empresa.",
     },
   },
+  detail: {
+    close: "Fechar",
+    actionsTitle: "O que fazer com este lead",
+    groups: { lists: "Lista de ligação e campanha", email: "E-mail", close: "Fechar o lead" },
+  },
 } as const;

@@ -62,4 +62,8 @@ export const profile = {
     empty: "The AI found nothing the rows back up. Nothing was saved.",
     notProposed: "This profile was already decided in another tab.",
   },
+  pointsTitle: "What the AI learned",
+  decideTitle: "Your decision",
+  compareHint: "See whether the Hunter finds the companies on this list.",
+  inUseTitle: "Profiles in use and waiting",
 } satisfies Widen<typeof pt>;

@@ -59,4 +59,8 @@ export const profile = {
     empty: "A IA não achou nada que as linhas sustentem. Nada foi salvo.",
     notProposed: "Esse perfil já foi decidido em outra aba.",
   },
+  pointsTitle: "O que a IA aprendeu",
+  decideTitle: "Sua decisão",
+  compareHint: "Veja se o Caçador acha as empresas desta lista.",
+  inUseTitle: "Perfis em uso e esperando",
 } as const;

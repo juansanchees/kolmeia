@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { CallFacts } from "@/components/calls/CallFacts";
 import { CallHistory } from "@/components/calls/CallHistory";
 import { ContactRecord } from "@/components/calls/ContactRecord";
-import { Notice } from "@/components/email/bits";
+import { HexPanel, Notice } from "@/components/ui";
+import { BlockTitle } from "@/components/leads/SectionIntro";
 import { leadPhone } from "@/lib/calls/call-input";
 import { callsOf } from "@/lib/calls/call-queries";
 import { getLead } from "@/lib/leads/queries";
@@ -27,15 +28,16 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
   const blocked = detail.lead.do_not_call;
 
   return (
-    <div className="flex min-w-0 flex-col gap-5">
-      <Link href="/leads/ligar" className="font-mono text-xs text-blue underline underline-offset-4">
+    <div className="flex min-w-0 flex-col gap-6">
+      <Link href="/leads/ligar" className="k-link inline-flex min-h-11 w-fit items-center rounded-[10px] px-1 text-base font-medium underline">
         {t.calls.back}
       </Link>
       <CallFacts detail={detail} phone={phone} now={new Date()} blocked={blocked} />
       {blocked ? <Notice tone="warn" role="alert">{t.calls.blocked}</Notice> : (
-        <section aria-label={t.calls.record.title} className="border border-line bg-surface p-4">
+        <HexPanel as="section" aria-label={t.calls.record.title} c={20} cSm={10} className="flex flex-col gap-4 py-6" wrapClassName="k-in [animation-delay:.15s]">
+          <BlockTitle hint={t.calls.recordHint}>{t.calls.record.title}</BlockTitle>
           <ContactRecord leadId={id} afterSave="next" />
-        </section>
+        </HexPanel>
       )}
       <CallHistory calls={calls} />
     </div>

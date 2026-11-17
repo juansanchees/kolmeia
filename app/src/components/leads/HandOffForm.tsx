@@ -4,8 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { handOffLeadAction } from "@/app/(app)/leads/lead-actions";
-import { btn } from "@/components/email/bits";
-import { Field, TextArea, TextInput } from "@/components/ui";
+import { Chevron, Field, HexButton, Select, TextArea, TextInput } from "@/components/ui";
 import type { BriefDraft } from "@/lib/leads/brief";
 import type { Person } from "@/lib/team/types";
 import { fill } from "@/lib/i18n";
@@ -26,9 +25,9 @@ export function HandOffForm({ leadId, closers, draft }: { leadId: string; closer
 
   if (list.length === 0) {
     return (
-      <p className="text-sm text-muted">
+      <p className="m-0 text-base text-[#4a5361]">
         {H.noCloser}{" "}
-        <Link href="/configuracoes/equipe" className="text-blue underline underline-offset-4">
+        <Link href="/configuracoes/equipe" className="k-link font-medium underline">
           {t.team.tab}
         </Link>
       </p>
@@ -50,15 +49,15 @@ export function HandOffForm({ leadId, closers, draft }: { leadId: string; closer
   };
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-3">
+    <form onSubmit={submit} className="flex flex-col gap-4">
       <Field label={H.to} htmlFor="ho-to">
-        <select id="ho-to" value={closerId} onChange={(e) => setCloserId(e.target.value)} className="min-h-11 w-full border border-line bg-surface px-2.5 text-base text-ink">
+        <Select id="ho-to" value={closerId} onChange={(e) => setCloserId(e.target.value)}>
           {list.map((p) => (
             <option key={p.user_id} value={p.user_id}>
               {p.label}
             </option>
           ))}
-        </select>
+        </Select>
       </Field>
       <Field label={H.who} htmlFor="ho-who">
         <TextInput id="ho-who" value={who} maxLength={600} onChange={(e) => setWho(e.target.value)} />
@@ -71,20 +70,20 @@ export function HandOffForm({ leadId, closers, draft }: { leadId: string; closer
       </Field>
       {draft.evidence_urls.length > 0 && (
         <div className="flex flex-col gap-1">
-          <span className="font-mono text-xs uppercase tracking-wide">{H.proof}</span>
+          <span className="font-mono text-[13px] font-medium uppercase tracking-wide">{H.proof}</span>
           {draft.evidence_urls.map((u) => (
-            <a key={u} href={u} target="_blank" rel="noopener noreferrer nofollow" className="break-all text-[13px] text-blue underline underline-offset-4">
+            <a key={u} href={u} target="_blank" rel="noopener noreferrer nofollow" className="k-link break-all text-[15px] underline">
               {u} ↗
             </a>
           ))}
         </div>
       )}
-      <div className="flex flex-wrap items-center gap-3">
-        <button type="submit" className={btn.cta} disabled={pending}>
-          {H.button}
-        </button>
+      <div className="flex flex-wrap items-center gap-4">
+        <HexButton type="submit" tone="honey" disabled={pending}>
+          {H.button} <Chevron className="k-arrow" />
+        </HexButton>
         {msg && (
-          <span role={msg.ok ? "status" : "alert"} className={`text-sm ${msg.ok ? "text-ok" : "text-danger"}`}>
+          <span role={msg.ok ? "status" : "alert"} className={`text-base font-medium ${msg.ok ? "text-ok" : "text-danger"}`}>
             {msg.text}
           </span>
         )}

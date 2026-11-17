@@ -13,15 +13,15 @@ export function FieldList({ fields, importNames, emailQuality = {} }: { fields: 
   const L = t.leads;
   if (fields.length === 0) return null;
   return (
-    <ul className="m-0 flex list-none flex-col border border-line p-0">
+    <ul className="m-0 flex list-none flex-col rounded-[14px] border border-[#e3e6ec] p-0">
       {fields.map((f) => {
         const link = f.source !== "import" ? sanitizeUrl(f.source_ref) : null;
         const source = f.source === "import" && f.source_ref ? (importNames[f.source_ref] ?? L.sources.import) : L.sources[f.source];
         const refuted = f.status === "refuted";
         return (
-          <li key={f.id} className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5 border-b border-line px-3 py-2 text-[13px] last:border-b-0">
-            <span className="w-28 shrink-0 font-mono text-xs text-muted">{L.fieldLabels[f.field]}</span>
-            <span className={`min-w-0 flex-1 break-words text-sm ${refuted ? "line-through text-muted" : ""}`}>
+          <li key={f.id} className="k-row flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-[#eef0f3] px-4 py-3 text-[15px] last:border-b-0">
+            <span className="w-32 shrink-0 font-mono text-[13px] uppercase tracking-wide text-[#4a5361]">{L.fieldLabels[f.field]}</span>
+            <span className={`min-w-0 flex-1 break-words text-base ${refuted ? "line-through text-[#4a5361]" : "font-medium"}`}>
               {f.value}
               {f.field === "email" && (
                 <span className="ml-2">
@@ -29,9 +29,9 @@ export function FieldList({ fields, importNames, emailQuality = {} }: { fields: 
                 </span>
               )}
             </span>
-            <span className="text-muted">
+            <span className="text-[#4a5361]">
               {link ? (
-                <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue underline underline-offset-2">
+                <a href={link} target="_blank" rel="noopener noreferrer" className="k-link underline">
                   {host(link)}
                 </a>
               ) : (
@@ -39,8 +39,8 @@ export function FieldList({ fields, importNames, emailQuality = {} }: { fields: 
               )}{" "}
               · {date(f.seen_at, t.intl)}
             </span>
-            {f.status === "confirmed" && <span className="font-mono text-xs text-ok" title={L.confirmed}>✓ {L.confirmed}</span>}
-            {f.status === "unverified" && <span className="font-mono text-xs text-muted">⚠ {L.unproven}</span>}
+            {f.status === "confirmed" && <span className="rounded-full bg-ok-soft px-2.5 py-0.5 text-sm font-medium text-ok" title={L.confirmed}>✓ {L.confirmed}</span>}
+            {f.status === "unverified" && <span className="rounded-full bg-warn-soft px-2.5 py-0.5 text-sm font-medium text-warn">⚠ {L.unproven}</span>}
           </li>
         );
       })}

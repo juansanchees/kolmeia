@@ -32,4 +32,8 @@ export const coverage = {
     failed: "Could not save. Try again.",
   },
   saved: "Mark saved.",
+  subtitle: "Where you already searched for companies and where you still have not.",
+  noSearchesHint: "Run the Hunter or upload a list: every search shows up here.",
+  legend: "The bar shows how many leads each town has.",
+  manualHint: "Mark a town you already searched outside the app, so it counts as covered.",
 } satisfies Widen<typeof pt>;

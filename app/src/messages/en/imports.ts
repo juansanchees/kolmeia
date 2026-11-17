@@ -51,4 +51,6 @@ export const imports = {
   undoNo: "No",
   undoneCounts: "{deleted} leads deleted · {kept} kept (other sources or already worked)",
   fields: { name: "Company", website: "Website", phone: "Phone", email: "Email", address: "Address", city: "City", state: "State", zip: "ZIP", contact_name: "Contact", contact_title: "Title", note: "Note" },
+  subtitle: "Upload a CSV or XLSX in 4 steps. Nothing goes in before the preview.",
+  stepHints: { file: "Pick the list file.", columns: "Say what each column is.", preview: "Check before importing.", done: "The list is in." },
 } satisfies Widen<typeof pt>;

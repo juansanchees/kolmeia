@@ -29,4 +29,8 @@ export const coverage = {
     failed: "Não deu para salvar. Tente de novo.",
   },
   saved: "Marca salva.",
+  subtitle: "Onde você já procurou empresas e onde ainda falta.",
+  noSearchesHint: "Rode o Caçador ou suba uma lista: cada busca aparece aqui.",
+  legend: "A barra mostra quantos leads cada cidade tem.",
+  manualHint: "Marque uma cidade que você já procurou fora do app, para ela contar como coberta.",
 } as const;
