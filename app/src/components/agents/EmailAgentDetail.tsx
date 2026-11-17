@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { approveSequenceAction, rewriteSequenceAction, saveSequenceEditAction, setEmailAgentRunningAction, type EmailActionResult } from "@/app/(app)/agentes/[id]/email-actions";
-import { btn, Notice } from "@/components/email/bits";
-import { Pill } from "@/components/research/controls";
+import { Badge, buttonClass, HexPanel, Notice, StepTitle } from "@/components/ui";
+import { powerClass } from "@/components/research/controls";
+import { AgentHead, DlStat } from "./AgentHead";
 import { approveBlock } from "@/lib/email-agent/gating";
 import { stepProblems } from "@/lib/email/template";
 import type { AgentRow } from "@/lib/agents/types";
@@ -75,114 +76,117 @@ function Inner({ agent, campaignId, sequence, preview, metrics, sender, c12Ready
   const approve = () => preview && sequence && run(() => approveSequenceAction(sequence.id, preview.digest));
 
   const m = metrics;
+  const muted = "m-0 text-base text-[#4a5361]";
   return (
-    <section aria-labelledby="agent-title" className="flex flex-col gap-5 border border-line bg-surface p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1.5">
-        <h2 id="agent-title" className="text-2xl">
-          {agent.name}
-        </h2>
-        <span className="flex items-center gap-2 font-mono text-xs text-muted">
-          {A.types.email} · <span className="border border-line px-2 py-0.5">{A.statuses[agent.status]}</span>
-          <Pill tone={approved ? "ok" : "unknown"}>{approved ? D.status.approved : D.status.waiting}</Pill>
-        </span>
+    <HexPanel as="section" aria-labelledby="agent-title" raised wrapClassName="k-in" className="flex flex-col gap-7 py-7">
+      <div className="flex flex-col gap-2">
+        <AgentHead id="agent-title" name={agent.name} type="email" typeLabel={A.types.email} status={agent.status} statusLabel={A.statuses[agent.status]}>
+          <Badge tone={approved ? "ok" : "neutral"}>{approved ? D.status.approved : D.status.waiting}</Badge>
+        </AgentHead>
+        <p className="m-0 font-mono text-sm text-[#4a5361]" data-send-mode={sendMode}>
+          {sendMode === "real" ? D.modeReal : D.modeDry}
+        </p>
       </div>
-
-      <p className="font-mono text-xs text-muted" data-send-mode={sendMode}>
-        {sendMode === "real" ? D.modeReal : D.modeDry}
-      </p>
 
       {!c12Ready && (
-        <p role="status" className="bg-warn-soft px-3 py-2.5 text-sm font-semibold text-warn">
+        <Notice tone="warn" className="font-semibold">
           {D.rehearsalOnly}
-        </p>
-      )}
-
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          disabled={pending || (!running && !approved)}
-          className={running ? btn.ghost : btn.primary}
-          onClick={() => run(() => setEmailAgentRunningAction(agent.id, !running))}
-        >
-          {running ? D.pause : D.turnOn}
-        </button>
-        {!running && !approved && <span className="text-sm text-muted">{D.turnOnNeeds}</span>}
-        {!running && <ArchiveButton agentId={agent.id} />}
-      </div>
-
-      {msg && (
-        <Notice tone={msg.tone} role={msg.tone === "warn" ? "alert" : "status"}>
-          {msg.text}
         </Notice>
       )}
 
       <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h3 className="text-base font-semibold">{D.sequence}</h3>
+        <StepTitle n={1} as="h3" hint={!running && !approved ? D.turnOnNeeds : undefined}>
+          {A.detail.steps.power}
+        </StepTitle>
+        <div className="flex flex-col gap-3 md:pl-[42px]">
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              disabled={pending || (!running && !approved)}
+              className={powerClass(running)}
+              onClick={() => run(() => setEmailAgentRunningAction(agent.id, !running))}
+            >
+              {running ? D.pause : D.turnOn}
+            </button>
+            {!running && <ArchiveButton agentId={agent.id} />}
+          </div>
+          {msg && (
+            <Notice tone={msg.tone} role={msg.tone === "warn" ? "alert" : "status"}>
+              {msg.text}
+            </Notice>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <StepTitle n={2} as="h3" hint={D.editResets}>
+            {D.sequence}
+          </StepTitle>
           {sequence && (
-            <span className="font-mono text-xs text-muted">
+            <span className="font-mono text-sm text-[#4a5361]">
               {fill(D.version, { n: sequence.version })}
               {sequence.human_edited ? ` · ${D.humanEdited}` : ""}
             </span>
           )}
         </div>
-        {sequence ? (
-          <SequenceEditor value={value} onChange={setValue} disabled={pending} />
-        ) : (
-          <p className="text-sm text-muted">{D.noSequence}</p>
-        )}
-        <p className="text-sm text-muted">{D.editResets}</p>
-        <div className="flex flex-wrap items-center gap-3">
-          {sequence && (
-            <button type="button" className={btn.primary} disabled={pending || !dirty || !valid} onClick={save}>
-              {pending ? D.saving : D.save}
+        <div className="flex flex-col gap-3 md:pl-[42px]">
+          {sequence ? <SequenceEditor value={value} onChange={setValue} disabled={pending} /> : <p className={muted}>{D.noSequence}</p>}
+          <div className="flex flex-wrap items-center gap-3">
+            {sequence && (
+              <button type="button" className={buttonClass("primary")} disabled={pending || !dirty || !valid} onClick={save}>
+                {pending ? D.saving : D.save}
+              </button>
+            )}
+            <button type="button" className={buttonClass("secondary")} disabled={pending} onClick={() => {
+              // an approved version is replaced: unsent mail of that text is cancelled and the owner approves again
+              if (approved && !window.confirm(D.rewriteConfirm)) return;
+              run(() => rewriteSequenceAction(campaignId));
+            }}>
+              {pending ? D.rewriting : D.rewrite}
             </button>
-          )}
-          <button type="button" className={btn.ghost} disabled={pending} onClick={() => {
-            // an approved version is replaced: unsent mail of that text is cancelled and the owner approves again
-            if (approved && !window.confirm(D.rewriteConfirm)) return;
-            run(() => rewriteSequenceAction(campaignId));
-          }}>
-            {pending ? D.rewriting : D.rewrite}
-          </button>
+          </div>
+          <p className={muted}>{fill(D.rewriteEstimate, { usd: estimateUsd.toFixed(2) })}</p>
         </div>
-        <p className="text-sm text-muted">{fill(D.rewriteEstimate, { usd: estimateUsd.toFixed(2) })}</p>
       </div>
 
       {sequence && (
-        <>
-          <SequenceExamples examples={examples} sender={sender} rehearsalOnly={!c12Ready} />
-          {isOwner ? (
-            <div className="flex flex-col items-start gap-2">
-              <button type="button" className={btn.primary} disabled={pending || block !== null} onClick={approve}>
-                {pending ? D.approving : D.approve}
-              </button>
-              {approved && <p className="text-sm text-muted">{D.alreadyApproved}</p>}
-              {block === "dirty" && <p className="text-sm text-muted">{D.unsavedBlocksApprove}</p>}
-              {block === "examples" && <p className="text-sm text-muted">{D.needsExamples}</p>}
-              {block === "sender" && <p className="text-sm text-muted">{D.needsSender}</p>}
-            </div>
-          ) : (
-            <p className="text-sm text-muted">{D.onlyOwner}</p>
-          )}
-        </>
+        <div className="flex flex-col gap-3">
+          <StepTitle n={3} as="h3">{D.examples}</StepTitle>
+          <div className="flex flex-col gap-4 md:pl-[42px]">
+            <SequenceExamples examples={examples} sender={sender} rehearsalOnly={!c12Ready} />
+            {isOwner ? (
+              <div className="flex flex-col items-start gap-2">
+                <button type="button" className={buttonClass("primary")} disabled={pending || block !== null} onClick={approve}>
+                  {pending ? D.approving : D.approve}
+                </button>
+                {approved && <p className={muted}>{D.alreadyApproved}</p>}
+                {block === "dirty" && <p className={muted}>{D.unsavedBlocksApprove}</p>}
+                {block === "examples" && <p className={muted}>{D.needsExamples}</p>}
+                {block === "sender" && <p className={muted}>{D.needsSender}</p>}
+              </div>
+            ) : (
+              <p className={muted}>{D.onlyOwner}</p>
+            )}
+          </div>
+        </div>
       )}
 
-      <dl className="m-0" aria-label={D.metrics.title}>
-        {(["drafts", "approved", "sent", "replies", "unsubscribed", "bounced"] as const).map((k) => (
-          <div key={k} className="grid grid-cols-1 gap-x-4 border-t border-line py-2 text-sm sm:grid-cols-[14rem_1fr]">
-            <dt className="font-mono text-xs text-muted">{D.metrics[k]}</dt>
-            <dd className="m-0">{m[k]}</dd>
-          </div>
-        ))}
-      </dl>
+      <div className="flex flex-col gap-3">
+        <StepTitle n={sequence ? 4 : 3} as="h3">{D.metrics.title}</StepTitle>
+        <dl className="m-0 grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(140px,1fr))] md:pl-[42px]" aria-label={D.metrics.title}>
+          {(["drafts", "approved", "sent", "replies", "unsubscribed", "bounced"] as const).map((k) => (
+            <DlStat key={k} label={D.metrics[k]} value={m[k]} />
+          ))}
+        </dl>
+      </div>
 
       <div className="flex flex-col gap-1">
-        <Link href={`/campanhas/${campaignId}`} className={btn.link}>
+        <Link href={`/campanhas/${campaignId}`} className="k-link inline-flex min-h-11 items-center self-start text-base font-semibold text-ink underline decoration-honey decoration-2 underline-offset-4">
           {D.campaign}
         </Link>
-        <span className="text-sm text-muted">{D.campaignHint}</span>
+        <span className={muted}>{D.campaignHint}</span>
       </div>
-    </section>
+    </HexPanel>
   );
 }

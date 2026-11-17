@@ -5,25 +5,11 @@ import { useActionState, useState } from "react";
 import { startHunterAction } from "@/app/(app)/agentes/agent-actions";
 import { AUDIENCES, regionOptions } from "@/lib/agents/hunter";
 import { idle } from "@/lib/form-state";
-import { Choice, PrimaryButton } from "@/components/research/controls";
-import { TextArea, TextInput } from "@/components/ui";
+import { Choice, StepSet } from "@/components/research/controls";
+import { Chevron, HexButton, HexPanel, Notice, TextArea, TextInput } from "@/components/ui";
 import { useT } from "@/lib/i18n/client";
 
 const OTHER = "__other__";
-
-function QuestionCard({ title, error, children }: { title: string; error?: string; children: React.ReactNode }) {
-  return (
-    <fieldset className="m-0 flex flex-col gap-3 border border-line bg-surface p-4">
-      <legend className="px-1 text-lg">{title}</legend>
-      {children}
-      {error && (
-        <p role="alert" className="text-sm text-danger">
-          {error}
-        </p>
-      )}
-    </fieldset>
-  );
-}
 
 export function HunterStartForm({
   hasProfile,
@@ -54,12 +40,13 @@ export function HunterStartForm({
   const region = regionChoice === OTHER ? regionText : regionChoice;
 
   return (
-    <form action={action} className="flex flex-col gap-4" noValidate>
+    <HexPanel as="section" aria-label={t.agents.types.hunter} wrapClassName="k-in" className="py-7">
+    <form action={action} className="flex flex-col gap-7" noValidate>
       <input type="hidden" name="profileSource" value={profileSource} />
       <input type="hidden" name="audience" value={audience} />
       <input type="hidden" name="region" value={region} />
 
-      <QuestionCard title={H.q1} error={err.companyNote}>
+      <StepSet n={1} title={H.q1} error={err.companyNote}>
         <div className="flex flex-wrap gap-2">
           <Choice pressed={profileSource === "saved"} disabled={!hasProfile} onClick={() => setProfileSource("saved")}>
             {H.profileSaved}
@@ -69,9 +56,9 @@ export function HunterStartForm({
           </Choice>
         </div>
         {!hasProfile && (
-          <p className="text-sm text-muted">
+          <p className="m-0 text-base text-[#4a5361]">
             {H.noProfile}{" "}
-            <Link href="/configuracoes/empresa" className="text-blue underline underline-offset-4">
+            <Link href="/configuracoes/empresa" className="k-link font-medium text-ink underline decoration-honey decoration-2 underline-offset-4">
               {H.fillProfile}
             </Link>
           </p>
@@ -87,12 +74,12 @@ export function HunterStartForm({
               onChange={(e) => setCompanyNote(e.target.value)}
               placeholder={H.companyNotePlaceholder}
             />
-            <p className="text-sm text-muted">{H.describeAdds}</p>
+            <p className="m-0 text-base text-[#4a5361]">{H.describeAdds}</p>
           </>
         )}
-      </QuestionCard>
+      </StepSet>
 
-      <QuestionCard title={H.q2} error={err.audienceText}>
+      <StepSet n={2} title={H.q2} error={err.audienceText}>
         <div className="flex flex-wrap gap-2">
           {AUDIENCES.map((a) => (
             <Choice key={a} pressed={audience === a} onClick={() => setAudience(a)}>
@@ -110,9 +97,9 @@ export function HunterStartForm({
             placeholder={H.audienceTextPlaceholder}
           />
         )}
-      </QuestionCard>
+      </StepSet>
 
-      <QuestionCard title={H.q3} error={err.region}>
+      <StepSet n={3} title={H.q3} error={err.region}>
         <div className="flex flex-wrap gap-2">
           {options.map((o) => (
             <Choice key={o} pressed={regionChoice === o} onClick={() => setRegionChoice(o)} className="max-w-full truncate">
@@ -132,23 +119,24 @@ export function HunterStartForm({
             placeholder={H.regionPlaceholder}
           />
         )}
-      </QuestionCard>
+      </StepSet>
 
       {!ai && (
-        <p role="status" className="bg-warn-soft px-3 py-2.5 text-sm text-warn">
+        <Notice tone="warn">
           {t.ai.notConfigured} {H.noAiDraft}
-        </p>
+        </Notice>
       )}
       <div className="flex flex-wrap items-center gap-4">
-        <PrimaryButton type="submit" disabled={pending}>
-          {H.start}
-        </PrimaryButton>
+        <HexButton type="submit" disabled={pending}>
+          {H.start} <Chevron className="k-arrow" />
+        </HexButton>
         {state.status === "error" && state.message && (
-          <p role="alert" className="text-sm text-danger">
+          <p role="alert" className="m-0 text-base font-medium text-danger">
             {state.message}
           </p>
         )}
       </div>
     </form>
+    </HexPanel>
   );
 }

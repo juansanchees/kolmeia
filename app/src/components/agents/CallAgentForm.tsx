@@ -3,8 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { createCallAgentAction } from "@/app/(app)/agentes/call-actions";
-import { PrimaryButton } from "@/components/research/controls";
-import { input } from "@/components/email/bits";
+import { StepSet } from "@/components/research/controls";
+import { Chevron, Field, HexButton, HexPanel, Notice, Select, TextInput } from "@/components/ui";
 import type { Person } from "@/lib/team/types";
 import { TEMPERATURES, type Temperature } from "@/lib/research/types";
 import { fill } from "@/lib/i18n";
@@ -39,73 +39,84 @@ export function CallAgentForm({ people }: { people: Person[] }) {
     });
   };
 
+  const check = "k-btn inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full border-2 border-line bg-surface px-4 text-[15px] has-[:checked]:border-honey has-[:checked]:bg-honey-light has-[:checked]:font-semibold";
   return (
-    <form onSubmit={submit} aria-label={t.agents.types.call} className="flex flex-col gap-4 border border-line bg-surface p-5">
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="font-mono text-xs text-muted">{C.name}</span>
-        <input className={input} value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
-      </label>
+    <HexPanel wrapClassName="k-in" className="py-7">
+    <form onSubmit={submit} aria-label={t.agents.types.call} className="flex flex-col gap-7">
+      <Field label={C.name} htmlFor="call-name">
+        <TextInput id="call-name" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
+      </Field>
 
-      <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
-        <legend className="mb-1 text-base font-semibold">{C.qFilter}</legend>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-mono text-xs text-muted">{C.minLevel}</span>
-          <select className={input} value={minLevel} onChange={(e) => setMinLevel(Number(e.target.value))}>
+      <StepSet n={1} title={C.qFilter}>
+        <Field label={C.minLevel} htmlFor="call-min-level">
+          <Select id="call-min-level" value={minLevel} onChange={(e) => setMinLevel(Number(e.target.value))}>
             {[0, 1, 2, 3, 4].map((l) => (
               <option key={l} value={l}>
                 {fill(C.levelOption, { n: l })}
               </option>
             ))}
-          </select>
-        </label>
-        <div role="group" aria-label={C.temperatures} className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-          <span className="font-mono text-xs text-muted">{C.temperatures}</span>
-          <label className="flex items-center gap-2">
-            <input type="checkbox" checked={temps.length === 0} onChange={() => setTemps([])} />
-            {C.any}
-          </label>
-          {TEMPERATURES.map((x) => (
-            <label key={x} className="flex items-center gap-2">
-              <input type="checkbox" checked={temps.includes(x)} onChange={() => toggle(x)} />
-              {t.research.labels.temperatureTitle[x]}
+          </Select>
+        </Field>
+        <div role="group" aria-label={C.temperatures} className="flex flex-col gap-2">
+          <span className="font-mono text-[13px] font-medium uppercase tracking-wide text-ink">{C.temperatures}</span>
+          <div className="flex flex-wrap gap-2">
+            <label className={check}>
+              <input type="checkbox" className="size-[18px] accent-ink" checked={temps.length === 0} onChange={() => setTemps([])} />
+              {C.any}
             </label>
-          ))}
+            {TEMPERATURES.map((x) => (
+              <label key={x} className={check}>
+                <input type="checkbox" className="size-[18px] accent-ink" checked={temps.includes(x)} onChange={() => toggle(x)} />
+                {t.research.labels.temperatureTitle[x]}
+              </label>
+            ))}
+          </div>
         </div>
-      </fieldset>
+      </StepSet>
 
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="text-base font-semibold">{C.qPerDay}</span>
-        <input className={input} type="number" inputMode="numeric" min={1} max={50} value={perDay} onChange={(e) => setPerDay(e.target.value)} aria-invalid={!perDayOk} aria-describedby="per-day-hint" />
-        <span id="per-day-hint" className="text-[13px] text-muted">
+      <StepSet n={2} title={C.qPerDay}>
+        <TextInput
+          aria-label={C.qPerDay}
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={50}
+          value={perDay}
+          onChange={(e) => setPerDay(e.target.value)}
+          aria-invalid={!perDayOk}
+          aria-describedby="per-day-hint"
+          className="max-w-40"
+        />
+        <span id="per-day-hint" className="text-base text-[#4a5361]">
           {C.perDayHint}
         </span>
-      </label>
+      </StepSet>
 
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="text-base font-semibold">{C.qCaller}</span>
+      <StepSet n={3} title={C.qCaller}>
         {people.length === 0 ? (
-          <span className="text-warn">{C.noPeople}</span>
+          <Notice tone="warn">{C.noPeople}</Notice>
         ) : (
-          <select className={input} value={caller} onChange={(e) => setCaller(e.target.value)}>
+          <Select aria-label={C.qCaller} value={caller} onChange={(e) => setCaller(e.target.value)}>
             {people.map((p) => (
               <option key={p.user_id} value={p.user_id}>
                 {p.label} · {t.team.roles[p.role]}
               </option>
             ))}
-          </select>
+          </Select>
         )}
-      </label>
+      </StepSet>
 
       {error && (
-        <p role="alert" className="bg-warn-soft px-3 py-2.5 text-sm text-warn">
+        <Notice tone="warn" role="alert">
           {error}
-        </p>
+        </Notice>
       )}
       <div>
-        <PrimaryButton type="submit" disabled={pending || !ready}>
-          {C.create}
-        </PrimaryButton>
+        <HexButton type="submit" disabled={pending || !ready}>
+          {C.create} <Chevron className="k-arrow" />
+        </HexButton>
       </div>
     </form>
+    </HexPanel>
   );
 }

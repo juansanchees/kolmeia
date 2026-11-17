@@ -14,7 +14,7 @@ export function ArchiveButton({ agentId }: { agentId: string }) {
     <span className="flex flex-col items-start gap-1">
       {asking ? (
         <span className="flex flex-wrap items-center gap-2">
-          <span className="text-sm">{t.agents.archiveConfirm}</span>
+          <span className="text-base font-medium">{t.agents.archiveConfirm}</span>
           <GhostButton
             disabled={pending}
             onClick={() =>
@@ -44,7 +44,7 @@ export function ArchiveButton({ agentId }: { agentId: string }) {
         </GhostButton>
       )}
       {error && (
-        <span role="alert" className="text-sm text-danger">
+        <span role="alert" className="text-base font-medium text-danger">
           {error}
         </span>
       )}

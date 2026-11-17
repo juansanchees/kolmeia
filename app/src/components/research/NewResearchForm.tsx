@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { createResearch } from "@/app/(app)/agentes/actions";
 import { idle } from "@/lib/form-state";
-import { Button, Field, TextArea, TextInput } from "@/components/ui";
+import { Chevron, Field, HexButton, TextArea, TextInput } from "@/components/ui";
 import { useT } from "@/lib/i18n/client";
 
 export function NewResearchForm() {
@@ -37,11 +37,11 @@ export function NewResearchForm() {
         />
       </Field>
       <div className="flex flex-wrap items-center gap-4">
-        <Button type="submit" disabled={pending}>
-          {M.submit}
-        </Button>
+        <HexButton type="submit" disabled={pending}>
+          {M.submit} <Chevron className="k-arrow" />
+        </HexButton>
         {state.status === "error" && state.message && (
-          <p role="alert" className="text-sm text-danger">
+          <p role="alert" className="m-0 text-base font-medium text-danger">
             {state.message}
           </p>
         )}

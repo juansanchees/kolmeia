@@ -7,7 +7,7 @@ import { SupabaseAgentStore } from "@/lib/agents/store";
 import type { AgentRow } from "@/lib/agents/types";
 import { listSizesToday } from "@/lib/calls/list-queries";
 import { AgentList } from "@/components/agents/AgentList";
-import { Notice } from "@/components/email/bits";
+import { buttonClass, CountPill, EmptyState, HexPanel, Notice } from "@/components/ui";
 import { QualifierCard } from "@/components/qualifier/QualifierCard";
 import type { QualifierStatus } from "@/lib/qualifier/view";
 import { NewResearchForm } from "@/components/research/NewResearchForm";
@@ -43,36 +43,41 @@ export default async function AgentsPage() {
     <div className="flex flex-col gap-8">
       {qualifierFailed && <Notice tone="warn">{t.qualifier.statusFailed}</Notice>}
       {qualifier && <QualifierCard status={qualifier} placesOn={hasPlaces()} isOwner={workspace.role === "owner"} />}
-      <section aria-labelledby="mine" className="flex flex-col gap-3">
-        <h2 id="mine" className="text-2xl">
+      <section aria-labelledby="mine" className="k-in flex flex-col gap-3 [animation-delay:.06s]">
+        <h2 id="mine" className="flex items-center gap-2.5 text-2xl">
           {t.agents.mine}
+          {agents.length > 0 && <CountPill>{agents.length}</CountPill>}
         </h2>
         {agents.length === 0 ? (
-          <p className="text-sm">
-            {t.agents.empty}{" "}
-            <Link href="/agentes/novo" className="text-blue underline underline-offset-4">
-              {t.agents.newAgent}
-            </Link>
-          </p>
+          <EmptyState
+            icon={SPARK}
+            title={t.agents.empty}
+            action={
+              <Link href="/agentes/novo" className={buttonClass("primary")}>
+                {t.agents.newAgent}
+              </Link>
+            }
+          >
+            {t.agents.emptyHint}
+          </EmptyState>
         ) : (
           <AgentList agents={agents} listSizes={listSizes} />
         )}
       </section>
-      <section aria-labelledby="one-off" className="flex flex-col gap-4">
-        <h2 id="one-off" className="text-2xl">
-          {t.agents.oneOff.title}
-        </h2>
+      <section aria-labelledby="one-off" className="k-in flex flex-col gap-4 [animation-delay:.12s]">
+        <div className="flex flex-col gap-1">
+          <h2 id="one-off" className="text-2xl">
+            {t.agents.oneOff.title}
+          </h2>
+          <p className="m-0 text-base text-[#4a5361]">{t.agents.oneOff.hint}</p>
+        </div>
         <div className="flex flex-wrap items-start gap-6">
-          <div className="flex min-w-0 flex-[999_1_420px] flex-col gap-4 border border-line bg-surface p-5">
-            <h3 className="text-xl">{t.research.newForm.title}</h3>
-            <p className="text-sm">{t.research.newForm.intro}</p>
-            {!ai && (
-              <p role="status" className="bg-warn-soft px-3 py-2.5 text-sm text-warn">
-                {t.ai.notConfigured}
-              </p>
-            )}
+          <HexPanel wrapClassName="min-w-0 flex-[999_1_420px]" className="flex flex-col gap-4 py-6">
+            <h3 className="font-body text-xl font-semibold normal-case tracking-normal">{t.research.newForm.title}</h3>
+            <p className="m-0 text-base text-[#4a5361]">{t.research.newForm.intro}</p>
+            {!ai && <Notice tone="warn">{t.ai.notConfigured}</Notice>}
             <NewResearchForm />
-          </div>
+          </HexPanel>
           <aside aria-label={t.research.yourResearch} className="flex min-w-0 flex-[1_1_240px] flex-col gap-3">
             <RunList runs={runs} />
           </aside>
@@ -81,3 +86,6 @@ export default async function AgentsPage() {
     </div>
   );
 }
+
+// a spark: "an agent does it for you"
+const SPARK = "M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8";

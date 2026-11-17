@@ -1,9 +1,14 @@
 import Link from "next/link";
-import { Badge } from "@/components/email/bits";
+import { CountPill, EmptyState } from "@/components/ui";
 import { usd } from "@/components/research/format";
 import type { SourceRow, SpendBy, SpendRow } from "@/lib/spend/view";
 import { getT } from "@/lib/i18n/server";
 import { Paged } from "@/components/Pager";
+
+const ROW = "rounded-[12px] border border-[#eef0f3] open:border-honey-edge open:bg-honey-hover";
+const SUMMARY = "k-row min-h-12 cursor-pointer items-center rounded-[12px] px-3.5 py-3";
+const LEADS = "m-2 mt-0 flex flex-col gap-1 rounded-[10px] bg-surface px-3.5 py-3";
+const COINS = "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM15 9.5c-.5-1-1.6-1.5-3-1.5-1.7 0-3 .8-3 2s1.3 1.7 3 2 3 .8 3 2-1.3 2-3 2c-1.4 0-2.5-.5-3-1.5M12 6v2M12 16v2";
 
 /** Small costs keep their fractions of a cent: nothing rounds down to "0,00". */
 export function money(v: number, intl: string): string {
@@ -14,37 +19,37 @@ export function money(v: number, intl: string): string {
 export async function SpendTable({ rows, by }: { rows: SpendRow[]; by: SpendBy }) {
   const t = await getT();
   const S = t.spend;
-  if (rows.length === 0) return <p className="text-sm text-muted">{S.empty}</p>;
+  if (rows.length === 0) return <EmptyState icon={COINS} title={S.empty}>{S.emptyHint}</EmptyState>;
   return (
-    <Paged as="ul" resetKey={by} className="m-0 flex list-none flex-col border border-line bg-surface p-0">
+    <Paged as="ul" resetKey={by} className="m-0 flex list-none flex-col gap-1 p-0">
       {rows.map((r) => (
-        <li key={r.key} className="border-b border-line last:border-b-0">
-          <details>
-            <summary className="grid min-h-11 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-3.5 py-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1fr)_auto]">
-              <span className="min-w-0 truncate text-sm font-semibold">{r.label}</span>
-              <span className="text-right font-mono text-sm font-semibold md:order-last">US$ {money(r.usd, t.intl)}</span>
-              <span className="col-span-2 flex flex-wrap gap-x-4 gap-y-0.5 text-[13px] text-muted md:contents">
+        <li key={r.key}>
+          <details className={ROW}>
+            <summary className={`${SUMMARY} grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 md:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1fr)_auto]`}>
+              <span className="min-w-0 truncate text-base font-semibold">{r.label}</span>
+              <span className="text-right md:order-last"><CountPill>US$ {money(r.usd, t.intl)}</CountPill></span>
+              <span className="col-span-2 flex flex-wrap gap-x-4 gap-y-0.5 text-[15px] text-[#4a5361] md:contents">
                 <span className="truncate">{by !== "agent" && r.agent}</span>
                 <span className="truncate">{by !== "step" && r.step}</span>
                 <span className="truncate">{by !== "model" && r.model}</span>
-                <span className="font-mono">
+                <span className="font-mono text-sm">
                   {r.inputTokens}/{r.outputTokens}
                   {r.searches + r.fetches > 0 ? ` · ${r.searches}/${r.fetches}` : ""}
                 </span>
               </span>
             </summary>
-            <div className="flex flex-col gap-1 border-t border-line bg-ground px-3.5 py-3">
-              <span className="font-mono text-xs text-muted">{S.leadsOf}</span>
+            <div className={LEADS}>
+              <span className="font-mono text-[13px] uppercase tracking-wide text-[#4a5361]">{S.leadsOf}</span>
               {r.leads.length === 0 ? (
-                <span className="text-[13px] text-muted">{S.noLead}</span>
+                <span className="text-[15px] text-[#4a5361]">{S.noLead}</span>
               ) : (
                 <Paged as="ul" resetKey={by} className="m-0 flex list-none flex-col gap-1 p-0">
                   {r.leads.map((l) => (
-                    <li key={l.id} className="flex justify-between gap-3 text-[13px]">
-                      <Link href={`/leads/${l.id}`} className="min-w-0 truncate text-blue underline underline-offset-4">
+                    <li key={l.id} className="flex justify-between gap-3 text-[15px]">
+                      <Link href={`/leads/${l.id}`} className="k-link min-w-0 truncate text-ink underline decoration-honey decoration-2 underline-offset-4">
                         {l.name}
                       </Link>
-                      <span className="font-mono">US$ {money(l.usd, t.intl)}</span>
+                      <span className="font-mono text-sm">US$ {money(l.usd, t.intl)}</span>
                     </li>
                   ))}
                 </Paged>
@@ -63,43 +68,43 @@ export async function SourceSpend({ rows }: { rows: SourceRow[] }) {
   const S = t.spend;
   return (
     <section aria-labelledby="src-title" className="flex flex-col gap-2">
-      <h2 id="src-title" className="text-2xl">
+      <h2 id="src-title" className="font-body text-lg font-semibold normal-case tracking-normal">
         {S.sources.title}
       </h2>
-      <p className="text-[13px] text-muted">{S.sources.intro}</p>
+      <p className="m-0 text-[15px] text-[#4a5361]">{S.sources.intro}</p>
       {rows.length === 0 ? (
-        <p className="text-sm text-muted">{S.sources.empty}</p>
+        <EmptyState icon={COINS} title={S.sources.empty}>{S.emptyHint}</EmptyState>
       ) : (
-        <ul className="m-0 flex list-none flex-col border border-line bg-surface p-0">
+        <ul className="m-0 flex list-none flex-col gap-1 p-0">
           {rows.map((r) => (
-            <li key={`${r.provider}:${r.kind}`} className="border-b border-line last:border-b-0">
+            <li key={`${r.provider}:${r.kind}`}>
               {r.leads.length === 0 ? (
-                <div className="flex min-h-11 items-center justify-between gap-3 px-3.5 py-3">
-                  <span className="text-sm font-semibold">{r.label}</span>
+                <div className={`${ROW} ${SUMMARY} flex justify-between gap-3`}>
+                  <span className="text-base font-semibold">{r.label}</span>
                   <span className="flex items-center gap-3">
-                    <Badge tone="cold">{r.runs}</Badge>
-                    <span className="font-mono text-sm">US$ {money(r.usd, t.intl)}</span>
+                    <CountPill tone="cold" title={S.sources.columns.runs}>{r.runs}</CountPill>
+                    <CountPill>US$ {money(r.usd, t.intl)}</CountPill>
                   </span>
                 </div>
               ) : (
-                <details>
-                  <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 px-3.5 py-3">
-                    <span className="text-sm font-semibold">{r.label}</span>
+                <details className={ROW}>
+                  <summary className={`${SUMMARY} flex justify-between gap-3`}>
+                    <span className="text-base font-semibold">{r.label}</span>
                     <span className="flex items-center gap-3">
-                      <Badge tone="cold">{r.runs}</Badge>
-                      <span className="font-mono text-sm">US$ {money(r.usd, t.intl)}</span>
+                      <CountPill tone="cold" title={S.sources.columns.runs}>{r.runs}</CountPill>
+                      <CountPill>US$ {money(r.usd, t.intl)}</CountPill>
                     </span>
                   </summary>
                   {(
-                    <div className="flex flex-col gap-1 border-t border-line bg-ground px-3.5 py-3">
-                      <span className="font-mono text-xs text-muted">{S.leadsOf}</span>
+                    <div className={LEADS}>
+                      <span className="font-mono text-[13px] uppercase tracking-wide text-[#4a5361]">{S.leadsOf}</span>
                       <ul className="m-0 flex list-none flex-col gap-1 p-0">
                         {r.leads.map((l) => (
-                          <li key={l.id} className="flex justify-between gap-3 text-[13px]">
-                            <Link href={`/leads/${l.id}`} className="min-w-0 truncate text-blue underline underline-offset-4">
+                          <li key={l.id} className="flex justify-between gap-3 text-[15px]">
+                            <Link href={`/leads/${l.id}`} className="k-link min-w-0 truncate text-ink underline decoration-honey decoration-2 underline-offset-4">
                               {l.name}
                             </Link>
-                            <span className="font-mono">US$ {money(l.usd, t.intl)}</span>
+                            <span className="font-mono text-sm">US$ {money(l.usd, t.intl)}</span>
                           </li>
                         ))}
                       </ul>

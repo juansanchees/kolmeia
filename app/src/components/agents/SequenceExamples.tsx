@@ -1,5 +1,6 @@
 "use client";
 
+import { Notice } from "@/components/ui";
 import { buildFooter } from "@/lib/email/compose";
 import type { SenderProfile } from "@/lib/email/types";
 import type { SequenceExample } from "@/lib/email-agent/types";
@@ -14,28 +15,21 @@ export function SequenceExamples({ examples, sender, rehearsalOnly }: { examples
   const t = useT();
   const D = t.emailAgent.detail;
   return (
-    <section aria-labelledby="examples-title" className="flex flex-col gap-3">
-      <h3 id="examples-title" className="text-base font-semibold">
-        {D.examples}
-      </h3>
-      <p className="text-sm text-muted">{D.examplesHint}</p>
-      {rehearsalOnly && (
-        <p role="status" className="bg-warn-soft px-3 py-2.5 text-sm text-warn">
-          {D.rehearsalOnly}
-        </p>
-      )}
-      {examples.length === 0 && <p className="text-sm text-muted">{D.examplesNone}</p>}
+    <section aria-label={D.examples} className="flex flex-col gap-3">
+      <p className="m-0 text-base text-[#4a5361]">{D.examplesHint}</p>
+      {rehearsalOnly && <Notice tone="warn">{D.rehearsalOnly}</Notice>}
+      {examples.length === 0 && <p className="m-0 text-base text-[#4a5361]">{D.examplesNone}</p>}
       <ol className="m-0 flex list-none flex-col gap-4 p-0">
         {examples.map((ex) => (
-          <li key={ex.prospect_id} className="flex flex-col gap-3 border border-line p-3">
-            <p className="font-mono text-xs text-muted">{fill(D.exampleFor, { company: ex.company, to: ex.to })}</p>
+          <li key={ex.prospect_id} className="flex flex-col gap-3 rounded-2xl border border-[#e3e6ec] bg-surface p-4">
+            <p className="m-0 font-mono text-sm text-[#4a5361]">{fill(D.exampleFor, { company: ex.company, to: ex.to })}</p>
             {ex.steps.map((s) => (
-              <article key={s.step} className="flex flex-col gap-1 border-t border-line pt-2" data-example-step={s.step}>
-                <span className="font-mono text-xs text-muted">{fill(D.stepTitle, { n: s.step })}</span>
-                <p className="text-sm font-semibold">{s.subject}</p>
-                <pre className="m-0 whitespace-pre-wrap font-sans text-sm">{s.body}</pre>
+              <article key={s.step} className="flex flex-col gap-1 rounded-[12px] bg-ground px-3.5 py-3" data-example-step={s.step}>
+                <span className="font-mono text-[13px] uppercase tracking-wide text-[#4a5361]">{fill(D.stepTitle, { n: s.step })}</span>
+                <p className="m-0 text-base font-semibold">{s.subject}</p>
+                <pre className="m-0 whitespace-pre-wrap font-body text-[15px]">{s.body}</pre>
                 {sender ? (
-                  <pre className="m-0 whitespace-pre-wrap font-mono text-xs text-muted" data-footer>
+                  <pre className="m-0 mt-1 whitespace-pre-wrap font-mono text-[13px] text-[#4a5361]" data-footer>
                     {buildFooter(sender, D.unsubLink)}
                   </pre>
                 ) : null}

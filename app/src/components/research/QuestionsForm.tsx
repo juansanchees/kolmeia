@@ -4,7 +4,8 @@ import { useState, useTransition } from "react";
 import { answerQuestions } from "@/app/(app)/agentes/actions";
 import type { Answers, Question } from "@/lib/research/types";
 import { useT } from "@/lib/i18n/client";
-import { Choice, PrimaryButton } from "./controls";
+import { Choice, StepSet } from "./controls";
+import { buttonClass, TextInput } from "@/components/ui";
 
 export function QuestionsForm({
   runId,
@@ -45,12 +46,9 @@ export function QuestionsForm({
   };
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-4">
+    <form onSubmit={submit} className="flex flex-col gap-5">
       {questions.map((q, i) => (
-        <fieldset key={q.id} className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0" disabled={disabled}>
-          <legend className="mb-2 text-sm font-semibold">
-            {i + 1}. {q.text}
-          </legend>
+        <StepSet key={q.id} n={i + 1} title={q.text} disabled={disabled}>
           <div className="flex flex-wrap gap-2">
             {q.options.map((o) => (
               <Choice key={o} pressed={state[q.id].choices.includes(o)} onClick={() => toggle(q.id, o)}>
@@ -59,54 +57,54 @@ export function QuestionsForm({
             ))}
           </div>
           {q.allowFreeText && (
-            <label className="flex flex-col gap-1 font-mono text-xs text-muted">
+            <label className="flex flex-col gap-1.5 font-mono text-[13px] font-medium uppercase tracking-wide text-ink">
               {M.freeText}
-              <input
+              <TextInput
                 type="text"
                 maxLength={500}
                 value={state[q.id].text}
                 onChange={(e) => setState((s) => ({ ...s, [q.id]: { ...s[q.id], text: e.target.value } }))}
-                className="h-11 w-full border border-edge bg-surface px-3 font-body text-[15px] text-ink"
+                className="font-body normal-case tracking-normal"
               />
             </label>
           )}
-        </fieldset>
+        </StepSet>
       ))}
 
-      <div className="flex flex-col gap-3 border border-[#c9d8f7] bg-surface p-3.5">
-        <label className="flex flex-col gap-1.5 font-mono text-xs text-muted">
+      <div className="flex flex-col gap-3 rounded-2xl border border-[#e3e6ec] bg-surface p-4">
+        <label className="flex flex-col gap-1.5 font-mono text-[13px] font-medium uppercase tracking-wide text-ink">
           {M.regionLabel} · {t.research.newForm.regionHint}
-          <input
+          <TextInput
             type="text"
             maxLength={1000}
             value={regionText}
             disabled={disabled}
             onChange={(e) => setRegionText(e.target.value)}
-            className="h-[46px] w-full border border-edge bg-surface px-3 font-body text-[15px] text-ink"
+            className="font-body normal-case tracking-normal"
           />
         </label>
         {places.length > 0 && (
           <div className="flex flex-col gap-2">
-            <span className="font-mono text-xs text-muted">{M.understoodAsShort}</span>
+            <span className="font-mono text-[13px] uppercase tracking-wide text-[#4a5361]">{M.understoodAsShort}</span>
             <ul className="m-0 flex list-none flex-wrap gap-2 p-0">
               {places.map((p) => (
-                <li key={p} className="border border-blue bg-blue-soft px-3 py-2 text-sm font-semibold text-blue-ink">
+                <li key={p} className="rounded-full border-2 border-honey bg-honey-light px-4 py-1.5 text-[15px] font-semibold text-ink">
                   {p}
                 </li>
               ))}
             </ul>
           </div>
         )}
-        <p className="text-[13px] text-muted">{M.regionNote}</p>
+        <p className="m-0 text-[15px] text-[#4a5361]">{M.regionNote}</p>
       </div>
 
       {!disabled && (
         <div className="flex flex-wrap items-center gap-3">
-          <PrimaryButton type="submit" disabled={pending}>
+          <button type="submit" disabled={pending} className={buttonClass("primary")}>
             {M.sendAnswers}
-          </PrimaryButton>
+          </button>
           {error && (
-            <p role="alert" className="text-sm text-danger">
+            <p role="alert" className="m-0 text-base font-medium text-danger">
               {error}
             </p>
           )}

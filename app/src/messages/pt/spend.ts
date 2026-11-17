@@ -1,5 +1,7 @@
 export const spend = {
   title: "Gastos",
+  subtitle: "Quanto a IA e as fontes pagas custaram, por agente, passo, modelo, lead ou dia.",
+  emptyHint: "Troque o período ou o agrupamento acima.",
   back: "◂ Agentes",
   qualifierToday: "Qualificador hoje: US$ {spent} de {cap}",
   workspaceToday: "Workspace hoje (UTC): US$ {spent} de {cap}",

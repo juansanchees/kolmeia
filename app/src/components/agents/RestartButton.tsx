@@ -23,7 +23,7 @@ export function RestartButton({ agentId }: { agentId: string }) {
         {t.agents.restart}
       </PrimaryButton>
       {error && (
-        <span role="alert" className="text-sm text-danger">
+        <span role="alert" className="text-base font-medium text-danger">
           {error}
         </span>
       )}

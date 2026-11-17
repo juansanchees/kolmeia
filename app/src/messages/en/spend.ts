@@ -3,6 +3,8 @@ import type { Widen } from "../widen";
 
 export const spend = {
   title: "Spend",
+  subtitle: "What the AI and paid sources cost, by agent, step, model, lead or day.",
+  emptyHint: "Change the period or the grouping above.",
   back: "◂ Agents",
   qualifierToday: "Qualifier today: US$ {spent} of {cap}",
   workspaceToday: "Workspace today (UTC): US$ {spent} of {cap}",

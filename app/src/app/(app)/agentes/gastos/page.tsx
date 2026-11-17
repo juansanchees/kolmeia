@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Notice } from "@/components/email/bits";
+import { CountPill, HexPanel, Notice, segItemCls, segWrapCls } from "@/components/ui";
+import { Meter } from "@/components/research/controls";
 import { QualifierCapForm } from "@/components/qualifier/QualifierCapForm";
 import { TakeOverButton } from "@/components/qualifier/TakeOverButton";
 import { SourceSpend, SpendTable, money } from "@/components/spend/SpendTable";
@@ -14,7 +15,6 @@ import { getT } from "@/lib/i18n/server";
 const BY: Record<string, SpendBy> = { agente: "agent", passo: "step", modelo: "model", lead: "lead", dia: "day" };
 const PERIOD: Record<string, SpendPeriod> = { hoje: "today", "7d": "7d", "30d": "30d" };
 const pick = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
-const chip = "inline-flex min-h-11 items-center border px-4 text-sm no-underline";
 
 export default async function GastosPage({ searchParams }: { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
   const t = await getT();
@@ -47,15 +47,31 @@ export default async function GastosPage({ searchParams }: { searchParams: Promi
   const rows = spendRows(spend.calls, by, spend, t);
   const src = sourceRows(sources, t);
   const href = (b: string, p: string) => `/agentes/gastos?por=${b}&periodo=${p}`;
-  const on = (active: boolean) => (active ? "border-blue bg-blue text-white" : "border-line bg-surface text-ink hover:bg-ground");
+
+  // "Total no período: US$ {usd}" with the amount in a pill (the template keeps its words, only {usd} moves)
+  const total = (template: string, usd: string, tone: "honey" | "navy" = "honey") => {
+    const [before, after = ""] = template.split("{usd}");
+    return (
+      <>
+        {before}
+        <CountPill tone={tone} className="text-base">{usd}</CountPill>
+        {after}
+      </>
+    );
+  };
+  const today = [
+    { text: fill(S.qualifierToday, { spent: money(q.spent_today, t.intl), cap: money(q.daily_cap_usd, t.intl) }), value: q.spent_today, max: q.daily_cap_usd },
+    { text: fill(S.workspaceToday, { spent: money(ws.spent, t.intl), cap: money(ws.cap, t.intl) }), value: ws.spent, max: ws.cap },
+  ];
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <Link href="/agentes" className="text-sm text-blue underline underline-offset-4">
+      <div className="k-in flex flex-col gap-1">
+        <Link href="/agentes" className="k-link inline-flex min-h-11 items-center self-start text-base font-medium text-ink underline decoration-honey decoration-2 underline-offset-4">
           {S.back}
         </Link>
         <h2 className="text-3xl">{S.title}</h2>
+        <p className="m-0 text-base text-[#4a5361]">{S.subtitle}</p>
       </div>
       {q.status === "paused" && q.paused_reason && (
         <Notice tone="warn">
@@ -65,34 +81,53 @@ export default async function GastosPage({ searchParams }: { searchParams: Promi
           </span>
         </Notice>
       )}
-      <div className="flex flex-col gap-1 text-sm font-semibold">
-        <p>{fill(S.qualifierToday, { spent: money(q.spent_today, t.intl), cap: money(q.daily_cap_usd, t.intl) })}</p>
-        <p>{fill(S.workspaceToday, { spent: money(ws.spent, t.intl), cap: money(ws.cap, t.intl) })}</p>
+      <div className="k-in grid gap-3 [animation-delay:.06s] sm:grid-cols-2">
+        {today.map((x) => (
+          <div key={x.text} className="flex flex-col gap-2.5 rounded-2xl border border-[#e3e6ec] bg-surface p-4 shadow-[0_6px_14px_-8px_rgba(15,27,61,0.12)]">
+            <p className="m-0 text-base font-semibold">{x.text}</p>
+            <Meter value={x.value} max={x.max} />
+          </div>
+        ))}
       </div>
       <QualifierCapForm status={q} />
-      <div className="flex flex-wrap gap-x-6 gap-y-2" aria-label="filtros">
-        <div role="group" aria-label={S.by.label} className="flex flex-wrap gap-2">
-          {(Object.keys(BY) as string[]).map((k) => (
-            <Link key={k} href={href(k, periodKey)} aria-current={BY[k] === by ? "true" : undefined} className={`${chip} ${on(BY[k] === by)}`}>
-              {BY_LABEL[BY[k]]}
-            </Link>
-          ))}
+      <div className="flex flex-wrap gap-x-6 gap-y-3" aria-label="filtros">
+        <div className="flex flex-col gap-1.5">
+          <span className="font-mono text-[13px] uppercase tracking-wide text-[#4a5361]">{S.by.label}</span>
+          <div role="group" aria-label={S.by.label} className={segWrapCls}>
+            {(Object.keys(BY) as string[]).map((k) => (
+              <Link key={k} href={href(k, periodKey)} aria-current={BY[k] === by ? "true" : undefined} className={segItemCls(BY[k] === by)}>
+                {BY_LABEL[BY[k]]}
+              </Link>
+            ))}
+          </div>
         </div>
-        <div role="group" aria-label={S.period.label} className="flex flex-wrap gap-2">
-          {Object.keys(PERIOD).map((k) => (
-            <Link key={k} href={href(byKey, k)} aria-current={PERIOD[k] === period ? "true" : undefined} className={`${chip} ${on(PERIOD[k] === period)}`}>
-              {PERIOD_LABEL[PERIOD[k]]}
-            </Link>
-          ))}
+        <div className="flex flex-col gap-1.5">
+          <span className="font-mono text-[13px] uppercase tracking-wide text-[#4a5361]">{S.period.label}</span>
+          <div role="group" aria-label={S.period.label} className={segWrapCls}>
+            {Object.keys(PERIOD).map((k) => (
+              <Link key={k} href={href(byKey, k)} aria-current={PERIOD[k] === period ? "true" : undefined} className={segItemCls(PERIOD[k] === period)}>
+                {PERIOD_LABEL[PERIOD[k]]}
+              </Link>
+            ))}
+          </div>
         </div>
       </div>
-      <p className="text-sm font-semibold">{fill(S.total, { usd: money(spendTotal(spend.calls), t.intl) })}</p>
-      <SpendTable rows={rows} by={by} />
-      <p className="text-[13px] text-muted">{S.pendingNote}</p>
-      {spend.truncated && <Notice tone="warn">{S.truncated}</Notice>}
-      <SourceSpend rows={src} />
-      <p className="text-sm font-semibold">{fill(S.sourcesTotal, { usd: money(src.reduce((s, r) => s + r.usd, 0), t.intl) })}</p>
-      <p className="text-sm font-semibold">{fill(S.grandTotal, { usd: money(grandTotal(spend.calls, sources), t.intl) })}{spend.truncated ? ` ${S.partial}` : ""}</p>
+      <HexPanel as="section" aria-label={S.title} wrapClassName="k-in [animation-delay:.1s]" className="flex flex-col gap-4 py-6">
+        <p className="m-0 text-base font-semibold">{total(S.total, money(spendTotal(spend.calls), t.intl))}</p>
+        <SpendTable rows={rows} by={by} />
+        <p className="m-0 text-[15px] text-[#4a5361]">{S.pendingNote}</p>
+        {spend.truncated && <Notice tone="warn">{S.truncated}</Notice>}
+      </HexPanel>
+      <HexPanel wrapClassName="k-in [animation-delay:.14s]" className="flex flex-col gap-4 py-6">
+        <SourceSpend rows={src} />
+        <p className="m-0 text-base font-semibold">{total(S.sourcesTotal, money(src.reduce((s, r) => s + r.usd, 0), t.intl))}</p>
+      </HexPanel>
+      <HexPanel tone="honey" c={18} wrapClassName="k-in [animation-delay:.18s]" className="py-5">
+        <p className="m-0 text-lg font-semibold">
+          {total(S.grandTotal, money(grandTotal(spend.calls, sources), t.intl), "navy")}
+          {spend.truncated ? ` ${S.partial}` : ""}
+        </p>
+      </HexPanel>
     </div>
   );
 }

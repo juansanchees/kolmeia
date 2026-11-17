@@ -19,7 +19,7 @@ export function RunControls({ runId, paused }: { runId: string; paused: boolean 
   return (
     <div className="flex flex-wrap items-center gap-2">
       {paused ? (
-        <GhostButton onClick={() => run("resume")} disabled={pending} className="border-blue text-blue">
+        <GhostButton onClick={() => run("resume")} disabled={pending} className="border-ink">
           {R.resume}
         </GhostButton>
       ) : (
@@ -31,7 +31,7 @@ export function RunControls({ runId, paused }: { runId: string; paused: boolean 
         {R.cancel}
       </GhostButton>
       {error && (
-        <p role="alert" className="w-full text-sm text-danger">
+        <p role="alert" className="m-0 w-full text-base font-medium text-danger">
           {error}
         </p>
       )}

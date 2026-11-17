@@ -11,9 +11,18 @@ import type { CheckWithEvidence } from "@/lib/research/store";
 import { TEMPERATURES, type Decision } from "@/lib/research/types";
 import { fill, type Messages } from "@/lib/i18n";
 import { useT } from "@/lib/i18n/client";
-import { DarkChoice, GhostButton, Pill, PrimaryButton } from "./controls";
+import { GhostButton, Meter, Pill, Stat } from "./controls";
+import { Chevron, CountPill, EmptyState, HexButton, HexPanel, Notice, SegmentedTabs, Select, TextInput } from "@/components/ui";
 import { count, date, host, money, moneyFull, UNKNOWN } from "./format";
 import { Hook, ProofList } from "./proof";
+
+const MONO = "font-mono text-[13px] uppercase tracking-wide text-[#4a5361]";
+const LINK = "k-link text-ink underline decoration-honey decoration-2 underline-offset-2";
+const LINK_MONO = "k-link inline-flex min-h-11 items-center self-start font-mono text-sm text-ink underline decoration-honey decoration-2 underline-offset-4";
+const BOX = "flex flex-col gap-3 rounded-2xl bg-surface p-4";
+const BOX_TITLE = "m-0 font-mono text-[13px] font-normal uppercase tracking-wide text-[#4a5361]";
+const FIELD = "flex flex-col gap-1.5 font-mono text-[13px] font-medium uppercase tracking-wide text-ink";
+const TABLE_WRAP = "max-h-[620px] overflow-auto rounded-2xl border border-[#e3e6ec] bg-surface";
 
 type Props = {
   run: Pick<RunRow, "id" | "title" | "region_text" | "status" | "is_partial" | "partial_reason" | "limits_notes">;
@@ -69,82 +78,74 @@ export function Results({ run, candidates, checks, jobs = [] }: Props) {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <Link href={`/agentes/pesquisa/${run.id}?view=conversa`} className="font-mono text-xs text-blue underline underline-offset-4">
-            {t.research.running.seeConversation}
-          </Link>
-          <h2 className="mt-1 text-3xl">{L.title}</h2>
-          <p className="text-[15px] text-muted">
-            {run.title} · {run.region_text}
-          </p>
-        </div>
+      <div className="k-in flex flex-col gap-1">
+        <Link href={`/agentes/pesquisa/${run.id}?view=conversa`} className={LINK_MONO}>
+          {t.research.running.seeConversation}
+        </Link>
+        <h2 className="text-3xl">{L.title}</h2>
+        <p className="m-0 text-base text-[#4a5361]">
+          {run.title} · {run.region_text}
+        </p>
       </div>
 
       {run.is_partial && (
-        <p role="status" className="bg-warn-soft px-3 py-2.5 text-sm text-warn">
+        <Notice tone="warn">
           <span className="font-semibold">{L.partial}</span> {run.partial_reason}
-        </p>
+        </Notice>
       )}
 
-      <section aria-label={L.tempSummary} className="flex flex-col gap-2">
-        <div className="flex flex-wrap gap-3">
-          {TEMPERATURES.map((x) => (
-            <div key={x} className="flex min-w-0 flex-[1_1_150px] flex-col gap-1 border border-line bg-surface p-3.5">
-              <span className="font-mono text-xs text-muted">{LB.temperatureTitle[x]}</span>
-              <span className="font-display text-4xl font-bold leading-none">{temps[x]}</span>
-              <span className="text-[13px] text-muted">
-                {fill(L.tempRule[x], { large: new Intl.NumberFormat(t.intl).format(TEMPERATURE_RULE.largeJobUsd), days: TEMPERATURE_RULE.veryRecentDays, reviews: TEMPERATURE_RULE.strongPresenceReviews })}
-              </span>
-            </div>
-          ))}
-        </div>
+      <section aria-label={L.tempSummary} className="k-in grid gap-3 [animation-delay:.06s] [grid-template-columns:repeat(auto-fit,minmax(170px,1fr))]">
+        {TEMPERATURES.map((x) => (
+          <Stat
+            key={x}
+            label={LB.temperatureTitle[x]}
+            value={temps[x]}
+            note={fill(L.tempRule[x], { large: new Intl.NumberFormat(t.intl).format(TEMPERATURE_RULE.largeJobUsd), days: TEMPERATURE_RULE.veryRecentDays, reviews: TEMPERATURE_RULE.strongPresenceReviews })}
+          />
+        ))}
       </section>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div role="group" aria-label={L.modeLabel} className="flex">
-          <DarkChoice pressed={mode === "cards"} onClick={() => setMode("cards")}>
-            {L.cards}
-          </DarkChoice>
-          <DarkChoice pressed={mode === "sheet"} onClick={() => setMode("sheet")} className="-ml-px">
-            {L.sheet}
-          </DarkChoice>
+      <div className="k-in flex flex-col gap-3 [animation-delay:.1s]">
+        <div className="flex flex-wrap items-center gap-3">
+          <SegmentedTabs
+            label={L.modeLabel}
+            value={mode}
+            onChange={setMode}
+            items={[
+              { value: "cards", label: L.cards },
+              { value: "sheet", label: L.sheet },
+            ]}
+          />
+          <span className="text-[15px] text-[#4a5361]">{L.sameList}</span>
         </div>
-        <span className="text-[13px] text-muted">{L.sameList}</span>
-      </div>
-
-      <div role="group" aria-label={L.tabsLabel} className="flex flex-wrap gap-2">
-        {TABS.map((x) => (
-          <DarkChoice key={x} pressed={tab === x} onClick={() => setTab(x)}>
-            {L.tabs[x]} · {x === "jobs" ? jobs.length : rows.filter((c) => inTab(c, x)).length}
-          </DarkChoice>
-        ))}
+        <SegmentedTabs label={L.tabsLabel} value={tab} onChange={setTab} items={TABS.map((x) => ({ value: x, label: L.tabs[x], count: x === "jobs" ? jobs.length : rows.filter((c) => inTab(c, x)).length }))} />
       </div>
 
       {decisionError && (
-        <p role="alert" className="text-sm text-danger">
+        <p role="alert" className="m-0 text-base font-medium text-danger">
           {decisionError}
         </p>
       )}
 
+      <div key={`${tab}-${mode}`} className="k-fade">
       {tab === "jobs" ? (
         <Jobs jobs={jobs} mode={mode} />
       ) : mode === "cards" ? (
         <div className="flex flex-wrap items-start gap-5">
           <section aria-label={L.tabs[tab]} className="flex min-w-0 flex-[2_1_480px] flex-col gap-4">
-            {tabRows.length === 0 && <p className="border border-line bg-surface p-4 text-sm text-muted">{L.emptyTab}</p>}
+            {tabRows.length === 0 && <EmptyState title={L.emptyTab} />}
             {cardRows.map((c) => (
               <Card key={c.id} c={c} selected={selected === c.id} onSelect={() => setSelected(c.id)} onDecide={(d) => decide(c.id, d)} />
             ))}
             <Pager pager={cardPager} />
           </section>
           <aside aria-label={`${L.proof} · ${L.limits}`} className="flex min-w-0 flex-[1_1_280px] flex-col gap-4">
-            <section aria-labelledby="proof-title" className="flex flex-col gap-3 border border-ink bg-surface p-4">
-              <h2 id="proof-title" className="font-mono text-xs font-normal normal-case tracking-normal text-muted">
+            <section aria-labelledby="proof-title" className={`${BOX} border-2 border-honey-edge`}>
+              <h2 id="proof-title" className={BOX_TITLE}>
                 {L.proof}
                 {selectedRow ? ` · ${selectedRow.name}` : ""}
               </h2>
-              {selectedRow ? <ProofList c={selectedRow} checks={checksBy.get(selectedRow.id) ?? []} now={now} /> : <p className="text-sm text-muted">{L.proofEmpty}</p>}
+              {selectedRow ? <ProofList c={selectedRow} checks={checksBy.get(selectedRow.id) ?? []} now={now} /> : <p className="m-0 text-base text-[#4a5361]">{L.proofEmpty}</p>}
             </section>
             <Limits notes={run.limits_notes} />
             <Coverage rows={rows} />
@@ -153,6 +154,7 @@ export function Results({ run, candidates, checks, jobs = [] }: Props) {
       ) : (
         <Sheet rows={tabRows} checksBy={checksBy} onDecide={decide} />
       )}
+      </div>
 
       <BottomBar runId={run.id} kept={kept} tabRows={tabRows} jobs={jobs} tab={tab} />
     </div>
@@ -165,9 +167,9 @@ function Card({ c, selected, onSelect, onDecide }: { c: CandidateRow; selected: 
   const L = t.research.list;
   const LB = t.research.labels;
   return (
-    <article className={`flex flex-col gap-3.5 border bg-surface p-4 ${selected ? "border-blue shadow-[inset_3px_0_0_var(--color-blue)]" : "border-line"}`}>
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-[22px]">{c.name}</h2>
+    <article className={`flex flex-col gap-3.5 rounded-2xl border-2 bg-surface p-5 shadow-[0_6px_14px_-8px_rgba(15,27,61,0.12)] ${selected ? "border-honey shadow-[inset_5px_0_0_var(--color-honey)]" : "border-[#e3e6ec]"}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-body text-[22px] font-semibold normal-case tracking-normal">{c.name}</h2>
         <span className="flex flex-wrap gap-1.5">
           {c.temperature && <Pill tone={c.temperature}>{LB.temperature[c.temperature]}</Pill>}
           {c.second_pass === "refuted" && <Pill tone="no">{L.refuted}</Pill>}
@@ -178,28 +180,28 @@ function Card({ c, selected, onSelect, onDecide }: { c: CandidateRow; selected: 
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-0.5">
-          <span className="font-mono text-xs text-muted">{L.askFor}</span>
-          <span className="text-[15px] font-semibold">
+          <span className={MONO}>{L.askFor}</span>
+          <span className="text-base font-semibold">
             {c.ask_for_name ? `${c.ask_for_name}${c.ask_for_title ? ` · ${c.ask_for_title}` : ""}` : UNKNOWN}
           </span>
           {c.name_confidence && (
-            <span className="text-[13px] text-muted">
+            <span className="text-[15px] text-[#4a5361]">
               {L.confidence} {LB.confidence[c.name_confidence]}
             </span>
           )}
         </div>
         <div className="flex flex-col gap-0.5">
-          <span className="font-mono text-xs text-muted">{L.contact}</span>
-          <span className="text-[15px] font-semibold">
+          <span className={MONO}>{L.contact}</span>
+          <span className="text-base font-semibold">
             {c.phone ?? UNKNOWN}
-            {c.phone && !c.phone_source_url && <span className="ml-1.5 text-[13px] font-normal text-muted">{L.unverified}</span>}
+            {c.phone && !c.phone_source_url && <span className="ml-1.5 text-[15px] font-normal text-[#4a5361]">{L.unverified}</span>}
           </span>
-          <span className="text-[13px] text-muted">
+          <span className="text-[15px] text-[#4a5361]">
             {[c.city, c.email_type ? LB.emailType[c.email_type] : null].filter(Boolean).join(" · ")}
             {c.website && (
               <>
                 {" · "}
-                <a href={c.website} target="_blank" rel="noopener noreferrer" className="text-blue underline underline-offset-2">
+                <a href={c.website} target="_blank" rel="noopener noreferrer" className={LINK}>
                   {host(c.website)}
                 </a>
               </>
@@ -208,21 +210,21 @@ function Card({ c, selected, onSelect, onDecide }: { c: CandidateRow; selected: 
         </div>
       </div>
 
-      <dl className="m-0 grid grid-cols-3 gap-2 border-y border-line py-2.5">
+      <dl className="m-0 grid grid-cols-3 gap-2 rounded-[14px] bg-ground px-3.5 py-3">
         {[
           [L.permits, count(c.permit_count, t.intl)],
           [L.totalValue, money(c.total_value_usd, t.intl)],
           [L.lastPermit, date(c.last_permit_date, t.intl)],
         ].map(([k, v]) => (
           <div key={k} className="flex min-w-0 flex-col">
-            <dt className="font-mono text-xs text-muted">{k}</dt>
+            <dt className={MONO}>{k}</dt>
             <dd className="m-0 font-display text-xl font-bold sm:text-2xl">{v}</dd>
           </div>
         ))}
       </dl>
 
       {c.biggest_job_address && (
-        <p className="text-sm">
+        <p className="m-0 text-base">
           <span className="font-semibold">{L.biggestJob}</span> {c.biggest_job_address} · {money(c.biggest_job_value_usd, t.intl)}
           {c.biggest_job_description ? ` · ${c.biggest_job_description}` : ""}
         </p>
@@ -231,13 +233,13 @@ function Card({ c, selected, onSelect, onDecide }: { c: CandidateRow; selected: 
       {c.hook && <Hook text={c.hook} />}
 
       {(c.signal_match || c.name_source_url || c.name_note || c.notes) && (
-        <p className="text-[13px] text-muted">
+        <p className="m-0 text-[15px] text-[#4a5361]">
           {(c.signal_match || c.name_source_url) && <span className="font-semibold text-ink">{L.sources} </span>}
           {c.signal_match}
           {c.name_source_url && (
             <>
               {c.signal_match ? " · " : ""}
-              <a href={c.name_source_url} target="_blank" rel="noopener noreferrer" className="text-blue underline underline-offset-2">
+              <a href={c.name_source_url} target="_blank" rel="noopener noreferrer" className={LINK}>
                 {host(c.name_source_url)}
               </a>
             </>
@@ -252,7 +254,7 @@ function Card({ c, selected, onSelect, onDecide }: { c: CandidateRow; selected: 
       )}
 
       {c.supplier_portal_url && (
-        <a href={c.supplier_portal_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue underline underline-offset-2">
+        <a href={c.supplier_portal_url} target="_blank" rel="noopener noreferrer" className={`${LINK} self-start text-base`}>
           {t.research.sheet.portal}
         </a>
       )}
@@ -271,7 +273,7 @@ function Decide({ c, onDecide, extra }: { c: CandidateRow; onDecide: (d: Decisio
         type="button"
         aria-pressed={c.user_decision === "keep"}
         onClick={() => onDecide("keep")}
-        className={`min-h-11 border px-4 text-sm font-semibold ${c.user_decision === "keep" ? "border-ok bg-ok text-white" : "border-edge bg-surface text-ink hover:border-ink"}`}
+        className={`k-btn min-h-11 rounded-[12px] border-2 px-4 text-[15px] font-semibold ${c.user_decision === "keep" ? "border-ok bg-ok text-white" : "border-line bg-surface text-ink hover:border-ink"}`}
       >
         {L.keep}
       </button>
@@ -279,7 +281,7 @@ function Decide({ c, onDecide, extra }: { c: CandidateRow; onDecide: (d: Decisio
         type="button"
         aria-pressed={c.user_decision === "drop"}
         onClick={() => onDecide("drop")}
-        className={`min-h-11 border px-4 text-sm font-semibold ${c.user_decision === "drop" ? "border-warn bg-warn text-white" : "border-edge bg-surface text-ink hover:border-ink"}`}
+        className={`k-btn min-h-11 rounded-[12px] border-2 px-4 text-[15px] font-semibold ${c.user_decision === "drop" ? "border-warn bg-warn text-white" : "border-line bg-surface text-ink hover:border-ink"}`}
       >
         {L.drop}
       </button>
@@ -293,11 +295,11 @@ function Limits({ notes }: { notes: RunRow["limits_notes"] }) {
   const t = useT();
   const L = t.research.list;
   return (
-    <section aria-labelledby="limits-title" className="flex flex-col gap-2 border border-line bg-surface p-4">
-      <h2 id="limits-title" className="font-mono text-xs font-normal normal-case tracking-normal text-muted">
+    <section aria-labelledby="limits-title" className={`${BOX} border border-[#e3e6ec]`}>
+      <h2 id="limits-title" className={BOX_TITLE}>
         {L.limits}
       </h2>
-      <ul className="m-0 flex list-none flex-col gap-2 p-0 text-sm">
+      <ul className="m-0 flex list-none flex-col gap-2 p-0 text-[15px]">
         {notes.map((n, i) => (
           <li key={i} className={n.kind === "blocked" || n.kind === "partial" ? "text-warn" : ""}>
             {n.text}
@@ -316,16 +318,19 @@ function Coverage({ rows }: { rows: CandidateRow[] }) {
   const L = t.research.list;
   const c = coverage(rows);
   const line = (label: string, n: number) => (
-    <li className="flex justify-between gap-2 border-t border-line py-1.5 text-sm">
-      <span>{label}</span>
-      <span className="font-mono">
-        {n} {L.of} {c.total}
+    <li className="flex flex-col gap-1.5 border-t border-[#e3e6ec] py-2 first:border-t-0">
+      <span className="flex justify-between gap-2 text-[15px]">
+        <span>{label}</span>
+        <span className="font-mono">
+          {n} {L.of} {c.total}
+        </span>
       </span>
+      <Meter value={n} max={c.total} />
     </li>
   );
   return (
-    <section aria-labelledby="coverage-title" className="flex flex-col border border-line bg-surface p-4">
-      <h2 id="coverage-title" className="mb-1 font-mono text-xs font-normal normal-case tracking-normal text-muted">
+    <section aria-labelledby="coverage-title" className={`${BOX} border border-[#e3e6ec]`}>
+      <h2 id="coverage-title" className={BOX_TITLE}>
         {L.coverage}
       </h2>
       <ul className="m-0 list-none p-0">
@@ -393,43 +398,43 @@ function Sheet({ rows, checksBy, onDecide }: { rows: CandidateRow[]; checksBy: M
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-end gap-x-4 gap-y-3 border border-line bg-surface px-3.5 py-3">
-        <label className="flex min-w-0 flex-[1_1_220px] flex-col gap-1 font-mono text-xs text-muted">
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-3 rounded-2xl border border-[#e3e6ec] bg-surface px-4 py-3.5">
+        <label className={`${FIELD} min-w-0 flex-[1_1_220px]`}>
           {L.search}
-          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={L.searchPlaceholder} className="h-10 border border-edge bg-surface px-2.5 font-body text-sm text-ink" />
+          <TextInput type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={L.searchPlaceholder} className="font-body normal-case tracking-normal" />
         </label>
-        <label className="flex flex-[1_1_140px] flex-col gap-1 font-mono text-xs text-muted">
+        <label className={`${FIELD} flex-[1_1_140px]`}>
           {L.tempFilter}
-          <select value={ft} onChange={(e) => setFt(e.target.value)} className="h-10 border border-edge bg-surface px-2.5 font-body text-sm text-ink">
+          <Select value={ft} onChange={(e) => setFt(e.target.value)} className="font-body normal-case tracking-normal">
             <option value="">{L.all}</option>
             {tempOptions.map((x) => (
               <option key={x} value={x}>
                 {LB.temperatureTitle[x]}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
-        <label className="flex flex-[1_1_140px] flex-col gap-1 font-mono text-xs text-muted">
+        <label className={`${FIELD} flex-[1_1_140px]`}>
           {L.confFilter}
-          <select value={fc} onChange={(e) => setFc(e.target.value)} className="h-10 border border-edge bg-surface px-2.5 font-body text-sm text-ink">
+          <Select value={fc} onChange={(e) => setFc(e.target.value)} className="font-body normal-case tracking-normal">
             <option value="">{L.all}</option>
             {confOptions.map((x) => (
               <option key={x} value={x}>
                 {LB.confidence[x]}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
-        <label className="flex h-10 items-center gap-2 text-sm">
-          <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} className="h-[18px] w-[18px]" />
+        <label className="flex min-h-12 items-center gap-2 text-base">
+          <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} className="size-[20px] accent-ink" />
           {L.allColumns}
         </label>
-        <span className="font-mono text-xs text-muted" aria-live="polite">
+        <span className="font-mono text-sm text-[#4a5361]" aria-live="polite">
           {fill(L.rowsCount, { a: view.length, b: rows.length, c: cols.length, d: SHEET_COLUMNS.length })}
         </span>
       </div>
 
-      <div className="max-h-[620px] overflow-auto border border-ink bg-surface" role="region" aria-label={L.sheet} tabIndex={0}>
+      <div className={TABLE_WRAP} role="region" aria-label={L.sheet} tabIndex={0}>
         <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
           <thead>
             <tr>
@@ -438,9 +443,9 @@ function Sheet({ rows, checksBy, onDecide }: { rows: CandidateRow[]; checksBy: M
                   key={col.id}
                   scope="col"
                   aria-sort={sort?.id === col.id ? (sort.dir === 1 ? "ascending" : "descending") : "none"}
-                  className={`sticky top-0 z-[1] whitespace-nowrap border-b border-ink bg-ground p-0 text-left ${i === 0 ? "left-0 z-[2] md:sticky" : ""}`}
+                  className={`sticky top-0 z-[1] whitespace-nowrap border-b-2 border-[#e3e6ec] bg-ground p-0 text-left ${i === 0 ? "left-0 z-[2] md:sticky" : ""}`}
                 >
-                  <button type="button" onClick={() => toggleSort(col)} className={`block w-full px-3 py-2.5 font-mono text-xs font-medium hover:bg-blue-wash ${col.kind === "number" || col.kind === "money" ? "text-right" : "text-left"}`}>
+                  <button type="button" onClick={() => toggleSort(col)} className={`block min-h-11 w-full px-3 py-2.5 font-mono text-[13px] font-medium text-[#4a5361] hover:bg-honey-hover hover:text-ink ${col.kind === "number" || col.kind === "money" ? "text-right" : "text-left"}`}>
                     {col.header}
                     {sort?.id === col.id ? (sort.dir === 1 ? " ↑" : " ↓") : ""}
                   </button>
@@ -451,7 +456,7 @@ function Sheet({ rows, checksBy, onDecide }: { rows: CandidateRow[]; checksBy: M
           <tbody>
             {view.length === 0 && (
               <tr>
-                <td colSpan={cols.length} className="px-4 py-7 text-muted">
+                <td colSpan={cols.length} className="px-4 py-7 text-[#4a5361]">
                   {L.noMatch}
                 </td>
               </tr>
@@ -468,7 +473,7 @@ function Sheet({ rows, checksBy, onDecide }: { rows: CandidateRow[]; checksBy: M
                     openRow(c.id);
                   }
                 }}
-                className={`cursor-pointer odd:bg-surface even:bg-[#fafbfc] hover:bg-blue-wash ${open === c.id ? "!bg-blue-soft" : ""}`}
+                className={`cursor-pointer odd:bg-surface even:bg-[#fafbfc] hover:bg-honey-hover ${open === c.id ? "!bg-honey-light" : ""}`}
               >
                 {cols.map((col, i) => {
                   const text = cellText(col, c, t);
@@ -477,7 +482,7 @@ function Sheet({ rows, checksBy, onDecide }: { rows: CandidateRow[]; checksBy: M
                     <td
                       key={col.id}
                       title={text || undefined}
-                      className={`max-w-[240px] overflow-hidden text-ellipsis whitespace-nowrap border-b border-line px-3 py-2 align-middle md:max-w-[360px] ${numeric ? "text-right font-mono text-[13px] tabular-nums" : ""} ${i === 0 ? "bg-inherit font-semibold md:sticky md:left-0 md:shadow-[1px_0_0_var(--color-line)]" : ""}`}
+                      className={`max-w-[240px] overflow-hidden text-ellipsis whitespace-nowrap border-b border-[#eef0f3] px-3 py-2.5 align-middle text-[15px] md:max-w-[360px] ${numeric ? "text-right font-mono text-sm tabular-nums" : ""} ${i === 0 ? "bg-inherit font-semibold md:sticky md:left-0 md:shadow-[1px_0_0_var(--color-line)]" : ""}`}
                     >
                       {col.id === "temperature" && c.temperature ? (
                         <Pill tone={c.temperature}>{LB.temperature[c.temperature]}</Pill>
@@ -486,7 +491,7 @@ function Sheet({ rows, checksBy, onDecide }: { rows: CandidateRow[]; checksBy: M
                       ) : text ? (
                         text
                       ) : numeric || col.id === "askFor" ? (
-                        <span className="text-muted">{UNKNOWN}</span>
+                        <span className="text-[#4a5361]">{UNKNOWN}</span>
                       ) : (
                         ""
                       )}
@@ -499,12 +504,12 @@ function Sheet({ rows, checksBy, onDecide }: { rows: CandidateRow[]; checksBy: M
         </table>
       </div>
       <Pager pager={pager} />
-      <p className="text-[13px] text-muted">{L.sortHint}</p>
+      <p className="m-0 text-[15px] text-[#4a5361]">{L.sortHint}</p>
 
       {openC && (
-        <section ref={detailRef} aria-label={openC.name} className="flex flex-col gap-3.5 border border-ink bg-surface p-5">
-          <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-ink pb-2.5">
-            <h2 className="text-[22px]">{openC.name}</h2>
+        <section ref={detailRef} aria-label={openC.name} className="k-fade flex flex-col gap-3.5 rounded-2xl border-2 border-honey-edge bg-surface p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e3e6ec] pb-3">
+            <h2 className="font-body text-[22px] font-semibold normal-case tracking-normal">{openC.name}</h2>
             <GhostButton onClick={() => setOpen(null)}>{L.closeRecord}</GhostButton>
           </div>
           {openC.hook && <Hook text={openC.hook} />}
@@ -513,11 +518,11 @@ function Sheet({ rows, checksBy, onDecide }: { rows: CandidateRow[]; checksBy: M
               const v = col.get(openC);
               const text = cellText(col, openC, t);
               return (
-                <div key={col.id} className="flex min-w-0 flex-col gap-0.5 border-b border-line py-2">
-                  <dt className="font-mono text-xs text-muted">{col.header}</dt>
-                  <dd className="m-0 text-sm [overflow-wrap:anywhere]">
+                <div key={col.id} className="flex min-w-0 flex-col gap-0.5 border-b border-[#e3e6ec] py-2">
+                  <dt className={MONO}>{col.header}</dt>
+                  <dd className="m-0 text-[15px] [overflow-wrap:anywhere]">
                     {col.kind === "url" && v ? (
-                      <a href={String(v)} target="_blank" rel="noopener noreferrer" className="text-blue underline underline-offset-2">
+                      <a href={String(v)} target="_blank" rel="noopener noreferrer" className={LINK}>
                         {String(v)}
                       </a>
                     ) : (
@@ -530,7 +535,7 @@ function Sheet({ rows, checksBy, onDecide }: { rows: CandidateRow[]; checksBy: M
           </dl>
           <Decide c={openC} onDecide={(d) => onDecide(openC.id, d)} />
           <div className="flex flex-col gap-2">
-            <h3 className="font-mono text-xs font-normal text-muted">{L.proof}</h3>
+            <h3 className={BOX_TITLE}>{L.proof}</h3>
             <ProofList c={openC} checks={checksBy.get(openC.id) ?? []} now={now} />
           </div>
         </section>
@@ -553,21 +558,21 @@ function Jobs({ jobs, mode }: { jobs: JobRow[]; mode: "cards" | "sheet" }) {
   const L = t.research.list;
   const J = t.research.jobs;
   const { pageItems, pager } = usePaged(jobs);
-  if (jobs.length === 0) return <p className="border border-line bg-surface p-4 text-sm text-muted">{J.empty}</p>;
+  if (jobs.length === 0) return <EmptyState title={J.empty} />;
   return (
     <section aria-label={L.tabs.jobs} className="flex flex-col gap-3">
-      <p className="text-[13px] text-muted">{J.intro}</p>
+      <p className="m-0 text-[15px] text-[#4a5361]">{J.intro}</p>
       {mode === "cards" ? (
         <ul className="m-0 flex list-none flex-col gap-3 p-0">
           {pageItems.map((j) => (
-            <li key={j.id} className="flex flex-col gap-1.5 border border-line bg-surface p-4">
+            <li key={j.id} className="flex flex-col gap-1.5 rounded-2xl border border-[#e3e6ec] bg-surface p-4">
               <span className="text-[17px] font-semibold">{j.address ?? j.project_name}</span>
-              {j.address && j.project_name && <span className="text-sm">{j.project_name}</span>}
-              <span className="text-sm text-muted">
+              {j.address && j.project_name && <span className="text-[15px]">{j.project_name}</span>}
+              <span className="text-[15px] text-[#4a5361]">
                 {[j.job_type, j.declared_value_usd !== null ? money(j.declared_value_usd, t.intl) : null, j.job_date ? date(j.job_date, t.intl) : null].filter(Boolean).join(" · ") || UNKNOWN}
               </span>
-              <span className="text-[12px] text-muted">
-                <a href={j.source_url} target="_blank" rel="noopener noreferrer" className="text-blue underline underline-offset-2">
+              <span className="text-[14px] text-[#4a5361]">
+                <a href={j.source_url} target="_blank" rel="noopener noreferrer" className={LINK}>
                   {host(j.source_url)}
                 </a>{" "}
                 · {L.seenOn} {date(j.seen_at, t.intl)}
@@ -577,12 +582,12 @@ function Jobs({ jobs, mode }: { jobs: JobRow[]; mode: "cards" | "sheet" }) {
           ))}
         </ul>
       ) : (
-        <div className="max-h-[620px] overflow-auto border border-ink bg-surface" role="region" aria-label={L.tabs.jobs} tabIndex={0}>
+        <div className={TABLE_WRAP} role="region" aria-label={L.tabs.jobs} tabIndex={0}>
           <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
             <thead>
               <tr>
                 {jobSheetColumns(t).map((col) => (
-                  <th key={col.id} scope="col" className="sticky top-0 whitespace-nowrap border-b border-ink bg-ground px-3 py-2.5 text-left font-mono text-xs font-medium">
+                  <th key={col.id} scope="col" className="sticky top-0 whitespace-nowrap border-b-2 border-[#e3e6ec] bg-ground px-3 py-2.5 text-left font-mono text-[13px] font-medium text-[#4a5361]">
                     {col.header}
                   </th>
                 ))}
@@ -590,17 +595,17 @@ function Jobs({ jobs, mode }: { jobs: JobRow[]; mode: "cards" | "sheet" }) {
             </thead>
             <tbody>
               {pageItems.map((j) => (
-                <tr key={j.id} className="odd:bg-surface even:bg-[#fafbfc]">
+                <tr key={j.id} className="odd:bg-surface even:bg-[#fafbfc] hover:bg-honey-hover">
                   {jobSheetColumns(t).map((col) => {
                     const text = jobCell(col, j, t);
                     return (
-                      <td key={col.id} title={text || undefined} className="max-w-[320px] overflow-hidden text-ellipsis whitespace-nowrap border-b border-line px-3 py-2">
+                      <td key={col.id} title={text || undefined} className="max-w-[320px] overflow-hidden text-ellipsis whitespace-nowrap border-b border-[#eef0f3] px-3 py-2.5 text-[15px]">
                         {col.kind === "url" && text ? (
-                          <a href={text} target="_blank" rel="noopener noreferrer" className="text-blue underline underline-offset-2">
+                          <a href={text} target="_blank" rel="noopener noreferrer" className={LINK}>
                             {host(text)}
                           </a>
                         ) : (
-                          text || <span className="text-muted">{UNKNOWN}</span>
+                          text || <span className="text-[#4a5361]">{UNKNOWN}</span>
                         )}
                       </td>
                     );
@@ -650,28 +655,30 @@ function BottomBar({ runId, kept, tabRows, jobs, tab }: { runId: string; kept: n
   };
 
   return (
-    <section aria-label={L.createList} className="bottom-0 flex flex-wrap items-end justify-between gap-4 border border-ink bg-surface p-4 md:sticky">
+    <HexPanel as="section" aria-label={L.createList} tone="honey" raised c={18} wrapClassName="bottom-0 z-10 md:sticky" className="flex flex-wrap items-end justify-between gap-4 py-5">
       <div className="flex flex-col gap-1">
-        <span className="text-[15px] font-semibold">{fill(L.keptCount, { n: kept })}</span>
-        <span className="text-[13px] text-muted">{L.useFor}</span>
+        <span className="flex items-center gap-2 text-base font-semibold">
+          <CountPill tone="honey">{kept}</CountPill> {fill(L.keptCount, { n: kept })}
+        </span>
+        <span className="text-[15px] text-[#4a5361]">{L.useFor}</span>
         {msg && (
-          <span role={msg.ok ? "status" : "alert"} className={`text-sm ${msg.ok ? "text-ok" : "text-danger"}`}>
+          <span role={msg.ok ? "status" : "alert"} className={`text-base font-medium ${msg.ok ? "text-ok" : "text-danger"}`}>
             {msg.text}
           </span>
         )}
       </div>
-      <div className="flex flex-wrap items-end gap-2">
-        <GhostButton onClick={download}>{L.download}</GhostButton>
-        <form onSubmit={create} className="flex flex-wrap items-end gap-2">
-          <label className="flex flex-col gap-1 font-mono text-xs text-muted">
+      <div className="flex flex-wrap items-end gap-2.5">
+        <GhostButton onClick={download} className="min-h-12!">{L.download}</GhostButton>
+        <form onSubmit={create} className="flex flex-wrap items-end gap-2.5">
+          <label className={FIELD}>
             {L.listName}
-            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} required className="h-11 w-48 border border-edge bg-surface px-3 font-body text-[15px] text-ink" />
+            <TextInput value={name} onChange={(e) => setName(e.target.value)} maxLength={120} required className="w-52 font-body normal-case tracking-normal" />
           </label>
-          <PrimaryButton type="submit" disabled={pending}>
-            {L.createList}
-          </PrimaryButton>
+          <HexButton type="submit" disabled={pending}>
+            {L.createList} <Chevron className="k-arrow" />
+          </HexButton>
         </form>
       </div>
-    </section>
+    </HexPanel>
   );
 }

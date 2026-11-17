@@ -3,10 +3,12 @@ import type { Widen } from "../widen";
 
 export const agents = {
   title: "Agents",
+  subtitle: "Helpers that find companies, write emails and build the call list for you.",
   newAgent: "+ New agent",
   mine: "My agents",
   empty: "No agents yet. Create the first one.",
-  oneOff: { title: "One-off research" },
+  emptyHint: "An agent works on its own: it finds companies with proof, writes emails or builds the day's call list.",
+  oneOff: { title: "One-off research", hint: "A single search, without creating an agent. Say what you are looking for and where." },
   open: "Open",
   continue: "Continue",
   archive: "Archive",
@@ -33,6 +35,8 @@ export const agents = {
   metrics: { runs: "Runs", found: "Companies found", verified: "Verified", refuted: "Refuted on 2nd pass", cost: "AI cost (total)" },
   gallery: {
     title: "New agent",
+    subtitle: "Pick what the agent will do. Then answer a few questions.",
+    describeHint: "Optional: write who you are looking for and press Enter to start a Hunter.",
     describe: "Describe what you want...",
     hunter: "Finds leads with proof",
     email: "Writes and sends after your OK",
@@ -101,5 +105,6 @@ export const agents = {
     pausedRun: "This agent is paused. Searching resumes when you turn it on again.",
     background: "This agent runs on its own in the background. This screen only shows progress.",
     history: "Runs",
+    steps: { setup: "What it does", power: "Turn on or pause", numbers: "Numbers" },
   },
 } satisfies Widen<typeof pt>;

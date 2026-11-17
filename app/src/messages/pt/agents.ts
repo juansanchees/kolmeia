@@ -1,10 +1,12 @@
 // Strings of the AGENTES area.
 export const agents = {
   title: "Agentes",
+  subtitle: "Ajudantes que acham empresas, escrevem e-mails e montam a lista de ligações para você.",
   newAgent: "+ Novo agente",
   mine: "Meus agentes",
   empty: "Nenhum agente ainda. Crie o primeiro.",
-  oneOff: { title: "Pesquisa avulsa" },
+  emptyHint: "Um agente trabalha sozinho: acha empresas com prova, escreve e-mails ou monta a lista de ligações do dia.",
+  oneOff: { title: "Pesquisa avulsa", hint: "Uma busca só, sem criar agente. Diga o que procura e onde." },
   open: "Abrir",
   continue: "Continuar",
   archive: "Arquivar",
@@ -31,6 +33,8 @@ export const agents = {
   metrics: { runs: "Execuções", found: "Empresas achadas", verified: "Conferidas", refuted: "Refutadas na 2ª passada", cost: "Custo de IA (total)" },
   gallery: {
     title: "Novo agente",
+    subtitle: "Escolha o que o agente vai fazer. Depois responda poucas perguntas.",
+    describeHint: "Opcional: escreva quem você procura e aperte Enter para começar um Caçador.",
     describe: "Descreva o que você quer...",
     hunter: "Acha leads com prova",
     email: "Escreve e envia após OK",
@@ -99,5 +103,6 @@ export const agents = {
     pausedRun: "Este agente está pausado. A busca continua quando você ligar o agente de novo.",
     background: "Este agente roda sozinho em segundo plano. Esta tela só mostra o progresso.",
     history: "Execuções",
+    steps: { setup: "O que ele faz", power: "Ligar ou pausar", numbers: "Números" },
   },
 } as const;

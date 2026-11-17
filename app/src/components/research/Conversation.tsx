@@ -2,19 +2,8 @@ import type { RunRow } from "@/lib/research/rows";
 import { getT } from "@/lib/i18n/server";
 import { PlanCard } from "./PlanCard";
 import { QuestionsForm } from "./QuestionsForm";
-
-function UserBubble({ children }: { children: React.ReactNode }) {
-  return <div className="max-w-[80%] self-end bg-blue px-3.5 py-3 text-[15px] leading-normal text-white">{children}</div>;
-}
-
-function AiBubble({ children, label }: { children: React.ReactNode; label?: string }) {
-  return (
-    <div className="flex max-w-full flex-col gap-3.5 self-start border border-[#c9d8f7] bg-blue-wash p-4 sm:max-w-[92%]">
-      {label && <span className="font-mono text-[11px] uppercase text-blue-ink">{label}</span>}
-      {children}
-    </div>
-  );
-}
+import { AiBubble, UserBubble } from "./controls";
+import { Badge, HexPanel } from "@/components/ui";
 
 /** Prototype "Pedido": the request, the AI's questions, the plan to approve. */
 export async function Conversation({ run, readOnly }: { run: RunRow; readOnly: boolean }) {
@@ -23,23 +12,23 @@ export async function Conversation({ run, readOnly }: { run: RunRow; readOnly: b
   const questions = run.questions ?? [];
   const answered = run.status !== "questions";
   return (
-    <section aria-label={M.conversation.label} className="flex flex-col border border-line bg-surface">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1.5 border-b border-ink px-5 py-3.5">
-        <h2 className="text-2xl">{run.title}</h2>
-        <span className="font-mono text-xs text-muted">{M.status[run.status]}</span>
+    <HexPanel as="section" aria-label={M.conversation.label} raised wrapClassName="k-in" className="flex flex-col gap-5 py-7">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 border-b border-[#e3e6ec] pb-4">
+        <h2 className="text-3xl">{run.title}</h2>
+        <Badge tone="honey">{M.status[run.status]}</Badge>
       </div>
 
-      <div className="flex flex-col gap-4 p-4 sm:p-5">
+      <div className="flex flex-col gap-4">
         <UserBubble>
           {run.request_text}
-          <span className="mt-1 block text-[13px] opacity-90">{run.region_text}</span>
+          <span className="mt-1 block text-[15px] text-honey-glow">{run.region_text}</span>
         </UserBubble>
 
-        {run.questions === null && <p className="font-mono text-xs text-muted">{M.conversation.thinking}</p>}
+        {run.questions === null && <p className="m-0 font-mono text-sm text-[#4a5361]">{M.conversation.thinking}</p>}
 
         {run.questions !== null && (
           <AiBubble label={t.ai.suggestion}>
-            <p className="text-[15px] leading-normal">
+            <p className="m-0 text-base leading-normal">
               <span className="font-semibold">{M.conversation.understood}</span> {run.progress.understood ?? ""}{" "}
               {questions.length ? M.conversation.askIntro : M.conversation.noQuestions}
             </p>
@@ -60,10 +49,10 @@ export async function Conversation({ run, readOnly }: { run: RunRow; readOnly: b
           <UserBubble key={i}>{a}</UserBubble>
         ))}
 
-        {run.status === "plan" && run.plan === null && <p className="font-mono text-xs text-muted">{M.conversation.planning}</p>}
+        {run.status === "plan" && run.plan === null && <p className="m-0 font-mono text-sm text-[#4a5361]">{M.conversation.planning}</p>}
 
         {run.plan && <PlanCard run={run} readOnly={readOnly || run.status !== "plan"} />}
       </div>
-    </section>
+    </HexPanel>
   );
 }

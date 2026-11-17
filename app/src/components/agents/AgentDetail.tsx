@@ -1,4 +1,5 @@
-import { Notice } from "@/components/email/bits";
+import { Badge, CountPill, HexPanel, Notice, StepTitle } from "@/components/ui";
+import { InfoRow } from "@/components/research/controls";
 import { when } from "@/components/email/format";
 import { usd } from "@/components/research/format";
 import type { RunRow } from "@/lib/research/rows";
@@ -10,17 +11,9 @@ import type { Messages } from "@/lib/i18n";
 import { AgentPowerButton } from "./AgentPowerButton";
 import { ArchiveButton } from "./ArchiveButton";
 import { Paged } from "@/components/Pager";
+import { AgentHead, DlStat } from "./AgentHead";
 
 type Cfg = { audience?: string; audienceText?: string; region?: string; rigor?: keyof Messages["research"]["plan"]["rigorNames"]; caps?: { maxCandidates: number; maxCostUsd: number; maxMinutes: number } };
-
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="grid grid-cols-1 gap-x-4 border-t border-line py-2 text-sm sm:grid-cols-[14rem_1fr]">
-      <dt className="font-mono text-xs text-muted">{label}</dt>
-      <dd className="m-0">{children}</dd>
-    </div>
-  );
-}
 
 const CAP_REASONS = ["daily_cap", "user_cap", "global_cap"];
 
@@ -34,66 +27,86 @@ export async function AgentDetail({ agent, setupRun, runs, now }: { agent: Agent
   const c = agent.config as Cfg;
   const aud = c.audience === "other" ? c.audienceText : c.audience ? (A.hunter.audiences as Record<string, string>)[c.audience] : undefined;
   return (
-    <section aria-labelledby="agent-title" className="flex flex-col gap-4 border border-line bg-surface p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1.5">
-        <h2 id="agent-title" className="text-2xl">
-          {agent.name}
-        </h2>
-        <span className="font-mono text-xs text-muted">
-          {A.types[agent.type]} · <span className="border border-line px-2 py-0.5">{A.statuses[agent.status]}</span>
-        </span>
-      </div>
-      <dl className="m-0">
-        {aud && <Row label={R.target}>{aud}</Row>}
-        {c.region && <Row label={R.region}>{c.region}</Row>}
-        {c.rigor && <Row label={R.rigor}>{t.research.plan.rigorNames[c.rigor]}</Row>}
-        <Row label={R.schedule}>{A.hunter.schedules[agent.schedule]}</Row>
-        <Row label={R.sources}>{R.sourcesValue}</Row>
-        {c.caps && (
-          <>
-            <Row label={R.maxCost}>US$ {usd(c.caps.maxCostUsd, t.intl)}</Row>
-            <Row label={R.maxTime}>{R.maxTimeValue.replace("{minutes}", String(c.caps.maxMinutes))}</Row>
-            <Row label={R.limit}>{R.limitValue.replace("{n}", String(c.caps.maxCandidates))}</Row>
-          </>
-        )}
-        {setupRun && <Row label={A.detail.creationCost}>US$ {usd(setupRun.spent_cost_usd, t.intl)}</Row>}
-      </dl>
-      {agent.status === "paused" && agent.paused_reason && (
-        <Notice tone="warn">{CAP_REASONS.includes(agent.paused_reason) ? A.capWarning : A.paused[agent.paused_reason]}</Notice>
-      )}
-      {agent.status === "paused" && agent.paused_reason && CAP_REASONS.includes(agent.paused_reason) && (
-        <p className="text-sm">{A.paused[agent.paused_reason]}</p>
-      )}
-      {upcoming && <p className="text-sm">{A.detail.nextRun.replace("{when}", when(agent.next_run_at, t.intl))}</p>}
-      <dl className="m-0">
-        <Row label={A.metrics.runs}>{m.runs}</Row>
-        <Row label={A.metrics.found}>{m.found}</Row>
-        <Row label={A.metrics.verified}>{m.verified}</Row>
-        <Row label={A.metrics.refuted}>{m.refuted}</Row>
-        <Row label={A.metrics.cost}>US$ {usd(m.costUsd, t.intl)}</Row>
-      </dl>
+    <div className="flex min-w-0 flex-col gap-5">
+      <HexPanel as="section" aria-labelledby="agent-title" raised wrapClassName="k-in" className="flex flex-col gap-7 py-7">
+        <AgentHead id="agent-title" name={agent.name} type={agent.type} typeLabel={A.types[agent.type]} status={agent.status} statusLabel={A.statuses[agent.status]} />
+
+        <div className="flex flex-col gap-3">
+          <StepTitle n={1} as="h3">{A.detail.steps.setup}</StepTitle>
+          <dl className="m-0 md:pl-[42px]">
+            {aud && <InfoRow label={R.target}>{aud}</InfoRow>}
+            {c.region && <InfoRow label={R.region}>{c.region}</InfoRow>}
+            {c.rigor && <InfoRow label={R.rigor}>{t.research.plan.rigorNames[c.rigor]}</InfoRow>}
+            <InfoRow label={R.schedule}>{A.hunter.schedules[agent.schedule]}</InfoRow>
+            <InfoRow label={R.sources}>{R.sourcesValue}</InfoRow>
+            {c.caps && (
+              <>
+                <InfoRow label={R.maxCost}>US$ {usd(c.caps.maxCostUsd, t.intl)}</InfoRow>
+                <InfoRow label={R.maxTime}>{R.maxTimeValue.replace("{minutes}", String(c.caps.maxMinutes))}</InfoRow>
+                <InfoRow label={R.limit}>{R.limitValue.replace("{n}", String(c.caps.maxCandidates))}</InfoRow>
+              </>
+            )}
+            {setupRun && <InfoRow label={A.detail.creationCost}>US$ {usd(setupRun.spent_cost_usd, t.intl)}</InfoRow>}
+          </dl>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <StepTitle n={2} as="h3" hint={A.detail.turnOnHelp}>{A.detail.steps.power}</StepTitle>
+          <div className="flex flex-col gap-3 md:pl-[42px]">
+            {agent.status === "paused" && agent.paused_reason && (
+              <Notice tone="warn">{CAP_REASONS.includes(agent.paused_reason) ? A.capWarning : A.paused[agent.paused_reason]}</Notice>
+            )}
+            {agent.status === "paused" && agent.paused_reason && CAP_REASONS.includes(agent.paused_reason) && (
+              <p className="m-0 text-base">{A.paused[agent.paused_reason]}</p>
+            )}
+            {upcoming && <p className="m-0 text-base">{A.detail.nextRun.replace("{when}", when(agent.next_run_at, t.intl))}</p>}
+            <div className="flex flex-wrap items-center gap-3">
+              <AgentPowerButton agentId={agent.id} status={agent.status} />
+              {!running && <ArchiveButton agentId={agent.id} />}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <StepTitle n={3} as="h3">{A.detail.steps.numbers}</StepTitle>
+          <dl className="m-0 grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(150px,1fr))] md:pl-[42px]">
+            {(
+              [
+                [A.metrics.runs, m.runs],
+                [A.metrics.found, m.found],
+                [A.metrics.verified, m.verified],
+                [A.metrics.refuted, m.refuted],
+                [A.metrics.cost, `US$ ${usd(m.costUsd, t.intl)}`],
+              ] as const
+            ).map(([label, value]) => (
+              <DlStat key={label} label={label} value={value} />
+            ))}
+          </dl>
+        </div>
+      </HexPanel>
+
       {runs.length > 0 && (
-        <div className="flex flex-col gap-1">
-          <h3 className="text-base font-semibold">{A.detail.history}</h3>
-          <Paged as="ul" className="m-0 flex list-none flex-col p-0">
+        <HexPanel as="section" aria-labelledby="agent-history" wrapClassName="k-in [animation-delay:.08s]" className="flex flex-col gap-3 py-6">
+          <h3 id="agent-history" className="flex items-center gap-2.5 font-body text-lg font-semibold normal-case tracking-normal">
+            {A.detail.history} <CountPill>{runs.length}</CountPill>
+          </h3>
+          <Paged as="ul" className="m-0 flex list-none flex-col gap-1 p-0">
             {runs.map((r) => (
-              <li key={r.id} className="flex flex-wrap items-baseline gap-x-3 border-t border-line py-2 text-sm">
-                <Link href={`/agentes/pesquisa/${r.id}`} className="text-blue underline underline-offset-4">
-                  {r.title}
+              <li key={r.id}>
+                <Link href={`/agentes/pesquisa/${r.id}`} className="k-row flex min-h-12 flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-[12px] px-3.5 py-2.5 text-ink no-underline">
+                  <span className="min-w-0 font-semibold">{r.title}</span>
+                  <span className="flex flex-wrap items-center gap-2 text-[15px] text-[#4a5361]">
+                    <Badge tone="neutral" className="py-0.5">{t.research.status[r.status]}</Badge>
+                    <span className="font-mono text-sm">{when(r.created_at, t.intl)}</span>
+                    <CountPill>{r.progress?.counts?.verified ?? 0}</CountPill>
+                    <span>{A.metrics.verified.toLowerCase()}</span>
+                  </span>
                 </Link>
-                <span className="font-mono text-xs text-muted">
-                  {t.research.status[r.status]} · {when(r.created_at, t.intl)} · {r.progress?.counts?.verified ?? 0} {A.metrics.verified.toLowerCase()}
-                </span>
               </li>
             ))}
           </Paged>
-        </div>
+        </HexPanel>
       )}
-      <p className="text-sm text-muted">{A.detail.turnOnHelp}</p>
-      <div className="flex flex-wrap items-center gap-4">
-        <AgentPowerButton agentId={agent.id} status={agent.status} />
-        {!running && <ArchiveButton agentId={agent.id} />}
-      </div>
-    </section>
+    </div>
   );
 }

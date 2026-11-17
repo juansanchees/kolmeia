@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { pauseHunterAction, turnOnHunterAction } from "@/app/(app)/agentes/agent-actions";
-import { btn } from "@/components/email/bits";
+import { powerClass } from "@/components/research/controls";
 import type { AgentStatus } from "@/lib/agents/types";
 import { useT } from "@/lib/i18n/client";
 
@@ -18,7 +18,7 @@ export function AgentPowerButton({ agentId, status }: { agentId: string; status:
       <button
         type="button"
         disabled={pending}
-        className={running ? btn.ghost : btn.primary}
+        className={powerClass(running)}
         onClick={() =>
           start(async () => {
             setError(null);
@@ -30,7 +30,7 @@ export function AgentPowerButton({ agentId, status }: { agentId: string; status:
         {running ? t.agents.detail.pause : t.agents.detail.turnOn}
       </button>
       {error && (
-        <span role="alert" className="text-sm text-danger">
+        <span role="alert" className="text-base font-medium text-danger">
           {error}
         </span>
       )}

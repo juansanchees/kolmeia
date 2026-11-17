@@ -9,6 +9,7 @@ import { Progress } from "@/components/research/Progress";
 import { Results } from "@/components/research/Results";
 import { RunDriver } from "@/components/research/RunDriver";
 import { getT } from "@/lib/i18n/server";
+import { buttonClass, EmptyState, Notice } from "@/components/ui";
 
 // The step route runs up to 300 s; server actions on this page are short, but keep the same ceiling.
 export const maxDuration = 300;
@@ -45,28 +46,22 @@ export default async function ResearchRunPage({
       {/* Agent runs are driven by the cron only: this page never claims a step for them, it just re-reads every 20 s. */}
       {ai && needsAdvance(run) && !run.agent_id && <RunDriver runId={run.id} status={run.status} />}
       {run.agent_id && run.status === "paused" && (
-        <p role="status" className="bg-warn-soft px-3 py-2.5 text-sm text-warn">
-          {t.agents.detail.pausedRun}
-        </p>
+        <Notice tone="warn">{t.agents.detail.pausedRun}</Notice>
       )}
       {run.agent_id && needsAdvance(run) && run.status !== "paused" && (
         <>
           <AutoRefresh seconds={20} />
-          <p role="status" className="bg-blue-wash px-3 py-2.5 text-sm text-blue-ink">
-            {t.agents.detail.background}
-          </p>
+          <Notice tone="info">{t.agents.detail.background}</Notice>
         </>
       )}
       {!ai && needsAdvance(run) && !run.agent_id && (
-        <p role="status" className="bg-warn-soft px-3 py-2.5 text-sm text-warn">
-          {t.ai.notConfigured}
-        </p>
+        <Notice tone="warn">{t.ai.notConfigured}</Notice>
       )}
 
       {showConversation ? (
         <>
           {!talking && (
-            <Link href={`/agentes/pesquisa/${run.id}`} className="font-mono text-xs text-blue underline underline-offset-4">
+            <Link href={`/agentes/pesquisa/${run.id}`} className="k-link inline-flex min-h-11 items-center self-start font-mono text-sm text-ink underline decoration-honey decoration-2 underline-offset-4">
               {M.running.backToRun}
             </Link>
           )}
@@ -77,21 +72,24 @@ export default async function ResearchRunPage({
       ) : run.status === "done" || candidates.length > 0 ? (
         <>
           {(run.status === "failed" || run.status === "cancelled") && (
-            <p role="status" className="bg-warn-soft px-3 py-2.5 text-sm text-warn">
-              {run.status === "failed" ? M.failed : M.cancelled}
-            </p>
+            <Notice tone="warn">{run.status === "failed" ? M.failed : M.cancelled}</Notice>
           )}
           <Results run={run} candidates={candidates} checks={checks} jobs={jobs} />
         </>
       ) : (
-        <section className="border border-line bg-surface p-5">
-          <h2 className="text-2xl">{run.title}</h2>
-          <p role="status" className="mt-3 text-sm">
-            {run.status === "failed" ? `${M.failed} ${run.error ? (t.ai as Record<string, string>)[camel(run.error)] ?? "" : ""}` : M.cancelled}
-          </p>
-          <Link href={`/agentes/pesquisa/${run.id}?view=conversa`} className="mt-3 inline-block text-sm text-blue underline underline-offset-4">
-            {M.running.back}
-          </Link>
+        <section aria-label={run.title}>
+          <EmptyState
+            title={run.title}
+            action={
+              <Link href={`/agentes/pesquisa/${run.id}?view=conversa`} className={buttonClass("secondary")}>
+                {M.running.back}
+              </Link>
+            }
+          >
+            <p role="status" className="m-0">
+              {run.status === "failed" ? `${M.failed} ${run.error ? (t.ai as Record<string, string>)[camel(run.error)] ?? "" : ""}` : M.cancelled}
+            </p>
+          </EmptyState>
         </section>
       )}
     </div>

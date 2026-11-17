@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { countLeadsAction, createEmailAgentAction } from "@/app/(app)/agentes/novo/email/actions";
-import { input } from "@/components/email/bits";
-import { PrimaryButton } from "@/components/research/controls";
+import { StepSet } from "@/components/research/controls";
+import { Badge, Chevron, Field, HexButton, HexPanel, Notice, Select, TextInput } from "@/components/ui";
 import { MAX_MAILBOXES, PICKABLE_STATUSES, TONES, type LeadCounts, type LeadFilterConfig, type Tone } from "@/lib/email-agent/types";
 import type { LeadStatus } from "@/lib/leads/types";
 import { TEMPERATURES } from "@/lib/research/types";
@@ -79,157 +79,162 @@ export function EmailAgentWizard({ mailboxes, hunters, ai, estimateUsd }: { mail
     });
   };
 
-  const q = "text-base font-semibold";
-  const hint = "text-[13px] text-muted";
+  const hint = "m-0 text-base text-[#4a5361]";
+  const mono = "font-mono text-[13px] font-medium uppercase tracking-wide text-ink";
+  const chip = "k-btn inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full border-2 border-line bg-surface px-4 text-[15px] has-[:checked]:border-honey has-[:checked]:bg-honey-light has-[:checked]:font-semibold has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60";
+  const box = "size-[18px] accent-ink";
   return (
-    <form onSubmit={submit} aria-label={t.agents.types.email} className="flex flex-col gap-5 border border-line bg-surface p-5">
-      <div>
+    <HexPanel wrapClassName="k-in" className="py-7">
+    <form onSubmit={submit} aria-label={t.agents.types.email} className="flex flex-col gap-7">
+      <div className="flex flex-col gap-1">
         <h2 className="text-2xl">{E.title}</h2>
-        <p className="mt-1 text-sm text-muted">{E.intro}</p>
+        <p className={hint}>{E.intro}</p>
       </div>
 
-      <fieldset disabled={locked} className="m-0 flex min-w-0 flex-col gap-5 border-0 p-0">
-      <label className="flex flex-col gap-1 text-sm">
-        <span className="font-mono text-xs text-muted">{E.name}</span>
-        <input className={input} value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
-      </label>
+      <fieldset disabled={locked} className="m-0 flex min-w-0 flex-col gap-7 border-0 p-0">
+      <Field label={E.name} htmlFor="email-agent-name">
+        <TextInput id="email-agent-name" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
+      </Field>
 
-      <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
-        <legend className={`${q} mb-1`}>{E.qLeads}</legend>
-        <div role="group" aria-label={E.statuses} className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-          <span className="font-mono text-xs text-muted">{E.statuses}</span>
-          {PICKABLE_STATUSES.map((s) => (
-            <label key={s} className="flex items-center gap-2">
-              <input type="checkbox" checked={statuses.includes(s)} onChange={() => setStatuses((cur) => toggle(cur, s))} />
-              {t.leads.statuses[s]}
-            </label>
-          ))}
+      <StepSet n={1} title={E.qLeads}>
+        <div role="group" aria-label={E.statuses} className="flex flex-col gap-2">
+          <span className={mono}>{E.statuses}</span>
+          <div className="flex flex-wrap gap-2">
+            {PICKABLE_STATUSES.map((s) => (
+              <label key={s} className={chip}>
+                <input type="checkbox" className={box} checked={statuses.includes(s)} onChange={() => setStatuses((cur) => toggle(cur, s))} />
+                {t.leads.statuses[s]}
+              </label>
+            ))}
+          </div>
         </div>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-mono text-xs text-muted">{E.agent}</span>
-          <select className={input} value={agentId} onChange={(e) => setAgentId(e.target.value)}>
-            <option value="">{E.anyAgent}</option>
-            {hunters.map((h) => (
-              <option key={h.id} value={h.id}>
-                {h.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-mono text-xs text-muted">{E.temperature}</span>
-          <select className={input} value={temperature} onChange={(e) => setTemperature(e.target.value)}>
-            <option value="">{E.anyTemperature}</option>
-            {TEMPERATURES.map((x) => (
-              <option key={x} value={x}>
-                {t.research.labels.temperatureTitle[x]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={onlyEmail} onChange={(e) => setOnlyEmail(e.target.checked)} />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label={E.agent} htmlFor="email-agent-source">
+            <Select id="email-agent-source" value={agentId} onChange={(e) => setAgentId(e.target.value)}>
+              <option value="">{E.anyAgent}</option>
+              {hunters.map((h) => (
+                <option key={h.id} value={h.id}>
+                  {h.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label={E.temperature} htmlFor="email-agent-temperature">
+            <Select id="email-agent-temperature" value={temperature} onChange={(e) => setTemperature(e.target.value)}>
+              <option value="">{E.anyTemperature}</option>
+              {TEMPERATURES.map((x) => (
+                <option key={x} value={x}>
+                  {t.research.labels.temperatureTitle[x]}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+        <label className={`${chip} self-start`}>
+          <input type="checkbox" className={box} checked={onlyEmail} onChange={(e) => setOnlyEmail(e.target.checked)} />
           {E.onlyEmailApproach}
         </label>
-        <p role="status" className="text-sm">
+        <p role="status" className="m-0 rounded-[14px] bg-honey-soft px-4 py-3 text-base">
           {countError ? (
             <span className="text-warn">{countError}</span>
           ) : counts ? (
             <>
               {fill(E.counts, { total: counts.total, withEmail: counts.withEmail, withoutEmail: counts.withoutEmail })}
-              {counts.total >= 500 && <span className={`${hint} block`}>{E.countsMax}</span>}
+              {counts.total >= 500 && <span className="block text-[15px] text-[#4a5361]">{E.countsMax}</span>}
             </>
           ) : statuses.length > 0 ? (
             E.counting
           ) : null}
         </p>
-      </fieldset>
+      </StepSet>
 
-      <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
-        <legend className={`${q} mb-1`}>{E.qTone}</legend>
-        <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+      <StepSet n={2} title={E.qTone}>
+        <div className="flex flex-wrap gap-2">
           {TONES.map((x) => (
-            <label key={x} className="flex items-center gap-2">
-              <input type="radio" name="tone" checked={tone === x} onChange={() => setTone(x)} />
+            <label key={x} className={chip}>
+              <input type="radio" name="tone" className={box} checked={tone === x} onChange={() => setTone(x)} />
               {E.tones[x]}
             </label>
           ))}
         </div>
-      </fieldset>
+      </StepSet>
 
-      <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
-        <legend className={`${q} mb-1`}>{E.qSteps}</legend>
-        <div role="group" aria-label={E.steps} className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-          <span className="font-mono text-xs text-muted">{E.steps}</span>
-          {([1, 2, 3] as const).map((n) => (
-            <label key={n} className="flex items-center gap-2">
-              <input type="radio" name="steps" checked={steps === n} onChange={() => setSteps(n)} />
-              {n}
-            </label>
-          ))}
+      <StepSet n={3} title={E.qSteps}>
+        <div role="group" aria-label={E.steps} className="flex flex-col gap-2">
+          <span className={mono}>{E.steps}</span>
+          <div className="flex flex-wrap gap-2">
+            {([1, 2, 3] as const).map((n) => (
+              <label key={n} className={`${chip} min-w-16 justify-center`}>
+                <input type="radio" name="steps" className={box} checked={steps === n} onChange={() => setSteps(n)} />
+                {n}
+              </label>
+            ))}
+          </div>
         </div>
         {steps >= 2 && (
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-mono text-xs text-muted">{E.step2}</span>
-            <input className={input} type="number" inputMode="numeric" min={1} max={30} value={step2} onChange={(e) => setStep2(e.target.value)} aria-invalid={!delaysOk} />
-          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label={E.step2} htmlFor="email-agent-step2">
+              <TextInput id="email-agent-step2" type="number" inputMode="numeric" min={1} max={30} value={step2} onChange={(e) => setStep2(e.target.value)} aria-invalid={!delaysOk} />
+            </Field>
+            {steps === 3 && (
+              <Field label={E.step3} htmlFor="email-agent-step3">
+                <TextInput id="email-agent-step3" type="number" inputMode="numeric" min={2} max={60} value={step3} onChange={(e) => setStep3(e.target.value)} aria-invalid={!delaysOk} />
+              </Field>
+            )}
+          </div>
         )}
-        {steps === 3 && (
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-mono text-xs text-muted">{E.step3}</span>
-            <input className={input} type="number" inputMode="numeric" min={2} max={60} value={step3} onChange={(e) => setStep3(e.target.value)} aria-invalid={!delaysOk} />
-          </label>
-        )}
-        {steps >= 2 && <span className={hint}>{E.delaysHint}</span>}
-      </fieldset>
+        {steps >= 2 && <p className={hint}>{E.delaysHint}</p>}
+      </StepSet>
 
-      <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
-        <legend className={`${q} mb-1`}>{E.qMailboxes}</legend>
+      <StepSet n={4} title={E.qMailboxes} hint={E.mailboxesHint}>
         {mailboxes.length === 0 ? (
-          <p className="text-sm text-warn">{E.noMailboxes}</p>
+          <Notice tone="warn">{E.noMailboxes}</Notice>
         ) : (
-          mailboxes.map((m) => {
-            const usable = m.status === "ok";
-            const on = picked.includes(m.id);
-            return (
-              <label key={m.id} className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={on} disabled={!usable || (!on && picked.length >= MAX_MAILBOXES)} onChange={() => setPicked((cur) => toggle(cur, m.id))} />
-                {m.email}
-                {!usable && <span className="font-mono text-xs text-muted">{E.unverified}</span>}
-              </label>
-            );
-          })
+          <div className="flex flex-wrap gap-2">
+            {mailboxes.map((m) => {
+              const usable = m.status === "ok";
+              const on = picked.includes(m.id);
+              return (
+                <label key={m.id} className={chip}>
+                  <input type="checkbox" className={box} checked={on} disabled={!usable || (!on && picked.length >= MAX_MAILBOXES)} onChange={() => setPicked((cur) => toggle(cur, m.id))} />
+                  {m.email}
+                  {!usable && <Badge tone="neutral" className="py-0 text-[13px]">{E.unverified}</Badge>}
+                </label>
+              );
+            })}
+          </div>
         )}
-        <span className={hint}>{E.mailboxesHint}</span>
-      </fieldset>
+      </StepSet>
 
-      <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
-        <legend className={`${q} mb-1`}>{E.qReview}</legend>
-        <p className="text-sm">
-          {fill(E.review, { leads: counts?.withEmail ?? 0, tone: E.tones[tone].toLowerCase(), steps, boxes: picked.length })}
-        </p>
-        <p className="text-sm text-muted">{ai ? fill(E.estimate, { usd: estimateUsd.toFixed(2) }) : E.noAi}</p>
-        {counts && counts.withEmail === 0 && <p className="text-sm text-warn">{E.noLeads}</p>}
-      </fieldset>
+      <StepSet n={5} title={E.qReview}>
+        <div className="flex flex-col gap-1.5 rounded-[14px] border-2 border-honey-edge bg-honey-soft px-4 py-3">
+          <p className="m-0 text-base font-semibold">
+            {fill(E.review, { leads: counts?.withEmail ?? 0, tone: E.tones[tone].toLowerCase(), steps, boxes: picked.length })}
+          </p>
+          <p className="m-0 text-[15px] text-[#4a5361]">{ai ? fill(E.estimate, { usd: estimateUsd.toFixed(2) }) : E.noAi}</p>
+        </div>
+        {counts && counts.withEmail === 0 && <Notice tone="warn">{E.noLeads}</Notice>}
+      </StepSet>
 
       </fieldset>
 
       {error && (
-        <p role="alert" className="bg-warn-soft px-3 py-2.5 text-sm text-warn">
+        <Notice tone="warn" role="alert">
           {error.message}{" "}
           {error.agentId && (
-            <Link href={`/agentes/${error.agentId}`} className="underline underline-offset-4">
+            <Link href={`/agentes/${error.agentId}`} className="font-medium underline underline-offset-4">
               {E.openAgent}
             </Link>
           )}
           {locked && <span className="block">{E.retryLocked}</span>}
-        </p>
+        </Notice>
       )}
       <div>
-        <PrimaryButton type="submit" disabled={pending || !ready}>
-          {pending ? E.creating : locked ? E.retry : E.create}
-        </PrimaryButton>
+        <HexButton type="submit" disabled={pending || !ready}>
+          {pending ? E.creating : locked ? E.retry : E.create} <Chevron className="k-arrow" />
+        </HexButton>
       </div>
     </form>
+    </HexPanel>
   );
 }

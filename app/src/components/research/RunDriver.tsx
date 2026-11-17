@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import type { RunStatus } from "@/lib/research/types";
 import type { Messages } from "@/lib/i18n";
 import { useT } from "@/lib/i18n/client";
+import { Notice } from "@/components/ui";
 
 type StepReply = { outcome?: string; code?: string; status?: RunStatus; more?: boolean; error?: string };
 
@@ -82,14 +83,14 @@ export function RunDriver({ runId, status }: { runId: string; status: RunStatus 
 
   return (
     <div aria-live="polite" className="flex flex-col gap-2">
-      <p className="flex items-center gap-2 font-mono text-xs text-blue-ink">
-        <span aria-hidden="true" className="inline-block h-2 w-2 animate-pulse bg-blue" />
+      <p className="m-0 flex items-center gap-2 font-mono text-sm text-ink">
+        <span aria-hidden="true" className="inline-block size-2.5 animate-pulse rounded-full bg-honey" />
         {note}
       </p>
       {problem && (
-        <p role="alert" className="bg-warn-soft px-3 py-2.5 text-sm text-warn">
+        <Notice tone="warn" role="alert">
           {problem}
-        </p>
+        </Notice>
       )}
     </div>
   );

@@ -24,23 +24,12 @@ import { reserveFor } from "@/lib/ai/gateway";
 import { sequenceDef } from "@/lib/ai/email-tasks";
 import { RestartButton } from "@/components/agents/RestartButton";
 import { getT } from "@/lib/i18n/server";
+import { AiBubble, UserBubble } from "@/components/research/controls";
+import { HexPanel, Notice } from "@/components/ui";
+import { AgentHead } from "@/components/agents/AgentHead";
 
 // The step route runs up to 300 s; keep the same ceiling as the research page.
 export const maxDuration = 300;
-
-function UserBubble({ children }: { children: React.ReactNode }) {
-  return <div className="max-w-[80%] self-end bg-blue px-3.5 py-3 text-[15px] leading-normal text-white">{children}</div>;
-}
-
-async function AiBubble({ children }: { children: React.ReactNode }) {
-  const t = await getT();
-  return (
-    <div className="flex max-w-full flex-col gap-3.5 self-start border border-[#c9d8f7] bg-blue-wash p-4 sm:max-w-[92%]">
-      <span className="font-mono text-[11px] uppercase text-blue-ink">{t.ai.suggestion}</span>
-      {children}
-    </div>
-  );
-}
 
 export default async function AgentPage({ params }: { params: Promise<{ id: string }> }) {
   const t = await getT();
@@ -112,36 +101,34 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
   const audience = setup.success ? (setup.data.audience === "other" ? setup.data.audienceText : H.audiences[setup.data.audience]) : "";
 
   return (
-    <section aria-label={agent.name} className="flex flex-col border border-line bg-surface">
-      <div className="border-b border-ink px-5 py-3.5">
-        <h2 className="text-2xl">{agent.name}</h2>
-      </div>
-      <div className="flex flex-col gap-4 p-4 sm:p-5">
+    <HexPanel as="section" aria-labelledby="agent-title" raised wrapClassName="k-in" className="flex flex-col gap-5 py-7">
+      <AgentHead id="agent-title" name={agent.name} type={agent.type} typeLabel={t.agents.types[agent.type]} status={agent.status} statusLabel={t.agents.statuses[agent.status]} />
+      <div className="flex flex-col gap-4">
         {setup.success && (
           <UserBubble>
             <span className="block">{audience}</span>
-            <span className="mt-1 block text-[13px] opacity-90">{setup.data.region}</span>
-            <span className="mt-1 block text-[13px] opacity-90">{profile}</span>
+            <span className="mt-1 block text-[15px] text-honey-glow">{setup.data.region}</span>
+            <span className="mt-1 block text-[15px] text-honey-glow">{profile}</span>
           </UserBubble>
         )}
 
         {ai && run && needsAdvance(run) && <RunDriver runId={run.id} status={run.status} />}
 
         {(step === "thinking" || step === "planning") && (
-          <p role="status" className="font-mono text-xs text-muted">
+          <p role="status" className="m-0 font-mono text-sm text-[#4a5361]">
             {step === "thinking" ? t.research.conversation.thinking : t.research.conversation.planning}
           </p>
         )}
 
         {step === "no_ai" && (
-          <p role="status" className="bg-warn-soft px-3 py-2.5 text-sm text-warn">
+          <Notice tone="warn">
             {t.ai.notConfigured} {H.noAi}
-          </p>
+          </Notice>
         )}
 
         {step === "questions" && run && (
-          <AiBubble>
-            <p className="text-[15px] leading-normal">
+          <AiBubble label={t.ai.suggestion}>
+            <p className="m-0 text-base leading-normal">
               <span className="font-semibold">{t.research.conversation.understood}</span> {run.progress.understood ?? ""}{" "}
               {t.research.conversation.askIntro}
             </p>
@@ -162,13 +149,11 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
 
         {step === "setup_failed" && (
           <div className="flex flex-col items-start gap-3">
-            <p role="status" className="bg-warn-soft px-3 py-2.5 text-sm text-warn">
-              {H.setupFailed}
-            </p>
+            <Notice tone="warn">{H.setupFailed}</Notice>
             <RestartButton agentId={agent.id} />
           </div>
         )}
       </div>
-    </section>
+    </HexPanel>
   );
 }

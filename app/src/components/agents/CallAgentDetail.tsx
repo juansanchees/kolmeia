@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { buildListAction, setCallAgentRunningAction } from "@/app/(app)/agentes/call-actions";
-import { btn, Notice } from "@/components/email/bits";
-import { Pill } from "@/components/research/controls";
+import { Badge, buttonClass, CountPill, EmptyState, HexPanel, Notice, StepTitle } from "@/components/ui";
+import { InfoRow, Pill, powerClass } from "@/components/research/controls";
+import { AgentHead, DlStat } from "./AgentHead";
+import { TYPE_ICON } from "./type-icons";
 import { ArchiveButton } from "./ArchiveButton";
 import type { AgentRow } from "@/lib/agents/types";
 import { callAgentConfigSchema } from "@/lib/calls/types";
@@ -14,15 +16,6 @@ import { useT } from "@/lib/i18n/client";
 import { Paged } from "@/components/Pager";
 
 export type CallDetailRow = { leadId: string; name: string; temperature: "very_hot" | "hot" | "warm" | "cold" | null; level: number; phone: string | null; outcome: string | null };
-
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="grid grid-cols-1 gap-x-4 border-t border-line py-2 text-sm sm:grid-cols-[14rem_1fr]">
-      <dt className="font-mono text-xs text-muted">{label}</dt>
-      <dd className="m-0">{children}</dd>
-    </div>
-  );
-}
 
 /** Ligação agent page: config, Ligar/Pausar, "Montar lista de hoje", the day's numbers and the list (read only). */
 export function CallAgentDetail({
@@ -58,65 +51,76 @@ export function CallAgentDetail({
   const temps = cfg.success && cfg.data.temperatures.length > 0 ? cfg.data.temperatures.map((x) => t.research.labels.temperatureTitle[x]).join(", ") : C.any;
 
   return (
-    <section aria-labelledby="agent-title" className="flex flex-col gap-4 border border-line bg-surface p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1.5">
-        <h2 id="agent-title" className="text-2xl">
-          {agent.name}
-        </h2>
-        <span className="font-mono text-xs text-muted">
-          {A.types.call} · <span className="border border-line px-2 py-0.5">{A.statuses[agent.status]}</span>
-        </span>
-      </div>
+    <div className="flex min-w-0 flex-col gap-5">
+      <HexPanel as="section" aria-labelledby="agent-title" raised wrapClassName="k-in" className="flex flex-col gap-7 py-7">
+        <AgentHead id="agent-title" name={agent.name} type="call" typeLabel={A.types.call} status={agent.status} statusLabel={A.statuses[agent.status]} />
 
-      {cfg.success && (
-        <dl className="m-0">
-          <Row label={C.caller}>{callerLabel}</Row>
-          <Row label={C.perDay}>{cfg.data.per_day}</Row>
-          <Row label={C.minLevel}>{fill(C.levelOption, { n: cfg.data.min_level })}</Row>
-          <Row label={C.temperatures}>{temps}</Row>
-        </dl>
-      )}
-
-      <div className="flex flex-wrap items-center gap-3">
-        {canPower && (
-          <button type="button" disabled={pending} className={running ? btn.ghost : btn.primary} onClick={() => run(() => setCallAgentRunningAction(agent.id, !running))}>
-            {running ? A.detail.pause : A.detail.turnOn}
-          </button>
+        {cfg.success && (
+          <div className="flex flex-col gap-3">
+            <StepTitle n={1} as="h3">{A.detail.steps.setup}</StepTitle>
+            <dl className="m-0 md:pl-[42px]">
+              <InfoRow label={C.caller}>{callerLabel}</InfoRow>
+              <InfoRow label={C.perDay}>{cfg.data.per_day}</InfoRow>
+              <InfoRow label={C.minLevel}>{fill(C.levelOption, { n: cfg.data.min_level })}</InfoRow>
+              <InfoRow label={C.temperatures}>{temps}</InfoRow>
+            </dl>
+          </div>
         )}
-        <button type="button" disabled={pending || !running} className={btn.ghost} onClick={() => run(() => buildListAction(agent.id))}>
-          {C.build}
-        </button>
-        {agent.status !== "running" && <ArchiveButton agentId={agent.id} />}
-      </div>
-      {!running && <p className="text-sm text-muted">{C.buildNeedsRunning}</p>}
-      {msg && <Notice tone={msg.tone} role={msg.tone === "warn" ? "alert" : "status"}>{msg.text}</Notice>}
 
-      <dl className="m-0">
-        <Row label={C.metrics.inList}>{stats.inList}</Row>
-        <Row label={C.metrics.called}>{stats.called}</Row>
-        <Row label={C.metrics.answered}>{stats.answered}</Row>
-        <Row label={C.metrics.meetings}>{stats.meetings}</Row>
-      </dl>
+        <div className="flex flex-col gap-3">
+          <StepTitle n={cfg.success ? 2 : 1} as="h3" hint={!running ? C.buildNeedsRunning : undefined}>
+            {A.detail.steps.power}
+          </StepTitle>
+          <div className="flex flex-col gap-3 md:pl-[42px]">
+            <div className="flex flex-wrap items-center gap-3">
+              {canPower && (
+                <button type="button" disabled={pending} className={powerClass(running)} onClick={() => run(() => setCallAgentRunningAction(agent.id, !running))}>
+                  {running ? A.detail.pause : A.detail.turnOn}
+                </button>
+              )}
+              <button type="button" disabled={pending || !running} className={buttonClass("secondary")} onClick={() => run(() => buildListAction(agent.id))}>
+                {C.build}
+              </button>
+              {agent.status !== "running" && <ArchiveButton agentId={agent.id} />}
+            </div>
+            {msg && <Notice tone={msg.tone} role={msg.tone === "warn" ? "alert" : "status"}>{msg.text}</Notice>}
+          </div>
+        </div>
 
-      <div className="flex flex-col gap-1">
-        <h3 className="text-base font-semibold">{t.calls.today}</h3>
+        <div className="flex flex-col gap-3">
+          <StepTitle n={cfg.success ? 3 : 2} as="h3">{A.detail.steps.numbers}</StepTitle>
+          <dl className="m-0 grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(140px,1fr))] md:pl-[42px]">
+            <DlStat label={C.metrics.inList} value={stats.inList} />
+            <DlStat label={C.metrics.called} value={stats.called} />
+            <DlStat label={C.metrics.answered} value={stats.answered} />
+            <DlStat label={C.metrics.meetings} value={stats.meetings} />
+          </dl>
+        </div>
+      </HexPanel>
+
+      <HexPanel as="section" aria-labelledby="call-today" wrapClassName="k-in [animation-delay:.08s]" className="flex flex-col gap-3 py-6">
+        <h3 id="call-today" className="flex items-center gap-2.5 font-body text-lg font-semibold normal-case tracking-normal">
+          {t.calls.today} {rows.length > 0 && <CountPill>{rows.length}</CountPill>}
+        </h3>
         {rows.length === 0 ? (
-          <p className="text-sm text-muted">{t.calls.empty}</p>
+          <EmptyState icon={TYPE_ICON.call} title={t.calls.empty}>
+            {running ? undefined : C.buildNeedsRunning}
+          </EmptyState>
         ) : (
-          <Paged as="ul" className="m-0 flex list-none flex-col p-0">
+          <Paged as="ul" className="m-0 flex list-none flex-col gap-1 p-0">
             {rows.map((r) => (
-              <li key={r.leadId} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line py-2 text-sm">
-                <Link href={`/leads/${r.leadId}`} className="font-semibold text-ink underline-offset-4 hover:underline">
-                  {r.name}
+              <li key={r.leadId}>
+                <Link href={`/leads/${r.leadId}`} className="k-row flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1 rounded-[12px] px-3.5 py-2.5 text-ink no-underline">
+                  <span className="min-w-0 flex-[1_1_200px] font-semibold">{r.name}</span>
+                  {r.temperature && <Pill tone={r.temperature}>{t.research.labels.temperature[r.temperature]}</Pill>}
+                  <span className="font-mono text-sm text-[#4a5361]">{r.phone ?? C.noPhone}</span>
+                  {r.outcome && <Badge tone="neutral" className="py-0.5">{t.calls.outcomes[r.outcome as keyof typeof t.calls.outcomes]}</Badge>}
                 </Link>
-                {r.temperature && <Pill tone={r.temperature}>{t.research.labels.temperature[r.temperature]}</Pill>}
-                <span className="font-mono text-xs text-muted">{r.phone ?? C.noPhone}</span>
-                {r.outcome && <span className="font-mono text-xs text-muted">{t.calls.outcomes[r.outcome as keyof typeof t.calls.outcomes]}</span>}
               </li>
             ))}
           </Paged>
         )}
-      </div>
-    </section>
+      </HexPanel>
+    </div>
   );
 }
