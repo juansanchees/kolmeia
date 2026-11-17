@@ -13,7 +13,7 @@ import { SelectionBar, type BulkNotice } from "@/components/leads/SelectionBar";
 import { ViewBar } from "@/components/leads/ViewBar";
 import type { LeadView } from "@/lib/leads/queries";
 import { usd } from "@/components/research/format";
-import { clearPatch, DEFAULT_LEAD_FILTERS, filterLeads, hasSiteNoEmail, leadFacetsOf, sortRows, type LeadFilters, type SegmentTab, type Sort, type SortKey } from "@/lib/leads/view";
+import { clearPatch, DEFAULT_LEAD_FILTERS, FILTER_PARAMS, filterLeads, filtersFromParams, hasSiteNoEmail, leadFacetsOf, sortRows, type LeadFilters, type SegmentTab, type Sort, type SortKey } from "@/lib/leads/view";
 import { chipValue, clearAllPatch, countOf, panelFilterKeys, removableChipKeys, SHORTCUT_CHIPS, summaryOf } from "@/lib/leads/filter-ui";
 import { leadsCsvAction } from "@/app/(app)/leads/lead-actions";
 import { AI_TYPE_BATCH, AI_TYPE_MAX, stageOf } from "@/lib/leads/classify";
@@ -114,7 +114,12 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
   const TB = t.leads.toolbar;
   const COL = t.leads.columns;
   const P = t.leads.paging;
-  const [f, setF] = useState<LeadFilters>(initialFilters);
+  const search = useSearchParams();
+  // Home's "Analisar" links (?entered / ?segment / ?noName) set existing filters on first load; all stages, so the count matches
+  const [f, setF] = useState<LeadFilters>(() => {
+    const p = filtersFromParams((k) => search.get(k));
+    return Object.keys(p).length ? { ...initialFilters, stage: "all", ...p } : initialFilters;
+  });
   // bumped when a saved view replaces every filter, so the search box takes the view's text
   const [searchKey, setSearchKey] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
@@ -126,7 +131,6 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
     return () => clearTimeout(id);
   }, []);
   const [menuOpen, setMenuOpen] = useState(false);
-  const search = useSearchParams();
   // The Home's "Quem você quer achar hoje?" sends ?ia=<text>: open "Busca com IA" with it (senders only, like the menu item)
   const pathname = usePathname();
   const iaText = canCreate ? search.get("ia")?.slice(0, 200) ?? null : null;
@@ -135,11 +139,11 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
   // the last bulk result (status / type); kept here because a success unmounts the selection bar
   const [notice, setNotice] = useState<BulkNotice | null>(null);
   const router = useRouter();
-  // read once, then drop ?ia from the URL (other params stay) so a reload or a lead link does not reopen the panel
+  // read once, then drop ?ia and the filter params from the URL (other params stay) so a reload or a lead link does not reopen the panel
   useEffect(() => {
-    if (!search.has("ia")) return;
+    if (!["ia", ...FILTER_PARAMS].some((k) => search.has(k))) return;
     const p = new URLSearchParams(search);
-    p.delete("ia");
+    for (const k of ["ia", ...FILTER_PARAMS]) p.delete(k);
     router.replace(`${pathname}${p.size ? `?${p}` : ""}`, { scroll: false });
   }, [search, pathname, router]);
   // The lead opens as a modal over this list (?lead=): same page, so filters/pager/scroll stay.

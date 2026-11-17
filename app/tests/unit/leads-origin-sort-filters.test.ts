@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeFilterKeys, clearPatch, DEFAULT_LEAD_FILTERS, enteredOk, filterLeads, lastTouchOk, leadFacetsOf, originKeysOf, parseLeadFilters, roleOf, sortRows, type FilterRow } from "@/lib/leads/view";
+import { activeFilterKeys, clearPatch, DEFAULT_LEAD_FILTERS, enteredOk, filterLeads, filtersFromParams, lastTouchOk, leadFacetsOf, originKeysOf, parseLeadFilters, roleOf, sortRows, type FilterRow } from "@/lib/leads/view";
 
 type Opt = { agent?: string | null; lists?: string[]; kind?: "import" | "agent" | "one_off"; importName?: string | null; seen?: string; touch?: string | null; phone?: string; contact?: string; title?: string };
 function row(name: string, o: Opt = {}): FilterRow {
@@ -65,6 +65,10 @@ describe("date presets (New York days)", () => {
     expect(enteredOk(edt("08", "23:59"), "7", now)).toBe(false);
     expect(enteredOk(new Date("2026-05-17T00:00:00-04:00").toISOString(), "30", now)).toBe(true);
     expect(enteredOk(new Date("2026-05-16T23:59:00-04:00").toISOString(), "30", now)).toBe(false);
+    expect(enteredOk(edt("14", "23:59"), "yesterday", now)).toBe(true);
+    expect(enteredOk(edt("14", "00:00"), "yesterday", now)).toBe(true);
+    expect(enteredOk(edt("13", "23:59"), "yesterday", now)).toBe(false);
+    expect(enteredOk(edt("15"), "yesterday", now)).toBe(false); // today is not yesterday
     expect(enteredOk(null, "7", now)).toBe(false);
     expect(enteredOk(null, "all", now)).toBe(true);
   });
@@ -121,5 +125,25 @@ describe("name, role, search, clear", () => {
   });
   it("an old saved view without the new keys loads with defaults", () => {
     expect(parseLeadFilters({ q: "x", lists: ["L"], cities: ["Boston"] })).toEqual({ ...DEFAULT_LEAD_FILTERS, q: "x", lists: ["L"], cities: ["Boston"] });
+  });
+});
+
+describe("filtersFromParams (Home's Analisar links)", () => {
+  const from = (q: string) => filtersFromParams((k) => new URLSearchParams(q).get(k));
+  it("reads entered, segment and noName", () => {
+    expect(from("entered=yesterday")).toEqual({ entered: "yesterday" });
+    expect(from("segment=large&noName=1")).toEqual({ segment: "large", noContactName: true });
+    expect(from("segment=none")).toEqual({ segment: "none" });
+  });
+  it("ignores unknown values", () => {
+    expect(from("entered=lastyear&segment=huge&noName=yes")).toEqual({});
+    expect(from("entered=all&segment=all")).toEqual({});
+    expect(from("")).toEqual({});
+  });
+  it("noName keeps only companies without a contact name", () => {
+    const f = { ...DEFAULT_LEAD_FILTERS, noContactName: true };
+    const row = (contactName: string | null) => ({ lead: { id: "x", first_seen_at: "2026-05-15T12:00:00Z", last_touch_at: null }, best: null, display: { name: "Co", contactName }, segment: "large" }) as unknown as FilterRow;
+    expect(filterLeads([row(null), row("Ana"), row("  ")], f)).toHaveLength(2);
+    expect(activeFilterKeys(f)).toEqual(["noContactName"]);
   });
 });

@@ -124,7 +124,8 @@ export function FacetPanel({ facets, f, set, agents, hasOneOff }: { facets: Lead
         return (
           <>
             {(["all", ...ROLES] as const).map((x, i) => <Opt key={x} type="radio" name={name} i={i} label={P.roleOpts[x]} checked={f.role === x} onChange={() => set({ role: x })} />)}
-            <Opt type="checkbox" name="facet-contact-name" i={ROLES.length + 1} label={P.hasContactName} checked={f.hasContactName} onChange={(on) => set({ hasContactName: on })} />
+            <Opt type="checkbox" name="facet-contact-name" i={ROLES.length + 1} label={P.hasContactName} checked={f.hasContactName} onChange={(on) => set({ hasContactName: on, ...(on && { noContactName: false }) })} />
+            <Opt type="checkbox" name="facet-no-contact-name" i={ROLES.length + 2} label={P.noContactName} checked={f.noContactName} onChange={(on) => set({ noContactName: on, ...(on && { hasContactName: false }) })} />
           </>
         );
       case "contact":

@@ -73,18 +73,20 @@ export type LeadFilters = FacetFilters & {
   segment: SegmentTab | "all";
   /** "all" = every lead. */
   stage: LeadStage | "all";
-  /** Entered (first_seen_at) today / in the last 7 or 30 days. */
+  /** Entered (first_seen_at) today / yesterday / in the last 7 or 30 days. */
   entered: EnteredPreset;
   /** Company name contains (or, with nameNot, does not contain) this text. */
   nameQ: string;
   nameNot: boolean;
   hasContactName: boolean;
+  /** Only companies with no named contact (the opposite of hasContactName). */
+  noContactName: boolean;
   role: RolePick;
   /** Last touch: never, or older than N days. */
   lastTouch: LastTouchPick;
 };
 
-export const ENTERED_PRESETS = ["all", "today", "7", "30"] as const;
+export const ENTERED_PRESETS = ["all", "today", "yesterday", "7", "30"] as const;
 export type EnteredPreset = (typeof ENTERED_PRESETS)[number];
 export const LAST_TOUCH_PICKS = ["all", "never", "7", "30", "90"] as const;
 export type LastTouchPick = (typeof LAST_TOUCH_PICKS)[number];
@@ -125,12 +127,13 @@ export function daysAgoStart(n: number, now: Date): Date {
   return new Date(guess - nyOffsetMs(first)); // second pass settles a DST change between guess and midnight
 }
 
-const ENTERED_DAYS: Record<Exclude<EnteredPreset, "all">, number> = { today: 0, "7": 6, "30": 29 };
+const ENTERED_DAYS: Record<Exclude<EnteredPreset, "all">, number> = { today: 0, yesterday: 1, "7": 6, "30": 29 };
 /** "Today" starts at local midnight; "7"/"30" = today plus the 6/29 days before. Unknown date = out. */
 export function enteredOk(iso: string | null | undefined, p: EnteredPreset, now: Date): boolean {
   if (p === "all") return true;
   const ms = iso ? Date.parse(iso) : NaN;
-  return !Number.isNaN(ms) && ms >= daysAgoStart(ENTERED_DAYS[p], now).getTime();
+  if (Number.isNaN(ms) || ms < daysAgoStart(ENTERED_DAYS[p], now).getTime()) return false;
+  return p !== "yesterday" || ms < daysAgoStart(0, now).getTime(); // yesterday is one day, not "since yesterday"
 }
 
 /** "never" = no last touch; "7/30/90" = last touch before that many days ago (midnight). */
@@ -160,7 +163,7 @@ export function sortRows<T extends Pick<FilterRow, "lead" | "display">>(rows: T[
 export const DEFAULT_LEAD_FILTERS: LeadFilters = {
   q: "", temperature: "all", agent: "all", status: "all", tab: "all", minLevel: 0, companyTypes: [], minPermitUsd: 0, aiQuestion: "", aiAnswer: "all",
   contact: "all", cities: [], levels: [], hasPhone: false, hasEmail: false, siteNoEmail: false, origins: [], emailQuality: [], lists: [], segment: "all", stage: "all",
-  entered: "all", nameQ: "", nameNot: false, hasContactName: false, role: "all", lastTouch: "all",
+  entered: "all", nameQ: "", nameNot: false, hasContactName: false, noContactName: false, role: "all", lastTouch: "all",
 };
 
 export type FacetCount<T> = { value: T; n: number };
@@ -205,6 +208,7 @@ const filtersSchema = z.object({
   nameQ: z.string().max(100),
   nameNot: z.boolean(),
   hasContactName: z.boolean(),
+  noContactName: z.boolean(),
   role: z.enum(["all", ...ROLES]),
   lastTouch: z.enum(LAST_TOUCH_PICKS),
 }).partial();
@@ -294,6 +298,7 @@ function otherFiltersOf(f: LeadFilters): (i: FilterRow) => boolean {
     if (!enteredOk(lead.first_seen_at, f.entered, now) || !lastTouchOk(lead.last_touch_at, f.lastTouch, now)) return false;
     if (nameQ && fold(display.name).includes(nameQ) === f.nameNot) return false;
     if (f.hasContactName && !display.contactName?.trim()) return false;
+    if (f.noContactName && display.contactName?.trim()) return false;
     if (f.role !== "all" && roleOf(display.contactTitle) !== f.role) return false;
     if (!leadInTab({ best }, f.tab)) return false;
     // "none" = no research at all; named temperatures use the effective (display) one
@@ -425,3 +430,15 @@ export function leadsCsv(items: LeadListItem[], t: Messages): string {
   ];
   return toCsv(rows, [...sheetColumns(t), ...extra]);
 }
+
+/** Links from outside (the Home's "Analisar") open the list filtered: ?entered=yesterday&segment=large&noName=1. Unknown values are ignored. */
+export function filtersFromParams(get: (k: string) => string | null): Partial<LeadFilters> {
+  const p: Partial<LeadFilters> = {};
+  const entered = get("entered");
+  if (entered && entered !== "all" && (ENTERED_PRESETS as readonly string[]).includes(entered)) p.entered = entered as EnteredPreset;
+  const segment = get("segment");
+  if (segment && ([...SEGMENTS, "none"] as string[]).includes(segment)) p.segment = segment as SegmentTab;
+  if (get("noName") === "1") p.noContactName = true;
+  return p;
+}
+export const FILTER_PARAMS = ["entered", "segment", "noName"] as const;

@@ -9,10 +9,10 @@ const ME = "00000000-0000-4000-8000-000000000001";
 const OTHER = "00000000-0000-4000-8000-000000000002";
 
 let seq = 0;
-function row(o: { id?: string; status?: string; contacted?: string | null; dnc?: boolean; phone?: string | null; email?: string | null; segment?: Segment | null; seen?: string; touch?: string | null; contact?: string } = {}): HomeRow {
+function row(o: { id?: string; status?: string; contacted?: string | null; dnc?: boolean; phone?: string | null; email?: string | null; owner?: string; segment?: Segment | null; seen?: string; touch?: string | null; contact?: string } = {}): HomeRow {
   const id = o.id ?? `lead-${++seq}`;
   return {
-    lead: { id, status: (o.status ?? "new") as never, level: 1, origin_kind: "import", origin_agent_id: null, first_contacted_at: o.contacted ?? null, last_touch_at: o.touch ?? null, segment: null, first_seen_at: o.seen ?? "2026-11-01T12:00:00Z", do_not_call: o.dnc ?? false },
+    lead: { id, status: (o.status ?? "new") as never, level: 1, origin_kind: "import", origin_agent_id: null, first_contacted_at: o.contacted ?? null, last_touch_at: o.touch ?? null, segment: null, first_seen_at: o.seen ?? "2026-11-01T12:00:00Z", do_not_call: o.dnc ?? false, owner_id: o.owner ?? null },
     best: null,
     display: { name: `Co ${id}`, city: "Boston", phone: o.phone === undefined ? "(508) 555-0101" : o.phone, website: null, email: o.email ?? null, contactName: o.contact ?? null },
     origins: [],
@@ -79,6 +79,16 @@ describe("Retornos combinados", () => {
     const team = { ...DEFAULT_PLAN, returns: { ...DEFAULT_PLAN.returns, team: true } };
     expect(keys(buildPlan(input({ rows: [a], tasks: [theirs] }), team, DEFAULT_HOME_RULE), "returns")).toHaveLength(1);
     expect(keys(buildPlan(input({ rows: [a], tasks: [theirs], sender: false }), team, DEFAULT_HOME_RULE), "returns")).toHaveLength(0);
+  });
+  test("a closer also sees every open task on the leads she owns, whoever it is assigned to", () => {
+    const mine = row({ id: "own", owner: ME });
+    const other = row({ id: "oth", owner: OTHER });
+    const onMine = task({ lead_id: "own", due_at: "2026-11-17T16:00:00Z", assignee_id: OTHER });
+    const onOther = task({ lead_id: "oth", due_at: "2026-11-17T16:00:00Z", assignee_id: OTHER });
+    const assignedToMe = task({ lead_id: "oth", due_at: "2026-11-17T17:00:00Z" });
+    const ids = (sender: boolean) => keys(buildPlan(input({ rows: [mine, other], tasks: [onMine, onOther, assignedToMe], sender }), DEFAULT_PLAN, DEFAULT_HOME_RULE), "returns");
+    expect(ids(false)).toEqual([`task:${onMine.id}`, `task:${assignedToMe.id}`]);
+    expect(ids(true)).toEqual([`task:${assignedToMe.id}`]); // sender: "mine" stays assigned-to-me
   });
   test("done: task done today, or a call on the lead after the task was written; a call before it does not count", () => {
     const done = task({ lead_id: "a", due_at: "2026-11-17T16:00:00Z", done_at: "2026-11-17T14:30:00Z" });
@@ -167,6 +177,7 @@ describe("Analisar", () => {
     const r = block(p, "review").items;
     expect(r.map((i) => i.key)).toEqual(["review:meet:m", "review:new:2026-11-16", "review:big", "review:notype"]);
     expect(r[0]).toMatchObject({ action: "meeting", href: null, hot: true });
+    expect(r.slice(1).map((i) => i.href)).toEqual(["/leads?entered=yesterday", "/leads?segment=large&noName=1", "/leads?segment=none"]);
     expect(r.slice(1).map((i) => i.reason)).toEqual([
       { t: "review", kind: "newYesterday", n: 2 },
       { t: "review", kind: "bigNoContact", n: 1 },

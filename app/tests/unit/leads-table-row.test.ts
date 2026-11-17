@@ -25,7 +25,7 @@ const fullItem = {
 test("toTableRow keeps only what the table uses", () => {
   const r = toTableRow(fullItem, []);
   expect(Object.keys(r.best!).sort()).toEqual([...TABLE_BEST_COLUMNS].sort());
-  expect(Object.keys(r.lead).sort()).toEqual(["first_contacted_at", "first_seen_at", "id", "last_touch_at", "level", "origin_agent_id", "origin_kind", "segment", "status"]);
+  expect(Object.keys(r.lead).sort()).toEqual(["first_contacted_at", "first_seen_at", "id", "last_touch_at", "level", "origin_agent_id", "origin_kind", "owner_id", "segment", "status"]);
   expect(JSON.stringify(r)).not.toContain("closer_brief");
 });
 

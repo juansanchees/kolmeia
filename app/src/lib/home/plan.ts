@@ -166,9 +166,10 @@ export function buildPlan(input: PlanInput, plan: DayPlan, rule: HomeRule): Buil
   const builders: Record<BlockId, (n: number) => { items: PlanItem[]; available: number; rest?: PlanItem[] }> = {
     returns: (n) => {
       const c = plan.returns;
+      // "mine" = assigned to me; a closer also sees every task on the leads she owns, whoever it is assigned to
       const mine = !(c.team && input.sender);
       const picked = input.tasks
-        .filter((x) => RETURN_KINDS.includes(x.kind) && (!mine || x.assignee_id === input.userId) && byId.has(x.lead_id))
+        .filter((x) => RETURN_KINDS.includes(x.kind) && byId.has(x.lead_id) && (!mine || x.assignee_id === input.userId || (!input.sender && byId.get(x.lead_id)?.lead.owner_id === input.userId)))
         .map((x) => {
           const due = Date.parse(x.due_at);
           const when: "late" | "today" | "tomorrow" | null = due < startToday ? "late" : due < endToday ? "today" : due < endTomorrow ? "tomorrow" : null;
@@ -227,9 +228,9 @@ export function buildPlan(input: PlanInput, plan: DayPlan, rule: HomeRule): Buil
       const open = input.rows.filter((r) => stageOf(r.lead) !== "closed");
       const meetingAhead = new Set(input.tasks.filter((x) => x.kind === "meeting" && !x.done_at && Date.parse(x.due_at) >= startToday).map((x) => x.lead_id));
       const items: PlanItem[] = [];
-      const count = (kind: ReviewKind, key: string, rows: HomeRow[]) => {
+      const count = (kind: ReviewKind, key: string, rows: HomeRow[], href: string) => {
         if (rows.length === 0) return;
-        items.push({ key, block: "review", action: "look", leadId: null, name: "", city: null, segment: null, note: "", reason: { t: "review", kind, n: rows.length }, hot: false, href: "/leads", done: marks.has(key), real: false });
+        items.push({ key, block: "review", action: "look", leadId: null, name: "", city: null, segment: null, note: "", reason: { t: "review", kind, n: rows.length }, hot: false, href, done: marks.has(key), real: false });
       };
       if (c.meetingNoDate) {
         for (const r of open.filter((r) => free(r) && calls(r.lead.id).last === "meeting_booked" && !meetingAhead.has(r.lead.id))) {
@@ -240,10 +241,10 @@ export function buildPlan(input: PlanInput, plan: DayPlan, rule: HomeRule): Buil
         count("newYesterday", `review:new:${nyDay(new Date(startYesterday))}`, open.filter((r) => {
           const ms = Date.parse(r.lead.first_seen_at);
           return ms >= startYesterday && ms < startToday;
-        }));
+        }), "/leads?entered=yesterday");
       }
-      if (c.bigNoContact) count("bigNoContact", "review:big", open.filter((r) => r.segment === "large" && !r.display.contactName?.trim() && !r.lead.do_not_call));
-      if (c.noType) count("noType", "review:notype", open.filter((r) => !r.segment));
+      if (c.bigNoContact) count("bigNoContact", "review:big", open.filter((r) => r.segment === "large" && !r.display.contactName?.trim() && !r.lead.do_not_call), "/leads?segment=large&noName=1");
+      if (c.noType) count("noType", "review:notype", open.filter((r) => !r.segment), "/leads?segment=none");
       return { items: items.slice(0, n), available: items.length };
     },
   };

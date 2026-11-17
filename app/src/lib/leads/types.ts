@@ -81,7 +81,7 @@ export const TABLE_BEST_COLUMNS = [
 ] as const;
 export type TableBest = Pick<CandidateRow, (typeof TABLE_BEST_COLUMNS)[number]>;
 
-export type TableLead = Pick<LeadRow, "id" | "status" | "level" | "origin_kind" | "origin_agent_id" | "first_contacted_at" | "last_touch_at" | "segment" | "first_seen_at">;
+export type TableLead = Pick<LeadRow, "id" | "status" | "level" | "origin_kind" | "origin_agent_id" | "first_contacted_at" | "last_touch_at" | "segment" | "first_seen_at"> & { owner_id?: string | null };
 
 export type LeadTableRow = {
   lead: TableLead;

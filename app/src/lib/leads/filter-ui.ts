@@ -23,7 +23,7 @@ export const PANEL_CATEGORIES = {
   entered: ["entered"],
   lastTouch: ["lastTouch"],
   name: ["nameQ"],
-  role: ["role", "hasContactName"],
+  role: ["role", "hasContactName", "noContactName"],
   contact: ["hasEmail", "siteNoEmail", "hasPhone"],
   emailQuality: ["emailQuality"],
   level: ["levels"],
@@ -85,7 +85,7 @@ function phraseOf(k: keyof LeadFilters, f: LeadFilters, agents: [string, string]
   const S = t.leads.summary;
   const v = chipValue(k, f, agents, t);
   switch (k) {
-    case "hasPhone": case "hasEmail": case "hasContactName": case "siteNoEmail": return S[k];
+    case "hasPhone": case "hasEmail": case "hasContactName": case "noContactName": case "siteNoEmail": return S[k];
     case "cities": return fill(S.cities, { v });
     case "lists": return fill(S.lists, { v });
     case "entered": return S.entered[f.entered as Exclude<LeadFilters["entered"], "all">];
