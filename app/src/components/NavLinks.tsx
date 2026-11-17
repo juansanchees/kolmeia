@@ -17,8 +17,8 @@ export function NavLinks({ variant, role }: { variant: "top" | "bottom"; role: R
       aria-label={t.nav.label}
       className={
         bottom
-          ? "fixed inset-x-0 bottom-0 z-20 grid grid-flow-col auto-cols-fr border-t border-line bg-surface md:hidden pb-[env(safe-area-inset-bottom)]"
-          : "hidden md:flex mx-auto max-w-6xl gap-1 px-4"
+          ? "fixed inset-x-0 bottom-0 z-20 grid grid-flow-col auto-cols-fr border-t border-[#e3e6ec] bg-surface shadow-[0_-6px_16px_-10px_rgba(15,27,61,0.18)] md:hidden pb-[env(safe-area-inset-bottom)]"
+          : "hidden md:flex flex-wrap gap-1"
       }
     >
       {items.map((l) => {
@@ -30,8 +30,8 @@ export function NavLinks({ variant, role }: { variant: "top" | "bottom"; role: R
             aria-current={current ? "page" : undefined}
             className={
               bottom
-                ? `flex min-h-14 items-center justify-center px-2 text-center font-mono text-xs uppercase tracking-wide ${current ? "text-blue" : ""}`
-                : `border-b-2 px-3 py-2 font-mono text-xs uppercase tracking-wide ${current ? "border-honey text-blue" : "border-transparent"}`
+                ? `flex min-h-14 items-center justify-center border-t-4 px-2 text-center font-mono text-xs uppercase tracking-wide text-ink ${current ? "border-honey bg-honey-soft font-medium" : "border-transparent"}`
+                : `flex min-h-12 items-center border-b-4 px-3.5 font-mono text-[15px] uppercase tracking-wide text-ink no-underline transition-colors hover:border-honey-edge ${current ? "border-honey font-medium" : "border-transparent"}`
             }
           >
             {l.label}

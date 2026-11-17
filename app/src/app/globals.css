@@ -60,8 +60,21 @@ h2 {
 }
 
 :focus-visible {
-  outline: 3px solid var(--color-blue);
+  outline: 3px solid var(--color-ink);
   outline-offset: 2px;
+  box-shadow: 0 0 0 7px rgba(245, 164, 0, 0.35);
+}
+
+button:not(:disabled),
+summary,
+select:not(:disabled),
+[role="button"] {
+  cursor: pointer;
+}
+
+::selection {
+  background: var(--color-honey-light);
+  color: var(--color-ink);
 }
 
 /* Hexagons: .hx points left and right (--c = how deep the points are), .hxv points up and down. */
@@ -116,6 +129,7 @@ h2 {
   }
   .k-field input:focus-visible {
     outline: none;
+    box-shadow: none;
   }
   .k-row {
     transition: background-color 0.18s ease;
@@ -143,6 +157,7 @@ h2 {
   /* hexagons are clipped, so the focus ring is a drop shadow that follows the shape */
   .k-lift:focus-visible {
     outline: none;
+    box-shadow: none;
     filter: drop-shadow(0 0 2px var(--color-ink)) drop-shadow(0 0 6px rgba(245, 164, 0, 0.9)) !important;
   }
   .hx-fill {
@@ -201,6 +216,39 @@ h2 {
   .k-panel::backdrop {
     background: rgba(15, 27, 61, 0.45);
   }
+  /* HexPanel (ui.tsx): --hc = point depth from md up, --hc-sm on phones. The inner fill is 0.6px shallower so the
+     border layer stays even, and its side padding always clears the diagonal (utilities px-* still override). */
+  .hx-out {
+    --c: var(--hc-sm);
+  }
+  .hx-in {
+    --c: calc(var(--hc-sm) - 0.6px);
+    padding-inline: calc(var(--c) + 16px);
+  }
+  @media (min-width: 48rem) {
+    .hx-out {
+      --c: var(--hc);
+    }
+    .hx-in {
+      --c: calc(var(--hc) - 0.6px);
+    }
+  }
+  /* inputs, selects, textareas (ui.tsx): navy border + honey halo on focus instead of the outline */
+  .k-input {
+    transition: border-color 0.2s ease, box-shadow 0.25s ease;
+  }
+  .k-input:hover:not(:disabled) {
+    border-color: var(--color-edge);
+  }
+  .k-input:focus-visible,
+  .k-input:focus {
+    outline: none;
+    border-color: var(--color-ink);
+    box-shadow: 0 0 0 5px rgba(245, 164, 0, 0.3);
+  }
+  .k-input[aria-invalid="true"] {
+    border-color: var(--color-danger);
+  }
 }
 
 @keyframes k-up {
@@ -221,7 +269,7 @@ h2 {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .k-btn, .k-link, .k-field, .k-row, .k-arrow, .k-lift, .hx-fill, .k-hex, .k-cat, .k-opt, .k-close,
+  .k-btn, .k-link, .k-field, .k-row, .k-arrow, .k-lift, .hx-fill, .k-hex, .k-cat, .k-opt, .k-close, .k-input,
   .k-in, .k-fade, .k-pop, .k-panel {
     animation: none !important;
     transition: none !important;

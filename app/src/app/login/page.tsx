@@ -3,6 +3,7 @@ import { hasSupabase } from "@/lib/env";
 import { getUser } from "@/lib/workspace";
 import { NotConfigured } from "@/components/NotConfigured";
 import { LocaleSwitch } from "@/components/LocaleSwitch";
+import { PublicShell } from "@/components/ui";
 import { safeNext } from "./next";
 import { LoginForm } from "./LoginForm";
 
@@ -14,11 +15,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   if (!hasSupabase) return <NotConfigured />;
   if (await getUser()) redirect(next);
   return (
-    <main className="mx-auto max-w-md px-4 py-16">
-      <div className="mb-6 flex justify-end">
-        <LocaleSwitch />
-      </div>
+    <PublicShell aside={<LocaleSwitch />}>
       <LoginForm next={next} />
-    </main>
+    </PublicShell>
   );
 }

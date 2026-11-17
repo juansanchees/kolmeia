@@ -4,6 +4,8 @@ import { hasSupabase } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/workspace";
 import { NotConfigured } from "@/components/NotConfigured";
+import { LocaleSwitch } from "@/components/LocaleSwitch";
+import { buttonClass, Notice, PublicShell } from "@/components/ui";
 import { getT } from "@/lib/i18n/server";
 import { AcceptButton } from "./AcceptButton";
 
@@ -22,8 +24,8 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
     // invite_preview needs a session, so the invite e-mail is unknown here and the prompt is generic.
     body = (
       <>
-        <p>{t.team.signInFirstGeneric}</p>
-        <Link href={`/login?next=/convite/${token}`} className="text-blue underline underline-offset-4">
+        <p className="m-0 text-lg">{t.team.signInFirstGeneric}</p>
+        <Link href={`/login?next=/convite/${token}`} className={`${buttonClass("primary")} min-h-14! text-[17px]!`}>
           {t.login.signIn}
         </Link>
       </>
@@ -35,21 +37,19 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
     // "No row" = unknown token = expired.
     body = row?.valid ? (
       <>
-        <p>{t.team.joinAs.replace("{workspace}", row.workspace_name)}</p>
-        <p className="break-all text-sm">{row.email}</p>
+        <p className="m-0 text-lg">{t.team.joinAs.replace("{workspace}", row.workspace_name)}</p>
+        <p className="m-0 break-all rounded-[12px] bg-cold px-3.5 py-2.5 font-mono text-[15px]">{row.email}</p>
         <AcceptButton token={token} />
       </>
     ) : (
-      <p role="alert" className="text-danger">{t.team.expired}</p>
+      <Notice tone="danger" role="alert">{t.team.expired}</Notice>
     );
   }
 
   return (
-    <main className="mx-auto max-w-md px-4 py-16">
-      <div className="flex flex-col gap-4 border border-line bg-surface p-6">
-        <h1 className="text-3xl">{t.team.joinTitle}</h1>
-        {body}
-      </div>
-    </main>
+    <PublicShell aside={<LocaleSwitch />}>
+      <h1 className="text-4xl">{t.team.joinTitle}</h1>
+      {body}
+    </PublicShell>
   );
 }

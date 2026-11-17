@@ -16,6 +16,8 @@ export const common = {
   login: {
     title: "Entrar",
     signUpTitle: "Criar conta",
+    intro: "Entre com o e-mail e a senha que você usa na equipe.",
+    signUpIntro: "Use o e-mail do trabalho. Depois enviamos uma mensagem para confirmar.",
     email: "E-mail",
     password: "Senha",
     passwordHint: "Pelo menos 8 caracteres.",

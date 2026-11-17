@@ -20,7 +20,7 @@ export function LocaleSwitch() {
     });
   };
   return (
-    <div role="group" aria-label={t.locale.label} className="flex border border-line">
+    <div role="group" aria-label={t.locale.label} className="flex gap-1 rounded-[12px] bg-[#eef0f4] p-1">
       {LOCALES.map((l) => (
         <button
           key={l}
@@ -31,7 +31,7 @@ export function LocaleSwitch() {
           aria-pressed={l === locale}
           disabled={pending}
           onClick={() => pick(l)}
-          className={`min-h-11 min-w-11 px-2 font-mono text-xs uppercase ${l === locale ? "bg-ink text-surface" : "text-muted hover:text-ink"} disabled:opacity-60`}
+          className={`k-btn min-h-11 min-w-12 rounded-[9px] px-2 text-[15px] uppercase ${l === locale ? "bg-ink font-semibold text-white" : "text-ink hover:bg-surface"} disabled:opacity-60`}
         >
           {l}
         </button>

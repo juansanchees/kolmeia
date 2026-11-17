@@ -5,7 +5,9 @@ import { DEFAULT_PAGE_SIZE, PAGE_SIZES, pageBounds } from "@/lib/paging";
 import { fill } from "@/lib/i18n";
 import { useT } from "@/lib/i18n/client";
 
-const btnCls = "min-h-11 border border-blue bg-surface px-4 text-sm font-semibold text-blue hover:bg-blue-wash disabled:opacity-40";
+import { buttonClass } from "./ui";
+
+const btnCls = buttonClass("secondary", "sm");
 
 /** Client-side paging: always starts at 15 per page; page 1 again whenever `resetKey` changes. */
 export function usePaged<T>(items: T[], resetKey = "") {
@@ -26,18 +28,18 @@ export function Pager({ pager: p }: { pager: PagerState }) {
   if (p.total <= PAGE_SIZES[0]) return null;
   return (
     <nav aria-label={P.label} className="flex flex-wrap items-center justify-between gap-2">
-      <span className="font-mono text-xs text-muted">{fill(P.showing, { from: p.start + 1, to: p.end, total: p.total })}</span>
+      <span className="font-mono text-sm text-[#4a5361]">{fill(P.showing, { from: p.start + 1, to: p.end, total: p.total })}</span>
       <div className="flex flex-wrap items-center gap-2">
-        <label className="flex items-center gap-2 text-sm">
+        <label className="flex items-center gap-2 text-base">
           {P.perPage}
-          <select aria-label={P.perPage} value={p.size} onChange={(e) => p.setSize(Number(e.target.value))} className="min-h-11 min-w-0 border border-line bg-surface px-2.5 text-sm text-ink">
+          <select aria-label={P.perPage} value={p.size} onChange={(e) => p.setSize(Number(e.target.value))} className="k-input min-h-11 min-w-0 rounded-[12px] border-2 border-line bg-surface px-2.5 text-base text-ink">
             {PAGE_SIZES.map((n) => (
               <option key={n} value={n}>{n}</option>
             ))}
           </select>
         </label>
         <button type="button" aria-label={P.prev} disabled={p.page <= 1} onClick={() => p.setPage(p.page - 1)} className={btnCls}>{P.prev}</button>
-        <span className="font-mono text-xs text-muted">{fill(P.page, { page: p.page, pages: p.pages })}</span>
+        <span className="font-mono text-sm text-[#4a5361]">{fill(P.page, { page: p.page, pages: p.pages })}</span>
         <button type="button" aria-label={P.next} disabled={p.page >= p.pages} onClick={() => p.setPage(p.page + 1)} className={btnCls}>{P.next}</button>
       </div>
     </nav>

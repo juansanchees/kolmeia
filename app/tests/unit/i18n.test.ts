@@ -91,6 +91,6 @@ describe("LocaleSwitch", () => {
     expect(html("en")).toMatch(/aria-label="Português"[^>]*aria-pressed="false"/);
     expect(html("pt")).toContain('aria-label="Idioma"');
     expect(html("pt")).toMatch(/aria-label="Português"[^>]*aria-pressed="true"/);
-    expect(html("pt").match(/min-h-11 min-w-11/g)).toHaveLength(2);
+    expect(html("pt").match(/min-h-11 min-w-12/g)).toHaveLength(2);
   });
 });
