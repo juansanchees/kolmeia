@@ -167,7 +167,7 @@ export async function EmailOverview(d: OverviewData) {
               </div>
             </details>
           )}
-          <Link href="/agentes" className="k-link border-t border-[#e3e6ec] px-4 py-3.5 text-[15px] font-semibold underline">
+          <Link href="/agentes" className="k-link m-1.5 rounded-xl px-2.5 py-3.5 text-[15px] font-semibold underline">
             + {O.newResearch}
           </Link>
         </Panel>

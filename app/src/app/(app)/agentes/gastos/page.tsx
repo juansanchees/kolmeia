@@ -90,7 +90,7 @@ export default async function GastosPage({ searchParams }: { searchParams: Promi
         ))}
       </div>
       <QualifierCapForm status={q} />
-      <div className="flex flex-wrap gap-x-6 gap-y-3" aria-label="filtros">
+      <div className="flex flex-wrap gap-x-6 gap-y-3" aria-label={S.filtersLabel}>
         <div className="flex flex-col gap-1.5">
           <span className="font-mono text-[13px] uppercase tracking-wide text-[#4a5361]">{S.by.label}</span>
           <div role="group" aria-label={S.by.label} className={segWrapCls}>

@@ -114,11 +114,11 @@ export function QualifyControls({ filteredIds, selected, onDone }: { filteredIds
             </>
           )}
           <div className="flex flex-wrap gap-2.5">
+            <Button type="button" variant="secondary" className="order-2" onClick={cancel} disabled={pending}>
+              {S.cancel}
+            </Button>
             <Button type="button" onClick={confirm} disabled={pending || estimate === null}>
               {S.confirm}
-            </Button>
-            <Button type="button" variant="secondary" onClick={cancel} disabled={pending}>
-              {S.cancel}
             </Button>
           </div>
         </section>

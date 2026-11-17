@@ -57,7 +57,7 @@ export default async function ResultsPage({ searchParams }: { searchParams: Prom
         ) : rows.length === 0 ? (
           <EmptyState title={R.emptyGroup} />
         ) : (
-          <HexPanel as="section" aria-label={R.tabs[tab]} c={18} cSm={10} className="py-3">
+          <HexPanel as="section" aria-label={R.tabs[tab]} c={18} cSm={10} className="py-5">
             <Paged as="ul" resetKey={tab} className="m-0 flex list-none flex-col p-0">
               {rows.map((r) => {
                 const l = lead.get(r.lead_id);

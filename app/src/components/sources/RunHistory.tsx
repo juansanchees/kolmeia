@@ -39,7 +39,7 @@ export async function RunHistory({ runs }: { runs: RunView[] }) {
   return (
     <section aria-labelledby="run-history" className="flex flex-col gap-3">
       {runs.some((r) => open(r.status)) && <AutoRefresh seconds={15} />}
-      <div id="run-history"><StepTitle n={3}>{Q.historyTitle}</StepTitle></div>
+      <StepTitle><span id="run-history">{Q.historyTitle}</span></StepTitle>
       {runs.length === 0 ? (
         <EmptyState title={Q.historyEmpty} className="py-6" />
       ) : (

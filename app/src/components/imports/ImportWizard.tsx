@@ -243,10 +243,10 @@ export function ImportWizard() {
               {noId && <Notice tone="warn" role="alert">{M.fileErrors.noIdColumn}</Notice>}
               {!listName.trim() && <p className="m-0 text-base text-[#4a5361]">{M.listNameRequired}</p>}
               <div className="flex flex-wrap items-center gap-3">
+                <Button type="button" variant="secondary" className="order-2" onClick={back}>{M.back}</Button>
                 <HexButton type="button" disabled={busy || noId || !listName.trim()} onClick={() => void toPreview()}>
                   {busy ? M.previewLoading : M.next} <Chevron className="k-arrow" />
                 </HexButton>
-                <Button type="button" variant="secondary" onClick={back}>{M.back}</Button>
               </div>
             </div>
           )}
@@ -287,10 +287,10 @@ export function ImportWizard() {
               )}
               {busy && <p role="status" className="m-0 font-mono text-base">{fill(M.progress, { done: progress, total: entries.length })}</p>}
               <div className="flex flex-wrap items-center gap-3">
+                <Button type="button" variant="secondary" className="order-2" disabled={busy || sent > 0} onClick={() => setStep("columns")}>{M.back}</Button>
                 <HexButton type="button" disabled={busy || entries.length === 0} onClick={() => void run()}>
                   {error && sent > 0 ? M.retry : M.import} <Chevron className="k-arrow" />
                 </HexButton>
-                <Button type="button" variant="secondary" disabled={busy || sent > 0} onClick={() => setStep("columns")}>{M.back}</Button>
               </div>
             </div>
           )}

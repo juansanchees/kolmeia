@@ -26,7 +26,7 @@ export async function AgentList({ agents, listSizes = {} }: { agents: AgentRow[]
                 <Icon d={TYPE_ICON[a.type]} />
               </span>
               <div className="flex min-w-0 flex-1 flex-col gap-1">
-                <Link href={v.href} className="k-link truncate text-[19px] font-semibold text-ink underline-offset-4 decoration-2 decoration-honey hover:underline">
+                <Link href={v.href} title={a.name} className="k-link truncate text-[19px] font-semibold text-ink underline-offset-4 decoration-2 decoration-honey hover:underline">
                   {a.name}
                 </Link>
                 <span className="text-[15px] text-[#4a5361]">

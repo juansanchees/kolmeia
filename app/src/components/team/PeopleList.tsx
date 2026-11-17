@@ -35,7 +35,7 @@ export function PeopleList({ people, invites }: { people: Person[]; invites: Inv
         ))}
       </Paged>
 
-      <StepTitle as="h3" n={3}>{t.team.pending}</StepTitle>
+      <StepTitle as="h3">{t.team.pending}</StepTitle>
       {invites.length === 0 && <EmptyState title={t.team.noPending} className="py-6">{t.team.noPendingHint}</EmptyState>}
       <Paged as="ul" className="m-0 flex list-none flex-col gap-2 p-0">
         {invites.map((i) => (

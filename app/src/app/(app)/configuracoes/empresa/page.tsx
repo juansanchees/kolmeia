@@ -33,7 +33,7 @@ export default async function CompanyPage() {
 
   return (
     <section className="flex flex-col gap-4">
-      <StepTitle n={1} hint={t.company.intro}>{t.company.title}</StepTitle>
+      <StepTitle hint={t.company.intro}>{t.company.title}</StepTitle>
       <ProfileForm initial={initial} readOnly={!workspace || !isSender(workspace.role)} />
     </section>
   );

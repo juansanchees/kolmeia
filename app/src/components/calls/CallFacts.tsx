@@ -49,6 +49,11 @@ export async function CallFacts({ detail, phone, now, blocked = false }: { detai
         </span>
       </div>
 
+      <div className="flex flex-col gap-2">
+        <Notice tone="warn">{C.b2bOnly}</Notice>
+        <Notice tone="warn">{C.noRecording}</Notice>
+      </div>
+
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
         {href ? (
           <a href={href} className="k-lift inline-flex text-ink no-underline drop-shadow-[0_8px_12px_rgba(15,27,61,0.22)]">
@@ -114,10 +119,6 @@ export async function CallFacts({ detail, phone, now, blocked = false }: { detai
         </div>
       )}
 
-      <ul className="m-0 flex list-none flex-col gap-1 border-t border-[#e3e6ec] p-0 pt-4 text-[15px] text-[#4a5361]">
-        <li>{C.b2bOnly}</li>
-        <li>{C.noRecording}</li>
-      </ul>
     </HexPanel>
   );
 }

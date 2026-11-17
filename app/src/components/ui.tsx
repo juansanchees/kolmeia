@@ -211,9 +211,9 @@ export function PageHeader({ title, subtitle, actions, className = "" }: { title
   );
 }
 
-/** Numbered step heading (honey hexagon with the number + title), like the Leads filter steps. The hexagon turns on
+/** Step heading (honey hexagon with the number + title; omit `n` for a plain section heading, a bare hexagon), like the Leads filter steps. The hexagon turns on
  *  hover of the nearest `.k-step` (the heading itself, or put `k-step` on the step's wrapper). */
-export function StepTitle({ n, children, hint, as: Tag = "h2" }: { n: number; children: ReactNode; hint?: ReactNode; as?: "h2" | "h3" }) {
+export function StepTitle({ n, children, hint, as: Tag = "h2" }: { n?: number; children: ReactNode; hint?: ReactNode; as?: "h2" | "h3" }) {
   return (
     <div className="k-step flex flex-col gap-1">
       <Tag className="flex items-center gap-2.5 font-body text-lg font-semibold normal-case tracking-normal">

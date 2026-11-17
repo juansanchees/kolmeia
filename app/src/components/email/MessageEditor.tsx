@@ -125,7 +125,7 @@ export function MessageEditor({ m, canSend }: { m: EditableMessage; canSend: boo
       )}
 
       <div>
-        <button type="button" className={btn.link} aria-expanded={showPreview} onClick={() => setShowPreview((s) => !s)}>
+        <button type="button" className={`${btn.link} inline-flex min-h-11 items-center`} aria-expanded={showPreview} onClick={() => setShowPreview((s) => !s)}>
           {M.review.preview}
         </button>
         {showPreview &&

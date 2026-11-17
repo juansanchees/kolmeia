@@ -30,7 +30,7 @@ export default async function SourcesPage() {
   if (!supabase || error) {
     return (
       <section className="flex flex-col gap-4">
-        <StepTitle n={1}>{t.sources.title}</StepTitle>
+        <StepTitle>{t.sources.title}</StepTitle>
         <Notice tone="warn" role="alert">{t.sources.errors.generic}</Notice>
       </section>
     );
@@ -47,7 +47,7 @@ export default async function SourcesPage() {
 
   return (
     <section className="flex flex-col gap-4">
-      <StepTitle n={1} hint={t.sources.intro}>{t.sources.title}</StepTitle>
+      <StepTitle hint={t.sources.intro}>{t.sources.title}</StepTitle>
       <div className="flex flex-wrap items-start gap-5">
         {views.map((v) => (
           <ConnectionCard key={v.provider} view={v} isOwner={workspace.role === "owner"} />

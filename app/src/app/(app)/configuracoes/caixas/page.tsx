@@ -31,8 +31,8 @@ export default async function MailboxPage() {
   return (
     <div className="flex flex-wrap items-start gap-5">
       <HexPanel as="section" aria-labelledby="sender-title" wrapClassName="k-in flex-[1_1_320px]" className="flex flex-col gap-4 py-6">
-        <div id="sender-title"><StepTitle n={1} hint={M.sender.intro}>{M.sender.title}</StepTitle></div>
-        {!senderComplete(sender) && <Notice>{M.sender.incomplete}</Notice>}
+        <StepTitle n={1} hint={M.sender.intro}><span id="sender-title">{M.sender.title}</span></StepTitle>
+        {!senderComplete(sender) && <Notice tone="warn">{M.sender.incomplete}</Notice>}
         <SenderForm initial={sender} disabled={!s.canSend} />
       </HexPanel>
 

@@ -13,6 +13,7 @@ export const spend = {
   sourcesTotal: "Paid sources (Apify, Apollo): US$ {usd}",
   partial: "(partial)",
   grandTotal: "Grand total (AI + paid sources): US$ {usd}",
+  filtersLabel: "Spend filters",
   by: { label: "View by", agent: "Agent", step: "Step", model: "Model", lead: "Lead", day: "Day" },
   period: { label: "Period", today: "Today", d7: "7 days", d30: "30 days" },
   columns: { name: "Who", agent: "Agent", step: "Step", model: "Model", tokens: "Tokens (in/out)", web: "Searches/reads", usd: "US$" },

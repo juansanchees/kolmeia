@@ -83,7 +83,7 @@ export default async function CallPage({ searchParams }: { searchParams: Promise
         </EmptyState>
       )}
       {todo.length > 0 && (
-        <HexPanel as="section" aria-labelledby="today-title" c={18} cSm={10} className="py-3" wrapClassName="k-in [animation-delay:.2s]">
+        <HexPanel as="section" aria-labelledby="today-title" c={18} cSm={10} className="py-5" wrapClassName="k-in [animation-delay:.2s]">
           <Paged as="ul" className="m-0 flex list-none flex-col p-0">{todo.map((r) => <Row key={r.item.id} r={r} />)}</Paged>
         </HexPanel>
       )}

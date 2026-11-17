@@ -127,7 +127,7 @@ export function Results({ run, candidates, checks, jobs = [] }: Props) {
         </p>
       )}
 
-      <div key={`${tab}-${mode}`} className="k-fade">
+      <div key={mode} className="k-fade">
       {tab === "jobs" ? (
         <Jobs jobs={jobs} mode={mode} />
       ) : mode === "cards" ? (
@@ -167,7 +167,7 @@ function Card({ c, selected, onSelect, onDecide }: { c: CandidateRow; selected: 
   const L = t.research.list;
   const LB = t.research.labels;
   return (
-    <article className={`flex flex-col gap-3.5 rounded-2xl border-2 bg-surface p-5 shadow-[0_6px_14px_-8px_rgba(15,27,61,0.12)] ${selected ? "border-honey shadow-[inset_5px_0_0_var(--color-honey)]" : "border-[#e3e6ec]"}`}>
+    <article className={`flex flex-col gap-3.5 rounded-2xl border-2 bg-surface p-5 ${selected ? "relative border-honey before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:w-[5px] before:bg-honey before:content-['']" : "border-[#e3e6ec] shadow-[0_6px_14px_-8px_rgba(15,27,61,0.12)]"}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-body text-[22px] font-semibold normal-case tracking-normal">{c.name}</h2>
         <span className="flex flex-wrap gap-1.5">

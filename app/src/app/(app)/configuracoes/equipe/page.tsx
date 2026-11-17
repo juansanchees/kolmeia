@@ -31,11 +31,11 @@ export default async function TeamPage() {
       <p className="m-0 text-lg text-[#4a5361]">{t.team.subtitle}</p>
       <div className="flex flex-wrap items-start gap-5">
         <HexPanel as="section" aria-labelledby="team-people" wrapClassName="k-in flex-[2_1_380px]" className="flex flex-col gap-4 py-6">
-          <div id="team-people"><StepTitle n={1} hint={t.team.peopleHint}>{t.team.people}</StepTitle></div>
+          <StepTitle hint={t.team.peopleHint}><span id="team-people">{t.team.people}</span></StepTitle>
           <PeopleList people={(people.data ?? []) as Person[]} invites={(invites.data ?? []) as InviteRow[]} />
         </HexPanel>
         <HexPanel as="section" aria-labelledby="team-invite" wrapClassName="k-in flex-[1_1_320px]" className="flex flex-col gap-4 py-6">
-          <div id="team-invite"><StepTitle n={2} hint={t.team.inviteHint}>{t.team.invite}</StepTitle></div>
+          <StepTitle hint={t.team.inviteHint}><span id="team-invite">{t.team.invite}</span></StepTitle>
           <InviteForm />
         </HexPanel>
       </div>

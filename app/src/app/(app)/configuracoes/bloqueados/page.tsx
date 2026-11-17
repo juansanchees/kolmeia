@@ -28,8 +28,8 @@ export default async function BlockedPage() {
   return (
     <div className="flex flex-wrap items-start gap-5">
       <HexPanel as="section" aria-labelledby="bl-list" wrapClassName="k-in flex-[2_1_380px]" className="flex flex-col gap-4 py-6">
-        <div id="bl-list" className="flex flex-wrap items-start justify-between gap-2">
-          <StepTitle n={1} hint={B.intro}>{B.title}</StepTitle>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <StepTitle n={1} hint={B.intro}><span id="bl-list">{B.title}</span></StepTitle>
           <CountPill tone="soft">{rows.length}</CountPill>
         </div>
         {rows.length === 0 && <EmptyState title={B.none} className="py-6" />}
