@@ -13,8 +13,8 @@ export type SourceCounts = { started: number; polled: number; imported: number; 
 export type SourceRunRow = {
   id: string;
   workspace_id: string;
-  provider: "apify" | "apollo";
-  kind: "maps" | "apollo" | "contact";
+  provider: "apify" | "apollo" | "shovels";
+  kind: "maps" | "apollo" | "contact" | "shovels";
   query: Record<string, unknown>;
   max_results: number;
   reserve_usd: number;

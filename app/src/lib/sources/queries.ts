@@ -5,21 +5,45 @@ import type { AgentSourcesView } from "@/components/sources/AgentSources";
 
 // Reads as the user (RLS: only owner and sdr see runs and agent settings). Keys are never selected: only the last 4.
 
-export type ConnectedSources = { maps: boolean; apollo: boolean; today: { apify: { spent: number | null; cap: number | null }; apollo: { calls: number | null; cap: number | null } } };
-type ConnRow = { provider: string; daily_cap_usd: number | null; daily_calls: number | null; spent_today_usd: number | null; calls_today: number | null };
+export type ConnectedSources = {
+  maps: boolean;
+  apollo: boolean;
+  shovels: boolean;
+  today: { apify: { spent: number | null; cap: number | null }; apollo: { calls: number | null; cap: number | null } };
+  /** Shovels records (= credits) in the last 30 days, against the workspace's monthly cap. */
+  month: { shovels: { used: number | null; cap: number | null } };
+};
+type ConnRow = {
+  provider: string;
+  daily_cap_usd: number | null;
+  daily_calls: number | null;
+  spent_today_usd: number | null;
+  calls_today: number | null;
+  monthly_records: number | null;
+  used_month: number | null;
+};
 const num = (v: unknown): number | null => (v === null || v === undefined || Number.isNaN(Number(v)) ? null : Number(v));
 
 /** Which sources this workspace connected (and today's use). Any error reads as "nothing connected": the buttons stay hidden. */
 export async function connectedSources(db: SupabaseClient, ws: string): Promise<ConnectedSources> {
-  const none: ConnectedSources = { maps: false, apollo: false, today: { apify: { spent: null, cap: null }, apollo: { calls: null, cap: null } } };
+  const none: ConnectedSources = {
+    maps: false,
+    apollo: false,
+    shovels: false,
+    today: { apify: { spent: null, cap: null }, apollo: { calls: null, cap: null } },
+    month: { shovels: { used: null, cap: null } },
+  };
   const { data, error } = await db.rpc("list_source_connections", { p_ws: ws });
   if (error || !Array.isArray(data)) return none;
   const rows = data as ConnRow[];
   const apify = rows.find((r) => r.provider === "apify");
   const apollo = rows.find((r) => r.provider === "apollo");
+  const shovels = rows.find((r) => r.provider === "shovels");
   return {
     maps: !!apify,
     apollo: !!apollo,
+    shovels: !!shovels,
+    month: { shovels: { used: num(shovels?.used_month), cap: num(shovels?.monthly_records) } },
     today: { apify: { spent: num(apify?.spent_today_usd), cap: num(apify?.daily_cap_usd) }, apollo: { calls: num(apollo?.calls_today), cap: num(apollo?.daily_calls) } },
   };
 }
@@ -28,7 +52,7 @@ const RUN_COLS = "id, kind, query, status, error, found, dropped, cost_usd, rese
 
 /** The workspace's last 50 searches, newest first. Contact runs (the Qualificador's P2b) are not searches: they show in Gastos. */
 export async function listRuns(db: SupabaseClient, ws: string): Promise<RunView[]> {
-  const { data, error } = await db.from("source_runs").select(RUN_COLS).eq("workspace_id", ws).in("kind", ["maps", "apollo"]).order("created_at", { ascending: false }).limit(50);
+  const { data, error } = await db.from("source_runs").select(RUN_COLS).eq("workspace_id", ws).in("kind", ["maps", "apollo", "shovels"]).order("created_at", { ascending: false }).limit(50);
   if (error || !data) return [];
   return (data as Record<string, unknown>[]).map((r) => ({
     id: String(r.id),

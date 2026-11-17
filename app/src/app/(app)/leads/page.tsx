@@ -51,7 +51,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
     <LeadsTable
       items={items.map((i) => toTableRow(i, origins.get(i.lead.id) ?? []))}
       canCreate={isSender(workspace.role)}
-      sources={{ maps: conn?.maps ?? false, apollo: conn?.apollo ?? false }}
+      sources={{ maps: conn?.maps ?? false, apollo: conn?.apollo ?? false, shovels: conn?.shovels ?? false }}
       initialFilters={initial}
       views={views}
       lists={lists}

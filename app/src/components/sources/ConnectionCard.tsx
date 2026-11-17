@@ -9,13 +9,13 @@ import type { SourceResult } from "@/lib/sources/connections";
 import { fill, t } from "@/messages/pt";
 
 const S = t.sources;
-type P = "apify" | "apollo";
+type P = "apify" | "apollo" | "shovels";
 
 export type ConnectionView = {
   provider: P;
   last4: string | null; // null = not connected
-  cap: number | null; // USD (apify) or searches (apollo)
-  today: number | null; // USD spent (apify) or searches done (apollo)
+  cap: number | null; // USD/day (apify), searches/day (apollo) or records per 30 days (shovels)
+  today: number | null; // USD spent today (apify), searches today (apollo) or records in the last 30 days (shovels)
 };
 
 const money = (n: number) => n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -58,15 +58,15 @@ function CapForm({ provider, cap }: { provider: P; cap: number }) {
     <form action={action} className="flex flex-wrap items-end gap-2" noValidate>
       <input type="hidden" name="provider" value={provider} />
       <label htmlFor={id} className="flex flex-col gap-1">
-        <span className="font-mono text-xs text-muted">{provider === "apify" ? S.capUsdLabel : S.capCallsLabel}</span>
+        <span className="font-mono text-xs text-muted">{provider === "apify" ? S.capUsdLabel : provider === "shovels" ? S.capRecordsLabel : S.capCallsLabel}</span>
         <input
           id={id}
           name="cap"
           type="number"
           inputMode="decimal"
-          min={provider === "apify" ? 0.5 : 1}
-          max={provider === "apify" ? 50 : 200}
-          step={provider === "apify" ? 0.5 : 1}
+          min={provider === "apify" ? 0.5 : provider === "shovels" ? 50 : 1}
+          max={provider === "apify" ? 50 : provider === "shovels" ? 50000 : 200}
+          step={provider === "apify" ? 0.5 : provider === "shovels" ? 50 : 1}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           className={`${input} w-28`}
@@ -131,7 +131,7 @@ export function ConnectionCard({ view, isOwner }: { view: ConnectionView; isOwne
   return (
     <Card aria-labelledby={`src-${provider}`} className="flex-[1_1_340px]">
       <CardTitle id={`src-${provider}`}>{S.providers[provider]}</CardTitle>
-      <p className="text-sm">{provider === "apify" ? S.mapsTerms : S.apolloTerms}</p>
+      <p className="text-sm">{provider === "apify" ? S.mapsTerms : provider === "shovels" ? S.shovelsTerms : S.apolloTerms}</p>
       {provider === "apify" && <p className="text-sm text-muted">{S.noSocial}</p>}
 
       {connected ? (
@@ -139,10 +139,14 @@ export function ConnectionCard({ view, isOwner }: { view: ConnectionView; isOwne
           <span className="font-mono text-base">{fill(S.keyMasked, { last4: last4 })}</span>
           {today !== null && cap !== null && (
             <span className="text-sm">
-              {provider === "apify" ? fill(S.todayUsd, { spent: money(today), cap: money(cap) }) : fill(S.todayCalls, { n: today, cap })}
+              {provider === "apify"
+                ? fill(S.todayUsd, { spent: money(today), cap: money(cap) })
+                : provider === "shovels"
+                  ? fill(S.monthRecords, { n: today, cap })
+                  : fill(S.todayCalls, { n: today, cap })}
             </span>
           )}
-          {atCap && <Notice>{S.capHit}</Notice>}
+          {atCap && <Notice>{provider === "shovels" ? S.capHitMonth : S.capHit}</Notice>}
         </div>
       ) : (
         <p className="text-sm text-muted">{S.notConnected}</p>

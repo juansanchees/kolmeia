@@ -1,11 +1,11 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { enqueueApollo, enqueueMaps } from "@/app/(app)/leads/buscar/actions";
+import { enqueueApollo, enqueueMaps, enqueueShovels } from "@/app/(app)/leads/buscar/actions";
 import { btn, Card, CardTitle, input, Notice } from "@/components/email/bits";
 import { Field } from "@/components/ui";
 import type { SearchResult } from "@/lib/sources/search";
-import { estimateLabel } from "@/lib/sources/view";
+import { estimateLabel, SHOVELS_TAGS } from "@/lib/sources/view";
 import { t } from "@/messages/pt";
 
 const S = t.sources;
@@ -20,9 +20,11 @@ function Result({ r }: { r: SearchResult | null }) {
 const area = `${input} min-h-24`;
 
 /** One search form: the terms copy first, then the fields, the cost estimate and the button. */
-export function SearchForm({ kind }: { kind: "maps" | "apollo" }) {
-  const [state, action, pending] = useActionState(kind === "maps" ? enqueueMaps : enqueueApollo, null);
-  const [max, setMax] = useState("50");
+export function SearchForm({ kind }: { kind: "maps" | "apollo" | "shovels" }) {
+  const [state, action, pending] = useActionState(kind === "maps" ? enqueueMaps : kind === "shovels" ? enqueueShovels : enqueueApollo, null);
+  const [max, setMax] = useState(kind === "shovels" ? "25" : "50");
+  const [place, setPlace] = useState("");
+  const [tag, setTag] = useState<string>("all");
   const [terms, setTerms] = useState("");
   const [location, setLocation] = useState("");
   const [locations, setLocations] = useState("");
@@ -30,11 +32,11 @@ export function SearchForm({ kind }: { kind: "maps" | "apollo" }) {
   const [pages, setPages] = useState("1");
   const [label, setLabel] = useState("");
   const n = Number(max);
-  const estimate = kind === "maps" ? (Number.isInteger(n) && n >= 1 && n <= 200 ? estimateLabel("maps", n) : null) : estimateLabel("apollo", 25);
+  const estimate = kind === "maps" ? (Number.isInteger(n) && n >= 1 && n <= 200 ? estimateLabel("maps", n) : null) : estimateLabel(kind, 25);
   return (
     <Card id={kind} aria-labelledby={`buscar-${kind}`} className="flex-[1_1_340px]">
-      <CardTitle id={`buscar-${kind}`}>{kind === "maps" ? Q.maps : Q.apollo}</CardTitle>
-      <p className="text-sm">{kind === "maps" ? S.mapsTerms : S.apolloTerms}</p>
+      <CardTitle id={`buscar-${kind}`}>{Q[kind]}</CardTitle>
+      <p className="text-sm">{kind === "maps" ? S.mapsTerms : kind === "shovels" ? S.shovelsTerms : S.apolloTerms}</p>
       {kind === "maps" && <p className="text-sm text-muted">{S.noSocial}</p>}
       <form action={action} className="flex flex-col gap-3" noValidate>
         {kind === "maps" ? (
@@ -47,6 +49,24 @@ export function SearchForm({ kind }: { kind: "maps" | "apollo" }) {
             </Field>
             <Field label={Q.maxLabel} htmlFor="maps-max" error={max.trim() === "" && state !== null && "error" in state && state.error === "invalid" ? Q.maxRequired : undefined}>
               <input id="maps-max" name="max" type="number" inputMode="numeric" min={1} max={200} step={1} value={max} onChange={(e) => setMax(e.target.value)} className={`${input} w-28`} />
+            </Field>
+          </>
+        ) : kind === "shovels" ? (
+          <>
+            <Field label={Q.placeLabel} htmlFor="shovels-place" hint={Q.placeHint}>
+              <input id="shovels-place" name="place" value={place} onChange={(e) => setPlace(e.target.value)} className={input} maxLength={80} aria-describedby="shovels-place-hint" />
+            </Field>
+            <Field label={Q.tagLabel} htmlFor="shovels-tag">
+              <select id="shovels-tag" name="tag" value={tag} onChange={(e) => setTag(e.target.value)} className={input}>
+                {SHOVELS_TAGS.map((k) => (
+                  <option key={k} value={k}>
+                    {Q.tags[k]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label={Q.recordsLabel} htmlFor="shovels-max">
+              <input id="shovels-max" name="max" type="number" inputMode="numeric" min={1} max={100} step={1} value={max} onChange={(e) => setMax(e.target.value)} className={`${input} w-28`} />
             </Field>
           </>
         ) : (

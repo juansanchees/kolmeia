@@ -6,6 +6,7 @@ import { openKey } from "./connections";
 import { CONTACT_ACTOR, CONTACT_MAX_ITEMS, contactInput, keepEmails } from "./contact";
 import { fetchHttpJson, SourceHttpError, type HttpJson } from "./http";
 import { MAPS_ACTOR, mapPlace, mapsInput } from "./maps";
+import { mapContractor, permitWindow, shovelsClient, ShovelsError, shovelsSize, SHOVELS_TAGS, type ShovelsTag } from "./shovels";
 import type { SourceCounts, SourceRunRow, SourceTickStore } from "./store";
 import type { ImportRowIn } from "./types";
 
@@ -26,6 +27,7 @@ function codeOf(e: unknown): string {
   if (e instanceof ApolloPlanError) return "plan";
   if (e instanceof ApolloKeyError) return "key";
   if (e instanceof ApolloError) return e.status ? `http_${e.status}` : "network";
+  if (e instanceof ShovelsError) return e.code;
   if (e instanceof Error && e.name === "SecretError") return "key_unreadable";
   return "failed";
 }
@@ -157,6 +159,37 @@ export async function runSourceTick(opts: { store: SourceTickStore; http?: HttpJ
         }
         // zero results is a real answer, shown as found=0 (not an error)
         await importRun(run, rows, found, 0);
+      } else if (run.kind === "shovels") {
+        // Shovels answers right away, like Apollo. Every record returned costs 1 credit: the page size never goes past
+        // what Shovels itself says is left (run.max_results already fits the workspace's own monthly cap).
+        await store.markStarted(tick, run.id, "shovels", "");
+        counts.started++;
+        const client = shovelsClient(key, http);
+        const tag: ShovelsTag = SHOVELS_TAGS.includes(run.query.tag as ShovelsTag) ? (run.query.tag as ShovelsTag) : "all";
+        let items: unknown[];
+        try {
+          const geoId = await client.resolvePlace(typeof run.query.place === "string" ? run.query.place : "");
+          if (!geoId) {
+            await fail(run, "place_not_found", 0);
+            return;
+          }
+          const size = shovelsSize(run.max_results, await client.usage());
+          if (size < 1) {
+            await fail(run, "credits", 0);
+            return;
+          }
+          items = await client.contractors({ geoId, tag, size, ...permitWindow(now()) });
+        } catch (e) {
+          await fail(run, codeOf(e), 0);
+          return;
+        }
+        const rows: ImportRowIn[] = [];
+        for (const it of items) {
+          const row = mapContractor(it, rows.length + 1);
+          if (row) rows.push(row);
+        }
+        // found = records Shovels returned = credits spent; the ledger counts it against the monthly cap
+        await importRun(run, rows, items.length, 0);
       } else {
         await fail(run, "unsupported", 0);
       }
@@ -169,8 +202,8 @@ export async function runSourceTick(opts: { store: SourceTickStore; http?: HttpJ
   };
 
   const pollRun = async (run: SourceRunRow) => {
-    if (run.kind === "apollo") {
-      // an Apollo run is finished inside its own tick; one still running was cut off by a crash
+    if (run.kind === "apollo" || run.kind === "shovels") {
+      // an Apollo or Shovels run is finished inside its own tick; one still running was cut off by a crash
       await fail(run, "interrupted", 0);
       return;
     }

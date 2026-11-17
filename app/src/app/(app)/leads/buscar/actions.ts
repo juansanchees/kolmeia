@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { enqueueApolloCore, enqueueMapsCore, saveAgentSourcesCore, type SearchResult, type SearchRpc } from "@/lib/sources/search";
+import { enqueueApolloCore, enqueueMapsCore, enqueueShovelsCore, saveAgentSourcesCore, type SearchResult, type SearchRpc } from "@/lib/sources/search";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace } from "@/lib/workspace";
 
@@ -36,6 +36,12 @@ export async function enqueueApollo(_prev: SearchResult | null, form: FormData):
   const c = await context();
   if (!c) return { error: "generic" };
   return done(await enqueueApolloCore(c.who, { locations: get(form, "locations"), naics: get(form, "naics"), pages: get(form, "pages"), label: get(form, "label") }, { rpc: c.rpc }));
+}
+
+export async function enqueueShovels(_prev: SearchResult | null, form: FormData): Promise<SearchResult> {
+  const c = await context();
+  if (!c) return { error: "generic" };
+  return done(await enqueueShovelsCore(c.who, { place: get(form, "place"), tag: get(form, "tag"), max: get(form, "max"), label: get(form, "label") }, { rpc: c.rpc }));
 }
 
 export async function saveAgentSources(_prev: SearchResult | null, form: FormData): Promise<SearchResult> {

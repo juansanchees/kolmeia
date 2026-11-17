@@ -5,16 +5,17 @@ import { fill, t } from "@/messages/pt";
 // Pure helpers of the "Buscar" screens: labels, form parsing. No I/O. The database repeats every limit.
 
 const S = t.sources;
-export type Kind = "maps" | "apollo";
+export type Kind = "maps" | "apollo" | "shovels";
 
 /** Same formula as the database (enqueue_source_run): the most a Maps run may cost. MAPS_USD_PER_PLACE is a "?" estimate. */
 const MAPS_USD_PER_PLACE = 0.004;
 const MAPS_MIN_USD = 0.5;
 export const mapsReserve = (max: number): number => Math.max(MAPS_MIN_USD, Math.ceil(max * MAPS_USD_PER_PLACE * 100) / 100);
 
-/** "até US$ 0,50" for Maps; Apollo's free lookup has no dollar cost. */
+/** "até US$ 0,50" for Maps; Apollo's free lookup and Shovels' free plan have no dollar cost. */
 export function estimateLabel(kind: Kind, max: number): string {
   if (kind === "apollo") return S.search.estimateApollo;
+  if (kind === "shovels") return S.search.estimateShovels;
   return fill(S.estimate, { usd: usd(mapsReserve(max)) });
 }
 
@@ -22,7 +23,7 @@ type RunStatusIn = { status: string; error: string | null };
 
 const known = (o: object, k: string): boolean => Object.prototype.hasOwnProperty.call(o, k);
 
-/** "na fila", "rodando", "importada", "falhou · demorou demais", "recusada · teto do dia". Unknown codes become "erro". */
+/** "na fila", "rodando", "importada", "falhou · demorou demais", "recusada · teto atingido". Unknown codes become "erro". */
 export function runStatusLabel(row: RunStatusIn): string {
   const base = known(S.runStatus, row.status) ? S.runStatus[row.status as keyof typeof S.runStatus] : S.runStatus.failed;
   if ((row.status !== "failed" && row.status !== "refused") || !row.error) return base;
@@ -31,10 +32,11 @@ export function runStatusLabel(row: RunStatusIn): string {
   return `${base} · ${reason}`;
 }
 
-type Conn = { provider: "apify" | "apollo"; today: number | null; cap: number | null };
+type Conn = { provider: "apify" | "apollo" | "shovels"; today: number | null; cap: number | null };
 
-/** "Hoje: US$ 1,20 de 2,00" / "Hoje: 3 de 20 buscas"; "?" when the database did not say. */
+/** "Hoje: US$ 1,20 de 2,00" / "Hoje: 3 de 20 buscas" / "120 de 500 usados este mês" (Shovels); "?" when the database did not say. */
 export function todayLine(c: Conn): string {
+  if (c.provider === "shovels") return fill(S.monthRecords, { n: c.today === null ? "?" : c.today, cap: c.cap === null ? "?" : c.cap });
   if (c.provider === "apify") return fill(S.todayUsd, { spent: c.today === null ? "?" : usd(c.today), cap: c.cap === null ? "?" : usd(c.cap) });
   return fill(S.todayCalls, { n: c.today === null ? "?" : c.today, cap: c.cap === null ? "?" : c.cap });
 }
@@ -46,10 +48,33 @@ export function runTitle(r: { kind: string; query: Record<string, unknown> }): s
   const label = typeof r.query.label === "string" ? r.query.label.trim() : "";
   if (label) return label;
   if (r.kind === "maps") return [strs(r.query.terms).join(", "), typeof r.query.location === "string" ? r.query.location : ""].filter(Boolean).join(" · ");
+  if (r.kind === "shovels") {
+    const tag = SHOVELS_TAGS.includes(r.query.tag as ShovelsTag) ? S.search.tags[r.query.tag as ShovelsTag] : "";
+    return [typeof r.query.place === "string" && r.query.place ? r.query.place : "MA", tag].filter(Boolean).join(" · ");
+  }
   return [strs(r.query.locations).join(", "), strs(r.query.naics).join(", ")].filter(Boolean).join(" · ") || S.search.kindApollo;
 }
 
 // ---------------------------------------------------------------- forms
+
+// Shovels presets and place parsing live here (no API host): the browser form uses them, shovels.ts re-exports them.
+export const SHOVELS_TAGS = ["all", "new_construction", "hvac"] as const;
+export type ShovelsTag = (typeof SHOVELS_TAGS)[number];
+
+export type PlaceLookup = { geoId: string } | { lookup: "cities" | "counties"; q: string } | null;
+
+/**
+ * Massachusetts only. "" / "MA" / "Massachusetts" = the whole state; a MA ZIP (01xxx-02xxx) is a geo_id as is;
+ * "... County" looks up a county; anything else looks up a city. null = not a MA place.
+ */
+export function placeQuery(raw: string): PlaceLookup {
+  const p = raw.trim().replace(/\s+/g, " ").replace(/,?\s*(MA|Mass\.?|Massachusetts)$/i, "").trim();
+  if (!p || /^(MA|Massachusetts)$/i.test(p)) return { geoId: "MA" };
+  if (/^\d{5}$/.test(p)) return /^0[12]\d{3}$/.test(p) ? { geoId: p } : null;
+  if (p.length > 80 || !/^[\p{L} .'-]+$/u.test(p)) return null;
+  return /\bcounty$/i.test(p) ? { lookup: "counties", q: p } : { lookup: "cities", q: p };
+}
+
 
 export type Parsed<T> = { ok: true; value: T } | { ok: false };
 
@@ -92,6 +117,18 @@ export function parseApolloForm(i: { locations?: unknown; naics?: unknown; pages
   const query: ApolloQuery = { locations: r.data.locations, naics: r.data.naics, pages: r.data.pages };
   if (r.data.label) query.label = r.data.label;
   return { ok: true, value: { query, max: r.data.pages * 25 } };
+}
+
+export type ShovelsQuery = { place: string; tag: ShovelsTag; label?: string };
+const shovelsForm = z.object({ place: z.string().trim().max(80), tag: z.enum(SHOVELS_TAGS), max: intText(1, 100), label });
+
+/** Shovels: a MA place ("" = the whole state), a permit-type preset, how many contractors (1 record = 1 credit). */
+export function parseShovelsForm(i: { place?: unknown; tag?: unknown; max?: unknown; label?: unknown }): Parsed<Enqueue<ShovelsQuery>> {
+  const r = shovelsForm.safeParse({ place: text(i.place), tag: text(i.tag) || "all", max: text(i.max), label: text(i.label) || undefined });
+  if (!r.success || !placeQuery(r.data.place)) return { ok: false };
+  const query: ShovelsQuery = { place: r.data.place, tag: r.data.tag };
+  if (r.data.label) query.label = r.data.label;
+  return { ok: true, value: { query, max: r.data.max } };
 }
 
 export type AgentSourcesView = {

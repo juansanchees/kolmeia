@@ -215,6 +215,44 @@ describe("runSourceTick", () => {
     expect(f.of("import")[0].args).toEqual(["R2", [], 0, 0, 0]);
   });
 
+  test("shovels runs resolve the place, ask at most the credits left, map and import in one tick", async () => {
+    const SH = "https://api.shovels.ai/v2";
+    const key = "shovels_TESTKEY_0000";
+    const sh = (o: Partial<SourceRunRow> = {}) =>
+      run({ id: "R3", provider: "shovels", kind: "shovels", query: { place: "Worcester", tag: "hvac", label: "Worcester" }, max_results: 50, reserve_usd: 0, ciphertext: sealKey(WS, "shovels", key), ...o });
+    const http = (left: number) =>
+      fakeHttp({
+        [`GET ${SH}/cities/search`]: { status: 200, json: { items: [{ geo_id: "w1", name: "WORCESTER, WORCESTER COUNTY, MA", state: "MA" }] } },
+        [`GET ${SH}/usage`]: { status: 200, json: { credits_used: 500 - left, credit_limit: 500 } },
+        [`GET ${SH}/contractors/search`]: { status: 200, json: { items: [{ business_name: "Alpha HVAC" }, { name: "" }] } },
+      });
+    const f = fakeStore({ start: [sh()] });
+    const h = http(30);
+    const r = await runSourceTick({ store: f.store, http: h, now: () => NOW });
+    expect(r).toMatchObject({ outcome: "ok", started: 1, imported: 1, failed: 0 });
+    expect(f.of("started")[0].args).toEqual(["R3", "shovels", ""]);
+    const q = new URL(h.calls[2].url).searchParams;
+    expect([q.get("geo_id"), q.get("size"), q.get("permit_tags"), q.get("permit_status")]).toEqual(["w1", "30", "hvac", "active"]);
+    const imp = f.of("import")[0].args as [string, { name: string }[], number, number, number];
+    expect(imp[1].map((x) => x.name)).toEqual(["Alpha HVAC"]);
+    expect(imp.slice(2)).toEqual([2, 1, 0]);
+    expect(h.calls.every((c) => c.headers["X-API-Key"] === key && !c.url.includes(key))).toBe(true);
+
+    // no credits left at Shovels: fails "credits" without asking for contractors
+    const f2 = fakeStore({ start: [sh()] });
+    const h2 = http(0);
+    await runSourceTick({ store: f2.store, http: h2, now: () => NOW });
+    expect(f2.of("failed")[0].args).toEqual(["R3", "credits", 0]);
+    expect(h2.calls.some((c) => c.url.includes("/contractors/"))).toBe(false);
+
+    // a place outside MA fails without any call
+    const f3 = fakeStore({ start: [sh({ query: { place: "90210", tag: "all" } })] });
+    const h3 = http(100);
+    await runSourceTick({ store: f3.store, http: h3, now: () => NOW });
+    expect(f3.of("failed")[0].args).toEqual(["R3", "place_not_found", 0]);
+    expect(h3.calls).toHaveLength(0);
+  });
+
   test("a SUCCEEDED run whose import is refused (22023) fails once as import_refused and is not re-polled", async () => {
     const f = fakeStore({ poll: [polling()] }, { importError: () => Object.assign(new Error("run is not importable"), { code: "22023" }) });
     const http = succeeded(0.1);

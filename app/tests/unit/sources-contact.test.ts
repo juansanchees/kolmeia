@@ -83,7 +83,7 @@ describe("contact scraper (P2b) pure helpers", () => {
 });
 
 describe("the search history is only for searches", () => {
-  test("listRuns asks for Maps and Apollo runs only: a contact run is not a search", async () => {
+  test("listRuns asks for Maps, Apollo and Shovels runs only: a contact run is not a search", async () => {
     const { listRuns } = await import("@/lib/sources/queries");
     const seen: unknown[][] = [];
     const q: Record<string, unknown> = {
@@ -94,6 +94,6 @@ describe("the search history is only for searches", () => {
       limit: async () => ({ data: [], error: null }),
     };
     await listRuns({ from: () => q } as never, "ws");
-    expect(seen).toEqual([["kind", ["maps", "apollo"]]]);
+    expect(seen).toEqual([["kind", ["maps", "apollo", "shovels"]]]);
   });
 });

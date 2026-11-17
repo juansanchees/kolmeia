@@ -156,7 +156,7 @@ export const leads = {
     archived: "Esta campanha está arquivada.",
     notAllowed: "Sem permissão para isso.",
   },
-  sources: { import: "importado", site: "site", places: "Places", ai: "IA", research: "pesquisa", apify_maps: "Google Maps", apollo: "Apollo", apify_contact: "site (contato)", pattern: "palpite (padrão)" },
+  sources: { import: "importado", site: "site", places: "Places", ai: "IA", research: "pesquisa", apify_maps: "Google Maps", apollo: "Apollo", shovels: "Shovels (alvarás)", apify_contact: "site (contato)", pattern: "palpite (padrão)" },
   fieldsTitle: "De onde veio",
   fieldLabels: {
     name: "Empresa", website: "Site", phone: "Telefone", email: "E-mail", address: "Endereço", city: "Cidade", state: "Estado", zip: "ZIP",

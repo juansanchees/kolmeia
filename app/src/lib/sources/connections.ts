@@ -5,16 +5,17 @@ import type { Role } from "@/lib/roles";
 import { apifyClient } from "./apify";
 import { apolloClient, ApolloKeyError, ApolloPlanError } from "./apollo";
 import type { HttpJson } from "./http";
+import { shovelsClient } from "./shovels";
 
 // Connected sources: keys are encrypted here, on the server, and stored by the owner-only RPC set_source_connection.
 // A key never leaves in a result, a log line or an error; clients only ever see the last 4 characters.
 
-export type Provider = "apify" | "apollo";
-export const PROVIDERS: readonly Provider[] = ["apify", "apollo"];
-export const isProvider = (v: unknown): v is Provider => v === "apify" || v === "apollo";
+export type Provider = "apify" | "apollo" | "shovels";
+export const PROVIDERS: readonly Provider[] = ["apify", "apollo", "shovels"];
+export const isProvider = (v: unknown): v is Provider => v === "apify" || v === "apollo" || v === "shovels";
 
-/** The bounds of the daily caps (same as the database). */
-export const CAP_LIMITS = { apify: { min: 0.5, max: 50 }, apollo: { min: 1, max: 200 } } as const;
+/** The bounds of the caps (same as the database): Apify US$/day, Apollo searches/day, Shovels records per rolling 30 days. */
+export const CAP_LIMITS = { apify: { min: 0.5, max: 50 }, apollo: { min: 1, max: 200 }, shovels: { min: 50, max: 50000 } } as const;
 
 /** Last 4 ALPHANUMERIC characters (the database allows only [A-Za-z0-9]{4}); "" when there are fewer than 4. */
 export function last4(key: string): string {
@@ -32,6 +33,7 @@ export function validateKeyShape(_p: Provider, key: string): boolean {
 export async function testKey(p: Provider, key: string, http: HttpJson): Promise<"ok" | "refused" | "unreachable"> {
   const k = key.trim();
   if (p === "apify") return apifyClient(k, http).checkKey();
+  if (p === "shovels") return shovelsClient(k, http).checkKey();
   try {
     await apolloClient(k, http).checkKey();
     return "ok";
@@ -56,13 +58,13 @@ export const sourceOk: SourceResult = { ok: true };
 
 export type Rpc = (fn: string, args: Record<string, unknown>) => Promise<{ error: { code?: string } | null }>;
 
-/** "" / missing -> null (keep the cap); otherwise a number in range (integer for Apollo), else "capRange". */
+/** "" / missing -> null (keep the cap); otherwise a number in range (integer for Apollo and Shovels), else "capRange". */
 export function parseCap(p: Provider, raw: unknown): number | null | "capRange" {
   if (raw === null || raw === undefined || String(raw).trim() === "") return null;
   const n = Number(String(raw).trim().replace(",", "."));
   const { min, max } = CAP_LIMITS[p];
   if (!Number.isFinite(n) || n < min || n > max) return "capRange";
-  if (p === "apollo" && !Number.isInteger(n)) return "capRange";
+  if (p !== "apify" && !Number.isInteger(n)) return "capRange";
   return Math.round(n * 100) / 100;
 }
 

@@ -44,8 +44,8 @@ export const spend = {
   sources: {
     title: "Fontes pagas",
     intro: "Custo das buscas no Apify e no Apollo (fora do teto de IA).",
-    provider: { apify: "Apify", apollo: "Apollo" },
-    labels: { maps: "Apify Maps", apollo: "Apollo", contact: "Apify contatos" },
+    provider: { apify: "Apify", apollo: "Apollo", shovels: "Shovels" },
+    labels: { maps: "Apify Maps", apollo: "Apollo", contact: "Apify contatos", shovels: "Shovels (alvarás)" },
     columns: { source: "Fonte", runs: "Buscas", usd: "US$" },
     empty: "Nenhuma busca paga neste período.",
   },

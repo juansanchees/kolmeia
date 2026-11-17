@@ -6,7 +6,17 @@ import { getCurrentWorkspace } from "@/lib/workspace";
 import { Notice } from "@/components/email/bits";
 import { t } from "@/messages/pt";
 
-type Row = { provider: string; last4: string; daily_cap_usd: number | null; daily_calls: number | null; spent_today_usd: number | null; calls_today: number | null };
+type Row = {
+  provider: string;
+  last4: string;
+  daily_cap_usd: number | null;
+  daily_calls: number | null;
+  spent_today_usd: number | null;
+  calls_today: number | null;
+  monthly_records: number | null;
+  used_month: number | null;
+};
+const n = (v: number | null) => (v === null ? null : Number(v));
 
 // Owner: connect, replace, cap, disconnect. SDR: read-only. Closer: not found. Only the last 4 characters are read.
 export default async function SourcesPage() {
@@ -23,12 +33,12 @@ export default async function SourcesPage() {
     );
   }
   const rows = (Array.isArray(data) ? data : []) as Row[];
-  const views: ConnectionView[] = (["apify", "apollo"] as const).map((provider) => {
+  const views: ConnectionView[] = (["apify", "apollo", "shovels"] as const).map((provider) => {
     const r = rows.find((x) => x.provider === provider);
     if (!r) return { provider, last4: null, cap: null, today: null };
-    return provider === "apify"
-      ? { provider, last4: r.last4, cap: r.daily_cap_usd === null ? null : Number(r.daily_cap_usd), today: r.spent_today_usd === null ? null : Number(r.spent_today_usd) }
-      : { provider, last4: r.last4, cap: r.daily_calls, today: r.calls_today };
+    if (provider === "apify") return { provider, last4: r.last4, cap: n(r.daily_cap_usd), today: n(r.spent_today_usd) };
+    if (provider === "shovels") return { provider, last4: r.last4, cap: n(r.monthly_records), today: n(r.used_month) };
+    return { provider, last4: r.last4, cap: n(r.daily_calls), today: n(r.calls_today) };
   });
 
   return (

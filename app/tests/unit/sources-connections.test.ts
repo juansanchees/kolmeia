@@ -106,6 +106,24 @@ describe("F3d connections", () => {
     expect(await t({ status: 500, json: {} })).toBe("unreachable");
   });
 
+  test("shovels: key tested on /usage (401/403 refused, network unreachable), cap is whole records 50..50000", async () => {
+    const url = "GET https://api.shovels.ai/v2/usage";
+    const t = (r: { status: number; json: unknown } | Error) => testKey("shovels", KEY, fakeHttp({ [url]: r }));
+    expect(await t({ status: 200, json: { credits_used: 3, credit_limit: 500 } })).toBe("ok");
+    expect(await t({ status: 401, json: {} })).toBe("refused");
+    expect(await t({ status: 403, json: {} })).toBe("refused");
+    expect(await t(new Error("network"))).toBe("unreachable");
+    expect(parseCap("shovels", "500")).toBe(500);
+    expect(parseCap("shovels", "49")).toBe("capRange");
+    expect(parseCap("shovels", "50001")).toBe("capRange");
+    expect(parseCap("shovels", "100.5")).toBe("capRange");
+    const http = fakeHttp({ [url]: { status: 200, json: { credits_used: 0, credit_limit: 500 } } });
+    const { rpc, calls } = recorder();
+    expect(await saveKeyCore({ ws: WS, role: "owner" }, { provider: "shovels", key: KEY, cap: "" }, { http, rpc })).toEqual({ ok: true });
+    expect(calls[0].args).toMatchObject({ p_provider: "shovels", p_cap: null });
+    expect(openKey(WS, "shovels", calls[0].args.p_ciphertext as string)).toBe(KEY);
+  });
+
   test("last4 uses alphanumerics only: a key ending in a hyphen stores a valid last4", async () => {
     const dashKey = "apify_api_TESTKEY12-";
     expect(last4(dashKey)).toBe("EY12");
