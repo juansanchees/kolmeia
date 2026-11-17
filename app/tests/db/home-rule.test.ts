@@ -36,6 +36,24 @@ describe("0035 home_rules", () => {
     // one row per user and workspace
     expect((await db.try(as(t.sdr), ins, [t.ws, "{}"])).error).toBeDefined();
   });
+  test("the app's PostgREST upsert (ON CONFLICT ... SET workspace_id, rule, updated_at) works for the owner and never touches another user's row", async () => {
+    const t = await seedTeam();
+    // exact shape PostgREST sends for .upsert({workspace_id, rule, updated_at}, {onConflict: "workspace_id,user_id"})
+    const upsert = `insert into public.home_rules (workspace_id, rule, updated_at) values ($1, $2::jsonb, $3::timestamptz)
+      on conflict (workspace_id, user_id) do update set workspace_id = excluded.workspace_id, rule = excluded.rule, updated_at = excluded.updated_at`;
+    const ts = new Date().toISOString();
+    await db.query(as(t.owner), upsert, [t.ws, JSON.stringify({ order: "newest" }), ts]);
+    expect(await db.query(as(t.owner), "select rule->>'order' as o from public.home_rules")).toEqual([{ o: "newest" }]);
+    await db.query(as(t.owner), upsert, [t.ws, JSON.stringify({ order: "hottest" }), ts]);
+    expect(await db.query(as(t.owner), "select rule->>'order' as o from public.home_rules")).toEqual([{ o: "hottest" }]);
+    // the sdr's own row is untouched by the owner's upserts
+    await db.query(as(t.sdr), "insert into public.home_rules (workspace_id, rule) values ($1,'{\"order\":\"sdr\"}'::jsonb)", [t.ws]);
+    await db.query(as(t.owner), upsert, [t.ws, JSON.stringify({ order: "owner-again" }), ts]);
+    expect(await db.admin("select rule->>'order' as o from public.home_rules where user_id = $1", [t.sdr])).toEqual([{ o: "sdr" }]);
+    // the owner cannot aim the same upsert at the sdr's row by naming the sdr as user_id
+    expect((await db.try(as(t.owner), upsert.replace("(workspace_id, rule, updated_at)", "(workspace_id, user_id, rule, updated_at)").replace("values ($1, $2::jsonb", "values ($1, $4::uuid, $2::jsonb"), [t.ws, JSON.stringify({ order: "x" }), ts, t.sdr])).error).toBeDefined();
+    expect(await db.admin("select rule->>'order' as o from public.home_rules where user_id = $1", [t.sdr])).toEqual([{ o: "sdr" }]);
+  });
   test("a rule must be an object; outsiders and anon get nothing", async () => {
     const t = await seedTeam();
     expect((await db.try(as(t.sdr), "insert into public.home_rules (workspace_id, rule) values ($1,'[1]'::jsonb)", [t.ws])).error).toBeDefined();
