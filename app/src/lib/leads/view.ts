@@ -49,6 +49,8 @@ export type FilterRow = {
   emailQuality?: EmailQuality | null;
   ai?: LeadListItem["ai"];
   origins?: OriginList[];
+  agentName?: string | null;
+  importName?: string | null;
   segment?: Segment | null;
   profileMatch?: boolean;
 };
@@ -128,6 +130,15 @@ export function parseLeadFilters(raw: unknown): LeadFilters {
 export const hasSiteNoEmail = (i: Pick<FilterRow, "display" | "lead">) =>
   Boolean(i.display.website?.trim()) && !i.display.email?.trim() && !["won", "lost", "discarded"].includes(i.lead.status);
 
+/** Every origin a lead can show: its lists/imports, the agent that found it, a one-off search; "Sem origem" when none. */
+export function originKeysOf(i: Pick<FilterRow, "lead" | "origins" | "agentName" | "importName">): string[] {
+  const k = new Set((i.origins ?? []).map((o) => o.name));
+  if (i.agentName) k.add(i.agentName);
+  else if (i.lead.origin_kind === "one_off") k.add(t.leads.oneOff);
+  if (i.importName) k.add(i.importName);
+  return k.size > 0 ? [...k] : [t.leads.origin.noneOption];
+}
+
 /** Left-panel and tab rules: trimmed display values (as lead_contact_values reads them), never-contacted = "new". */
 export function matchesFacets(i: FilterRow, f: FacetFilters): boolean {
   const contacted = i.lead.first_contacted_at !== null;
@@ -140,7 +151,7 @@ export function matchesFacets(i: FilterRow, f: FacetFilters): boolean {
   if (f.siteNoEmail && !hasSiteNoEmail(i)) return false;
   if (f.origins.length > 0 && !f.origins.includes(i.lead.origin_kind)) return false;
   if (f.emailQuality.length > 0 && (!i.emailQuality || !f.emailQuality.includes(i.emailQuality))) return false;
-  if (f.lists.length > 0 && !(i.origins ?? []).some((o) => f.lists.includes(o.name))) return false;
+  if (f.lists.length > 0 && !originKeysOf(i).some((k) => f.lists.includes(k))) return false;
   return true;
 }
 
@@ -213,10 +224,10 @@ function countBy<T>(rows: FilterRow[], key: (i: FilterRow) => T | null): FacetCo
   return [...m.entries()].map(([value, n]) => ({ value, n }));
 }
 
-/** Each lead counts once per list it came from. */
+/** Each lead counts once per origin it has. */
 function listCounts(rows: FilterRow[]): FacetCount<string>[] {
   const m = new Map<string, number>();
-  for (const i of rows) for (const name of new Set((i.origins ?? []).map((o) => o.name))) m.set(name, (m.get(name) ?? 0) + 1);
+  for (const i of rows) for (const name of originKeysOf(i)) m.set(name, (m.get(name) ?? 0) + 1);
   return [...m.entries()].map(([value, n]) => ({ value, n })).sort((a, b) => b.n - a.n || a.value.localeCompare(b.value));
 }
 

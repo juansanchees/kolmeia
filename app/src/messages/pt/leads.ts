@@ -73,7 +73,7 @@ export const leads = {
     saved: "Tipo salvo em {n} lead(s).",
     failed: "Não deu para salvar o tipo.",
   },
-  origin: { cameFrom: "Veio de:", item: "{name} ({date})", none: "Sem lista de origem", filter: "Lista de origem" },
+  origin: { cameFrom: "Veio de:", item: "{name} ({date})", none: "Sem lista de origem", noneOption: "Sem origem", filter: "Origem" },
   toolbar: {
     filters: "Filtros",
     more: "Mais ações",
@@ -110,7 +110,7 @@ export const leads = {
     siteNoEmail: "Tem site, sem e-mail",
     origins: "Origem",
     emailQuality: "Qualidade do e-mail",
-    lists: "Lista de origem",
+    lists: "Origem",
     temperature: "Temperatura",
     agent: "Agente",
     status: "Status",
