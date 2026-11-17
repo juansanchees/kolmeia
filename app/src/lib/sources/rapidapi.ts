@@ -42,7 +42,7 @@ const STATES: Record<B2bState, { api: string; name: string }> = {
 };
 /** Sector presets -> the API's industry values (several = comma-separated). */
 const INDUSTRIES: Record<B2bSector, string[]> = {
-  construction: ["Building_Construction", "Other_-_Construction"],
+  construction: ["Building_Construction"], // one value: comma-joined values are not verified
   real_estate: ["Property_Management", "Real_Estate_Investment_and_Development", "Other_-_Real_Estate"],
   architecture: ["Architecture_and_Planning"],
 };
@@ -119,7 +119,10 @@ export function mapDecisionMaker(item: unknown, state: B2bState, row = 1): Impor
   return out;
 }
 
-const b2bSchema = z.object({ leads: z.array(z.unknown()) });
+const b2bSchema = z.object({
+  leads: z.array(z.unknown()),
+  summary: z.object({ invalidInputs: z.record(z.string(), z.unknown()).catch({}) }).partial().catch({}).optional(),
+});
 const siteSchema = z.object({
   data: z.object({
     contact: z.object({ emails: z.array(z.unknown()).catch([]) }).partial().catch({}).optional(),
@@ -152,7 +155,7 @@ export function siteEmails(json: unknown, siteUrl: string, contactName?: string 
     if (email && !found.has(email)) found.set(email, { value: email, url: onOwnPage && page && page.length <= 2000 ? page : site, n: s.data.occurrences ?? 0 });
   }
   for (const e of r.data.data.contact?.emails ?? []) {
-    const email = ownSiteEmail(e, host, true);
+    const email = ownSiteEmail(e, host, false); // no page known: a free-mail address is not proof
     if (email && !found.has(email)) found.set(email, { value: email, url: site, n: 0 });
   }
   const rank = (e: string) => (matchesName(e, contactName) ? 0 : GENERIC.test(e.slice(0, e.indexOf("@"))) ? 2 : 1);
@@ -192,6 +195,8 @@ export function rapidApiClient(key: string, http: HttpJson) {
     async decisionMakers(q: Pick<B2bQuery, "state" | "sector" | "size" | "role">, page: number): Promise<unknown[]> {
       const r = b2bSchema.safeParse((await get(B2B_HOST, "/coldEmailFinder", b2bParams(q, page), B2B_TIMEOUT_MS)).json);
       if (!r.success) throw new RapidApiError("bad_response");
+      // a filter the API did not take would still return people, unfiltered: nothing is imported
+      if (Object.keys(r.data.summary?.invalidInputs ?? {}).length > 0) throw new RapidApiError("bad_query");
       return r.data.leads.slice(0, 200);
     },
     /** One site: the raw answer (read it with siteEmails) and what the plan says is left. */

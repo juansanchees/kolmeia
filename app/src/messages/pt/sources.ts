@@ -133,6 +133,7 @@ export const sources = {
     credits: "sem créditos no Shovels",
     place_not_found: "lugar não achado em MA",
     http_429: "limite do plano RapidAPI",
+    bad_query: "filtro não aceito pelo RapidAPI",
     no_leads: "sem leads",
     bad_response: "resposta estranha",
     aborted: "cancelada",

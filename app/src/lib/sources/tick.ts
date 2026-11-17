@@ -105,16 +105,24 @@ export async function runSourceTick(opts: { store: SourceTickStore; http?: HttpJ
         const client = rapidApiClient(key, http);
         const found: { leadId: string; value: string; url: string }[] = [];
         let asked = 0;
+        let refused = false;
         for (const l of leads) {
-          if (now() >= deadline) break; // shortcut: the leads not reached count as answered (no e-mail) for 30 days; the Apify step still applies
+          if (now() >= deadline) break; // the leads not reached leave the run (source_add_contacts) and can be asked again
           asked++;
           try {
             const r = await client.siteContacts(l.startUrl);
             found.push(...siteEmails(r.json, l.startUrl).map((e) => ({ leadId: l.leadId, ...e })));
             if (r.left === 0) break;
           } catch (e) {
-            if (e instanceof RapidApiError && (e.code === "key" || e.code === "http_429")) break; // the key or the plan is out: the rest would fail the same way
+            if (e instanceof RapidApiError && (e.code === "key" || e.code === "http_429")) {
+              refused = e.code === "key";
+              break; // the key or the plan is out: the rest would fail the same way
+            }
           }
+        }
+        if (refused && found.length === 0) {
+          await fail(run, "key", 0); // shows "chave recusada"; 'key' neither counts against the cap nor marks the leads as read
+          return;
         }
         try {
           await store.addContacts(tick, run.id, found, asked, 0);

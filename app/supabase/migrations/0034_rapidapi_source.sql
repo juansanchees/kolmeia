@@ -52,7 +52,10 @@ create trigger requeue_lead_on_import
 -- p_kind 'b2b': calls (one per run). p_kind 'contact': company sites read (one call each).
 -- A queued/running run counts what it may still use (1 call, or its leads); an imported one what it used (contact: found
 -- = the sites really asked). A failed run counts as used, except for the codes that happen before any call (no credits,
--- key refused or unreadable, disconnected, unsupported, no leads, a 4xx). Refused runs count 0.
+-- key refused or unreadable, disconnected, unsupported, no leads, a 429 plan-limit answer). Any other 4xx counts: it is
+-- not known whether RapidAPI bills it. Refused runs count 0.
+-- 31 days, not 30: a billing month of up to 31 days then never holds more than the cap. (Shovels' own window in 0033's
+-- source_month_records is not touched here.)
 create or replace function public.source_month_rapidapi(p_ws uuid, p_kind text)
 returns integer
 language sql
@@ -63,11 +66,11 @@ as $$
     case when r.status in ('queued', 'running') then (case when r.kind = 'b2b' then 1 else n.leads end)
          when r.status = 'imported' then (case when r.kind = 'b2b' then 1 else coalesce(r.found, n.leads) end)
          when r.status = 'failed' and coalesce(r.error, '') not in ('credits', 'key', 'key_unreadable', 'disconnected', 'unsupported', 'no_leads')
-              and coalesce(r.error, '') !~ '^http_4' then (case when r.kind = 'b2b' then 1 else n.leads end)
+              and coalesce(r.error, '') <> 'http_429' then (case when r.kind = 'b2b' then 1 else n.leads end)
          else 0 end), 0)::int
     from public.source_runs r
     cross join lateral (select count(*)::int as leads from public.source_run_leads l where l.run_id = r.id) n
-   where r.workspace_id = p_ws and r.provider = 'rapidapi' and r.kind = p_kind and r.created_at >= now() - interval '30 days';
+   where r.workspace_id = p_ws and r.provider = 'rapidapi' and r.kind = p_kind and r.created_at >= now() - interval '31 days';
 $$;
 
 -- Puts a lead's site in the workspace's open RapidAPI contact run (or opens one). The caller holds the workspace's
@@ -88,7 +91,7 @@ begin
     return false;
   end if;
   if exists (select 1 from public.source_run_leads l join public.source_runs r on r.id = l.run_id
-              where l.lead_id = p_lead and r.provider = 'rapidapi' and r.kind = 'contact' and r.status in ('queued', 'running')) then
+              where l.lead_id = p_lead and r.kind = 'contact' and r.status in ('queued', 'running')) then -- an open Apify run counts too
     return true;
   end if;
   if exists (select 1 from public.source_run_leads l join public.source_runs r on r.id = l.run_id
@@ -378,7 +381,7 @@ begin
     -- the next page for the same filters: pages already imported with results since the last empty page (an empty page = the end, start over)
     select count(*) + 1 into v_page
       from public.source_runs r
-     where r.workspace_id = p_ws and r.kind = 'b2b' and r.status = 'imported' and coalesce(r.found, 0) > 0
+     where r.workspace_id = p_ws and r.kind = 'b2b' and (r.status in ('queued', 'running') or (r.status = 'imported' and coalesce(r.found, 0) > 0))
        and (r.query - 'label' - 'page') = (p_query - 'label')
        and r.created_at > coalesce((select max(x.created_at) from public.source_runs x
                                      where x.workspace_id = p_ws and x.kind = 'b2b' and x.status = 'imported' and coalesce(x.found, 0) = 0
@@ -691,13 +694,13 @@ begin
       -- 0034: B2B calls in the rolling 30 days (younger queued runs left out)
       v_over := public.source_month_rapidapi(v.workspace_id, 'b2b') - (
           select count(*) from public.source_runs x
-           where x.workspace_id = v.workspace_id and x.provider = 'rapidapi' and x.kind = 'b2b' and x.status = 'queued' and x.created_at >= now() - interval '30 days' and (x.created_at, x.id) > (v.created_at, v.id))
+           where x.workspace_id = v.workspace_id and x.provider = 'rapidapi' and x.kind = 'b2b' and x.status = 'queued' and x.created_at >= now() - interval '31 days' and (x.created_at, x.id) > (v.created_at, v.id))
         > coalesce(v_cap_records, 10);
     elsif v.provider = 'rapidapi' then
       -- 0034: company sites in the rolling 30 days; a queued run counts its leads (younger queued runs left out)
       v_over := public.source_month_rapidapi(v.workspace_id, 'contact') - coalesce((
           select count(*) from public.source_run_leads l join public.source_runs x on x.id = l.run_id
-           where x.workspace_id = v.workspace_id and x.provider = 'rapidapi' and x.kind = 'contact' and x.status = 'queued' and x.created_at >= now() - interval '30 days' and (x.created_at, x.id) > (v.created_at, v.id)), 0)
+           where x.workspace_id = v.workspace_id and x.provider = 'rapidapi' and x.kind = 'contact' and x.status = 'queued' and x.created_at >= now() - interval '31 days' and (x.created_at, x.id) > (v.created_at, v.id)), 0)
         > coalesce(v_cap_sites, 30);
     else
       v_over := public.source_calls_today(v.workspace_id) - (
@@ -880,6 +883,13 @@ begin
     get diagnostics v_i = row_count;
     v_n := v_n + v_i;
   end loop;
+  -- 0034: a RapidAPI run reads its sites in lead_id order (source_contact_leads) and p_found is how many it read: the
+  -- leads it never reached leave the run, so they are not taken as read and can be asked again
+  if v_run.provider = 'rapidapi' then
+    delete from public.source_run_leads l
+     where l.run_id = p_run
+       and l.lead_id not in (select x.lead_id from public.source_run_leads x where x.run_id = p_run order by x.lead_id limit p_found);
+  end if;
   update public.source_runs
      set status = 'imported', found = p_found,
          dropped = greatest(p_found - (jsonb_array_length(p_rows) - v_skipped), 0),

@@ -133,6 +133,32 @@ describe("0034 rapidapi source", () => {
     expect(await askSite(sdr, ws, l1)).toBe(false); // answered in the last 30 days
   });
 
+  test("leads a RapidAPI run never reached leave it and can be asked again (p_found < leads)", async () => {
+    const { ws, sdr } = await connected();
+    const leads = [await addLead(ws), await addLead(ws), await addLead(ws)].sort();
+    for (const [i, l] of leads.entries()) expect(await askSite(sdr, ws, l, `https://site${i}.example.com/`)).toBe(true);
+    const t = await sourceTick();
+    const work = (await db.query<{ r: { start: { id: string; provider: string }[] } }>(clock, "select public.source_next_work($1) as r", [t]))[0].r;
+    const run = work.start.find((s) => s.provider === "rapidapi")!;
+    await db.query(clock, "select public.source_mark_started($1,$2,'rapidapi','rapidapi')", [t, run.id]);
+    await db.query(clock, "select public.source_add_contacts($1,$2,'[]'::jsonb,1,0)", [t, run.id]); // the tick read only the first site
+    expect((await db.admin<{ lead_id: string }>("select lead_id from public.source_run_leads where run_id = $1", [run.id])).map((r) => r.lead_id)).toEqual([leads[0]]);
+    expect(await askSite(sdr, ws, leads[0], "https://site0.example.com/")).toBe(false); // read: not again for 30 days
+    expect(await askSite(sdr, ws, leads[1], "https://site1.example.com/")).toBe(true); // never reached: asked again
+  });
+
+  test("the month counts a 4xx (it may be billed) but not a 429, and keeps a 30.5-day-old call (31-day window)", async () => {
+    const { ws, owner } = await connected();
+    const failed = (error: string, age = "1 day") =>
+      db.admin(`insert into public.source_runs (workspace_id, provider, kind, max_results, status, error, created_at) values ($1,'rapidapi','b2b',100,'failed',$2, now() - interval '${age}')`, [ws, error]);
+    for (const e of ["http_429", "key", "credits", "disconnected"]) await failed(e);
+    expect((await use(owner, ws)).used_month).toBe(0);
+    await failed("http_400");
+    await failed("bad_query");
+    await failed("network", "30 days 12 hours");
+    expect((await use(owner, ws)).used_month).toBe(3);
+  });
+
   test("the Qualificador asks RapidAPI first, then Apify for a lead RapidAPI already read", async () => {
     const { ws } = await connected();
     const lead = await addLead(ws);

@@ -523,7 +523,7 @@ describe("contact runs (P2b)", () => {
       expect(h.calls.every((c) => c.headers["X-RapidAPI-Key"] === key && !c.url.includes(key))).toBe(true);
     });
 
-    test("contact: a failing site is skipped; a refused key stops the run; no leads fails free", async () => {
+    test("contact: a failing site is skipped; a refused key with nothing found fails 'key'; no leads fails free", async () => {
       const leads = [
         { leadId: "L1", startUrl: "https://alpha-build.example/" },
         { leadId: "L2", startUrl: "https://beta-build.example/" },
@@ -540,7 +540,12 @@ describe("contact runs (P2b)", () => {
       const h2 = fakeHttp({ [`GET ${SITE}`]: { status: 401, json: {} } });
       await runSourceTick({ store: f2.store, http: h2, now: () => NOW });
       expect(h2.calls).toHaveLength(1);
-      expect(f2.of("addContacts")[0].args).toEqual(["C3", [], 1, 0]);
+      expect(f2.of("addContacts")).toHaveLength(0);
+      expect(f2.of("failed")[0].args).toEqual(["C3", "key", 0]);
+      // a 429 (plan limit) is not a key problem: what was read is stored
+      const f2b = fakeStore({ start: [ra({ id: "C6", kind: "contact", max_results: 10 })] }, { contactLeads: leads });
+      await runSourceTick({ store: f2b.store, http: fakeHttp({ [`GET ${SITE}`]: { status: 429, json: {} } }), now: () => NOW });
+      expect(f2b.of("addContacts")[0].args).toEqual(["C6", [], 1, 0]);
 
       const f3 = fakeStore({ start: [ra({ id: "C4", kind: "contact", max_results: 10 })] });
       await runSourceTick({ store: f3.store, http: fakeHttp({}), now: () => NOW });

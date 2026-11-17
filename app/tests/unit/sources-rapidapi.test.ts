@@ -99,10 +99,8 @@ describe("siteEmails", () => {
       { value: "pat@granite-ridge.example", best_source: "https://directory.example/listing" },
       { value: "logo@2x.png", best_source: "https://www.granite-ridge.example/" },
     ]);
-    expect(siteEmails(json, "https://granite-ridge.example", null)).toEqual([
-      { value: "pat@granite-ridge.example", url: "https://granite-ridge.example/" },
-      { value: "owner.gr@gmail.com", url: "https://granite-ridge.example/" },
-    ]);
+    // a free-mail address with no page behind it (contact.emails) is not proof either
+    expect(siteEmails(json, "https://granite-ridge.example", null)).toEqual([{ value: "pat@granite-ridge.example", url: "https://granite-ridge.example/" }]);
     expect(siteEmails({ data: "x" }, "https://granite-ridge.example")).toEqual([]);
     expect(siteEmails(answer(["pat@granite-ridge.example"]), "javascript:alert(1)")).toEqual([]);
   });
@@ -116,7 +114,7 @@ describe("rapidApiClient", () => {
     const q = new URL(h.calls[0].url).searchParams;
     expect(Object.fromEntries(q)).toEqual({
       companyLocation: "New_Hampshire",
-      companyIndustries: "Building_Construction,Other_-_Construction",
+      companyIndustries: "Building_Construction",
       companySize: "11-50",
       contactSeniority: "founder",
       pageNumber: "3",
@@ -130,6 +128,11 @@ describe("rapidApiClient", () => {
       expect(String(e.message)).not.toContain(KEY);
     }
     await expect(rapidApiClient(KEY, fakeHttp({ [`GET ${B2B}`]: { status: 200, json: { ok: false } } })).decisionMakers({ state: "MA", sector: "architecture", size: "1-10", role: "manager" }, 1)).rejects.toMatchObject({ code: "bad_response" });
+    // a filter the API did not take: the run fails, nothing is imported
+    const bad = fakeHttp({ [`GET ${B2B}`]: { status: 200, json: { ok: true, leads: [person()], summary: { invalidInputs: { companyIndustries: "x" } } } } });
+    await expect(rapidApiClient(KEY, bad).decisionMakers({ state: "MA", sector: "construction", size: "11-50", role: "founder" }, 1)).rejects.toMatchObject({ code: "bad_query" });
+    const ok = fakeHttp({ [`GET ${B2B}`]: { status: 200, json: { ok: true, leads: [person()], summary: { invalidInputs: {} } } } });
+    expect(await rapidApiClient(KEY, ok).decisionMakers({ state: "MA", sector: "construction", size: "11-50", role: "founder" }, 1)).toHaveLength(1);
     expect(b2bParams({ state: "MA", sector: "real_estate", size: "51-200", role: "c-suite" }, 0).get("companyIndustries")).toBe("Property_Management,Real_Estate_Investment_and_Development,Other_-_Real_Estate");
   });
 

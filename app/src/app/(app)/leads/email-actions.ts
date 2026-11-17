@@ -98,13 +98,13 @@ export async function findEmailAction(leadIds: string[]): Promise<FindOut> {
           const { error } = await db.from("lead_fields").insert(rows.map((r) => ({ workspace_id: workspace.id, lead_id: r.leadId, field: "email", value: r.email, source: "pattern", source_ref: r.pattern, status: "unverified", excerpt: r.excerpt })));
           if (error && error.code !== "23505") throw new Error(`addGuesses: ${error.message}`);
         },
-        // Server-side only by design: record_verifier_verdict is not executable by any client role, so this call fails
-        // until a vendor and a server-side caller are set up (none is; the step is skipped while EMAIL_VERIFIER = none).
         // RapidAPI's site reader (queued for the sources clock); without a connection or room this month it says false
         readSite: async (leadId, url) => {
           const { data, error } = await db.rpc("request_site_contact", { p_ws: workspace.id, p_lead: leadId, p_url: url });
           return !error && data === true;
         },
+        // Server-side only by design: record_verifier_verdict is not executable by any client role, so this call fails
+        // until a vendor and a server-side caller are set up (none is; the step is skipped while EMAIL_VERIFIER = none).
         saveVerdict: async (email, status) => {
           const { error } = await db.rpc("record_verifier_verdict", { p_ws: workspace.id, p_email: email, p_status: status, p_verifier: verifier?.name ?? "" });
           if (error) throw new Error(`saveVerdict: ${error.message}`);
