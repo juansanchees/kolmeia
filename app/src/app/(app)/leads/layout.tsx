@@ -1,6 +1,6 @@
 import { getCurrentWorkspace } from "@/lib/workspace";
-import { leadsTabs, leadsTabsFor } from "@/lib/nav";
-import { SubNav } from "@/components/SubNav";
+import { leadsCards, leadsMoreLinks } from "@/lib/nav";
+import { LeadsNav } from "@/components/leads/LeadsNav";
 import { Notice } from "@/components/email/bits";
 import { getT } from "@/lib/i18n/server";
 
@@ -9,13 +9,13 @@ export default async function LeadsLayout({ children }: { children: React.ReactN
   const t = await getT();
   const workspace = await getCurrentWorkspace();
   return (
-    <div className="flex min-w-0 flex-col gap-5">
-      <div className="flex flex-col gap-3">
-        <header className="flex flex-col gap-1">
-          <h1 className="text-4xl">{t.leads.title}</h1>
-          <p className="text-muted">{t.leads.subtitle}</p>
+    <div className="flex min-w-0 flex-col gap-5 text-[17px]">
+      <div className="flex flex-col gap-4">
+        <header className="k-in flex flex-col gap-1.5">
+          <h1 className="text-4xl md:text-[46px]">{t.leads.title}</h1>
+          <p className="m-0 text-lg text-[#4a5361]">{t.leads.subtitle}</p>
         </header>
-        <SubNav label={t.leads.nav.label} items={workspace ? leadsTabsFor(workspace.role, t) : leadsTabs(t)} />
+        <LeadsNav label={t.leads.nav.label} cards={leadsCards(t)} more={leadsMoreLinks(workspace?.role ?? "closer", t)} moreLabel={t.leads.nav.more.label} />
       </div>
       {workspace?.role === "closer" && <Notice tone="info">{t.roles.closerNotice}</Notice>}
       {children}

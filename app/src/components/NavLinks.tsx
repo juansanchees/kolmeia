@@ -31,7 +31,7 @@ export function NavLinks({ variant, role }: { variant: "top" | "bottom"; role: R
             className={
               bottom
                 ? `flex min-h-14 items-center justify-center px-2 text-center font-mono text-xs uppercase tracking-wide ${current ? "text-blue" : ""}`
-                : `border-b-2 px-3 py-2 font-mono text-xs uppercase tracking-wide ${current ? "border-blue text-blue" : "border-transparent"}`
+                : `border-b-2 px-3 py-2 font-mono text-xs uppercase tracking-wide ${current ? "border-honey text-blue" : "border-transparent"}`
             }
           >
             {l.label}

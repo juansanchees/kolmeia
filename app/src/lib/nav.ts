@@ -47,6 +47,29 @@ export function leadsTabsFor(role: Role, t: Messages): readonly NavItem[] {
       ];
 }
 
+export type LeadsCard = NavItem & { hint: string; icon: "list" | "phone" | "calendar" | "check" };
+
+/** The four big cards at the top of LEADS (every role): what the person wants to do now. */
+export const leadsCards = (t: Messages): readonly LeadsCard[] => [
+  { href: "/leads", label: t.leads.nav.cards.all, hint: t.leads.nav.cards.allHint, icon: "list" },
+  { href: "/leads/ligar", label: t.leads.nav.cards.call, hint: t.leads.nav.cards.callHint, icon: "phone" },
+  { href: "/leads/tarefas", label: t.leads.nav.cards.tasks, hint: t.leads.nav.cards.tasksHint, icon: "calendar" },
+  { href: "/leads/resultados", label: t.leads.nav.cards.results, hint: t.leads.nav.cards.resultsHint, icon: "check" },
+];
+
+/** "Organizar e analisar:" links under the cards: owner and sdr only, the same rule as leadsTabsFor. */
+export function leadsMoreLinks(role: Role, t: Messages): readonly NavItem[] {
+  const M = t.leads.nav.more;
+  return role === "closer"
+    ? []
+    : [
+        { href: "/leads/listas", label: M.lists },
+        { href: "/leads/funil", label: M.funnel },
+        { href: "/leads/cobertura", label: M.coverage },
+        { href: "/leads/perfil", label: M.profile },
+      ];
+}
+
 export const campaignTabs = (t: Messages): readonly NavItem[] => [
   { href: "/campanhas", label: t.email.nav.campaigns },
   { href: "/campanhas/respostas", label: t.email.nav.replies },
