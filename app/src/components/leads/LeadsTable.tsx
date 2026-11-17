@@ -383,13 +383,13 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
               <Step n={++step} title={ST.search}>
                 <div className="flex flex-wrap gap-2.5">
                   <SearchBox key={searchKey} value={f.q} set={set} />
-                  <button ref={moreBtn} type="button" aria-haspopup="dialog" aria-expanded={showFilters} aria-controls="lead-filters" onClick={() => setShowFilters(true)} className="k-lift flex flex-[1_1_220px] font-semibold text-ink">
+                  <button ref={moreBtn} type="button" aria-haspopup="dialog" aria-expanded={showFilters} aria-controls="lead-filters" onClick={() => setShowFilters(true)} className="k-lift flex min-w-[15rem] flex-[1_1_220px] whitespace-nowrap font-semibold text-ink">
                     <span className="hx flex flex-1 bg-ink p-[2px] [--c:14px]">
-                      <span className="hx hx-fill inline-flex min-h-[54px] flex-1 flex-wrap items-center justify-center gap-x-2.5 bg-surface px-[30px] [--c:13.4px]">
+                      <span className="hx hx-fill inline-flex min-h-[54px] flex-1 flex-nowrap items-center justify-center gap-x-2.5 bg-surface px-[30px] [--c:13.4px]">
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
                           <path d="M4 6h16M7 12h10M10 18h4" />
                         </svg>
-                        {ST.moreFilters} <span className={`font-normal ${MUTED}`}>{ST.moreFiltersHint}</span>
+                        {ST.moreFilters} <span className={`hidden font-normal 2xl:inline ${MUTED}`}>{ST.moreFiltersHint}</span>
                         <Chevron className="k-arrow" />
                       </span>
                     </span>
