@@ -10,7 +10,7 @@ const Q = t.sources.search;
 
 export type RunView = {
   id: string;
-  kind: "maps" | "apollo" | "contact" | "shovels";
+  kind: "maps" | "apollo" | "contact" | "shovels" | "b2b";
   query: Record<string, unknown>;
   status: string;
   error: string | null;
@@ -26,7 +26,7 @@ const tone = (s: string): Tone => (s === "imported" ? "ok" : s === "failed" || s
 const open = (s: string) => s === "queued" || s === "running";
 
 function cost(r: RunView): string {
-  if (r.kind === "apollo" || r.kind === "shovels") return Q.costNone;
+  if (r.kind === "apollo" || r.kind === "shovels" || r.kind === "b2b") return Q.costNone;
   if (open(r.status)) return fill(t.sources.estimate, { usd: usd(r.reserve_usd) });
   if (r.status === "refused") return "—";
   return r.cost_usd === null ? Q.costUnknown : `US$ ${usd(r.cost_usd)}`;
@@ -46,7 +46,7 @@ export function RunHistory({ runs }: { runs: RunView[] }) {
             <li key={r.id} className="flex flex-col gap-1.5 border-b border-line px-3.5 py-3 last:border-b-0">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <span className="min-w-0 truncate text-sm font-semibold">
-                  {r.kind === "maps" ? Q.kindMaps : r.kind === "shovels" ? Q.kindShovels : Q.kindApollo} · {runTitle(r)}
+                  {r.kind === "maps" ? Q.kindMaps : r.kind === "shovels" ? Q.kindShovels : r.kind === "b2b" ? Q.kindB2b : Q.kindApollo} · {runTitle(r)}
                 </span>
                 <span className="font-mono text-xs text-muted">{date(r.created_at)}</span>
               </div>

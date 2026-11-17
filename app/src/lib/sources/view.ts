@@ -5,7 +5,7 @@ import { fill, t } from "@/messages/pt";
 // Pure helpers of the "Buscar" screens: labels, form parsing. No I/O. The database repeats every limit.
 
 const S = t.sources;
-export type Kind = "maps" | "apollo" | "shovels";
+export type Kind = "maps" | "apollo" | "shovels" | "b2b";
 
 /** Same formula as the database (enqueue_source_run): the most a Maps run may cost. MAPS_USD_PER_PLACE is a "?" estimate. */
 const MAPS_USD_PER_PLACE = 0.004;
@@ -16,6 +16,7 @@ export const mapsReserve = (max: number): number => Math.max(MAPS_MIN_USD, Math.
 export function estimateLabel(kind: Kind, max: number): string {
   if (kind === "apollo") return S.search.estimateApollo;
   if (kind === "shovels") return S.search.estimateShovels;
+  if (kind === "b2b") return S.search.estimateB2b;
   return fill(S.estimate, { usd: usd(mapsReserve(max)) });
 }
 
@@ -32,10 +33,12 @@ export function runStatusLabel(row: RunStatusIn): string {
   return `${base} · ${reason}`;
 }
 
-type Conn = { provider: "apify" | "apollo" | "shovels"; today: number | null; cap: number | null };
+type Conn = { provider: "apify" | "apollo" | "shovels" | "rapidapi" | "rapidapi_sites"; today: number | null; cap: number | null };
 
 /** "Hoje: US$ 1,20 de 2,00" / "Hoje: 3 de 20 buscas" / "120 de 500 usados este mês" (Shovels); "?" when the database did not say. */
 export function todayLine(c: Conn): string {
+  if (c.provider === "rapidapi") return fill(S.monthCalls, { n: c.today === null ? "?" : c.today, cap: c.cap === null ? "?" : c.cap });
+  if (c.provider === "rapidapi_sites") return fill(S.monthSites, { n: c.today === null ? "?" : c.today, cap: c.cap === null ? "?" : c.cap });
   if (c.provider === "shovels") return fill(S.monthRecords, { n: c.today === null ? "?" : c.today, cap: c.cap === null ? "?" : c.cap });
   if (c.provider === "apify") return fill(S.todayUsd, { spent: c.today === null ? "?" : usd(c.today), cap: c.cap === null ? "?" : usd(c.cap) });
   return fill(S.todayCalls, { n: c.today === null ? "?" : c.today, cap: c.cap === null ? "?" : c.cap });
@@ -51,6 +54,10 @@ export function runTitle(r: { kind: string; query: Record<string, unknown> }): s
   if (r.kind === "shovels") {
     const tag = SHOVELS_TAGS.includes(r.query.tag as ShovelsTag) ? S.search.tags[r.query.tag as ShovelsTag] : "";
     return [typeof r.query.place === "string" && r.query.place ? r.query.place : "MA", tag].filter(Boolean).join(" · ");
+  }
+  if (r.kind === "b2b") {
+    const sector = (B2B_SECTORS as readonly string[]).includes(String(r.query.sector)) ? S.search.sectors[r.query.sector as B2bSector] : "";
+    return [sector, typeof r.query.state === "string" ? r.query.state : "", typeof r.query.page === "number" ? fill(S.search.page, { n: r.query.page }) : ""].filter(Boolean).join(" · ");
   }
   return [strs(r.query.locations).join(", "), strs(r.query.naics).join(", ")].filter(Boolean).join(" · ") || S.search.kindApollo;
 }
@@ -129,6 +136,24 @@ export function parseShovelsForm(i: { place?: unknown; tag?: unknown; max?: unkn
   const query: ShovelsQuery = { place: r.data.place, tag: r.data.tag };
   if (r.data.label) query.label = r.data.label;
   return { ok: true, value: { query, max: r.data.max } };
+}
+
+// RapidAPI B2B presets (no API host here: the browser form uses them; rapidapi.ts maps them to the API's values).
+export const B2B_STATES = ["MA", "CT", "RI", "NH", "ME", "VT", "NY"] as const;
+export const B2B_SECTORS = ["construction", "real_estate", "architecture"] as const;
+export const B2B_SIZES = ["1-10", "11-50", "51-200", "201-500"] as const;
+export const B2B_ROLES = ["founder", "partner", "c-suite", "director", "manager"] as const;
+export type B2bState = (typeof B2B_STATES)[number];
+export type B2bSector = (typeof B2B_SECTORS)[number];
+export type B2bQuery = { state: B2bState; sector: B2bSector; size: (typeof B2B_SIZES)[number]; role: (typeof B2B_ROLES)[number]; label?: string };
+const b2bForm = z.object({ state: z.enum(B2B_STATES), sector: z.enum(B2B_SECTORS), size: z.enum(B2B_SIZES), role: z.enum(B2B_ROLES), label });
+
+/** B2B decision-makers: one call = one page of up to 100 people (the database picks the page). */
+export function parseB2bForm(i: { state?: unknown; sector?: unknown; size?: unknown; role?: unknown; label?: unknown }): Parsed<Enqueue<B2bQuery>> {
+  const r = b2bForm.safeParse({ state: text(i.state), sector: text(i.sector), size: text(i.size), role: text(i.role), label: text(i.label) || undefined });
+  if (!r.success) return { ok: false };
+  const { label: l, ...query } = r.data;
+  return { ok: true, value: { query: l ? { ...query, label: l } : query, max: 100 } };
 }
 
 export type AgentSourcesView = {

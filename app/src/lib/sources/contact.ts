@@ -38,7 +38,6 @@ function junk(email: string): boolean {
   return false;
 }
 
-const sameSite = (a: string, b: string) => a === b || a.endsWith(`.${b}`) || b.endsWith(`.${a}`);
 const rec = (v: unknown): Record<string, unknown> | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
 
 /** Mailboxes small contractors really use. Kept only when read on the lead's own page (never from a third party's). */
@@ -55,6 +54,17 @@ export function isDirectoryHost(host: string): boolean {
   const h = host.toLowerCase().replace(/\.+$/, "");
   return BLOCKED_NETWORK.test(h) || DIRECTORY_HOSTS.some((d) => h === d || h.endsWith(`.${d}`));
 }
+
+/** The address, normalised, when it may be stored for a site: on the site's own domain, or a free-mail one read on its own page. */
+export function ownSiteEmail(e: unknown, siteHost: string, onOwnPage: boolean): string | null {
+  if (typeof e !== "string") return null;
+  const email = e.trim().toLowerCase();
+  if (email.length > 254 || !EMAIL.test(email) || junk(email)) return null;
+  const domain = email.slice(email.lastIndexOf("@") + 1);
+  return sameSite(domain, siteHost) || (onOwnPage && FREE_MAIL.has(domain)) ? email : null;
+}
+
+export const sameSite = (a: string, b: string) => a === b || a.endsWith(`.${b}`) || b.endsWith(`.${a}`);
 
 /**
  * The e-mails to store, per lead. An e-mail is kept when its domain is the lead's domain, or when it is a free-mail
@@ -83,11 +93,8 @@ export function keepEmails(items: unknown[], leads: { leadId: string; host: stri
     if (!pageUrl) continue;
     const onOwnPage = !!page && sameSite(page, siteHost);
     for (const e of it.emails) {
-      if (typeof e !== "string") continue;
-      const email = e.trim().toLowerCase();
-      if (email.length > 254 || !EMAIL.test(email) || junk(email)) continue;
-      const domain = email.slice(email.lastIndexOf("@") + 1);
-      if (!sameSite(domain, siteHost) && !(onOwnPage && FREE_MAIL.has(domain))) continue;
+      const email = ownSiteEmail(e, siteHost, onOwnPage);
+      if (!email) continue;
       for (const leadId of byHost.get(siteHost)!) {
         const k = `${leadId}:${email}`;
         if (seen.has(k) || (count.get(leadId) ?? 0) >= PER_LEAD) continue;

@@ -11,7 +11,7 @@ const FE = t.leads.findEmail;
 
 export function summary(results: FindEmailResult[]): string {
   const n = (s: FindEmailResult["step"]) => results.filter((r) => r.step === s).length;
-  return fill(FE.summary, { site: n("site"), pattern: n("pattern"), verifier: n("verifier"), none: n("none") });
+  return fill(FE.summary, { site: n("site"), queued: n("queued"), pattern: n("pattern"), verifier: n("verifier"), none: n("none") });
 }
 
 /** One lead's result: which step found what. */

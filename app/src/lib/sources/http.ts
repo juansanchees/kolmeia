@@ -4,7 +4,7 @@ export interface HttpJson {
     method: "GET" | "POST",
     url: string,
     o: { headers: Record<string, string>; body?: unknown; timeoutMs: number },
-  ): Promise<{ status: number; json: unknown }>;
+  ): Promise<{ status: number; json: unknown; headers?: Record<string, string> }>;
 }
 
 export type SourceHttpCode = "timeout" | "network" | "bad_json";
@@ -49,6 +49,6 @@ export const fetchHttpJson: HttpJson = {
         if (res.ok) throw new SourceHttpError("bad_json");
       }
     }
-    return { status: res.status, json };
+    return { status: res.status, json, headers: Object.fromEntries(res.headers) }; // keys lower-case (quota headers)
   },
 };

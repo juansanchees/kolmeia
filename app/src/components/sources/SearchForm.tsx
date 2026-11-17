@@ -1,11 +1,11 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { enqueueApollo, enqueueMaps, enqueueShovels } from "@/app/(app)/leads/buscar/actions";
+import { enqueueApollo, enqueueB2b, enqueueMaps, enqueueShovels } from "@/app/(app)/leads/buscar/actions";
 import { btn, Card, CardTitle, input, Notice } from "@/components/email/bits";
 import { Field } from "@/components/ui";
 import type { SearchResult } from "@/lib/sources/search";
-import { estimateLabel, SHOVELS_TAGS } from "@/lib/sources/view";
+import { B2B_ROLES, B2B_SECTORS, B2B_SIZES, B2B_STATES, estimateLabel, SHOVELS_TAGS } from "@/lib/sources/view";
 import { t } from "@/messages/pt";
 
 const S = t.sources;
@@ -20,8 +20,8 @@ function Result({ r }: { r: SearchResult | null }) {
 const area = `${input} min-h-24`;
 
 /** One search form: the terms copy first, then the fields, the cost estimate and the button. */
-export function SearchForm({ kind }: { kind: "maps" | "apollo" | "shovels" }) {
-  const [state, action, pending] = useActionState(kind === "maps" ? enqueueMaps : kind === "shovels" ? enqueueShovels : enqueueApollo, null);
+export function SearchForm({ kind }: { kind: "maps" | "apollo" | "shovels" | "b2b" }) {
+  const [state, action, pending] = useActionState({ maps: enqueueMaps, apollo: enqueueApollo, shovels: enqueueShovels, b2b: enqueueB2b }[kind], null);
   const [max, setMax] = useState(kind === "shovels" ? "25" : "50");
   const [place, setPlace] = useState("");
   const [tag, setTag] = useState<string>("all");
@@ -31,12 +31,13 @@ export function SearchForm({ kind }: { kind: "maps" | "apollo" | "shovels" }) {
   const [naics, setNaics] = useState("");
   const [pages, setPages] = useState("1");
   const [label, setLabel] = useState("");
+  const [b2b, setB2b] = useState({ state: "MA", sector: "construction", size: "11-50", role: "founder" });
   const n = Number(max);
   const estimate = kind === "maps" ? (Number.isInteger(n) && n >= 1 && n <= 200 ? estimateLabel("maps", n) : null) : estimateLabel(kind, 25);
   return (
     <Card id={kind} aria-labelledby={`buscar-${kind}`} className="flex-[1_1_340px]">
       <CardTitle id={`buscar-${kind}`}>{Q[kind]}</CardTitle>
-      <p className="text-sm">{kind === "maps" ? S.mapsTerms : kind === "shovels" ? S.shovelsTerms : S.apolloTerms}</p>
+      <p className="text-sm">{kind === "maps" ? S.mapsTerms : kind === "shovels" ? S.shovelsTerms : kind === "b2b" ? S.rapidapiTerms : S.apolloTerms}</p>
       {kind === "maps" && <p className="text-sm text-muted">{S.noSocial}</p>}
       <form action={action} className="flex flex-col gap-3" noValidate>
         {kind === "maps" ? (
@@ -68,6 +69,27 @@ export function SearchForm({ kind }: { kind: "maps" | "apollo" | "shovels" }) {
             <Field label={Q.recordsLabel} htmlFor="shovels-max">
               <input id="shovels-max" name="max" type="number" inputMode="numeric" min={1} max={100} step={1} value={max} onChange={(e) => setMax(e.target.value)} className={`${input} w-28`} />
             </Field>
+          </>
+        ) : kind === "b2b" ? (
+          <>
+            {(
+              [
+                ["state", Q.stateLabel, B2B_STATES, Q.states],
+                ["sector", Q.sectorLabel, B2B_SECTORS, Q.sectors],
+                ["size", Q.sizeLabel, B2B_SIZES, null],
+                ["role", Q.roleLabel, B2B_ROLES, Q.roles],
+              ] as const
+            ).map(([name, text, values, labels]) => (
+              <Field key={name} label={text} htmlFor={`b2b-${name}`}>
+                <select id={`b2b-${name}`} name={name} value={b2b[name]} onChange={(e) => setB2b({ ...b2b, [name]: e.target.value })} className={input}>
+                  {values.map((v) => (
+                    <option key={v} value={v}>
+                      {labels ? (labels as Record<string, string>)[v] : v}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ))}
           </>
         ) : (
           <>

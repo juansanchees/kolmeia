@@ -15,6 +15,8 @@ type Row = {
   calls_today: number | null;
   monthly_records: number | null;
   used_month: number | null;
+  monthly_sites: number | null;
+  used_sites: number | null;
 };
 const n = (v: number | null) => (v === null ? null : Number(v));
 
@@ -33,11 +35,12 @@ export default async function SourcesPage() {
     );
   }
   const rows = (Array.isArray(data) ? data : []) as Row[];
-  const views: ConnectionView[] = (["apify", "apollo", "shovels"] as const).map((provider) => {
+  const views: ConnectionView[] = (["apify", "apollo", "shovels", "rapidapi"] as const).map((provider) => {
     const r = rows.find((x) => x.provider === provider);
     if (!r) return { provider, last4: null, cap: null, today: null };
     if (provider === "apify") return { provider, last4: r.last4, cap: n(r.daily_cap_usd), today: n(r.spent_today_usd) };
     if (provider === "shovels") return { provider, last4: r.last4, cap: n(r.monthly_records), today: n(r.used_month) };
+    if (provider === "rapidapi") return { provider, last4: r.last4, cap: n(r.monthly_records), today: n(r.used_month), sites: { cap: n(r.monthly_sites), used: n(r.used_sites) } };
     return { provider, last4: r.last4, cap: n(r.daily_calls), today: n(r.calls_today) };
   });
 

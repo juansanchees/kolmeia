@@ -156,7 +156,7 @@ export const leads = {
     archived: "Esta campanha está arquivada.",
     notAllowed: "Sem permissão para isso.",
   },
-  sources: { import: "importado", site: "site", places: "Places", ai: "IA", research: "pesquisa", apify_maps: "Google Maps", apollo: "Apollo", shovels: "Shovels (alvarás)", apify_contact: "site (contato)", pattern: "palpite (padrão)" },
+  sources: { import: "importado", site: "site", places: "Places", ai: "IA", research: "pesquisa", apify_maps: "Google Maps", apollo: "Apollo", shovels: "Shovels (alvarás)", rapidapi_b2b: "RapidAPI (decisores)", rapidapi_contact: "site (RapidAPI)", apify_contact: "site (contato)", pattern: "palpite (padrão)" },
   fieldsTitle: "De onde veio",
   fieldLabels: {
     name: "Empresa", website: "Site", phone: "Telefone", email: "E-mail", address: "Endereço", city: "Cidade", state: "Estado", zip: "ZIP",
@@ -182,14 +182,14 @@ export const leads = {
   findEmail: {
     button: "Achar e-mail",
     finding: "Procurando…",
-    steps: { site: "Achado no site do lead", pattern: "Palpites pelo padrão (não verificados)", verifier: "Confirmado pelo verificador", none: "Nada achado" },
+    steps: { site: "Achado no site do lead", queued: "Lendo o site da empresa (volta em alguns minutos)", pattern: "Palpites pelo padrão (não verificados)", verifier: "Confirmado pelo verificador", none: "Nada achado" },
     reasons: {
       no_contact: "Falta o nome do contato.",
       no_domain: "Falta o site próprio do lead (domínio).",
       dead_domain: "O domínio do site não recebe e-mail.",
     },
     verifierOff: "Verificador pago não configurado: os palpites ficam como desconhecidos e não entram em campanha.",
-    summary: "{site} achado(s) no site · {pattern} com palpites · {verifier} confirmado(s) · {none} sem resultado",
+    summary: "{site} achado(s) no site · {queued} lendo o site (clique de novo em alguns minutos) · {pattern} com palpites · {verifier} confirmado(s) · {none} sem resultado",
     tooMany: "Escolha de 1 a {n} leads.",
     failed: "Não deu para procurar agora. Tente de novo.",
   },

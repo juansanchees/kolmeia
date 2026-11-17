@@ -1,6 +1,6 @@
 import "server-only";
 import { isSender, type Role } from "@/lib/roles";
-import { parseAgentSources, parseApolloForm, parseMapsForm, parseShovelsForm, type AgentSourcesInput } from "./view";
+import { parseAgentSources, parseApolloForm, parseB2bForm, parseMapsForm, parseShovelsForm, type AgentSourcesInput } from "./view";
 
 // Manual searches and per-agent sources: the testable core of the server actions. Every result is a fixed code:
 // never a database or service message (it could carry a key or a query).
@@ -19,7 +19,7 @@ function rpcError(e: { code?: string; message?: string }): SearchError {
   return "generic";
 }
 
-async function enqueue(who: Who, kind: "maps" | "apollo" | "shovels", parsed: { ok: true; value: { query: object; max: number } } | { ok: false }, rpc: SearchRpc): Promise<SearchResult> {
+async function enqueue(who: Who, kind: "maps" | "apollo" | "shovels" | "b2b", parsed: { ok: true; value: { query: object; max: number } } | { ok: false }, rpc: SearchRpc): Promise<SearchResult> {
   if (!isSender(who.role)) return { error: "notAllowed" };
   if (!parsed.ok) return { error: "invalid" };
   const { error } = await rpc("enqueue_source_run", { p_ws: who.ws, p_kind: kind, p_query: parsed.value.query, p_max: parsed.value.max });
@@ -36,6 +36,10 @@ export async function enqueueApolloCore(who: Who, input: Parameters<typeof parse
 
 export async function enqueueShovelsCore(who: Who, input: Parameters<typeof parseShovelsForm>[0], deps: { rpc: SearchRpc }): Promise<SearchResult> {
   return enqueue(who, "shovels", isSender(who.role) ? parseShovelsForm(input) : { ok: false }, deps.rpc);
+}
+
+export async function enqueueB2bCore(who: Who, input: Parameters<typeof parseB2bForm>[0], deps: { rpc: SearchRpc }): Promise<SearchResult> {
+  return enqueue(who, "b2b", isSender(who.role) ? parseB2bForm(input) : { ok: false }, deps.rpc);
 }
 
 export async function saveAgentSourcesCore(who: Who, input: AgentSourcesInput, deps: { rpc: SearchRpc }): Promise<SearchResult> {

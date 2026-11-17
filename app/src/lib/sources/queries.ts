@@ -9,9 +9,14 @@ export type ConnectedSources = {
   maps: boolean;
   apollo: boolean;
   shovels: boolean;
+  rapidapi: boolean;
   today: { apify: { spent: number | null; cap: number | null }; apollo: { calls: number | null; cap: number | null } };
   /** Shovels records (= credits) in the last 30 days, against the workspace's monthly cap. */
-  month: { shovels: { used: number | null; cap: number | null } };
+  month: {
+    shovels: { used: number | null; cap: number | null };
+    /** RapidAPI B2B calls and company sites read in the last 30 days, against their caps. */
+    rapidapi: { calls: number | null; callsCap: number | null; sites: number | null; sitesCap: number | null };
+  };
 };
 type ConnRow = {
   provider: string;
@@ -21,6 +26,8 @@ type ConnRow = {
   calls_today: number | null;
   monthly_records: number | null;
   used_month: number | null;
+  monthly_sites: number | null;
+  used_sites: number | null;
 };
 const num = (v: unknown): number | null => (v === null || v === undefined || Number.isNaN(Number(v)) ? null : Number(v));
 
@@ -30,8 +37,9 @@ export async function connectedSources(db: SupabaseClient, ws: string): Promise<
     maps: false,
     apollo: false,
     shovels: false,
+    rapidapi: false,
     today: { apify: { spent: null, cap: null }, apollo: { calls: null, cap: null } },
-    month: { shovels: { used: null, cap: null } },
+    month: { shovels: { used: null, cap: null }, rapidapi: { calls: null, callsCap: null, sites: null, sitesCap: null } },
   };
   const { data, error } = await db.rpc("list_source_connections", { p_ws: ws });
   if (error || !Array.isArray(data)) return none;
@@ -39,11 +47,16 @@ export async function connectedSources(db: SupabaseClient, ws: string): Promise<
   const apify = rows.find((r) => r.provider === "apify");
   const apollo = rows.find((r) => r.provider === "apollo");
   const shovels = rows.find((r) => r.provider === "shovels");
+  const rapid = rows.find((r) => r.provider === "rapidapi");
   return {
     maps: !!apify,
     apollo: !!apollo,
     shovels: !!shovels,
-    month: { shovels: { used: num(shovels?.used_month), cap: num(shovels?.monthly_records) } },
+    rapidapi: !!rapid,
+    month: {
+      shovels: { used: num(shovels?.used_month), cap: num(shovels?.monthly_records) },
+      rapidapi: { calls: num(rapid?.used_month), callsCap: num(rapid?.monthly_records), sites: num(rapid?.used_sites), sitesCap: num(rapid?.monthly_sites) },
+    },
     today: { apify: { spent: num(apify?.spent_today_usd), cap: num(apify?.daily_cap_usd) }, apollo: { calls: num(apollo?.calls_today), cap: num(apollo?.daily_calls) } },
   };
 }
@@ -52,7 +65,7 @@ const RUN_COLS = "id, kind, query, status, error, found, dropped, cost_usd, rese
 
 /** The workspace's last 50 searches, newest first. Contact runs (the Qualificador's P2b) are not searches: they show in Gastos. */
 export async function listRuns(db: SupabaseClient, ws: string): Promise<RunView[]> {
-  const { data, error } = await db.from("source_runs").select(RUN_COLS).eq("workspace_id", ws).in("kind", ["maps", "apollo", "shovels"]).order("created_at", { ascending: false }).limit(50);
+  const { data, error } = await db.from("source_runs").select(RUN_COLS).eq("workspace_id", ws).in("kind", ["maps", "apollo", "shovels", "b2b"]).order("created_at", { ascending: false }).limit(50);
   if (error || !data) return [];
   return (data as Record<string, unknown>[]).map((r) => ({
     id: String(r.id),

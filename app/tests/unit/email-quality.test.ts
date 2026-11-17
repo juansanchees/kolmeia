@@ -132,6 +132,35 @@ describe("e-mail cascade", () => {
     expect(x.saved).toEqual([["pat.doe@acme.example", "invalid"], ["pat@acme.example", "verified"]]);
   });
 
+  test("step 1: the contact's own mailbox wins over other e-mails on file", async () => {
+    const fields = [
+      field({ field: "contact_name", value: "Pat Doe" }),
+      field({ value: "info@acme.example", source: "rapidapi_contact", seen_at: "2026-11-15T00:00:00Z" }),
+      field({ value: "pdoe@acme.example", source: "rapidapi_contact", seen_at: "2026-11-01T00:00:00Z" }),
+      field({ value: "office@acme.example", source: "apify_contact", seen_at: "2026-11-16T00:00:00Z" }),
+    ];
+    expect(await findEmailFor(item(), fields, deps(MX).d)).toMatchObject({ step: "site", email: "pdoe@acme.example", source: "rapidapi_contact" });
+    expect(await findEmailFor(item(), fields.slice(1), deps(MX).d)).toMatchObject({ step: "site", email: "office@acme.example" }); // no name: newest site e-mail
+  });
+
+  test("step 1b: RapidAPI reads the own site before any guess; skipped (guesses go on) when it says no; never for a directory page", async () => {
+    const fields = [field({ field: "contact_name", value: "Pat Doe" }), field({ field: "website", value: "www.acme.example" })];
+    const asked: [string, string][] = [];
+    const x = deps(MX);
+    const queued = await findEmailFor(item(), fields, { ...x.d, readSite: async (id, url) => (asked.push([id, url]), true) });
+    expect(queued).toMatchObject({ step: "queued", email: null, guesses: [] });
+    expect(asked).toEqual([["lead-1", "https://www.acme.example/"]]);
+    expect(x.added).toEqual([]); // no guess while the site is being read
+    // not connected / no site left / already read: the cascade goes on to the guesses
+    expect(await findEmailFor(item(), fields, { ...deps(MX).d, readSite: async () => false })).toMatchObject({ step: "pattern" });
+    // an e-mail on file stops before RapidAPI; a directory "site" never reaches it
+    let called = 0;
+    const count = async () => (called++, true);
+    await findEmailFor(item(), [...fields, field({ value: "pat@acme.example", source: "import" })], { ...deps(MX).d, readSite: count });
+    await findEmailFor(item({ website: "https://facebook.com/acme" }), [field({ field: "contact_name", value: "Pat" })], { ...deps(MX).d, readSite: count });
+    expect(called).toBe(0);
+  });
+
   test("no guesses for a domain that takes no mail, a missing contact or a missing own site", async () => {
     const withSite = [field({ field: "contact_name", value: "Pat Doe" }), field({ field: "website", value: "acme.example" })];
     expect(await findEmailFor(item(), withSite, deps(NONE).d)).toMatchObject({ step: "none", reason: "dead_domain" });

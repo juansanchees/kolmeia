@@ -157,6 +157,7 @@ export type SourceRow = { provider: string; kind: string; label: string; runs: n
 /** "Apify Maps", "Apollo" or "Apify contatos": the step the source shows as. */
 export function sourceLabel(provider: string, kind: string): string {
   const own = S.sources.labels as Record<string, string>;
+  if (Object.hasOwn(own, `${provider}_${kind}`)) return own[`${provider}_${kind}`]; // RapidAPI's site reader is kind 'contact' too
   return Object.hasOwn(own, kind) ? own[kind] : `${(S.sources.provider as Record<string, string>)[provider] ?? provider}`;
 }
 

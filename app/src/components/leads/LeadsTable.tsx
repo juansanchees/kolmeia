@@ -48,7 +48,7 @@ type Panel = "nl" | "ai" | "views" | "qualify";
 type Props = {
   items: LeadTableRow[];
   canCreate: boolean;
-  sources?: { maps: boolean; apollo: boolean; shovels?: boolean };
+  sources?: { maps: boolean; apollo: boolean; shovels?: boolean; rapidapi?: boolean };
   initialFilters?: LeadFilters;
   views?: LeadView[];
   lists?: { id: string; name: string }[];
@@ -232,6 +232,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
             {sources.maps && <Link href="/leads/buscar#maps" className={linkBtn}>{t.sources.search.maps}</Link>}
             {sources.apollo && <Link href="/leads/buscar#apollo" className={linkBtn}>{t.sources.search.apollo}</Link>}
             {sources.shovels && <Link href="/leads/buscar#shovels" className={linkBtn}>{t.sources.search.shovels}</Link>}
+            {sources.rapidapi && <Link href="/leads/buscar#b2b" className={linkBtn}>{t.sources.search.b2b}</Link>}
           </div>
         )}
       </div>
@@ -326,6 +327,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
                 {sources.maps && <Link href="/leads/buscar#maps" role="menuitem" className={menuItem}>{t.sources.search.maps}</Link>}
                 {sources.apollo && <Link href="/leads/buscar#apollo" role="menuitem" className={menuItem}>{t.sources.search.apollo}</Link>}
                 {sources.shovels && <Link href="/leads/buscar#shovels" role="menuitem" className={menuItem}>{t.sources.search.shovels}</Link>}
+                {sources.rapidapi && <Link href="/leads/buscar#b2b" role="menuitem" className={menuItem}>{t.sources.search.b2b}</Link>}
                 <button type="button" role="menuitem" disabled={finding || findable.length === 0} onClick={findEmails} className={`${menuItem} disabled:text-muted`}>{fill(TB.findEmailBulk, { n: findable.length })}</button>
                 <button type="button" role="menuitem" disabled={typing || untypedIds.length === 0} onClick={() => { setMenuOpen(false); setConfirmType(true); }} className={`${menuItem} disabled:text-muted`}>{fill(TB.aiType, { n: untypedIds.length })}</button>
                 <button type="button" role="menuitem" onClick={download} className={menuItem}>{L.csv}</button>

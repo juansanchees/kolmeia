@@ -124,6 +124,24 @@ describe("F3d connections", () => {
     expect(openKey(WS, "shovels", calls[0].args.p_ciphertext as string)).toBe(KEY);
   });
 
+  test("rapidapi: key checked by shape only (no request: every call spends the plan); two caps, each in its own range", async () => {
+    const http = fakeHttp({});
+    expect(await testKey("rapidapi", KEY, http)).toBe("ok");
+    expect(http.calls).toHaveLength(0);
+    expect(parseCap("rapidapi", "10")).toBe(10);
+    expect(parseCap("rapidapi", "5001")).toBe("capRange");
+    expect(parseCap("rapidapi_sites", "50000")).toBe(50000);
+    expect(parseCap("rapidapi_sites", "0")).toBe("capRange");
+    expect(parseCap("rapidapi_sites", "2.5")).toBe("capRange");
+    const { rpc, calls } = recorder();
+    expect(await saveKeyCore({ ws: WS, role: "owner" }, { provider: "rapidapi", key: "short", cap: "" }, { http, rpc })).toEqual({ error: "keyShape" });
+    expect(await saveKeyCore({ ws: WS, role: "owner" }, { provider: "rapidapi", key: KEY, cap: "" }, { http, rpc })).toEqual({ ok: true });
+    expect(calls[0].args).toMatchObject({ p_provider: "rapidapi", p_cap: null });
+    expect(await saveCapCore({ ws: WS, role: "owner" }, { provider: "rapidapi_sites", cap: "300" }, { rpc })).toEqual({ ok: true });
+    expect(calls[1].args).toMatchObject({ p_provider: "rapidapi_sites", p_cap: 300 });
+    expect(await saveCapCore({ ws: WS, role: "owner" }, { provider: "serpapi", cap: "3" }, { rpc })).toEqual({ error: "generic" });
+  });
+
   test("last4 uses alphanumerics only: a key ending in a hyphen stores a valid last4", async () => {
     const dashKey = "apify_api_TESTKEY12-";
     expect(last4(dashKey)).toBe("EY12");

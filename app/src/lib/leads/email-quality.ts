@@ -66,6 +66,12 @@ function nameParts(contactName: string): string[] {
     .filter((p) => p.length > 0);
 }
 
+/** Is this address the contact's own mailbox in one of the usual company patterns (jdoe@, john.doe@, john@...)? */
+export function matchesName(email: string, contactName: string | null | undefined): boolean {
+  const e = email.trim().toLowerCase();
+  return patternCandidates(contactName, e.slice(e.lastIndexOf("@") + 1)).some((c) => c.email === e);
+}
+
 /** Step 2 of the cascade: the usual company patterns. Guesses only: never verified, never sent until the verifier says so. */
 export function patternCandidates(contactName: string | null | undefined, domain: string | null): { email: string; pattern: string }[] {
   if (!contactName || !domain) return [];

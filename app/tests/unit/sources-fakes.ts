@@ -1,7 +1,7 @@
 // Fake HttpJson for the sources tests: no network, ever.
 import type { HttpJson } from "@/lib/sources/http";
 
-export type FakeRoute = { status: number; json: unknown } | Error;
+export type FakeRoute = { status: number; json: unknown; headers?: Record<string, string> } | Error;
 
 /**
  * Routes are keyed "METHOD url-prefix" (e.g. "GET https://api.apify.com/v2/users/me"); the longest matching prefix wins.

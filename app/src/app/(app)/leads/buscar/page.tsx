@@ -21,17 +21,24 @@ export default async function SearchPage() {
       <section aria-labelledby="buscar-title" className="flex flex-col gap-3">
         <h2 id="buscar-title" className="text-2xl">{Q.title}</h2>
         <p className="text-sm">{Q.intro}</p>
-        {conn && (conn.maps || conn.apollo || conn.shovels) ? (
+        {conn && (conn.maps || conn.apollo || conn.shovels || conn.rapidapi) ? (
           <>
             <div className="flex flex-col gap-1 font-mono text-xs text-muted">
               {conn.maps && <span>{t.sources.providers.apify}: {todayLine({ provider: "apify", today: conn.today.apify.spent, cap: conn.today.apify.cap })}</span>}
               {conn.apollo && <span>{t.sources.providers.apollo}: {todayLine({ provider: "apollo", today: conn.today.apollo.calls, cap: conn.today.apollo.cap })}</span>}
               {conn.shovels && <span>{t.sources.providers.shovels}: {todayLine({ provider: "shovels", today: conn.month.shovels.used, cap: conn.month.shovels.cap })}</span>}
+              {conn.rapidapi && (
+                <span>
+                  {t.sources.providers.rapidapi}: {todayLine({ provider: "rapidapi", today: conn.month.rapidapi.calls, cap: conn.month.rapidapi.callsCap })} ·{" "}
+                  {todayLine({ provider: "rapidapi_sites", today: conn.month.rapidapi.sites, cap: conn.month.rapidapi.sitesCap })}
+                </span>
+              )}
             </div>
             <div className="flex flex-wrap items-start gap-5">
               {conn.maps && <SearchForm kind="maps" />}
               {conn.apollo && <SearchForm kind="apollo" />}
               {conn.shovels && <SearchForm kind="shovels" />}
+              {conn.rapidapi && <SearchForm kind="b2b" />}
             </div>
           </>
         ) : (

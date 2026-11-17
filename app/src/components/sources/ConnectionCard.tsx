@@ -9,13 +9,24 @@ import type { SourceResult } from "@/lib/sources/connections";
 import { fill, t } from "@/messages/pt";
 
 const S = t.sources;
-type P = "apify" | "apollo" | "shovels";
+type P = "apify" | "apollo" | "shovels" | "rapidapi";
+/** RapidAPI has a second cap (company sites read per 30 days) on the same connection. */
+type CapP = P | "rapidapi_sites";
 
 export type ConnectionView = {
   provider: P;
   last4: string | null; // null = not connected
   cap: number | null; // USD/day (apify), searches/day (apollo) or records per 30 days (shovels)
   today: number | null; // USD spent today (apify), searches today (apollo) or records in the last 30 days (shovels)
+  sites?: { cap: number | null; used: number | null }; // rapidapi only: company sites read per 30 days
+};
+// [label, min, max, step] of each cap (the database repeats the bounds)
+const CAP_INPUT: Record<CapP, [string, number, number, number]> = {
+  apify: [S.capUsdLabel, 0.5, 50, 0.5],
+  apollo: [S.capCallsLabel, 1, 200, 1],
+  shovels: [S.capRecordsLabel, 50, 50000, 50],
+  rapidapi: [S.capB2bLabel, 1, 5000, 1],
+  rapidapi_sites: [S.capSitesLabel, 1, 50000, 1],
 };
 
 const money = (n: number) => n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -50,7 +61,8 @@ function KeyForm({ provider, connected }: { provider: P; connected: boolean }) {
   );
 }
 
-function CapForm({ provider, cap }: { provider: P; cap: number }) {
+function CapForm({ provider, cap }: { provider: CapP; cap: number }) {
+  const [text, min, max, step] = CAP_INPUT[provider];
   const [state, action, pending] = useActionState(saveSourceCap, null);
   const [value, setValue] = useState(String(cap));
   const id = `cap-${provider}`;
@@ -58,15 +70,15 @@ function CapForm({ provider, cap }: { provider: P; cap: number }) {
     <form action={action} className="flex flex-wrap items-end gap-2" noValidate>
       <input type="hidden" name="provider" value={provider} />
       <label htmlFor={id} className="flex flex-col gap-1">
-        <span className="font-mono text-xs text-muted">{provider === "apify" ? S.capUsdLabel : provider === "shovels" ? S.capRecordsLabel : S.capCallsLabel}</span>
+        <span className="font-mono text-xs text-muted">{text}</span>
         <input
           id={id}
           name="cap"
           type="number"
           inputMode="decimal"
-          min={provider === "apify" ? 0.5 : provider === "shovels" ? 50 : 1}
-          max={provider === "apify" ? 50 : provider === "shovels" ? 50000 : 200}
-          step={provider === "apify" ? 0.5 : provider === "shovels" ? 50 : 1}
+          min={min}
+          max={max}
+          step={step}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           className={`${input} w-28`}
@@ -124,14 +136,14 @@ function Disconnect({ provider }: { provider: P }) {
 
 /** One provider: masked key, cap, today's spend, terms. Owner edits; the sdr only reads. */
 export function ConnectionCard({ view, isOwner }: { view: ConnectionView; isOwner: boolean }) {
-  const { provider, last4, cap, today } = view;
+  const { provider, last4, cap, today, sites } = view;
   const connected = last4 !== null;
   // 0.5 = the smallest Apify run reserve (APIFY_MIN_CHARGE_USD): under that margin no new Maps search fits today.
   const atCap = connected && cap !== null && today !== null && (provider === "apify" ? today + 0.5 > cap : today >= cap);
   return (
     <Card aria-labelledby={`src-${provider}`} className="flex-[1_1_340px]">
       <CardTitle id={`src-${provider}`}>{S.providers[provider]}</CardTitle>
-      <p className="text-sm">{provider === "apify" ? S.mapsTerms : provider === "shovels" ? S.shovelsTerms : S.apolloTerms}</p>
+      <p className="text-sm">{provider === "apify" ? S.mapsTerms : provider === "shovels" ? S.shovelsTerms : provider === "rapidapi" ? S.rapidapiTerms : S.apolloTerms}</p>
       {provider === "apify" && <p className="text-sm text-muted">{S.noSocial}</p>}
 
       {connected ? (
@@ -143,10 +155,15 @@ export function ConnectionCard({ view, isOwner }: { view: ConnectionView; isOwne
                 ? fill(S.todayUsd, { spent: money(today), cap: money(cap) })
                 : provider === "shovels"
                   ? fill(S.monthRecords, { n: today, cap })
-                  : fill(S.todayCalls, { n: today, cap })}
+                  : provider === "rapidapi"
+                    ? fill(S.monthCalls, { n: today, cap })
+                    : fill(S.todayCalls, { n: today, cap })}
             </span>
           )}
-          {atCap && <Notice>{provider === "shovels" ? S.capHitMonth : S.capHit}</Notice>}
+          {sites && sites.used !== null && sites.cap !== null && <span className="text-sm">{fill(S.monthSites, { n: sites.used, cap: sites.cap })}</span>}
+          {(atCap || (sites && sites.used !== null && sites.cap !== null && sites.used >= sites.cap)) && (
+            <Notice>{provider === "shovels" || provider === "rapidapi" ? S.capHitMonth : S.capHit}</Notice>
+          )}
         </div>
       ) : (
         <p className="text-sm text-muted">{S.notConnected}</p>
@@ -156,6 +173,7 @@ export function ConnectionCard({ view, isOwner }: { view: ConnectionView; isOwne
         <>
           <KeyForm provider={provider} connected={connected} />
           {connected && cap !== null && <CapForm provider={provider} cap={cap} />}
+          {connected && sites && sites.cap !== null && <CapForm provider="rapidapi_sites" cap={sites.cap} />}
           {connected && <Disconnect provider={provider} />}
         </>
       ) : (

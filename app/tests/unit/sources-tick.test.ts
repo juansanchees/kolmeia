@@ -463,4 +463,94 @@ describe("contact runs (P2b)", () => {
     expect(b.of("failed")[0].args).toEqual(["C1", "failed", 0.2]);
     expect(b.of("addContacts")).toHaveLength(0);
   });
+
+  describe("rapidapi", () => {
+    const key = "rapidapi_TESTKEY_000000000000";
+    const B2B = "https://b2b-lead-finder-for-cold-email.p.rapidapi.com/coldEmailFinder";
+    const SITE = "https://website-contact-finder.p.rapidapi.com/";
+    const ra = (o: Partial<SourceRunRow> & { id: string }) => run({ provider: "rapidapi", reserve_usd: 0, ciphertext: sealKey(WS, "rapidapi", key), ...o });
+    const site = (emails: string[], left?: string) => ({
+      status: 200,
+      json: { data: { contact: { emails }, sources: { emails: emails.map((value) => ({ value, best_source: `https://${value.split("@")[1]}/team` })) } } },
+      headers: (left === undefined ? {} : { "x-ratelimit-credits-remaining": left }) as Record<string, string>,
+    });
+
+    test("b2b: one call on the page the database chose; only US people of the state are imported", async () => {
+      const f = fakeStore({ start: [ra({ id: "B1", kind: "b2b", query: { state: "MA", sector: "construction", size: "11-50", role: "founder", page: 2 }, max_results: 100 })] });
+      const people = [
+        { "Company Name": "Granite Ridge Builders", Country: "United States", "Company Location": "Worcester, Massachusetts, United States", Name: "Pat Example" },
+        { "Company Name": "Maple Leaf Homes", Country: "Canada", Name: "Lee Sample" },
+      ];
+      const h = fakeHttp({ [`GET ${B2B}`]: { status: 200, json: { ok: true, leads: people } } });
+      const r = await runSourceTick({ store: f.store, http: h, now: () => NOW });
+      expect(r).toMatchObject({ outcome: "ok", started: 1, imported: 1, failed: 0 });
+      expect(h.calls).toHaveLength(1);
+      expect(new URL(h.calls[0].url).searchParams.get("pageNumber")).toBe("2");
+      const imp = f.of("import")[0].args as [string, { name: string; contact_name: string }[], number, number, number];
+      expect(imp[1].map((x) => [x.name, x.contact_name])).toEqual([["Granite Ridge Builders", "Pat Example"]]);
+      expect(imp.slice(2)).toEqual([2, 1, 0]);
+
+      const f2 = fakeStore({ start: [ra({ id: "B2", kind: "b2b", query: { state: "MA", sector: "construction", size: "11-50", role: "founder", page: 1 } })] });
+      await runSourceTick({ store: f2.store, http: fakeHttp({ [`GET ${B2B}`]: { status: 429, json: {} } }), now: () => NOW });
+      expect(f2.of("failed")[0].args).toEqual(["B2", "http_429", 0]);
+    });
+
+    test("contact: every site read in the tick, e-mails stored with their page; stops when the plan says 0 left", async () => {
+      const leads = [
+        { leadId: "L1", startUrl: "https://alpha-build.example/" },
+        { leadId: "L2", startUrl: "https://beta-build.example/" },
+        { leadId: "L3", startUrl: "https://gamma-build.example/" },
+      ];
+      const f = fakeStore({ start: [ra({ id: "C1", kind: "contact", query: { label: "E-mails do site" }, max_results: 10 })] }, { contactLeads: leads });
+      const h = fakeHttp({
+        [`GET ${SITE}?url=https%3A%2F%2Falpha-build.example`]: site(["owner@alpha-build.example"], "5"),
+        [`GET ${SITE}?url=https%3A%2F%2Fbeta-build.example`]: site(["info@beta-build.example"], "0"),
+        [`GET ${SITE}?url=https%3A%2F%2Fgamma-build.example`]: site(["x@gamma-build.example"]),
+      });
+      const r = await runSourceTick({ store: f.store, http: h, now: () => NOW });
+      expect(r).toMatchObject({ outcome: "ok", started: 1, imported: 1, failed: 0 });
+      expect(f.of("started")[0].args).toEqual(["C1", "rapidapi", "rapidapi"]);
+      expect(h.calls).toHaveLength(2); // the plan said 0 left after the second site
+      expect(f.of("addContacts")[0].args).toEqual([
+        "C1",
+        [
+          { leadId: "L1", value: "owner@alpha-build.example", url: "https://alpha-build.example/team" },
+          { leadId: "L2", value: "info@beta-build.example", url: "https://beta-build.example/team" },
+        ],
+        2,
+        0,
+      ]);
+      expect(h.calls.every((c) => c.headers["X-RapidAPI-Key"] === key && !c.url.includes(key))).toBe(true);
+    });
+
+    test("contact: a failing site is skipped; a refused key stops the run; no leads fails free", async () => {
+      const leads = [
+        { leadId: "L1", startUrl: "https://alpha-build.example/" },
+        { leadId: "L2", startUrl: "https://beta-build.example/" },
+      ];
+      const f = fakeStore({ start: [ra({ id: "C2", kind: "contact", max_results: 10 })] }, { contactLeads: leads });
+      const h = fakeHttp({
+        [`GET ${SITE}?url=https%3A%2F%2Falpha-build.example`]: new SourceHttpError("timeout"),
+        [`GET ${SITE}?url=https%3A%2F%2Fbeta-build.example`]: site(["pat@beta-build.example"]),
+      });
+      await runSourceTick({ store: f.store, http: h, now: () => NOW });
+      expect(f.of("addContacts")[0].args).toEqual(["C2", [{ leadId: "L2", value: "pat@beta-build.example", url: "https://beta-build.example/team" }], 2, 0]);
+
+      const f2 = fakeStore({ start: [ra({ id: "C3", kind: "contact", max_results: 10 })] }, { contactLeads: leads });
+      const h2 = fakeHttp({ [`GET ${SITE}`]: { status: 401, json: {} } });
+      await runSourceTick({ store: f2.store, http: h2, now: () => NOW });
+      expect(h2.calls).toHaveLength(1);
+      expect(f2.of("addContacts")[0].args).toEqual(["C3", [], 1, 0]);
+
+      const f3 = fakeStore({ start: [ra({ id: "C4", kind: "contact", max_results: 10 })] });
+      await runSourceTick({ store: f3.store, http: fakeHttp({}), now: () => NOW });
+      expect(f3.of("failed")[0].args).toEqual(["C4", "no_leads", 0]);
+    });
+
+    test("a RapidAPI run still running at poll time was cut off: interrupted", async () => {
+      const f = fakeStore({ poll: [ra({ id: "C5", kind: "contact", external_run_id: "rapidapi", dataset_id: "rapidapi", started_at: "2026-11-14T14:00:00Z" })] });
+      await runSourceTick({ store: f.store, http: fakeHttp({}), now: () => NOW });
+      expect(f.of("failed")[0].args).toEqual(["C5", "interrupted", 0]);
+    });
+  });
 });

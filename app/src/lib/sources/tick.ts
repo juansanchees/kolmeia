@@ -6,9 +6,11 @@ import { openKey } from "./connections";
 import { CONTACT_ACTOR, CONTACT_MAX_ITEMS, contactInput, keepEmails } from "./contact";
 import { fetchHttpJson, SourceHttpError, type HttpJson } from "./http";
 import { MAPS_ACTOR, mapPlace, mapsInput } from "./maps";
+import { mapDecisionMaker, rapidApiClient, RapidApiError, siteEmails } from "./rapidapi";
 import { mapContractor, permitWindow, shovelsClient, ShovelsError, shovelsSize, SHOVELS_TAGS, type ShovelsTag } from "./shovels";
 import type { SourceCounts, SourceRunRow, SourceTickStore } from "./store";
 import type { ImportRowIn } from "./types";
+import { B2B_STATES, parseB2bForm, type B2bState } from "./view";
 
 // The sources clock (F3d): begin -> enqueue Caçador searches -> start queued runs -> poll running ones -> finish.
 // One run failing never stops the others, and finishTick always runs. The plaintext key lives only inside a run's
@@ -28,6 +30,7 @@ function codeOf(e: unknown): string {
   if (e instanceof ApolloKeyError) return "key";
   if (e instanceof ApolloError) return e.status ? `http_${e.status}` : "network";
   if (e instanceof ShovelsError) return e.code;
+  if (e instanceof RapidApiError) return e.code;
   if (e instanceof Error && e.name === "SecretError") return "key_unreadable";
   return "failed";
 }
@@ -89,7 +92,62 @@ export async function runSourceTick(opts: { store: SourceTickStore; http?: HttpJ
     let key: string | null = null;
     try {
       key = openKey(run.workspace_id, run.provider, run.ciphertext);
-      if (run.kind === "maps" || run.kind === "contact") {
+      if (run.provider === "rapidapi" && run.kind === "contact") {
+        // RapidAPI reads one site per call and answers right away: every site of the run is read in this tick. A site
+        // that fails is skipped (its lead gets nothing); the plan's own counter, when it says 0 left, stops the run.
+        const leads = await store.contactLeads(tick, run.id);
+        if (leads.length === 0) {
+          await fail(run, "no_leads", 0);
+          return;
+        }
+        await store.markStarted(tick, run.id, "rapidapi", "rapidapi");
+        counts.started++;
+        const client = rapidApiClient(key, http);
+        const found: { leadId: string; value: string; url: string }[] = [];
+        let asked = 0;
+        for (const l of leads) {
+          if (now() >= deadline) break; // shortcut: the leads not reached count as answered (no e-mail) for 30 days; the Apify step still applies
+          asked++;
+          try {
+            const r = await client.siteContacts(l.startUrl);
+            found.push(...siteEmails(r.json, l.startUrl).map((e) => ({ leadId: l.leadId, ...e })));
+            if (r.left === 0) break;
+          } catch (e) {
+            if (e instanceof RapidApiError && (e.code === "key" || e.code === "http_429")) break; // the key or the plan is out: the rest would fail the same way
+          }
+        }
+        try {
+          await store.addContacts(tick, run.id, found, asked, 0);
+          counts.imported++;
+        } catch (e) {
+          if (!isAlreadyHandled(e)) throw e;
+          await fail(run, "import_refused", 0);
+        }
+      } else if (run.kind === "b2b") {
+        // B2B answers right away (about 10 s): one page per run, the page number set by the database at enqueue.
+        const q = parseB2bForm(run.query);
+        const state = run.query.state as B2bState;
+        if (!q.ok || !B2B_STATES.includes(state)) {
+          await fail(run, "bad_state", 0);
+          return;
+        }
+        await store.markStarted(tick, run.id, "rapidapi", "");
+        counts.started++;
+        let items: unknown[];
+        try {
+          items = await rapidApiClient(key, http).decisionMakers(q.value.query, Number(run.query.page) || 1);
+        } catch (e) {
+          await fail(run, codeOf(e), 0);
+          return;
+        }
+        const rows: ImportRowIn[] = [];
+        for (const it of items) {
+          const row = mapDecisionMaker(it, state, rows.length + 1);
+          if (row) rows.push(row);
+        }
+        // found = people RapidAPI returned (outside the US or the state are dropped)
+        await importRun(run, rows, items.length, 0);
+      } else if (run.kind === "maps" || run.kind === "contact") {
         const client = apifyClient(key, http);
         let actor: string;
         let input: object;
@@ -202,8 +260,8 @@ export async function runSourceTick(opts: { store: SourceTickStore; http?: HttpJ
   };
 
   const pollRun = async (run: SourceRunRow) => {
-    if (run.kind === "apollo" || run.kind === "shovels") {
-      // an Apollo or Shovels run is finished inside its own tick; one still running was cut off by a crash
+    if (run.kind === "apollo" || run.kind === "shovels" || run.provider === "rapidapi") {
+      // an Apollo, Shovels or RapidAPI run is finished inside its own tick; one still running was cut off by a crash
       await fail(run, "interrupted", 0);
       return;
     }

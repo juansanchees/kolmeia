@@ -10,12 +10,24 @@ import { shovelsClient } from "./shovels";
 // Connected sources: keys are encrypted here, on the server, and stored by the owner-only RPC set_source_connection.
 // A key never leaves in a result, a log line or an error; clients only ever see the last 4 characters.
 
-export type Provider = "apify" | "apollo" | "shovels";
-export const PROVIDERS: readonly Provider[] = ["apify", "apollo", "shovels"];
-export const isProvider = (v: unknown): v is Provider => v === "apify" || v === "apollo" || v === "shovels";
+export type Provider = "apify" | "apollo" | "shovels" | "rapidapi";
+export const PROVIDERS: readonly Provider[] = ["apify", "apollo", "shovels", "rapidapi"];
+export const isProvider = (v: unknown): v is Provider => (PROVIDERS as readonly unknown[]).includes(v);
+/** What a cap form may set: a provider's own cap, or RapidAPI's second one (company sites read per 30 days). */
+export type CapTarget = Provider | "rapidapi_sites";
+const isCapTarget = (v: unknown): v is CapTarget => isProvider(v) || v === "rapidapi_sites";
 
-/** The bounds of the caps (same as the database): Apify US$/day, Apollo searches/day, Shovels records per rolling 30 days. */
-export const CAP_LIMITS = { apify: { min: 0.5, max: 50 }, apollo: { min: 1, max: 200 }, shovels: { min: 50, max: 50000 } } as const;
+/**
+ * The bounds of the caps (same as the database): Apify US$/day, Apollo searches/day, Shovels records per rolling 30 days,
+ * RapidAPI B2B calls and company sites read per rolling 30 days.
+ */
+export const CAP_LIMITS = {
+  apify: { min: 0.5, max: 50 },
+  apollo: { min: 1, max: 200 },
+  shovels: { min: 50, max: 50000 },
+  rapidapi: { min: 1, max: 5000 },
+  rapidapi_sites: { min: 1, max: 50000 },
+} as const;
 
 /** Last 4 ALPHANUMERIC characters (the database allows only [A-Za-z0-9]{4}); "" when there are fewer than 4. */
 export function last4(key: string): string {
@@ -34,6 +46,9 @@ export async function testKey(p: Provider, key: string, http: HttpJson): Promise
   const k = key.trim();
   if (p === "apify") return apifyClient(k, http).checkKey();
   if (p === "shovels") return shovelsClient(k, http).checkKey();
+  // every RapidAPI request spends the plan's quota and there is no free endpoint: the key is checked by shape only
+  // (validateKeyShape); a wrong key shows up as "chave recusada" on the first search.
+  if (p === "rapidapi") return "ok";
   try {
     await apolloClient(k, http).checkKey();
     return "ok";
@@ -59,7 +74,7 @@ export const sourceOk: SourceResult = { ok: true };
 export type Rpc = (fn: string, args: Record<string, unknown>) => Promise<{ error: { code?: string } | null }>;
 
 /** "" / missing -> null (keep the cap); otherwise a number in range (integer for Apollo and Shovels), else "capRange". */
-export function parseCap(p: Provider, raw: unknown): number | null | "capRange" {
+export function parseCap(p: CapTarget, raw: unknown): number | null | "capRange" {
   if (raw === null || raw === undefined || String(raw).trim() === "") return null;
   const n = Number(String(raw).trim().replace(",", "."));
   const { min, max } = CAP_LIMITS[p];
@@ -105,7 +120,7 @@ export async function saveKeyCore(
 
 export async function saveCapCore(who: Who, input: { provider: unknown; cap: unknown }, deps: { rpc: Rpc }): Promise<SourceResult> {
   if (who.role !== "owner") return { error: "notAllowed" };
-  if (!isProvider(input.provider)) return { error: "generic" };
+  if (!isCapTarget(input.provider)) return { error: "generic" };
   const cap = parseCap(input.provider, input.cap);
   if (cap === "capRange" || cap === null) return { error: "capRange" };
   const { error } = await deps.rpc("set_source_cap", { p_ws: who.ws, p_provider: input.provider, p_cap: cap });

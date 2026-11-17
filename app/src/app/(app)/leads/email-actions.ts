@@ -75,7 +75,7 @@ export async function checkEmailsAction(leadIds: string[]): Promise<CheckOut> {
 
 type FindOut = { ok: true; results: FindEmailResult[]; verifierConfigured: boolean } | { ok: false; error: string };
 
-/** The e-mail cascade for the selected leads: e-mail on file -> pattern guesses -> paid verifier (EMAIL_VERIFIER). */
+/** The e-mail cascade for the selected leads: e-mail on file -> the site via RapidAPI -> pattern guesses -> paid verifier (EMAIL_VERIFIER). */
 export async function findEmailAction(leadIds: string[]): Promise<FindOut> {
   const workspace = await requireSender();
   const parsed = idsOf(FIND_MAX_LEADS).safeParse(leadIds);
@@ -100,6 +100,11 @@ export async function findEmailAction(leadIds: string[]): Promise<FindOut> {
         },
         // Server-side only by design: record_verifier_verdict is not executable by any client role, so this call fails
         // until a vendor and a server-side caller are set up (none is; the step is skipped while EMAIL_VERIFIER = none).
+        // RapidAPI's site reader (queued for the sources clock); without a connection or room this month it says false
+        readSite: async (leadId, url) => {
+          const { data, error } = await db.rpc("request_site_contact", { p_ws: workspace.id, p_lead: leadId, p_url: url });
+          return !error && data === true;
+        },
         saveVerdict: async (email, status) => {
           const { error } = await db.rpc("record_verifier_verdict", { p_ws: workspace.id, p_email: email, p_status: status, p_verifier: verifier?.name ?? "" });
           if (error) throw new Error(`saveVerdict: ${error.message}`);
