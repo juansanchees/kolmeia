@@ -4,20 +4,20 @@ import { stageOf } from "@/lib/leads/classify";
 import { LEAD_STAGES, type LeadStage } from "@/lib/leads/types";
 import { enteredOk, originKeysOf } from "@/lib/leads/view";
 import { taskTab } from "@/lib/tasks/view";
-import { fill, t } from "@/messages/pt";
+import { fill, type Messages } from "@/lib/i18n";
 import type { HomeRow } from "./rule";
 
 const TZ = "America/New_York";
 
 /** "Bom dia" from 05:00, "Boa tarde" from 12:00, "Boa noite" from 18:00 until 05:00, by the hour in New York. */
-export function greetingOf(now: Date): string {
+export function greetingOf(now: Date, t: Messages): string {
   const h = Number(new Intl.DateTimeFormat("en-US", { timeZone: TZ, hour: "numeric", hourCycle: "h23" }).format(now));
   return h >= 12 && h < 18 ? t.home.greeting.afternoon : h >= 5 && h < 12 ? t.home.greeting.morning : t.home.greeting.evening;
 }
 
-/** "TERÇA, 17 DE NOVEMBRO" (New York date). */
-export function dateLineOf(now: Date): string {
-  return new Intl.DateTimeFormat("pt-BR", { timeZone: TZ, weekday: "long", day: "numeric", month: "long" }).format(now).replace("-feira", "").toLocaleUpperCase("pt-BR");
+/** "TERÇA, 17 DE NOVEMBRO" / "TUESDAY, NOVEMBER 17" (New York date, UI language). */
+export function dateLineOf(now: Date, t: Messages): string {
+  return new Intl.DateTimeFormat(t.intl, { timeZone: TZ, weekday: "long", day: "numeric", month: "long" }).format(now).replace("-feira", "").toLocaleUpperCase(t.intl);
 }
 
 /** The user's first name: the profile name when there is one, else the part of the e-mail before the @. */
@@ -28,7 +28,7 @@ export function firstNameOf(user: { email?: string | null; user_metadata?: Recor
   return first ? first[0].toLocaleUpperCase("pt-BR") + first.slice(1).toLocaleLowerCase("pt-BR") : "";
 }
 
-export const readyLine = (n: number) => (n === 0 ? t.home.readyNone : n === 1 ? t.home.readyOne : fill(t.home.ready, { n: n.toLocaleString("pt-BR") }));
+export const readyLine = (n: number, t: Messages) => (n === 0 ? t.home.readyNone : n === 1 ? t.home.readyOne : fill(t.home.ready, { n: n.toLocaleString(t.intl) }));
 
 /** Stage Novo, not "do not call", with a phone a call can use: what "Prontas para ligar" counts. */
 export const isReady = (r: HomeRow) => stageOf(r.lead) === "new" && !r.lead.do_not_call && telHref(r.display.phone ?? "") !== null;
@@ -56,7 +56,7 @@ export const parsePeriod = (raw: unknown): Period => (PERIODS.find((p) => p === 
 export type FunnelTile = { stage: LeadStage; n: number; note: string };
 
 /** The funnel strip: leads per stage among those that entered (first_seen_at) in the period. */
-export function funnelOf(rows: HomeRow[], period: Period, now: Date): FunnelTile[] {
+export function funnelOf(rows: HomeRow[], period: Period, now: Date, t: Messages): FunnelTile[] {
   const inPeriod = rows.filter((r) => enteredOk(r.lead.first_seen_at, period === "all" ? "all" : period, now));
   const n = Object.fromEntries(LEAD_STAGES.map((s) => [s, 0])) as Record<LeadStage, number>;
   let large = 0, residential = 0;

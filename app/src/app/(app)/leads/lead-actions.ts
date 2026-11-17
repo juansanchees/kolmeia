@@ -9,9 +9,9 @@ import { leadsCsv } from "@/lib/leads/view";
 import { sanitizeUrl } from "@/lib/safe-url";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace, requireSender } from "@/lib/workspace";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { getT } from "@/lib/i18n/server";
 
-const H = t.handoff;
 const id = z.string().uuid();
 const fail = (message: string): FormState => ({ status: "error", message });
 const ok = (message: string): FormState => ({ status: "success", message });
@@ -29,6 +29,8 @@ export async function handOffLeadAction(
   closerId: string,
   brief: { who: string; what_they_said: string; next_step: string; evidence_urls: string[] },
 ): Promise<FormState> {
+  const t = await getT();
+  const H = t.handoff;
   await requireSender();
   const parsedIds = z.object({ leadId: id, closerId: id }).safeParse({ leadId, closerId });
   if (!parsedIds.success) return fail(H.pickCloser);
@@ -50,6 +52,8 @@ export async function handOffLeadAction(
 
 /** Won or lost. Any signed-in member: the RPC (sender, or the lead's closer) and RLS decide. */
 export async function setLeadStatusAction(leadId: string, status: "won" | "lost"): Promise<FormState> {
+  const t = await getT();
+  const H = t.handoff;
   const parsed = z.object({ leadId: id, status: z.enum(["won", "lost"]) }).safeParse({ leadId, status });
   if (!parsed.success) return fail(H.failed);
   if (!(await getCurrentWorkspace())) return fail(H.failed);
@@ -64,6 +68,8 @@ export async function setLeadStatusAction(leadId: string, status: "won" | "lost"
 
 /** Puts one lead on a call agent's list for today. Owner/sdr only. */
 export async function addToCallListAction(leadId: string, agentId: string): Promise<FormState> {
+  const t = await getT();
+  const H = t.handoff;
   await requireSender();
   const parsed = z.object({ leadId: id, agentId: id }).safeParse({ leadId, agentId });
   if (!parsed.success) return fail(H.failed);
@@ -80,6 +86,7 @@ const leadIdsSchema = z.array(z.string().uuid()).min(1).max(5000);
 
 /** Marks many leads lost or discarded (stage "Fechado"); the DB trigger stops their sequences. Owner/sdr only. */
 export async function setLeadsStatusAction(leadIds: string[], status: "lost" | "discarded"): Promise<FormState> {
+  const t = await getT();
   const ws = await requireSender();
   const ids = leadIdsSchema.safeParse(leadIds);
   if (!ids.success) return fail(t.leads.tooMany);
@@ -98,6 +105,7 @@ export async function setLeadsStatusAction(leadIds: string[], status: "lost" | "
 
 /** Sets the manual type of leads; null = back to automatic. Owner/sdr only. */
 export async function setLeadSegmentAction(leadIds: string[], segment: Segment | null): Promise<FormState> {
+  const t = await getT();
   const ws = await requireSender();
   const ids = leadIdsSchema.safeParse(leadIds);
   if (!ids.success) return fail(t.leads.tooMany);
@@ -114,6 +122,7 @@ export async function setLeadSegmentAction(leadIds: string[], segment: Segment |
 
 /** The full CSV of the given leads: the table only holds slim rows, so the server builds it. */
 export async function leadsCsvAction(leadIds: string[]): Promise<{ csv: string } | { error: string }> {
+  const t = await getT();
   const ws = await requireSender();
   const ids = leadIdsSchema.safeParse(leadIds);
   if (!ids.success) return { error: t.leads.toolbar.csvFailed };
@@ -123,7 +132,7 @@ export async function leadsCsvAction(leadIds: string[]): Promise<{ csv: string }
     const items = await listLeads(supabase, ws.id, { ids: ids.data });
     const pos = new Map(ids.data.map((x, i) => [x, i]));
     items.sort((a, b) => (pos.get(a.lead.id) ?? 0) - (pos.get(b.lead.id) ?? 0)); // table order, not DB chunk order
-    return { csv: leadsCsv(items) };
+    return { csv: leadsCsv(items, t) };
   } catch {
     return { error: t.leads.toolbar.csvFailed };
   }

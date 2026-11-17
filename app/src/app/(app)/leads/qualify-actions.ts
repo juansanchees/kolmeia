@@ -10,9 +10,8 @@ import { PLACES_CALL_USD } from "@/lib/qualifier/places";
 import { hasPlaces } from "@/lib/qualifier/places-config";
 import { createClient } from "@/lib/supabase/server";
 import { requireSender } from "@/lib/workspace";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 
-const E = t.qualifier.errors;
 const MAX = 500;
 const ids = z.array(z.string().uuid()).max(MAX);
 
@@ -20,6 +19,8 @@ type Estimate = { ok: true; count: number; usd: number; leftTodayUsd: number } |
 
 /** What qualifying these leads on request would cost at most, and what the Qualificador has left today. */
 export async function estimateQualifyAction(leadIds: string[]): Promise<Estimate> {
+  const t = await getT();
+  const E = t.qualifier.errors;
   const workspace = await requireSender();
   const parsed = ids.safeParse(leadIds);
   if (!parsed.success) return { ok: false, error: E.failed };
@@ -54,6 +55,8 @@ export async function estimateQualifyAction(leadIds: string[]): Promise<Estimate
 
 /** Puts the leads at the front of the Qualificador's queue with the strong AI step on (request_qualification, 0014). */
 export async function requestQualifyAction(leadIds: string[]): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  const t = await getT();
+  const E = t.qualifier.errors;
   const workspace = await requireSender();
   const parsed = ids.safeParse(leadIds);
   if (!parsed.success || parsed.data.length === 0) return { ok: false, error: E.failed };

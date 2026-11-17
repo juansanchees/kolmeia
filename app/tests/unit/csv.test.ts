@@ -1,6 +1,9 @@
 import { describe, expect, test } from "vitest";
 import type { CandidateRow } from "@/lib/research/rows";
-import { coverage, csvCell, inTab, SHEET_COLUMNS, toCsv } from "@/lib/research/sheet";
+import { coverage, csvCell, inTab, sheetColumns, toCsv } from "@/lib/research/sheet";
+import { t } from "@/messages/pt";
+
+const SHEET_COLUMNS = sheetColumns(t);
 
 export function candidate(over: Partial<CandidateRow> = {}): CandidateRow {
   return {
@@ -55,7 +58,7 @@ export function candidate(over: Partial<CandidateRow> = {}): CandidateRow {
 
 describe("CSV export", () => {
   test("starts with a UTF-8 BOM, CRLF lines, header in column order", () => {
-    const csv = toCsv([candidate()]);
+    const csv = toCsv([candidate()], SHEET_COLUMNS);
     expect(csv.charCodeAt(0)).toBe(0xfeff);
     const lines = csv.slice(1).split("\r\n");
     expect(lines[0].split(",").slice(0, 5)).toEqual(["Empresa", "Perguntar por", "Cargo", "Confiança do nome", "Temperatura"]);
@@ -88,7 +91,7 @@ describe("CSV export", () => {
   });
 
   test("row values: labels in Portuguese, raw numbers, unknown is empty", () => {
-    const row = toCsv([candidate({ permit_count: null })]).slice(1).split("\r\n")[1];
+    const row = toCsv([candidate({ permit_count: null })], SHEET_COLUMNS).slice(1).split("\r\n")[1];
     expect(row.startsWith('"Harbor Test Construction, Inc.",Greg Tester,Owner,alta,Muito quente,')).toBe(true);
     expect(row).toContain(",7330624,2026-11-03,");
     expect(row).toContain("Falmouth,Cape & Islands,,7330624");
@@ -126,7 +129,7 @@ describe("review of 10/11/2026: phone cells, new tabs, jobs export", () => {
     expect(csvCell("+1+cmd|' /C calc'!A0", true)).toBe("'+1+cmd|' /C calc'!A0");
     expect(csvCell("=1+1", true)).toBe("'=1+1");
     expect(csvCell("+1 508-555-0199")).toBe("'+1 508-555-0199"); // any other column
-    const row = toCsv([candidate()]).slice(1).split("\r\n")[1];
+    const row = toCsv([candidate()], SHEET_COLUMNS).slice(1).split("\r\n")[1];
     expect(row).toContain(",+1 508-555-0199,");
   });
 
@@ -146,10 +149,10 @@ describe("review of 10/11/2026: phone cells, new tabs, jobs export", () => {
     const { toJobsCsv } = await import("@/lib/research/sheet");
     const csv = toJobsCsv([
       { id: "j1", run_id: "r1", address: "40 Elm St", project_name: null, job_type: "3-family", declared_value_usd: 650000, job_date: "2026-10-02", source_url: "https://permits.example/1", excerpt: "contractor: blank", seen_at: "2026-11-10T00:00:00.000Z" },
-    ]);
+    ], t);
     const lines = csv.slice(1).split("\r\n");
     expect(lines[0]).toBe("Endereço,Projeto,Tipo,Valor declarado (US$),Data,Fonte,Trecho,Visto em");
     expect(lines[1]).toBe("40 Elm St,,3-family,650000,2026-10-02,https://permits.example/1,contractor: blank,2026-11-10");
-    expect(toJobsCsv([]).slice(1).split("\r\n")).toEqual(["Endereço,Projeto,Tipo,Valor declarado (US$),Data,Fonte,Trecho,Visto em", ""]);
+    expect(toJobsCsv([], t).slice(1).split("\r\n")).toEqual(["Endereço,Projeto,Tipo,Valor declarado (US$),Data,Fonte,Trecho,Visto em", ""]);
   });
 });

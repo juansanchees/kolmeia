@@ -6,13 +6,14 @@ import { btn } from "@/components/email/bits";
 import { TrainButton } from "@/components/profile/TrainButton";
 import { date } from "@/components/research/format";
 import type { ImportListItem } from "@/lib/imports/store";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 import { Paged } from "@/components/Pager";
-
-const M = t.imports;
 
 /** `profiles`: import id -> its newest learned profile; `trainEstimateUsd`: what one training call can cost at most. */
 export function ImportHistory({ items, profiles = {}, trainEstimateUsd = 0 }: { items: ImportListItem[]; profiles?: Record<string, string>; trainEstimateUsd?: number }) {
+  const t = useT();
+  const M = t.imports;
   const [pending, start] = useTransition();
   const [asking, setAsking] = useState<string | null>(null);
   const [undone, setUndone] = useState<Record<string, { deleted: number; kept: number }>>({});
@@ -43,7 +44,7 @@ export function ImportHistory({ items, profiles = {}, trainEstimateUsd = 0 }: { 
               <li key={i.id} id={`import-${i.id}`} className="flex flex-col gap-2 border-b border-line px-3.5 py-3 last:border-b-0">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="min-w-0 truncate text-sm font-semibold">{i.list_name}</span>
-                  <span className="font-mono text-xs text-muted">{date(i.created_at)} · {M.statuses[status]}</span>
+                  <span className="font-mono text-xs text-muted">{date(i.created_at, t.intl)} · {M.statuses[status]}</span>
                 </div>
                 <p className="m-0 text-[13px] text-muted">
                   {fill(M.historyCounts, { rows: i.row_count, new: i.new_count, merged: i.merged_count, errors: i.error_count })}

@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "vitest";
+import { t } from "@/messages/pt";
 import { originLabel } from "@/lib/leads/view";
 import { originListsOf } from "@/lib/leads/queries";
 import { originText, toTableRow } from "@/lib/leads/table";
@@ -36,8 +37,8 @@ test("toTableRow: effective segment from origins and override", () => {
 test("import-only lead with no visible lists: Sem tipo and originLabel fallback", () => {
   const r = toTableRow(importOnly, []);
   expect(r.segment).toBeNull();
-  expect(originText(r)).toBe(originLabel(importOnly));
-  expect(originText({ ...r, origins: [{ name: "Lista A", at: "2026-11-01T00:00:00Z", kind: "list" }] })).toBe("Lista A");
+  expect(originText(r, t)).toBe(originLabel(importOnly, t));
+  expect(originText({ ...r, origins: [{ name: "Lista A", at: "2026-11-01T00:00:00Z", kind: "list" }] }, t)).toBe("Lista A");
 });
 
 test("originListsOf merges imports and lists, skips undone imports, sorts by date, dedupes by name", async () => {

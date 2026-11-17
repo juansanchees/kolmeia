@@ -63,3 +63,15 @@ describe("locale", () => {
     expect(fill(pt.paging.page, { page: 2, pages: 5 })).toBe("Página 2 de 5");
   });
 });
+
+describe("origin filter keys", () => {
+  it("stay Portuguese as keys but read in the UI language", async () => {
+    const { originKeyLabel } = await import("@/lib/leads/view");
+    expect(originKeyLabel("Sem origem", en)).toBe("No source");
+    expect(originKeyLabel("Pesquisa avulsa", en)).toBe("One-off research");
+    expect(originKeyLabel("Importado", en)).toBe("Imported");
+    expect(originKeyLabel("Importado · Planilha Y", en)).toBe("Imported · Planilha Y");
+    expect(originKeyLabel("Lista 1", en)).toBe("Lista 1");
+    expect(originKeyLabel("Sem origem", pt)).toBe("Sem origem");
+  });
+});

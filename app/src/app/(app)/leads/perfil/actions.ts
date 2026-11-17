@@ -15,13 +15,13 @@ import { POINT_KEYS, type LearnedProfile, type TrainingRow } from "@/lib/profile
 import { COMPANY_TYPES } from "@/lib/research/types";
 import { createClient } from "@/lib/supabase/server";
 import { requireSender } from "@/lib/workspace";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
+import type { Messages } from "@/lib/i18n";
 
-const E = t.profile.errors;
 const uuid = z.string().uuid();
 const PAGE = 1000;
 
-const AI_MESSAGES: Partial<Record<AiErrorCode, string>> = {
+const AI_MESSAGES = (t: Messages): Partial<Record<AiErrorCode, string>> => ({
   not_configured: t.ai.notConfigured,
   no_access: t.ai.noAccess,
   daily_cap: t.ai.dailyCap,
@@ -30,7 +30,7 @@ const AI_MESSAGES: Partial<Record<AiErrorCode, string>> = {
   refused: t.ai.refused,
   invalid_output: t.ai.invalidOutput,
   truncated: t.ai.truncated,
-};
+});
 
 /** The owner's edit, held to the same limits as the AI's proposal (the database only checks the top-level keys). */
 const edited = z.object({
@@ -54,6 +54,8 @@ type Done = { ok: true } | { ok: false; error: string };
 
 /** One Sonnet call in this user's session over a sample of the list; saves a PROPOSAL only. Nothing is applied. */
 export async function trainProfileAction(importId: string): Promise<{ ok: true; profileId: string } | { ok: false; error: string }> {
+  const t = await getT();
+  const E = t.profile.errors;
   const workspace = await requireSender();
   if (!uuid.safeParse(importId).success) return { ok: false, error: E.failed };
   const db = await createClient();
@@ -88,7 +90,7 @@ export async function trainProfileAction(importId: string): Promise<{ ok: true; 
     const r = await learnProfile({ workspaceId: workspace.id, runId: null, ledger: sessionLedger(db), transport: defaultTransport() }, { listName: String(imp.list_name), rows: sample });
     profile = r.data;
   } catch (e) {
-    return { ok: false, error: (isAiError(e) && AI_MESSAGES[e.code]) || t.ai.generic };
+    return { ok: false, error: (isAiError(e) && AI_MESSAGES(t)[e.code]) || t.ai.generic };
   }
   if (profile.points.length === 0) return { ok: false, error: E.empty };
 
@@ -103,6 +105,8 @@ export async function trainProfileAction(importId: string): Promise<{ ok: true; 
  * only (an open one is returned instead of paying twice). Needs 10 labeled leads, 3 of them good.
  */
 export async function learnFromResultsAction(): Promise<{ ok: true; profileId: string } | { ok: false; error: string }> {
+  const t = await getT();
+  const E = t.profile.errors;
   const workspace = await requireSender();
   const db = await createClient();
   if (!db) return { ok: false, error: E.failed };
@@ -120,7 +124,7 @@ export async function learnFromResultsAction(): Promise<{ ok: true; profileId: s
     profile = r.data;
     sampleRows = r.sampleRows;
   } catch (e) {
-    return { ok: false, error: (isAiError(e) && AI_MESSAGES[e.code]) || t.ai.generic };
+    return { ok: false, error: (isAiError(e) && AI_MESSAGES(t)[e.code]) || t.ai.generic };
   }
   if (!learnedSomething(profile, currentProfileOf(d.current))) return { ok: false, error: t.profile.results.empty };
 
@@ -132,6 +136,8 @@ export async function learnFromResultsAction(): Promise<{ ok: true; profileId: s
 
 /** The only way a profile starts to apply. `editedProfile` replaces the proposal's content (the original is kept). */
 export async function approveProfileAction(profileId: string, editedProfile: LearnedProfile | null, agentId: string | null): Promise<Done> {
+  const t = await getT();
+  const E = t.profile.errors;
   await requireSender();
   if (!uuid.safeParse(profileId).success || (agentId !== null && !uuid.safeParse(agentId).success)) return { ok: false, error: E.failed };
   const clean = editedProfile === null ? null : cleanEdit(editedProfile);
@@ -146,6 +152,8 @@ export async function approveProfileAction(profileId: string, editedProfile: Lea
 }
 
 export async function rejectProfileAction(profileId: string): Promise<Done> {
+  const t = await getT();
+  const E = t.profile.errors;
   await requireSender();
   if (!uuid.safeParse(profileId).success) return { ok: false, error: E.failed };
   const db = await createClient();

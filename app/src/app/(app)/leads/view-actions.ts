@@ -5,13 +5,15 @@ import { z } from "zod";
 import { parseLeadFilters } from "@/lib/leads/view";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace, requireSender } from "@/lib/workspace";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { getT } from "@/lib/i18n/server";
 
 const uuid = z.string().uuid();
 type Result = { ok: boolean; message?: string };
 
 /** Saves the current filters under a name (replacing a view of the same name); optionally the one the page opens with. */
 export async function saveViewAction(name: string, filters: unknown, makeDefault: boolean): Promise<Result> {
+  const t = await getT();
   const workspace = await getCurrentWorkspace();
   const supabase = await createClient();
   const n = z.string().trim().min(1).max(60).safeParse(name);
@@ -38,6 +40,7 @@ const addSchema = z.object({
 
 /** "Adicionar à lista": into an existing list, or a new one (an existing name is reused). Owner/sdr only (RLS too). */
 export async function addToListAction(leadIds: string[], target: { listId: string } | { name: string }): Promise<Result> {
+  const t = await getT();
   const workspace = await requireSender();
   const p = addSchema.safeParse({ leadIds, target });
   if (!p.success) return { ok: false, message: t.lists.add.none };

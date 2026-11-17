@@ -4,9 +4,8 @@ import { useState, useTransition } from "react";
 import { setQualifierAction } from "@/app/(app)/agentes/qualifier-actions";
 import { btn, Notice } from "@/components/email/bits";
 import type { QualifierStatus } from "@/lib/qualifier/view";
-import { t } from "@/messages/pt";
+import { useT } from "@/lib/i18n/client";
 
-const C = t.spend.caps;
 const input = "min-h-11 w-32 border border-line bg-surface px-3 text-sm text-ink";
 
 /** "5,5" and "5.5" both work; anything else is null. */
@@ -18,6 +17,8 @@ function parseUsd(v: string): number | null {
 
 /** Daily cap, lead cap and the automatic deep check. Owner/SDR only: the page requires a sender and the database checks again. */
 export function QualifierCapForm({ status }: { status: Pick<QualifierStatus, "daily_cap_usd" | "lead_cap_usd" | "auto_deep"> }) {
+  const t = useT();
+  const C = t.spend.caps;
   const [daily, setDaily] = useState(String(status.daily_cap_usd));
   const [lead, setLead] = useState(String(status.lead_cap_usd));
   const [autoDeep, setAutoDeep] = useState(status.auto_deep);

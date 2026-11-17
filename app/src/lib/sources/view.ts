@@ -1,10 +1,9 @@
 import { z } from "zod";
 import { usd } from "@/components/research/format";
-import { fill, t } from "@/messages/pt";
+import { fill, type Messages } from "@/lib/i18n";
 
 // Pure helpers of the "Buscar" screens: labels, form parsing. No I/O. The database repeats every limit.
 
-const S = t.sources;
 export type Kind = "maps" | "apollo" | "shovels" | "b2b";
 
 /** Same formula as the database (enqueue_source_run): the most a Maps run may cost. MAPS_USD_PER_PLACE is a "?" estimate. */
@@ -13,11 +12,12 @@ const MAPS_MIN_USD = 0.5;
 export const mapsReserve = (max: number): number => Math.max(MAPS_MIN_USD, Math.ceil(max * MAPS_USD_PER_PLACE * 100) / 100);
 
 /** "até US$ 0,50" for Maps; Apollo's free lookup and Shovels' free plan have no dollar cost. */
-export function estimateLabel(kind: Kind, max: number): string {
+export function estimateLabel(kind: Kind, max: number, t: Messages): string {
+  const S = t.sources;
   if (kind === "apollo") return S.search.estimateApollo;
   if (kind === "shovels") return S.search.estimateShovels;
   if (kind === "b2b") return S.search.estimateB2b;
-  return fill(S.estimate, { usd: usd(mapsReserve(max)) });
+  return fill(S.estimate, { usd: usd(mapsReserve(max), t.intl) });
 }
 
 type RunStatusIn = { status: string; error: string | null };
@@ -25,7 +25,8 @@ type RunStatusIn = { status: string; error: string | null };
 const known = (o: object, k: string): boolean => Object.prototype.hasOwnProperty.call(o, k);
 
 /** "na fila", "rodando", "importada", "falhou · demorou demais", "recusada · teto atingido". Unknown codes become "erro". */
-export function runStatusLabel(row: RunStatusIn): string {
+export function runStatusLabel(row: RunStatusIn, t: Messages): string {
+  const S = t.sources;
   const base = known(S.runStatus, row.status) ? S.runStatus[row.status as keyof typeof S.runStatus] : S.runStatus.failed;
   if ((row.status !== "failed" && row.status !== "refused") || !row.error) return base;
   const code = row.error.toLowerCase().replace("-", "_");
@@ -36,18 +37,20 @@ export function runStatusLabel(row: RunStatusIn): string {
 type Conn = { provider: "apify" | "apollo" | "shovels" | "rapidapi" | "rapidapi_sites"; today: number | null; cap: number | null };
 
 /** "Hoje: US$ 1,20 de 2,00" / "Hoje: 3 de 20 buscas" / "120 de 500 usados este mês" (Shovels); "?" when the database did not say. */
-export function todayLine(c: Conn): string {
+export function todayLine(c: Conn, t: Messages): string {
+  const S = t.sources;
   if (c.provider === "rapidapi") return fill(S.monthCalls, { n: c.today === null ? "?" : c.today, cap: c.cap === null ? "?" : c.cap });
   if (c.provider === "rapidapi_sites") return fill(S.monthSites, { n: c.today === null ? "?" : c.today, cap: c.cap === null ? "?" : c.cap });
   if (c.provider === "shovels") return fill(S.monthRecords, { n: c.today === null ? "?" : c.today, cap: c.cap === null ? "?" : c.cap });
-  if (c.provider === "apify") return fill(S.todayUsd, { spent: c.today === null ? "?" : usd(c.today), cap: c.cap === null ? "?" : usd(c.cap) });
+  if (c.provider === "apify") return fill(S.todayUsd, { spent: c.today === null ? "?" : usd(c.today, t.intl), cap: c.cap === null ? "?" : usd(c.cap, t.intl) });
   return fill(S.todayCalls, { n: c.today === null ? "?" : c.today, cap: c.cap === null ? "?" : c.cap });
 }
 
 const strs = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 
 /** The label the user typed, else what was searched. */
-export function runTitle(r: { kind: string; query: Record<string, unknown> }): string {
+export function runTitle(r: { kind: string; query: Record<string, unknown> }, t: Messages): string {
+  const S = t.sources;
   const label = typeof r.query.label === "string" ? r.query.label.trim() : "";
   if (label) return label;
   if (r.kind === "maps") return [strs(r.query.terms).join(", "), typeof r.query.location === "string" ? r.query.location : ""].filter(Boolean).join(" · ");

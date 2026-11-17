@@ -4,7 +4,7 @@ import { isSender } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace } from "@/lib/workspace";
 import { Notice } from "@/components/email/bits";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 
 type Row = {
   provider: string;
@@ -22,6 +22,7 @@ const n = (v: number | null) => (v === null ? null : Number(v));
 
 // Owner: connect, replace, cap, disconnect. SDR: read-only. Closer: not found. Only the last 4 characters are read.
 export default async function SourcesPage() {
+  const t = await getT();
   const workspace = await getCurrentWorkspace();
   if (!workspace || !isSender(workspace.role)) notFound();
   const supabase = await createClient();

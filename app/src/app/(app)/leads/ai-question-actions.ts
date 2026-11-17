@@ -11,26 +11,26 @@ import { ANSWER_TYPES, QUESTION_MAX, QUESTION_SOURCES, RUN_MAX, TEST_LEADS } fro
 import { nodeRawHttp } from "@/lib/qualifier/site/net";
 import { createClient } from "@/lib/supabase/server";
 import { requireSender } from "@/lib/workspace";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
+import type { Messages } from "@/lib/i18n";
 
 // "Pergunta da IA para cada lead": owner/sdr only, every write as the user (RLS 0029), every AI call in the user's
 // ledger (caps and allowlist in reserve_ai_call). The page drives the batch one bounded step at a time.
 
-const A = t.leads.aiQuestion;
 const uuid = z.string().uuid();
 const STEP_LEADS = 2;
 /** One step's site read per lead and AI call deadline (well inside the page's maxDuration of 300 s). */
 const SITE_MS = 20_000;
 const AI_MS = 30_000;
 
-const AI_TEXT: Partial<Record<AiErrorCode, string>> = {
+const AI_TEXT = (t: Messages): Partial<Record<AiErrorCode, string>> => ({
   not_configured: t.ai.notConfigured,
   no_access: t.ai.noAccess,
   daily_cap: t.ai.dailyCap,
   user_cap: t.ai.userCap,
   global_cap: t.ai.globalCap,
   refused: t.ai.refused,
-};
+});
 
 const createSchema = z.object({
   question: z.string().trim().min(3).max(QUESTION_MAX),
@@ -41,6 +41,8 @@ const createSchema = z.object({
 export type QuestionResult = { ok: true; id: string } | { ok: false; error: string };
 
 export async function createQuestionAction(input: z.input<typeof createSchema>): Promise<QuestionResult> {
+  const t = await getT();
+  const A = t.leads.aiQuestion;
   const ws = await requireSender();
   const p = createSchema.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues.some((i) => i.path[0] === "sources") ? A.pickSource : A.tooLong };
@@ -68,6 +70,8 @@ export async function archiveQuestionAction(questionId: string): Promise<{ ok: b
 export type StepOut = { ok: true; result: StepResult; stopText: string | null } | { ok: false; error: string };
 
 async function step(questionId: string, limit: number, leadIds?: string[]): Promise<StepOut> {
+  const t = await getT();
+  const A = t.leads.aiQuestion;
   const ws = await requireSender();
   const db = await createClient();
   if (!db || !uuid.safeParse(questionId).success) return { ok: false, error: A.failed };
@@ -84,7 +88,7 @@ async function step(questionId: string, limit: number, leadIds?: string[]): Prom
       { limit, leadIds },
     );
     // no revalidatePath here: the page refreshes once when the batch ends (onDone)
-    return { ok: true, result, stopText: result.stop ? (AI_TEXT[result.stop] ?? t.ai.generic) : null };
+    return { ok: true, result, stopText: result.stop ? (AI_TEXT(t)[result.stop] ?? t.ai.generic) : null };
   } catch {
     return { ok: false, error: A.failed };
   }
@@ -92,6 +96,8 @@ async function step(questionId: string, limit: number, leadIds?: string[]): Prom
 
 /** "Testar em 3": answers up to 3 leads now (re-answering them), so the person checks before a batch. */
 export async function testQuestionAction(questionId: string, leadIds: string[]): Promise<StepOut> {
+  const t = await getT();
+  const A = t.leads.aiQuestion;
   const ws = await requireSender();
   const ids = z.array(uuid).min(1).max(TEST_LEADS).safeParse(leadIds);
   const db = await createClient();
@@ -104,6 +110,8 @@ export async function testQuestionAction(questionId: string, leadIds: string[]):
 
 /** "Rodar em N": queues the leads; the page then calls stepQuestionAction while rows remain. */
 export async function enqueueQuestionAction(questionId: string, leadIds: string[]): Promise<{ ok: boolean; error?: string }> {
+  const t = await getT();
+  const A = t.leads.aiQuestion;
   const ws = await requireSender();
   const ids = z.array(uuid).min(1).max(RUN_MAX).safeParse(leadIds);
   const db = await createClient();

@@ -1,4 +1,5 @@
 import "server-only";
+import type { Messages } from "@/lib/i18n";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { LEADS_MAX, listLeads } from "@/lib/leads/queries";
 import { leadsCsv } from "@/lib/leads/view";
@@ -26,13 +27,13 @@ export async function listLeadIds(db: SupabaseClient, listId: string): Promise<s
 }
 
 /** The list's CSV, built from the leads the user can see (same columns and formula escaping as the LEADS CSV); null when the list is not visible. */
-export async function listCsv(db: SupabaseClient, workspaceId: string, listId: string): Promise<{ name: string; csv: string } | null> {
+export async function listCsv(db: SupabaseClient, workspaceId: string, listId: string, t: Messages): Promise<{ name: string; csv: string } | null> {
   const { data, error } = await db.from("lists").select("name").eq("id", listId).eq("workspace_id", workspaceId).maybeSingle();
   if (error) throw new Error(`listCsv: ${error.message}`);
   if (!data) return null;
   const ids = await listLeadIds(db, listId);
   const items = ids.length > 0 ? await listLeads(db, workspaceId, { ids }) : [];
-  return { name: data.name as string, csv: leadsCsv(items) };
+  return { name: data.name as string, csv: leadsCsv(items, t) };
 }
 
 /** Id and name of every list of the workspace, by name. */

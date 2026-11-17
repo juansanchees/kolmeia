@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
+import { t } from "@/messages/pt";
 import { pickSignal } from "@/lib/email/signal";
 import { campaignWarnings, contentChecks, hasContentProblem, type WarningsInput } from "@/lib/email/warnings";
 
@@ -10,16 +11,16 @@ const { reserveFor } = await import("@/lib/ai/gateway");
 
 // Fase 3 items 10-12: the draft signal, the local spam check, and the model per task.
 const GOOD = { subject: "your 4-unit permit on E St", body: "Hi David,\n\nSaw your permit for the new 4-unit building at 363 E St. Who's handling the HVAC on that one?\n\nJuan", step: 1 };
-const failing = (i: Parameters<typeof contentChecks>[0]) => contentChecks(i).filter((c) => !c.ok).map((c) => c.kind);
+const failing = (i: Parameters<typeof contentChecks>[0]) => contentChecks(i, t).filter((c) => !c.ok).map((c) => c.kind);
 
 describe("spam check (local rules)", () => {
   test("a clean first e-mail passes every check", () => {
     expect(failing(GOOD)).toEqual([]);
-    expect(contentChecks(GOOD).map((c) => c.kind)).toEqual(["spam_words", "links", "length", "caps", "exclaims"]);
+    expect(contentChecks(GOOD, t).map((c) => c.kind)).toEqual(["spam_words", "links", "length", "caps", "exclaims"]);
   });
   test("spam words, whole words only", () => {
     expect(failing({ ...GOOD, body: "Get a FREE quote, guaranteed. Act now." })).toContain("spam_words");
-    expect(contentChecks({ ...GOOD, body: "Act now for a free estimate" })[0].text).toMatch(/free, act now/);
+    expect(contentChecks({ ...GOOD, body: "Act now for a free estimate" }, t)[0].text).toMatch(/free, act now/);
     expect(failing({ ...GOOD, body: "We work freely across Freetown." })).not.toContain("spam_words");
   });
   test("links count only in the first e-mail", () => {
@@ -47,7 +48,7 @@ describe("spam check (local rules)", () => {
   test("recipient: only a verifier-checked address is OK; domain_ok-only and unchecked warn", () => {
     expect(failing({ ...GOOD, recipient: "verified" })).toEqual([]);
     expect(failing({ ...GOOD, recipient: "domain_ok" })).toEqual(["recipient"]);
-    expect(contentChecks({ ...GOOD, recipient: "domain_ok" }).at(-1)!.text).toMatch(/só o domínio/);
+    expect(contentChecks({ ...GOOD, recipient: "domain_ok" }, t).at(-1)!.text).toMatch(/só o domínio/);
     expect(failing({ ...GOOD, recipient: null })).toEqual(["recipient"]);
     // left out = not checked (the campaign strip judges only the text)
     expect(hasContentProblem(GOOD)).toBe(false);
@@ -57,8 +58,8 @@ describe("spam check (local rules)", () => {
       mailboxes: [], campaigns: [{ id: "c1", name: "Prédios", status: "draft", send_mode: "dry_run", sent: 0, bounced: 0 }], sentToday: {}, prospectsByCampaign: {}, gateOpen: true,
       sender: { legal_name: "New England Air HVAC Corp", postal_address: "1 Main St, Millbury, MA 01527", sender_name: "Juan" },
     };
-    expect(campaignWarnings(base)).toEqual([]);
-    const w = campaignWarnings({ ...base, spamDrafts: { c1: 2 } });
+    expect(campaignWarnings(base, t)).toEqual([]);
+    const w = campaignWarnings({ ...base, spamDrafts: { c1: 2 } }, t);
     expect(w).toEqual([{ kind: "spam_risk", text: expect.stringMatching(/Prédios: 2 rascunho/), href: "/campanhas/c1/revisar" }]);
   });
 });

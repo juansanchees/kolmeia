@@ -8,12 +8,13 @@ import { huntHref, type TownRow } from "@/lib/coverage/view";
 import { Badge } from "@/components/email/bits";
 import { Choice } from "@/components/research/controls";
 import { date } from "@/components/research/format";
-import { t } from "@/messages/pt";
+import { useT } from "@/lib/i18n/client";
 
-const C = t.coverage;
 const BAR = 12;
 
 export function CoverageTable({ towns }: { towns: TownRow[] }) {
+  const t = useT();
+  const C = t.coverage;
   const [county, setCounty] = useState("");
   const [onlyUncovered, setOnlyUncovered] = useState(false);
   const shown = towns.filter((x) => (!county || x.county === county) && (!onlyUncovered || !x.covered));
@@ -60,7 +61,7 @@ export function CoverageTable({ towns }: { towns: TownRow[] }) {
                       <span aria-hidden="true" className="text-blue">{"█".repeat(filled)}</span> {x.leads}
                     </td>
                     <td className="py-2 pr-3 font-mono">{x.searches}</td>
-                    <td className="py-2 pr-3 font-mono">{date(x.last)}</td>
+                    <td className="py-2 pr-3 font-mono">{date(x.last, t.intl)}</td>
                     <td className="py-2">
                       {x.covered ? (
                         <Badge tone="ok">{C.covered}</Badge>

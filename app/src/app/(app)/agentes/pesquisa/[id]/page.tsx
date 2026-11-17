@@ -8,12 +8,10 @@ import { Conversation } from "@/components/research/Conversation";
 import { Progress } from "@/components/research/Progress";
 import { Results } from "@/components/research/Results";
 import { RunDriver } from "@/components/research/RunDriver";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 
 // The step route runs up to 300 s; server actions on this page are short, but keep the same ceiling.
 export const maxDuration = 300;
-
-const M = t.research;
 
 export default async function ResearchRunPage({
   params,
@@ -22,6 +20,8 @@ export default async function ResearchRunPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+  const t = await getT();
+  const M = t.research;
   const { id } = await params;
   const { view } = await searchParams;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();

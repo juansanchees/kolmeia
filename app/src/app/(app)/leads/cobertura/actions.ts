@@ -8,13 +8,14 @@ import { isMarkDate } from "@/lib/coverage/view";
 import type { FormState } from "@/lib/form-state";
 import { createClient } from "@/lib/supabase/server";
 import { requireSender } from "@/lib/workspace";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 
-const E = t.coverage.errors;
 const uuid = z.string().uuid();
 
 /** A manual mark: a town already searched outside the app. Town from the fixed list, date not in the future, note <= 200. */
 export async function addMarkAction(form: FormData): Promise<FormState> {
+  const t = await getT();
+  const E = t.coverage.errors;
   const workspace = await requireSender();
   const fieldErrors: Record<string, string> = {};
   const name = townOf(String(form.get("town") ?? ""));

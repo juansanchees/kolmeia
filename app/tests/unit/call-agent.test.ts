@@ -58,10 +58,10 @@ describe("F5 call agent (UI)", () => {
   });
 
   test("agentRowView shows the list size for a call agent", () => {
-    expect(agentRowView(agent({}), new Date(), { listSize: 7 })).toMatchObject({ type: "Ligação", metric: "7 na lista", href: "/agentes/a1" });
-    expect(agentRowView(agent({ status: "running" }), new Date(), { listSize: 0 }).metric).toBe("0 na lista");
+    expect(agentRowView(agent({}), new Date(), t, { listSize: 7 })).toMatchObject({ type: "Ligação", metric: "7 na lista", href: "/agentes/a1" });
+    expect(agentRowView(agent({ status: "running" }), new Date(), t, { listSize: 0 }).metric).toBe("0 na lista");
     // without a number it falls back to the status line
-    expect(agentRowView(agent({}), new Date()).metric).toBe(t.agents.metric.neverRan);
+    expect(agentRowView(agent({}), new Date(), t).metric).toBe(t.agents.metric.neverRan);
   });
 
   test("the call agent strings exist", () => {

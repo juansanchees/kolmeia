@@ -9,11 +9,9 @@ import { Pill } from "@/components/research/controls";
 import { ArchiveButton } from "./ArchiveButton";
 import type { AgentRow } from "@/lib/agents/types";
 import { callAgentConfigSchema } from "@/lib/calls/types";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 import { Paged } from "@/components/Pager";
-
-const A = t.agents;
-const C = t.callAgent;
 
 export type CallDetailRow = { leadId: string; name: string; temperature: "very_hot" | "hot" | "warm" | "cold" | null; level: number; phone: string | null; outcome: string | null };
 
@@ -38,6 +36,9 @@ export function CallAgentDetail({
   stats: { inList: number; called: number; answered: number; meetings: number };
   rows: CallDetailRow[];
 }) {
+  const t = useT();
+  const A = t.agents;
+  const C = t.callAgent;
   const router = useRouter();
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ tone: "ok" | "warn"; text: string } | null>(null);

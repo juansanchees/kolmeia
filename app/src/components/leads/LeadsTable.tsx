@@ -11,7 +11,7 @@ import { SelectionBar, type BulkNotice } from "@/components/leads/SelectionBar";
 import { ViewBar } from "@/components/leads/ViewBar";
 import type { LeadView } from "@/lib/leads/queries";
 import { usd } from "@/components/research/format";
-import { activeFilterKeys, clearPatch, DEFAULT_LEAD_FILTERS, filterLeads, hasSiteNoEmail, leadFacetsOf, sortRows, type LeadFilters, type SegmentTab, type Sort, type SortKey } from "@/lib/leads/view";
+import { activeFilterKeys, clearPatch, DEFAULT_LEAD_FILTERS, filterLeads, hasSiteNoEmail, leadFacetsOf, originKeyLabel, sortRows, type LeadFilters, type SegmentTab, type Sort, type SortKey } from "@/lib/leads/view";
 import { leadsCsvAction } from "@/app/(app)/leads/lead-actions";
 import { AI_TYPE_BATCH, AI_TYPE_MAX, stageOf } from "@/lib/leads/classify";
 import { classifyTypesAction } from "@/app/(app)/leads/lead-type-actions";
@@ -23,12 +23,9 @@ import { LEAD_STAGES, type LeadStage, type LeadTableRow } from "@/lib/leads/type
 import { QualifyControls, RowCheck } from "@/components/qualifier/QualifyControls";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { openedFromList } from "@/components/leads/LeadModal";
-import { fill, t } from "@/messages/pt";
+import { fill, type Messages } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 
-const L = t.leads;
-const TB = t.leads.toolbar;
-const COL = t.leads.columns;
-const P = t.leads.paging;
 const SEGMENT_TABS: (SegmentTab | "all")[] = ["residential", "small", "large", "none", "all"];
 const STAGE_TABS: (LeadStage | "all")[] = [...LEAD_STAGES, "all"];
 
@@ -61,10 +58,10 @@ type Props = {
   typeReserveUsd?: number;
 };
 
-const lastTouch = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/New_York" }) : L.never);
+const lastTouch = (iso: string | null, t: Messages) => (iso ? new Date(iso).toLocaleDateString(t.intl, { timeZone: "America/New_York" }) : t.leads.never);
 
 /** Column headers in grid order (null = not sortable); the Entrou em column sits after Último contato. */
-const HEADERS: ({ key: SortKey; label: string } | null)[] = [
+const headers = (COL: Messages["leads"]["columns"]): ({ key: SortKey; label: string } | null)[] => [
   { key: "company", label: COL.company }, null, null, null, null, { key: "lastContact", label: COL.lastContact }, { key: "entered", label: COL.entered },
 ];
 
@@ -72,11 +69,13 @@ const HEADERS: ({ key: SortKey; label: string } | null)[] = [
 const nextSort = (s: Sort, key: SortKey): Sort => (s?.key !== key ? { key, dir: "asc" } : s.dir === "asc" ? { key, dir: "desc" } : null);
 
 /** The value part of an active-filter chip ("" = the label says it all). */
-function chipValue(k: keyof LeadFilters, f: LeadFilters, agents: [string, string][]): string {
+function chipValue(k: keyof LeadFilters, f: LeadFilters, agents: [string, string][], t: Messages): string {
+  const L = t.leads;
+  const TB = t.leads.toolbar;
   switch (k) {
     case "contact": return L.contactTabs[f.contact];
     case "cities": return f.cities.join(", ");
-    case "lists": return f.lists.join(", ");
+    case "lists": return f.lists.map((l) => originKeyLabel(l, t)).join(", ");
     case "entered": return L.facets.enteredOpts[f.entered];
     case "nameQ": return `${f.nameNot ? L.facets.nameNotContains : L.facets.nameContains} "${f.nameQ}"`;
     case "role": return L.facets.roleOpts[f.role];
@@ -90,7 +89,7 @@ function chipValue(k: keyof LeadFilters, f: LeadFilters, agents: [string, string
     case "tab": return t.research.list.tabs[f.tab];
     case "minLevel": return String(f.minLevel);
     case "companyTypes": return f.companyTypes.map((c) => L.nlSearch.types[c]).join(", ");
-    case "minPermitUsd": return usd(f.minPermitUsd);
+    case "minPermitUsd": return usd(f.minPermitUsd, t.intl);
     case "aiAnswer": return (L.aiQuestion.answers as Record<string, string>)[f.aiAnswer] ?? f.aiAnswer;
     default: return "";
   }
@@ -98,6 +97,8 @@ function chipValue(k: keyof LeadFilters, f: LeadFilters, agents: [string, string
 
 /** Typing stays local; the filter (and the whole list) only updates 200 ms after the last keystroke. */
 function SearchBox({ value, set }: { value: string; set: (patch: Partial<LeadFilters>) => void }) {
+  const t = useT();
+  const L = t.leads;
   const [q, setQ] = useState(value);
   useEffect(() => {
     if (q === value) return;
@@ -126,6 +127,11 @@ function ContactIcon({ on, glyph, yes, no }: { on: boolean; glyph: string; yes: 
 }
 
 export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: false }, initialFilters = DEFAULT_LEAD_FILTERS, views = [], lists = [], list = null, questions = [], answerReserveUsd = 0, typeReserveUsd = 0 }: Props) {
+  const t = useT();
+  const L = t.leads;
+  const TB = t.leads.toolbar;
+  const COL = t.leads.columns;
+  const P = t.leads.paging;
   const [f, setF] = useState<LeadFilters>(initialFilters);
   // bumped when a saved view replaces every filter, so the search box takes the view's text
   const [searchKey, setSearchKey] = useState(0);
@@ -198,7 +204,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
       if (!r.ok) return setNotice({ ok: false, text: r.error });
       setSearched((s) => new Set([...s, ...ids]));
       const left = findable.length - ids.length;
-      setNotice({ ok: true, text: `${fill(TB.findEmailBulkRun, { done: ids.length, total: findable.length, summary: findSummary(r.results) })}${left > 0 ? ` ${TB.findEmailBulkMore}` : ""}` });
+      setNotice({ ok: true, text: `${fill(TB.findEmailBulkRun, { done: ids.length, total: findable.length, summary: findSummary(r.results, t) })}${left > 0 ? ` ${TB.findEmailBulkMore}` : ""}` });
       router.refresh();
     });
   };
@@ -366,7 +372,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
       {csvError && <p role="alert" className="m-0 text-sm text-danger">{csvError}</p>}
       {canCreate && confirmType && typeTarget.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 border border-line bg-surface p-3">
-          <p className="m-0 min-w-0 flex-[1_1_240px] text-sm text-ink">{fill(TB.aiTypeEstimate, { usd: `US$ ${usd(typeEstimate)}`, n: typeTarget.length })}</p>
+          <p className="m-0 min-w-0 flex-[1_1_240px] text-sm text-ink">{fill(TB.aiTypeEstimate, { usd: `US$ ${usd(typeEstimate, t.intl)}`, n: typeTarget.length })}</p>
           <button type="button" onClick={classifyTypes} className={linkBtn}>{TB.aiTypeRun}</button>
           <button type="button" onClick={() => setConfirmType(false)} className="min-h-11 px-3 text-sm text-blue underline underline-offset-4">{TB.aiTypeCancel}</button>
         </div>
@@ -407,7 +413,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
       {chips.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           {chips.map((k) => {
-            const value = chipValue(k, f, agents);
+            const value = chipValue(k, f, agents, t);
             const label = `${L.chips[k as keyof typeof L.chips]}${value ? `: ${value}` : ""}`;
             return (
               <span key={k} className="inline-flex min-h-9 max-w-full items-center gap-1 border border-blue bg-blue-wash pl-3 text-[13px] text-ink">
@@ -435,7 +441,7 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
         <div className="hidden md:flex" role="row">
           {canCreate && <span className="w-11 shrink-0" />}
           <div className={`grid min-w-0 flex-1 px-3.5 ${aiQ ? GRID_AI : GRID} gap-3 font-mono text-xs uppercase tracking-wide text-muted`}>
-            {HEADERS.map((h, n) => {
+            {headers(t.leads.columns).map((h, n) => {
               if (!h) return <span key={n} />;
               const on = sort?.key === h.key;
               return (
@@ -495,20 +501,20 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
                     </span>
                     <span className="truncate text-[13px] text-muted" title={i.origins.length > 0 ? i.origins.map((o) => o.name).join(", ") : undefined}>
                       <span className="sr-only">{COL.origin}: </span>
-                      {originText(i)}
+                      {originText(i, t)}
                     </span>
                     <span className="font-mono text-[13px] text-muted">
                       <span className="md:hidden">{COL.lastContact}: </span>
-                      {lastTouch(i.lead.last_touch_at)}
+                      {lastTouch(i.lead.last_touch_at, t)}
                     </span>
                     <span className="font-mono text-[13px] text-muted">
                       <span className="md:hidden">{COL.entered}: </span>
-                      {lastTouch(i.lead.first_seen_at)}
+                      {lastTouch(i.lead.first_seen_at, t)}
                     </span>
                     {aiQ && (
                       <span className="min-w-0 text-[13px]">
                         <span className="sr-only">{aiQ.question}: </span>
-                        <span className="font-semibold">{answerText(i.ai?.[aiQ.id])}</span>
+                        <span className="font-semibold">{answerText(i.ai?.[aiQ.id], t)}</span>
                         {i.ai?.[aiQ.id]?.excerpt && <span className="block truncate text-muted" title={i.ai[aiQ.id].excerpt ?? undefined}>“{i.ai[aiQ.id].excerpt}” · {i.ai[aiQ.id].label}</span>}
                       </span>
                     )}

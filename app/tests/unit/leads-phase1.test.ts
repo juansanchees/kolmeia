@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { t } from "@/messages/pt";
 import { DEFAULT_LEAD_FILTERS, filterLeads, leadFacetsOf, leadsCsv, matchesFacets, parseLeadFilters } from "@/lib/leads/view";
 import type { LeadListItem, LeadRow } from "@/lib/leads/types";
 import { postponed, taskTab } from "@/lib/tasks/view";
@@ -120,7 +121,7 @@ describe("GET /api/leads/lists/[id]/csv", () => {
   });
   test.each(["owner", "sdr"])("%s downloads the list as CSV with formulas escaped", async (role) => {
     getCurrentWorkspace.mockResolvedValue({ id: "w", name: "W", role });
-    listCsv.mockResolvedValue({ name: "L", csv: leadsCsv([item({ name: "=HYPERLINK(\"http://x.example\")", city: "@SUM(A1)", phone: "+1 508-555-0199" })]) });
+    listCsv.mockResolvedValue({ name: "L", csv: leadsCsv([item({ name: "=HYPERLINK(\"http://x.example\")", city: "@SUM(A1)", phone: "+1 508-555-0199" })], t) });
     const res = await get();
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/csv");
@@ -130,6 +131,6 @@ describe("GET /api/leads/lists/[id]/csv", () => {
     expect(body).toContain("'@SUM(A1)");
     expect(body).not.toMatch(/(^|,)[=@]/m);
     expect(body).toContain("+1 508-555-0199"); // a plain phone number is not a formula
-    expect(listCsv).toHaveBeenCalledWith({ fake: true }, "w", LIST);
+    expect(listCsv).toHaveBeenCalledWith({ fake: true }, "w", LIST, t);
   });
 });

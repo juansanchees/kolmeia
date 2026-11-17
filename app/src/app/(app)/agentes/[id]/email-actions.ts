@@ -14,14 +14,14 @@ import { SupabaseEmailStore } from "@/lib/email/supabase-store";
 import { listLeads } from "@/lib/leads/queries";
 import { createClient } from "@/lib/supabase/server";
 import { requireSender } from "@/lib/workspace";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
+import type { Messages } from "@/lib/i18n";
 
-const E = t.emailAgent.detail;
 const uuid = z.string().uuid();
 
 export type EmailActionResult = { status: "ok" | "error" | "changed"; message?: string };
 
-const AI_MESSAGES: Partial<Record<AiErrorCode, string>> = {
+const AI_MESSAGES = (t: Messages): Partial<Record<AiErrorCode, string>> => ({
   not_configured: t.ai.notConfigured,
   no_access: t.ai.noAccess,
   daily_cap: t.ai.dailyCap,
@@ -30,7 +30,7 @@ const AI_MESSAGES: Partial<Record<AiErrorCode, string>> = {
   refused: t.ai.refused,
   invalid_output: t.ai.invalidOutput,
   truncated: t.ai.truncated,
-};
+});
 
 const stepsSchema = z
   .array(z.object({ step: z.union([z.literal(1), z.literal(2), z.literal(3)]), subject: z.string(), body: z.string() }))
@@ -57,6 +57,8 @@ function revalidate(agentId: string) {
  * messages of the old text cancelled by the database: an edit always goes back to approval.
  */
 export async function saveSequenceEditAction(campaignId: string, steps: SequenceStep[], tone: string, delays: { step2: number; step3: number }): Promise<EmailActionResult> {
+  const t = await getT();
+  const E = t.emailAgent.detail;
   const ws = await requireSender();
   const s = stepsSchema.safeParse(steps);
   const d = delaysSchema.safeParse(delays);
@@ -81,6 +83,8 @@ export async function saveSequenceEditAction(campaignId: string, steps: Sequence
 
 /** One Sonnet call per click, inside the user's AI caps. The result is a new draft that still needs the owner's approval. */
 export async function rewriteSequenceAction(campaignId: string): Promise<EmailActionResult> {
+  const t = await getT();
+  const E = t.emailAgent.detail;
   const ws = await requireSender();
   if (!uuid.safeParse(campaignId).success) return { status: "error", message: E.failed };
   const own = await ownCampaign(campaignId, ws.id);
@@ -115,7 +119,7 @@ export async function rewriteSequenceAction(campaignId: string): Promise<EmailAc
     );
     draft = r.data;
   } catch (e) {
-    return { status: "error", message: (isAiError(e) && AI_MESSAGES[e.code]) || t.ai.generic };
+    return { status: "error", message: (isAiError(e) && AI_MESSAGES(t)[e.code]) || t.ai.generic };
   }
 
   const { error } = await db.rpc("save_sequence_draft", {
@@ -140,6 +144,8 @@ export async function rewriteSequenceAction(campaignId: string): Promise<EmailAc
  * 40001: nothing is approved and the screen reloads its examples.
  */
 export async function approveSequenceAction(sequenceId: string, digest: string): Promise<EmailActionResult> {
+  const t = await getT();
+  const E = t.emailAgent.detail;
   const ws = await requireSender();
   if (ws.role !== "owner") return { status: "error", message: E.onlyOwner };
   if (!uuid.safeParse(sequenceId).success || !/^[0-9a-f]{64}$/.test(digest)) return { status: "error", message: E.failed };
@@ -159,6 +165,8 @@ export async function approveSequenceAction(sequenceId: string, digest: string):
 
 /** Ligar / Pausar. The database refuses Ligar without an approved version, a mailbox and the sender profile. */
 export async function setEmailAgentRunningAction(agentId: string, on: boolean): Promise<EmailActionResult> {
+  const t = await getT();
+  const E = t.emailAgent.detail;
   const ws = await requireSender();
   if (!uuid.safeParse(agentId).success) return { status: "error", message: E.failed };
   const db = await createClient();

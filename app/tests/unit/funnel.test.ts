@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
+import { t } from "@/messages/pt";
 import { FUNNEL_STATUSES, funnelByOrigin } from "@/lib/leads/funnel";
 import type { LeadListItem, LeadStatus } from "@/lib/leads/types";
 
@@ -18,7 +19,7 @@ describe("F5 funil", () => {
       item("discarded", "Boston"),
       item("won", "Cape"),
       item("lost", null, "one_off"),
-    ]);
+    ], t);
     expect(rows.map((r) => r.origin)).toEqual(["Boston", "Cape", rows[2].origin]);
     expect(rows[0]).toMatchObject({ origin: "Boston", total: 4 });
     expect(rows[0].counts.new).toBe(2);

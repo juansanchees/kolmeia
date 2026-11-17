@@ -4,17 +4,19 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace } from "@/lib/workspace";
 import { profileSchema } from "@/lib/profile-schema";
 import type { FormState } from "@/lib/form-state";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
+import type { Messages } from "@/lib/i18n";
 
-const fieldMessages: Record<string, string> = {
+const fieldMessages = (t: Messages): Record<string, string> => ({
   what_we_do: t.company.errors.whatWeDo,
   service_area: t.company.errors.serviceArea,
   wanted_work: t.company.errors.wantedWork,
   good_customer: t.company.errors.goodCustomer,
   not_wanted: t.company.errors.notWanted,
-};
+});
 
 export async function saveProfile(_prev: FormState, formData: FormData): Promise<FormState> {
+  const t = await getT();
   const parsed = profileSchema.safeParse({
     what_we_do: formData.get("what_we_do") ?? "",
     service_area: formData.get("service_area") ?? "",
@@ -26,7 +28,7 @@ export async function saveProfile(_prev: FormState, formData: FormData): Promise
     const fieldErrors: Record<string, string> = {};
     for (const issue of parsed.error.issues) {
       const key = issue.path[0];
-      if (typeof key === "string" && key in fieldMessages) fieldErrors[key] = fieldMessages[key];
+      if (typeof key === "string" && key in fieldMessages(t)) fieldErrors[key] = fieldMessages(t)[key];
     }
     return { status: "error", fieldErrors };
   }

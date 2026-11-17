@@ -2,20 +2,22 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { fill, t } from "@/messages/pt";
+import { fill, type Messages } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 import { btn } from "./bits";
 import { outcomeTime, timeOf } from "./format";
 
-const M = t.email;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-type DraftReply = { outcome?: string; code?: keyof typeof M.ai; remaining?: number; more?: boolean };
+type DraftReply = { outcome?: string; code?: keyof Messages["email"]["ai"]; remaining?: number; more?: boolean };
 
 /**
  * Drafting loop driven by this open page: one bounded step per request (a couple of prospects), page data refreshed
  * after each. Closing the page stops it; nothing is lost (the next visit continues). Stops after repeated AI errors.
  */
 export function DraftDriver({ campaignId, remaining: initial, autoStart }: { campaignId: string; remaining: number; autoStart: boolean }) {
+  const t = useT();
+  const M = t.email;
   const router = useRouter();
   const [running, setRunning] = useState(autoStart);
   const [remaining, setRemaining] = useState(initial);
@@ -69,6 +71,8 @@ export function DraftDriver({ campaignId, remaining: initial, autoStart }: { cam
       stopped = true;
       ctl.abort();
     };
+    // M (messages) is left out on purpose: switching language must not restart the drafting loop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [running, campaignId, router]);
 
   return (
@@ -105,6 +109,8 @@ type LogLine = { at: string; text: string; tone: "ok" | "warn" | "info" };
  * is open and running.
  */
 export function SendDriver({ campaignId, disabled, timezone }: { campaignId: string; disabled?: boolean; timezone?: string }) {
+  const t = useT();
+  const M = t.email;
   const router = useRouter();
   const [running, setRunning] = useState(false);
   const [log, setLog] = useState<LogLine[]>([]);
@@ -137,7 +143,7 @@ export function SendDriver({ campaignId, disabled, timezone }: { campaignId: str
       // a mailbox that stopped working (password refused / unreadable) ends the loop with one clear message
       const text = r.stop
         ? fill(M.send.mailboxStop, { error: r.error ?? "?" })
-        : fill(M.send.outcomes[outcome] ?? M.genericError, { time: outcomeTime(outcome, r.waitUntil, timezone), error: r.error ?? "?" });
+        : fill(M.send.outcomes[outcome] ?? M.genericError, { time: outcomeTime(outcome, r.waitUntil, t, timezone), error: r.error ?? "?" });
       if (outcome === "gap" && r.waitUntil) {
         setWaitUntil(r.waitUntil);
         const ms = Math.max(1_000, new Date(r.waitUntil).getTime() - Date.now() + 1_500);
@@ -181,14 +187,14 @@ export function SendDriver({ campaignId, disabled, timezone }: { campaignId: str
         {running && (
           <p className="flex items-center gap-2 font-mono text-xs text-blue-ink">
             <span aria-hidden="true" className="inline-block h-2 w-2 animate-pulse bg-blue" />
-            {waitUntil ? `${fill(M.send.waitGap, { time: timeOf(waitUntil) })} (${secondsLeft}s)` : M.send.running}
+            {waitUntil ? `${fill(M.send.waitGap, { time: timeOf(waitUntil, t.intl) })} (${secondsLeft}s)` : M.send.running}
           </p>
         )}
         {log.length > 0 && (
           <ul className="m-0 flex list-none flex-col gap-1 p-0">
             {log.map((l, i) => (
               <li key={`${l.at}-${i}`} className={`text-sm ${l.tone === "ok" ? "text-ok" : l.tone === "warn" ? "text-warn" : "text-ink"}`}>
-                <span className="font-mono text-xs text-muted">{timeOf(l.at)}</span> {l.text}
+                <span className="font-mono text-xs text-muted">{timeOf(l.at, t.intl)}</span> {l.text}
               </li>
             ))}
           </ul>

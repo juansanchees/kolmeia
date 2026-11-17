@@ -6,9 +6,9 @@ import { deleteSourceKey, saveSourceCap, saveSourceKey } from "@/app/(app)/confi
 import { btn, Card, CardTitle, input, Notice } from "@/components/email/bits";
 import { Field } from "@/components/ui";
 import type { SourceResult } from "@/lib/sources/connections";
-import { fill, t } from "@/messages/pt";
+import { fill, type Messages } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 
-const S = t.sources;
 type P = "apify" | "apollo" | "shovels" | "rapidapi";
 /** RapidAPI has a second cap (company sites read per 30 days) on the same connection. */
 type CapP = P | "rapidapi_sites";
@@ -21,23 +21,27 @@ export type ConnectionView = {
   sites?: { cap: number | null; used: number | null }; // rapidapi only: company sites read per 30 days
 };
 // [label, min, max, step] of each cap (the database repeats the bounds)
-const CAP_INPUT: Record<CapP, [string, number, number, number]> = {
+const capInput = (S: Messages["sources"]): Record<CapP, [string, number, number, number]> => ({
   apify: [S.capUsdLabel, 0.5, 50, 0.5],
   apollo: [S.capCallsLabel, 1, 200, 1],
   shovels: [S.capRecordsLabel, 50, 50000, 50],
   rapidapi: [S.capB2bLabel, 1, 5000, 1],
   rapidapi_sites: [S.capSitesLabel, 1, 50000, 1],
-};
+});
 
-const money = (n: number) => n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = (n: number, intl: string) => n.toLocaleString(intl, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function Result({ r }: { r: SourceResult | null }) {
+  const t = useT();
+  const S = t.sources;
   if (!r) return null;
   if ("ok" in r) return <Notice tone="ok">{S.saved}</Notice>;
   return <Notice role="alert">{S.errors[r.error]}</Notice>;
 }
 
 function KeyForm({ provider, connected }: { provider: P; connected: boolean }) {
+  const t = useT();
+  const S = t.sources;
   const [key, setKey] = useState("");
   const [state, action, pending] = useActionState(async (prev: SourceResult | null, fd: FormData) => {
     const r = await saveSourceKey(prev, fd);
@@ -62,7 +66,9 @@ function KeyForm({ provider, connected }: { provider: P; connected: boolean }) {
 }
 
 function CapForm({ provider, cap }: { provider: CapP; cap: number }) {
-  const [text, min, max, step] = CAP_INPUT[provider];
+  const t = useT();
+  const S = t.sources;
+  const [text, min, max, step] = capInput(t.sources)[provider];
   const [state, action, pending] = useActionState(saveSourceCap, null);
   const [value, setValue] = useState(String(cap));
   const id = `cap-${provider}`;
@@ -97,6 +103,8 @@ function CapForm({ provider, cap }: { provider: CapP; cap: number }) {
 }
 
 function Disconnect({ provider }: { provider: P }) {
+  const t = useT();
+  const S = t.sources;
   const router = useRouter();
   const [asking, setAsking] = useState(false);
   const [pending, start] = useTransition();
@@ -136,6 +144,8 @@ function Disconnect({ provider }: { provider: P }) {
 
 /** One provider: masked key, cap, today's spend, terms. Owner edits; the sdr only reads. */
 export function ConnectionCard({ view, isOwner }: { view: ConnectionView; isOwner: boolean }) {
+  const t = useT();
+  const S = t.sources;
   const { provider, last4, cap, today, sites } = view;
   const connected = last4 !== null;
   // 0.5 = the smallest Apify run reserve (APIFY_MIN_CHARGE_USD): under that margin no new Maps search fits today.
@@ -152,7 +162,7 @@ export function ConnectionCard({ view, isOwner }: { view: ConnectionView; isOwne
           {today !== null && cap !== null && (
             <span className="text-sm">
               {provider === "apify"
-                ? fill(S.todayUsd, { spent: money(today), cap: money(cap) })
+                ? fill(S.todayUsd, { spent: money(today, t.intl), cap: money(cap, t.intl) })
                 : provider === "shovels"
                   ? fill(S.monthRecords, { n: today, cap })
                   : provider === "rapidapi"

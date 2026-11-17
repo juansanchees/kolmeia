@@ -3,12 +3,12 @@
 import { useState, useTransition } from "react";
 import { takeOverChargeAction } from "@/app/(app)/agentes/qualifier-actions";
 import { btn } from "@/components/email/bits";
-import { t } from "@/messages/pt";
-
-const Q = t.qualifier;
+import { useT } from "@/lib/i18n/client";
 
 /** "Assumir a cobrança": shown to the owner only, next to the no_access pause notice. */
 export function TakeOverButton() {
+  const t = useT();
+  const Q = t.qualifier;
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   return (

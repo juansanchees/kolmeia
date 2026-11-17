@@ -3,11 +3,10 @@ import { computeCounts } from "@/lib/research/engine";
 import type { CandidateRow, RunRow, SourceRow } from "@/lib/research/rows";
 import type { CheckWithEvidence } from "@/lib/research/store";
 import { CHECKS_BY_RIGOR, SECOND_PASS_BY_RIGOR, STAGES, type Stage } from "@/lib/research/types";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { getT } from "@/lib/i18n/server";
 import { usd } from "./format";
 import { RunControls } from "./RunControls";
-
-const R = t.research.running;
 
 function Counter({ label, value, note }: { label: string; value: string; note: string }) {
   return (
@@ -20,7 +19,7 @@ function Counter({ label, value, note }: { label: string; value: string; note: s
 }
 
 /** Prototype "Buscando": counters, stages, what is being seen, sources, money, pause/continue/cancel. */
-export function Progress({
+export async function Progress({
   run,
   sources,
   candidates,
@@ -33,6 +32,8 @@ export function Progress({
   candidates: CandidateRow[];
   checks: CheckWithEvidence[];
 }) {
+  const t = await getT();
+  const R = t.research.running;
   const c = computeCounts(candidates, checks, sources.length);
   const stage: Stage = run.progress.stage ?? "discover_sources";
   const kinds = CHECKS_BY_RIGOR[run.rigor];
@@ -142,7 +143,7 @@ export function Progress({
           {!readOnly && <span className="text-[15px] font-semibold">{R.keepOpen}</span>}
           <span className="text-sm">{paused ? (run.progress.pauseReason === "daily_cap" ? R.pausedDailyCap : R.paused) : readOnly ? "" : R.keepOpenBody}</span>
           <span className="font-mono text-xs text-blue-ink">
-            {R.money}: {fill(R.moneyOf, { a: usd(run.spent_cost_usd), b: usd(run.max_cost_usd) })}
+            {R.money}: {fill(R.moneyOf, { a: usd(run.spent_cost_usd, t.intl), b: usd(run.max_cost_usd, t.intl) })}
           </span>
         </div>
         {!readOnly && <RunControls runId={run.id} paused={paused} />}

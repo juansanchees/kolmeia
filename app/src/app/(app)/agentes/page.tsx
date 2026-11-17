@@ -12,9 +12,10 @@ import { QualifierCard } from "@/components/qualifier/QualifierCard";
 import type { QualifierStatus } from "@/lib/qualifier/view";
 import { NewResearchForm } from "@/components/research/NewResearchForm";
 import { RunList, type RunListItem } from "@/components/research/RunList";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 
 export default async function AgentsPage() {
+  const t = await getT();
   const workspace = await requireSender();
   const ai = hasAi();
   const supabase = await createClient();

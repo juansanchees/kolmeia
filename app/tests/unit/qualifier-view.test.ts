@@ -26,31 +26,31 @@ describe("F3c-2 view", () => {
     expect(levelDots(2)).toBe("●●○○○");
     expect(levelDots(0)).toBe("○○○○○");
     expect(levelDots(9)).toBe("●●●●○");
-    expect(levelReason([], 1)).toBe("contactável");
-    expect(levelReason([field({ field: "phone", value: "1" })], 4)).toBe("obra ativa confirmada");
-    expect(nextStepLabel("p2", null)).toBe(t.qualifier.nextSteps.p2);
-    expect(nextStepLabel("done", "lead_cap")).toBe("parou no teto");
-    expect(nextStepLabel("done", "dead")).toBe(t.qualifier.done.dead);
-    expect(nextStepLabel("done", null)).toBe(t.qualifier.done.complete);
-    expect(nextStepLabel("zzz", null)).toBe(t.qualifier.done.complete);
+    expect(levelReason([], 1, t)).toBe("contactável");
+    expect(levelReason([field({ field: "phone", value: "1" })], 4, t)).toBe("obra ativa confirmada");
+    expect(nextStepLabel("p2", null, t)).toBe(t.qualifier.nextSteps.p2);
+    expect(nextStepLabel("done", "lead_cap", t)).toBe("parou no teto");
+    expect(nextStepLabel("done", "dead", t)).toBe(t.qualifier.done.dead);
+    expect(nextStepLabel("done", null, t)).toBe(t.qualifier.done.complete);
+    expect(nextStepLabel("zzz", null, t)).toBe(t.qualifier.done.complete);
   });
 
   it("level note fields read in Portuguese, never the raw check kind", () => {
     for (const k of ["has_work", "decision_maker", "exists_active", "candidate", "website", "zzz"]) {
-      expect(noteFieldLabel(k)).not.toMatch(/_|^candidate$|^zzz$/);
+      expect(noteFieldLabel(k, t)).not.toMatch(/_|^candidate$|^zzz$/);
     }
-    expect(noteFieldLabel("has_work")).toBe("obra ativa");
-    expect(noteFieldLabel("website")).toBe("Site");
+    expect(noteFieldLabel("has_work", t)).toBe("obra ativa");
+    expect(noteFieldLabel("website", t)).toBe("Site");
   });
 
   it("cardLines shows today's spend against the cap, the steps of the day and the Places warning only without a key", () => {
-    const off = cardLines(status, false);
+    const off = cardLines(status, false, t);
     expect(off.spent).toBe("US$ 1,20 de US$ 5,00 hoje");
     expect(off.queued).toBe("12 na fila");
     expect(off.today).toBe("3 prontos hoje");
     expect(off.steps).toBe("Hoje: 7 grátis · 0 Places · 2 IA leve · 1 IA forte");
     expect(off.levels).toEqual([[0, 4], [1, 5], [2, 2], [3, 1], [4, 0]]);
     expect(off.warning).toBe("⚠ Places desligado (sem chave)");
-    expect(cardLines(status, true).warning).toBeNull();
+    expect(cardLines(status, true, t).warning).toBeNull();
   });
 });

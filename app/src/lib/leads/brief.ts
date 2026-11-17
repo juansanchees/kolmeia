@@ -1,7 +1,7 @@
 // Draft of the closer brief for a lead (F5, no AI). Client-safe: the form edits it before the hand-off.
 import type { CloserBrief } from "@/lib/email/types";
 import { sanitizeUrl } from "@/lib/safe-url";
-import { t } from "@/messages/pt";
+import type { Messages } from "@/lib/i18n";
 
 /** Same limits as public.is_closer_brief (0020 / 0007). */
 export const BRIEF_LIMITS = { who: 600, what_they_said: 800, next_step: 400, evidence_urls: 4 } as const;
@@ -15,7 +15,7 @@ export function draftBrief(input: {
   emailBrief: CloserBrief | null;
   talkedNotes: string | null;
   proofUrls: string[];
-}): BriefDraft {
+}, t: Messages): BriefDraft {
   const { emailBrief } = input;
   const person = [input.askForName, input.askForTitle].map((s) => s?.trim()).filter(Boolean).join(", ");
   const who = emailBrief?.who.trim() || (person ? `${person} · ${input.company}` : input.company);

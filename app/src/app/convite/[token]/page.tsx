@@ -4,13 +4,14 @@ import { hasSupabase } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/workspace";
 import { NotConfigured } from "@/components/NotConfigured";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 import { AcceptButton } from "./AcceptButton";
 
 // Session-dependent: never prerender.
 export const dynamic = "force-dynamic";
 
 export default async function InvitePage({ params }: { params: Promise<{ token: string }> }) {
+  const t = await getT();
   const { token } = await params;
   if (!/^[0-9a-f]{64}$/.test(token)) notFound();
   if (!hasSupabase) return <NotConfigured />;

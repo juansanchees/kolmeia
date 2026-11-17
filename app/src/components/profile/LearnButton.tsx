@@ -5,12 +5,13 @@ import { useState, useTransition } from "react";
 import { learnFromResultsAction } from "@/app/(app)/leads/perfil/actions";
 import { btn } from "@/components/email/bits";
 import { usd } from "@/components/research/format";
-import { fill, t } from "@/messages/pt";
-
-const R = t.profile.results;
+import { fill } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 
 /** One AI call after a confirm; the proposal opens on its own page and changes nothing until approved. `blocked`: why it cannot run yet. */
 export function LearnButton({ estimateUsd, blocked }: { estimateUsd: number; blocked: string | null }) {
+  const t = useT();
+  const R = t.profile.results;
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +33,7 @@ export function LearnButton({ estimateUsd, blocked }: { estimateUsd: number; blo
         {confirming ? (
           <>
             <button type="button" disabled={pending} onClick={learn} className={btn.primary}>
-              {pending ? R.working : fill(R.confirm, { usd: usd(estimateUsd) })}
+              {pending ? R.working : fill(R.confirm, { usd: usd(estimateUsd, t.intl) })}
             </button>
             <button type="button" disabled={pending} onClick={() => setConfirming(false)} className={btn.link}>
               {R.cancel}
@@ -40,7 +41,7 @@ export function LearnButton({ estimateUsd, blocked }: { estimateUsd: number; blo
           </>
         ) : (
           <button type="button" disabled={Boolean(blocked)} aria-describedby={blocked ? "learn-blocked" : undefined} onClick={() => { setError(null); setConfirming(true); }} className={btn.ghost}>
-            {fill(R.learn, { usd: usd(estimateUsd) })}
+            {fill(R.learn, { usd: usd(estimateUsd, t.intl) })}
           </button>
         )}
       </div>

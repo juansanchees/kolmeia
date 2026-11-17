@@ -4,12 +4,13 @@ import { revokeInviteAction, removeMemberAction } from "@/app/(app)/configuracoe
 import { ActionButton } from "@/components/email/ActionButton";
 import { Badge } from "@/components/email/bits";
 import type { InviteRow, Person } from "@/lib/team/types";
-import { t } from "@/messages/pt";
+import { useT } from "@/lib/i18n/client";
 import { Paged } from "@/components/Pager";
 
-const day = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/New_York" });
+const day = (iso: string, intl: string) => new Date(iso).toLocaleDateString(intl, { timeZone: "America/New_York" });
 
 export function PeopleList({ people, invites }: { people: Person[]; invites: InviteRow[] }) {
+  const t = useT();
   return (
     <div className="flex flex-col gap-4">
       <Paged as="ul" className="m-0 flex list-none flex-col gap-2 p-0">
@@ -42,7 +43,7 @@ export function PeopleList({ people, invites }: { people: Person[]; invites: Inv
             <span className="flex min-w-0 flex-col">
               <span className="break-words font-semibold">{i.name}</span>
               <span className="break-all text-sm">{i.email}</span>
-              <span className="text-sm text-muted">{t.team.until} {day(i.expires_at)}</span>
+              <span className="text-sm text-muted">{t.team.until} {day(i.expires_at, t.intl)}</span>
             </span>
             <ActionButton
               variant="danger"

@@ -3,12 +3,10 @@
 import Link from "next/link";
 import { useState } from "react";
 import { GhostButton } from "@/components/research/controls";
-import { t } from "@/messages/pt";
+import { useT } from "@/lib/i18n/client";
 import type { Person } from "@/lib/team/types";
 import { CallAgentForm } from "./CallAgentForm";
 import { HunterStartForm } from "./HunterStartForm";
-
-const G = t.agents.gallery;
 
 function Card({ title, text, children, off }: { title: string; text: string; children?: React.ReactNode; off?: boolean }) {
   return (
@@ -21,6 +19,8 @@ function Card({ title, text, children, off }: { title: string; text: string; chi
 }
 
 export function AgentGallery({ hasProfile, serviceArea, ai, defaultRegion = "", people = [] }: { hasProfile: boolean; serviceArea: string; ai: boolean; defaultRegion?: string; people?: Person[] }) {
+  const t = useT();
+  const G = t.agents.gallery;
   const [describe, setDescribe] = useState("");
   const [open, setOpen] = useState(defaultRegion !== "");
   const [seed, setSeed] = useState("");

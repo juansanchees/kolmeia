@@ -6,11 +6,7 @@ import { btn, Card, CardTitle, input, Notice } from "@/components/email/bits";
 import { Field } from "@/components/ui";
 import type { SearchResult } from "@/lib/sources/search";
 import { type AgentSourcesView, estimateLabel } from "@/lib/sources/view";
-import { t } from "@/messages/pt";
-
-const S = t.sources;
-const A = S.agent;
-const Q = S.search;
+import { useT } from "@/lib/i18n/client";
 
 export type { AgentSourcesView };
 
@@ -27,6 +23,10 @@ function Check({ name, label, checked, onChange }: { name: string; label: string
 
 /** Per-agent sources. Only the connected providers show; when none is connected there is just a pointer to Configurações. */
 export function AgentSources({ agentId, connected, settings }: { agentId: string; connected: { maps: boolean; apollo: boolean }; settings: AgentSourcesView }) {
+  const t = useT();
+  const S = t.sources;
+  const A = S.agent;
+  const Q = S.search;
   const [state, action, pending] = useActionState(saveAgentSources, null as SearchResult | null);
   const [mapsOn, setMapsOn] = useState(settings.maps_on);
   const [mapsTerms, setMapsTerms] = useState(settings.maps_terms.join("\n"));
@@ -68,7 +68,7 @@ export function AgentSources({ agentId, connected, settings }: { agentId: string
             <Field label={Q.maxLabel} htmlFor="ag-maps-max" error={maxMissing ? Q.maxRequired : undefined}>
               <input id="ag-maps-max" name="mapsMax" type="number" inputMode="numeric" min={1} max={200} value={max} onChange={(e) => setMax(e.target.value)} className={`${input} w-28`} />
             </Field>
-            {Number.isInteger(n) && n >= 1 && n <= 200 && <p className="font-mono text-xs text-muted">{Q.costPrefix} {estimateLabel("maps", n)}</p>}
+            {Number.isInteger(n) && n >= 1 && n <= 200 && <p className="font-mono text-xs text-muted">{Q.costPrefix} {estimateLabel("maps", n, t)}</p>}
           </fieldset>
         ) : null}
         {connected.apollo ? (

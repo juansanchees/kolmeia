@@ -9,15 +9,17 @@ import { ActionButton } from "@/components/email/ActionButton";
 import { Badge, Card, CardTitle, Label, Notice } from "@/components/email/bits";
 import { ConnectMailboxForm, MailboxLimitForm, SenderForm } from "@/components/email/forms";
 import { when } from "@/components/email/format";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { getT } from "@/lib/i18n/server";
 
-const M = t.email;
 const STATUS_TONE = { unverified: "cold", ok: "ok", error: "danger" } as const;
 
 /** E4 (0024): mailbox_usage also answers the real limit of today (warm-up ramp). */
 type UsageWithRamp = { real_limit?: number } | null;
 
 export default async function MailboxPage() {
+  const t = await getT();
+  const M = t.email;
   const s = await emailSession();
   if (!s) return null;
   if (!isSender(s.workspace.role)) notFound();
@@ -53,7 +55,7 @@ export default async function MailboxPage() {
                   <div className="flex flex-col gap-2">
                     <Notice role="alert">
                       {M.mailbox.pausedHint}
-                      {m.paused_reason ? ` (${m.paused_reason}${m.paused_at ? ` · ${when(m.paused_at)}` : ""})` : ""}
+                      {m.paused_reason ? ` (${m.paused_reason}${m.paused_at ? ` · ${when(m.paused_at, t.intl)}` : ""})` : ""}
                     </Notice>
                     {isOwner && <ActionButton action={clearMailboxPause.bind(null, m.id)} label={M.mailbox.clearPause} confirm={M.mailbox.clearPauseConfirm} />}
                   </div>
@@ -67,7 +69,7 @@ export default async function MailboxPage() {
                   <Label>{M.mailbox.today}</Label>
                   <div className="text-sm">
                     {m.usage ? fill(M.mailbox.todayValue, { real: m.usage.real, dry: m.usage.dry_run, limit: m.usage.limit, test: m.usage.test ?? 0 }) : "?"}
-                    {m.verified_at ? ` · ${when(m.verified_at)}` : ""}
+                    {m.verified_at ? ` · ${when(m.verified_at, t.intl)}` : ""}
                   </div>
                 </div>
                 <div>
@@ -80,7 +82,7 @@ export default async function MailboxPage() {
                           start: m.ramp_start,
                           step: m.ramp_step,
                           limit: m.daily_limit,
-                        }) + (m.ramp_started_at ? ` · ${when(m.ramp_started_at)}` : ` · ${M.mailbox.rampNotStarted}`)}
+                        }) + (m.ramp_started_at ? ` · ${when(m.ramp_started_at, t.intl)}` : ` · ${M.mailbox.rampNotStarted}`)}
                   </div>
                 </div>
                 {isOwner && <MailboxLimitForm mailboxId={m.id} limit={m.daily_limit} />}

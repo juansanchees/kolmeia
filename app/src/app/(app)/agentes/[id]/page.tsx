@@ -23,18 +23,17 @@ import { loadEmailAgent } from "@/lib/email-agent/queries";
 import { reserveFor } from "@/lib/ai/gateway";
 import { sequenceDef } from "@/lib/ai/email-tasks";
 import { RestartButton } from "@/components/agents/RestartButton";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 
 // The step route runs up to 300 s; keep the same ceiling as the research page.
 export const maxDuration = 300;
-
-const H = t.agents.hunter;
 
 function UserBubble({ children }: { children: React.ReactNode }) {
   return <div className="max-w-[80%] self-end bg-blue px-3.5 py-3 text-[15px] leading-normal text-white">{children}</div>;
 }
 
-function AiBubble({ children }: { children: React.ReactNode }) {
+async function AiBubble({ children }: { children: React.ReactNode }) {
+  const t = await getT();
   return (
     <div className="flex max-w-full flex-col gap-3.5 self-start border border-[#c9d8f7] bg-blue-wash p-4 sm:max-w-[92%]">
       <span className="font-mono text-[11px] uppercase text-blue-ink">{t.ai.suggestion}</span>
@@ -44,6 +43,8 @@ function AiBubble({ children }: { children: React.ReactNode }) {
 }
 
 export default async function AgentPage({ params }: { params: Promise<{ id: string }> }) {
+  const t = await getT();
+  const H = t.agents.hunter;
   const workspace = await requireSender();
   const { id } = await params;
   if (!z.string().uuid().safeParse(id).success) notFound();

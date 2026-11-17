@@ -1,17 +1,23 @@
 import type { Metadata } from "next";
 import { fontVars } from "./fonts";
-import { t } from "@/messages/pt";
+import { htmlLang } from "@/lib/i18n";
+import { LocaleProvider } from "@/lib/i18n/client";
+import { getLocale, getT } from "@/lib/i18n/server";
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: t.appName,
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT();
+  return { title: t.appName, robots: { index: false, follow: false } };
+}
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+// The UI language comes from the kolmeia_locale cookie (PT | EN switch in the header): every page renders per request.
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const locale = await getLocale();
   return (
-    <html lang="pt-BR" className={fontVars}>
-      <body>{children}</body>
+    <html lang={htmlLang(locale)} className={fontVars}>
+      <body>
+        <LocaleProvider locale={locale}>{children}</LocaleProvider>
+      </body>
     </html>
   );
 }

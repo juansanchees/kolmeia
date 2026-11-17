@@ -1,7 +1,10 @@
 // Client-safe rules of the Caçador chat: no server imports here.
 import { z } from "zod";
 import { DEFAULT_CAPS, RIGORS, type Rigor } from "@/lib/research/types";
-import { t } from "@/messages/pt";
+import { ptMessages } from "@/lib/i18n";
+
+// The agent name and the research request are stored data and AI input: always Portuguese, whatever the UI language.
+const t = ptMessages;
 import { SCHEDULES } from "./types";
 
 export const AUDIENCES = ["builder", "developer", "property_manager", "other"] as const;

@@ -9,9 +9,8 @@ import type { ProfileRow } from "@/lib/profile/queries";
 import type { LearnedProfile } from "@/lib/profile/types";
 import { cardLines, citeOf } from "@/lib/profile/view";
 import { COMPANY_TYPES, type CompanyType } from "@/lib/research/types";
-import { fill, t } from "@/messages/pt";
-
-const M = t.profile;
+import { fill } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 
 type Draft = { texts: string[]; towns: string; types: CompanyType[]; queries: string };
 
@@ -29,6 +28,8 @@ const profileOf = (base: LearnedProfile, d: Draft): LearnedProfile => ({
 });
 
 export function ProfileCard({ profile, hunters }: { profile: ProfileRow; hunters: { id: string; name: string }[] }) {
+  const t = useT();
+  const M = t.profile;
   const router = useRouter();
   const [pending, start] = useTransition();
   const [editing, setEditing] = useState(false);
@@ -63,7 +64,7 @@ export function ProfileCard({ profile, hunters }: { profile: ProfileRow; hunters
           {p.points.map((pt, i) => (
             <li key={i} className="flex flex-col gap-1 text-sm">
               <label className="flex flex-col gap-1">
-                <span className="font-mono text-xs text-muted">{M.keys[pt.key]} {citeOf(pt)}</span>
+                <span className="font-mono text-xs text-muted">{M.keys[pt.key]} {citeOf(pt, t)}</span>
                 <input value={draft.texts[i] ?? ""} maxLength={200} onChange={(e) => setDraft((d) => ({ ...d, texts: d.texts.map((x, j) => (j === i ? e.target.value : x)) }))} className={input} />
               </label>
             </li>
@@ -71,7 +72,7 @@ export function ProfileCard({ profile, hunters }: { profile: ProfileRow; hunters
         </ul>
       ) : p.points.length ? (
         <ul className="m-0 flex list-none flex-col gap-2 p-0">
-          {cardLines(p).map((l, i) => (
+          {cardLines(p, t).map((l, i) => (
             <li key={i} className="text-sm">
               <span className="font-semibold">{l.label}:</span> {l.text} <span className="font-mono text-xs text-muted">{l.cite}</span>
             </li>

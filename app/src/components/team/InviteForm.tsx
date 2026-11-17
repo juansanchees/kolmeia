@@ -5,9 +5,10 @@ import { createInviteAction } from "@/app/(app)/configuracoes/equipe/actions";
 import { btn } from "@/components/email/bits";
 import { Field, TextInput } from "@/components/ui";
 import { idle, type FormState } from "@/lib/form-state";
-import { t } from "@/messages/pt";
+import { useT } from "@/lib/i18n/client";
 
 export function InviteForm() {
+  const t = useT();
   const [state, action, pending] = useActionState<FormState & { link?: string }, FormData>(createInviteAction, idle);
   // Controlled on purpose: React 19 resets uncontrolled fields after a form action, dropping what was typed on an error.
   const [name, setName] = useState("");

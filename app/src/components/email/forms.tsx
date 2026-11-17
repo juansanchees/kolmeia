@@ -15,10 +15,9 @@ import {
 import { idle, type FormState } from "@/lib/form-state";
 import type { MailboxRow, SenderProfile } from "@/lib/email/types";
 import { Field } from "@/components/ui";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 import { btn, input, Notice } from "./bits";
-
-const M = t.email;
 
 function FormMessage({ status, message }: { status: string; message?: string }) {
   if (!message) return null;
@@ -27,6 +26,8 @@ function FormMessage({ status, message }: { status: string; message?: string }) 
 
 // ---------------------------------------------------------------- sender profile (R4)
 export function SenderForm({ initial, disabled }: { initial: SenderProfile; disabled?: boolean }) {
+  const t = useT();
+  const M = t.email;
   const [state, action, pending] = useActionState(saveSenderProfile, idle);
   const [v, setV] = useState(initial);
   const e = state.fieldErrors ?? {};
@@ -55,6 +56,8 @@ export function SenderForm({ initial, disabled }: { initial: SenderProfile; disa
 
 // ---------------------------------------------------------------- connect a Gmail mailbox
 export function ConnectMailboxForm() {
+  const t = useT();
+  const M = t.email;
   const [state, action, pending] = useActionState(connectMailbox, idle);
   const e = state.fieldErrors ?? {};
   return (
@@ -76,6 +79,8 @@ export function ConnectMailboxForm() {
 }
 
 export function MailboxLimitForm({ mailboxId, limit }: { mailboxId: string; limit: number }) {
+  const t = useT();
+  const M = t.email;
   const router = useRouter();
   const [value, setValue] = useState(String(limit));
   const [msg, setMsg] = useState<{ ok: boolean; text?: string } | null>(null);
@@ -110,6 +115,8 @@ export function MailboxLimitForm({ mailboxId, limit }: { mailboxId: string; limi
 
 // ---------------------------------------------------------------- new campaign
 export function NewCampaignForm({ lists, mailboxes }: { lists: { id: string; name: string }[]; mailboxes: { id: string; email: string }[] }) {
+  const t = useT();
+  const M = t.email;
   const [state, action, pending] = useActionState(createCampaign, idle);
   const [listId, setListId] = useState(lists[0]?.id ?? "");
   const [name, setName] = useState(lists[0]?.name ?? "");
@@ -149,6 +156,8 @@ export function NewCampaignForm({ lists, mailboxes }: { lists: { id: string; nam
 
 // ---------------------------------------------------------------- type a missing address (R18: stored as manual)
 export function ProspectEmailForm({ prospectId, company }: { prospectId: string; company: string }) {
+  const t = useT();
+  const M = t.email;
   const router = useRouter();
   const [value, setValue] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
@@ -180,6 +189,8 @@ export function ProspectEmailForm({ prospectId, company }: { prospectId: string;
 }
 
 export function DelaysForm({ campaignId, step2, step3 }: { campaignId: string; step2: number; step3: number }) {
+  const t = useT();
+  const M = t.email;
   const router = useRouter();
   const [s2, setS2] = useState(String(step2));
   const [s3, setS3] = useState(String(step3));
@@ -222,6 +233,8 @@ export function CampaignMailboxesForm({
   options: { id: string; email: string; status: MailboxRow["status"]; sentToday: number }[];
   selected: string[];
 }) {
+  const t = useT();
+  const M = t.email;
   const router = useRouter();
   const [ticked, setTicked] = useState<string[]>(selected);
   const [msg, setMsg] = useState<{ ok: boolean; text?: string } | null>(null);
@@ -265,6 +278,8 @@ export function CampaignMailboxesForm({
 
 // ---------------------------------------------------------------- suppressions
 export function SuppressionForm() {
+  const t = useT();
+  const M = t.email;
   const [fields, setFields] = useState({ value: "", reason: "manual", note: "" });
   const [state, action, pending] = useActionState(async (prev: FormState, fd: FormData) => {
     const r = await addSuppression(prev, fd);

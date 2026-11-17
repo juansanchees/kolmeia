@@ -5,9 +5,10 @@ import { saveProfile } from "./actions";
 import { idle } from "@/lib/form-state";
 import { WANTED_WORK, type ProfileInput } from "@/lib/profile-schema";
 import { Button, Field, TextArea } from "@/components/ui";
-import { t } from "@/messages/pt";
+import { useT } from "@/lib/i18n/client";
 
 export function ProfileForm({ initial, readOnly }: { initial: ProfileInput; readOnly: boolean }) {
+  const t = useT();
   const [state, action, pending] = useActionState(saveProfile, idle);
   // Controlled on purpose: React resets uncontrolled fields after a form action, which would drop the saved values.
   const [v, setV] = useState(initial);

@@ -6,12 +6,12 @@ import { saveViewAction } from "@/app/(app)/leads/view-actions";
 import { btn } from "@/components/email/bits";
 import type { LeadView } from "@/lib/leads/queries";
 import type { LeadFilters } from "@/lib/leads/view";
-import { t } from "@/messages/pt";
-
-const V = t.leads.views;
+import { useT } from "@/lib/i18n/client";
 
 /** "Visão" picker plus "Salvar visão" (name + "open with this view"). */
 export function ViewBar({ views, filters, onPick }: { views: LeadView[]; filters: LeadFilters; onPick: (f: LeadFilters | null) => void }) {
+  const t = useT();
+  const V = t.leads.views;
   const router = useRouter();
   const [picked, setPicked] = useState(views.find((v) => v.is_default)?.id ?? "");
   const [open, setOpen] = useState(false);

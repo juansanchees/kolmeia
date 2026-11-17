@@ -165,6 +165,13 @@ export const email = {
     mode: { dry_run: "ensaio", real: "envio real" },
     counts: "{prospects} empresas · {approved} aprovados · {sent} enviados",
   },
+  // Pieces of the schedule line and of "volta a enviar {time}" (lib/email/schedule).
+  schedule: {
+    weekdays: ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"],
+    range: "{from} a {to}",
+    at: "às {time}",
+    dayAt: "{day} às {time}",
+  },
   campaign: {
     back: "← Campanhas",
     schedule: "Envia {days}, das {start} às {end} ({tz}), até {limit} por dia",

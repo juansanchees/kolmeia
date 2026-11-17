@@ -2,12 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { EMAIL_QUALITIES } from "@/lib/leads/email-quality";
-import { ENTERED_PRESETS, LAST_TOUCH_PICKS, ROLES, type LeadFacets, type LeadFilters } from "@/lib/leads/view";
+import { ENTERED_PRESETS, LAST_TOUCH_PICKS, originKeyLabel, ROLES, type LeadFacets, type LeadFilters } from "@/lib/leads/view";
+import { ptMessages } from "@/lib/i18n";
 import { TEMPERATURES } from "@/lib/research/types";
-import { t } from "@/messages/pt";
+import { useT } from "@/lib/i18n/client";
 
-const P = t.leads.facets;
-const F = t.leads.filters;
 const selectCls = "min-h-11 w-full min-w-0 border border-line bg-surface px-2.5 text-sm text-ink";
 
 export function toggle<T>(list: T[], v: T, on: boolean): T[] {
@@ -26,6 +25,8 @@ function Check({ label, n, checked, onChange }: { label: string; n: number | nul
 
 /** Typing stays local; the list updates 200 ms after the last keystroke (like the search box). */
 function NameBox({ value, set }: { value: string; set: (patch: Partial<LeadFilters>) => void }) {
+  const t = useT();
+  const P = t.leads.facets;
   const [q, setQ] = useState(value);
   // the chip x or Limpar changes the value from outside: take it into the box
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -49,6 +50,9 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
 
 /** The "Filtros" panel: each value with its count for the current filters (leadFacetsOf), plus temperature and agent. */
 export function FacetPanel({ facets, f, set, agents, hasOneOff }: { facets: LeadFacets; f: LeadFilters; set: (patch: Partial<LeadFilters>) => void; agents: [string, string][]; hasOneOff: boolean }) {
+  const t = useT();
+  const P = t.leads.facets;
+  const F = t.leads.filters;
   const cityN = new Map(facets.cities.map((c) => [c.value, c.n]));
   // a picked city or list outside the counted ones stays visible so it can be unticked
   const cities = [...facets.cities.map((c) => c.value), ...f.cities.filter((c) => !cityN.has(c))];
@@ -64,10 +68,10 @@ export function FacetPanel({ facets, f, set, agents, hasOneOff }: { facets: Lead
           <Check key={c} label={c} n={cityN.get(c) ?? null} checked={f.cities.includes(c)} onChange={(on) => set({ cities: toggle(f.cities, c, on) })} />
         ))}
       </Group>
-      {lists.some((l) => l !== t.leads.origin.noneOption) && (
+      {lists.some((l) => l !== ptMessages.leads.origin.noneOption) && (
         <Group title={t.leads.origin.filter}>
           {lists.map((l) => (
-            <Check key={l} label={l} n={listN.get(l) ?? null} checked={f.lists.includes(l)} onChange={(on) => set({ lists: toggle(f.lists, l, on) })} />
+            <Check key={l} label={originKeyLabel(l, t)} n={listN.get(l) ?? null} checked={f.lists.includes(l)} onChange={(on) => set({ lists: toggle(f.lists, l, on) })} />
           ))}
         </Group>
       )}

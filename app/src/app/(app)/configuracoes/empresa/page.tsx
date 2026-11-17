@@ -2,10 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace } from "@/lib/workspace";
 import { isSender } from "@/lib/roles";
 import { WANTED_WORK, type ProfileInput } from "@/lib/profile-schema";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 import { ProfileForm } from "./ProfileForm";
 
 export default async function CompanyPage() {
+  const t = await getT();
   const workspace = await getCurrentWorkspace();
   const supabase = await createClient();
   let initial: ProfileInput = { what_we_do: "", service_area: "", wanted_work: [], good_customer: "", not_wanted: "" };

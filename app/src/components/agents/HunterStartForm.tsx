@@ -7,9 +7,8 @@ import { AUDIENCES, regionOptions } from "@/lib/agents/hunter";
 import { idle } from "@/lib/form-state";
 import { Choice, PrimaryButton } from "@/components/research/controls";
 import { TextArea, TextInput } from "@/components/ui";
-import { t } from "@/messages/pt";
+import { useT } from "@/lib/i18n/client";
 
-const H = t.agents.hunter;
 const OTHER = "__other__";
 
 function QuestionCard({ title, error, children }: { title: string; error?: string; children: React.ReactNode }) {
@@ -39,6 +38,8 @@ export function HunterStartForm({
   seedText: string;
   defaultRegion?: string;
 }) {
+  const t = useT();
+  const H = t.agents.hunter;
   const [state, action, pending] = useActionState(startHunterAction, idle);
   const err = state.fieldErrors ?? {};
   const [profileSource, setProfileSource] = useState<"saved" | "describe">(hasProfile ? "saved" : "describe");

@@ -3,11 +3,12 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { approveC12Item, setClockReal, type C12Item } from "@/app/(app)/campanhas/c12-actions";
-import { fill, t } from "@/messages/pt";
+import { fill, ptMessages } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 import { Badge, btn, Card, CardTitle, input, Notice } from "./bits";
 
-const M = t.email.c12;
-const ITEMS = Object.keys(M.items) as C12Item[];
+// the item keys are the same in every language
+const ITEMS = Object.keys(ptMessages.email.c12.items) as C12Item[];
 
 export type C12Approval = { item: string; evidence: string; approved_at: string };
 
@@ -21,6 +22,8 @@ export function clockRealGate({ approved, total, isOwner, enabled }: { approved:
 
 /** C12 (0018): the owner approves each item by hand with a note; everyone else sees the status only. */
 export function C12Checklist({ campaignId, approvals, isOwner, clock, userId, envName }: { campaignId: string; approvals: C12Approval[]; isOwner: boolean; clock: ClockReal; userId: string; envName: string }) {
+  const t = useT();
+  const M = t.email.c12;
   const done = new Map(approvals.map((a) => [a.item, a]));
   const count = ITEMS.filter((i) => done.has(i)).length;
   return (
@@ -39,7 +42,7 @@ export function C12Checklist({ campaignId, approvals, isOwner, clock, userId, en
             </div>
             {done.has(item) && (
               <span className="break-words text-[13px] text-muted">
-                {fill(M.approvedOn, { date: new Date(done.get(item)!.approved_at).toLocaleDateString("pt-BR"), evidence: done.get(item)!.evidence })}
+                {fill(M.approvedOn, { date: new Date(done.get(item)!.approved_at).toLocaleDateString(t.intl), evidence: done.get(item)!.evidence })}
               </span>
             )}
             {isOwner && <C12ItemForm campaignId={campaignId} item={item} again={done.has(item)} />}
@@ -52,13 +55,15 @@ export function C12Checklist({ campaignId, approvals, isOwner, clock, userId, en
 }
 
 function ClockRealSwitch({ campaignId, missing, total, isOwner, clock, userId, envName }: { campaignId: string; missing: number; total: number; isOwner: boolean; clock: ClockReal; userId: string; envName: string }) {
+  const t = useT();
+  const M = t.email.c12;
   const C = M.clock;
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
   const gate = clockRealGate({ approved: total - missing, total, isOwner, enabled: clock.enabled });
-  const date = clock.setAt ? new Date(clock.setAt).toLocaleDateString("pt-BR") : "";
+  const date = clock.setAt ? new Date(clock.setAt).toLocaleDateString(t.intl) : "";
   const who = clock.setBy === userId ? C.you : C.other;
   const state = clock.enabled ? fill(C.stateOn, { date, who }) : clock.setAt ? fill(C.stateOffSince, { date, who }) : C.stateOff;
   const run = (on: boolean) =>
@@ -119,6 +124,8 @@ function ClockRealSwitch({ campaignId, missing, total, isOwner, clock, userId, e
 }
 
 function C12ItemForm({ campaignId, item, again }: { campaignId: string; item: C12Item; again: boolean }) {
+  const t = useT();
+  const M = t.email.c12;
   const router = useRouter();
   const [checked, setChecked] = useState(false);
   const [evidence, setEvidence] = useState("");

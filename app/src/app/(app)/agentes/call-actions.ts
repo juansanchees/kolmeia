@@ -6,14 +6,16 @@ import { callAgentConfigSchema, type CallAgentConfig } from "@/lib/calls/types";
 import type { FormState } from "@/lib/form-state";
 import { createClient } from "@/lib/supabase/server";
 import { requireSender } from "@/lib/workspace";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { getT } from "@/lib/i18n/server";
 
-const C = t.callAgent;
 const uuid = z.string().uuid();
 const name = z.string().trim().min(1).max(80);
 
 /** Born paused (the database lets a call agent leave draft only with a valid config). The caller redirects. */
 export async function createCallAgentAction(input: { name: string; config: CallAgentConfig }): Promise<{ ok: true; agentId: string } | { ok: false; error: string }> {
+  const t = await getT();
+  const C = t.callAgent;
   const ws = await requireSender();
   const n = name.safeParse(input.name);
   const cfg = callAgentConfigSchema.safeParse(input.config);
@@ -38,6 +40,8 @@ export async function createCallAgentAction(input: { name: string; config: CallA
 
 /** "Montar lista de hoje": idempotent per day, never past per_day (build_call_list). */
 export async function buildListAction(agentId: string): Promise<FormState> {
+  const t = await getT();
+  const C = t.callAgent;
   await requireSender();
   if (!uuid.safeParse(agentId).success) return { status: "error", message: C.failed };
   const db = await createClient();
@@ -56,6 +60,8 @@ export async function buildListAction(agentId: string): Promise<FormState> {
  * this one exists. The database re-checks the config on Ligar (the caller must still be a member).
  */
 export async function setCallAgentRunningAction(agentId: string, on: boolean): Promise<FormState> {
+  const t = await getT();
+  const C = t.callAgent;
   const ws = await requireSender();
   if (!uuid.safeParse(agentId).success) return { status: "error", message: C.failed };
   const db = await createClient();

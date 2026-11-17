@@ -1,13 +1,14 @@
 import { describe, expect, test } from "vitest";
+import { t } from "@/messages/pt";
 import { campaignWarnings, type WarningsInput } from "@/lib/email/warnings";
 
 const mailbox = { id: "m1", email: "a@x.com", status: "ok" as const, health_status: "ok" as const, daily_limit: 30 };
 const campaign = { id: "c1", name: "Prédios", status: "active" as const, send_mode: "real" as const, sent: 0, bounced: 0 };
 const base: WarningsInput = { mailboxes: [mailbox], campaigns: [campaign], sentToday: { m1: 0 }, prospectsByCampaign: { c1: 10 }, gateOpen: true, sender: { legal_name: "New England Air HVAC Corp", postal_address: "1 Main St, Millbury, MA 01527", sender_name: "Juan" } };
-const kinds = (i: Partial<WarningsInput>) => campaignWarnings({ ...base, ...i }).map((w) => w.kind);
+const kinds = (i: Partial<WarningsInput>) => campaignWarnings({ ...base, ...i }, t).map((w) => w.kind);
 
 describe("warnings", () => {
-  test("none when everything is healthy", () => expect(campaignWarnings(base)).toEqual([]));
+  test("none when everything is healthy", () => expect(campaignWarnings(base, t)).toEqual([]));
   test("disconnected mailbox", () => {
     expect(kinds({ mailboxes: [{ ...mailbox, status: "error" }] })).toEqual(["mailbox_error"]);
     expect(kinds({ mailboxes: [{ ...mailbox, status: "unverified" }] })).toEqual(["mailbox_error"]);
@@ -49,7 +50,7 @@ describe("warnings", () => {
       prospectsByCampaign: {},
       gateOpen: false,
       sender: null,
-    });
+    }, t);
     expect(w.map((x) => x.kind)).toEqual(["mailbox_error", "mailbox_paused", "no_leads", "daily_limit", "high_bounce", "rehearsal_only", "sender_profile_incomplete"]);
     for (const x of w) {
       expect(x.text.length).toBeGreaterThan(5);

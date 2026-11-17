@@ -13,12 +13,12 @@ import { validDelays } from "@/lib/email/schedule";
 import { REPLY_CLASSES, SUPPRESSION_REASONS, type ApprovalResult, type MessageVersion } from "@/lib/email/types";
 import { timeOf } from "@/components/email/format";
 import type { FormState } from "@/lib/form-state";
-import { fill, t } from "@/messages/pt";
+import { fill, type Messages } from "@/lib/i18n";
+import { getT } from "@/lib/i18n/server";
 
 // Every action runs as the logged-in user (RLS; R14). The database re-checks roles and rules in its functions.
 // Approval exists ONLY here, as a person's click (R1, R13): the AI and the engine never call set_email_approval.
 
-const M = t.email;
 const uuid = z.string().uuid();
 const versions = z.array(z.object({ id: uuid, updatedAt: z.string().min(10).max(40) })).min(1).max(200);
 const EMAIL = /^[a-z0-9._%+'-]+@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/;
@@ -27,15 +27,16 @@ const DOMAIN = /^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/;
 export type ActionResult = { ok: boolean; message?: string };
 
 const ok = (message?: string): ActionResult => ({ ok: true, message });
-const err = (message: string = M.genericError): ActionResult => ({ ok: false, message });
+const err = (message: string): ActionResult => ({ ok: false, message });
 
 async function sender() {
   const s = await emailSession();
   return s && s.canSend ? s : null;
 }
 
-/** Portuguese text for a mailbox error code (SMTP / stored secret / configuration). */
-function mailboxError(code: string | null | undefined, waitUntil?: string): string {
+/** Text for a mailbox error code (SMTP / stored secret / configuration). */
+function mailboxError(code: string | null | undefined, t: Messages, waitUntil?: string): string {
+  const M = t.email;
   switch (code) {
     case "auth_failed":
     case "mailbox_secret":
@@ -44,7 +45,7 @@ function mailboxError(code: string | null | undefined, waitUntil?: string): stri
     case "no_public_origin":
       return M.mailbox.errors[code];
     case "test_limit":
-      return fill(M.mailbox.errors.test_limit, { time: timeOf(waitUntil) });
+      return fill(M.mailbox.errors.test_limit, { time: timeOf(waitUntil, t.intl) });
     case "sending_paused":
       return M.send.outcomes.sending_paused;
     default:
@@ -65,6 +66,8 @@ const senderSchema = z.object({
 });
 
 export async function saveSenderProfile(_prev: FormState, form: FormData): Promise<FormState> {
+  const t = await getT();
+  const M = t.email;
   const parsed = senderSchema.safeParse({
     legal_name: form.get("legal_name") ?? "",
     postal_address: form.get("postal_address") ?? "",
@@ -99,6 +102,8 @@ const connectSchema = z.object({
 });
 
 export async function connectMailbox(_prev: FormState, form: FormData): Promise<FormState> {
+  const t = await getT();
+  const M = t.email;
   const parsed = connectSchema.safeParse({ email: form.get("email") ?? "", password: form.get("password") ?? "" });
   if (!parsed.success) {
     const fieldErrors: Record<string, string> = {};
@@ -120,57 +125,67 @@ export async function connectMailbox(_prev: FormState, form: FormData): Promise<
   if (error || typeof id !== "string") return { status: "error", message: M.mailbox.errors.generic };
   const v = await verifyMailbox(s.deps, id).catch(() => ({ ok: false, error: "generic" }));
   refresh("/configuracoes/caixas");
-  if (!v.ok) return { status: "error", message: mailboxError(v.error) };
+  if (!v.ok) return { status: "error", message: mailboxError(v.error, t) };
   return { status: "success", message: M.saved };
 }
 
 export async function reverifyMailbox(mailboxId: string): Promise<ActionResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await sender();
-  if (!s || !uuid.safeParse(mailboxId).success) return err();
+  if (!s || !uuid.safeParse(mailboxId).success) return err(M.genericError);
   try {
     const v = await verifyMailbox(s.deps, mailboxId);
     refresh("/configuracoes/caixas");
-    return v.ok ? ok(M.saved) : err(mailboxError(v.error));
+    return v.ok ? ok(M.saved) : err(mailboxError(v.error, t));
   } catch (e) {
     return err(e instanceof MailboxKeyError ? M.keyMissing : M.mailbox.errors.generic);
   }
 }
 
 export async function sendTestMessage(mailboxId: string): Promise<ActionResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await sender();
   const self = s?.user.email?.toLowerCase();
-  if (!s || !self || !uuid.safeParse(mailboxId).success) return err();
+  if (!s || !self || !uuid.safeParse(mailboxId).success) return err(M.genericError);
   try {
     // Only to the logged-in user's own account address (from the session; never typed). At most 5 a day.
     const r = await sendTestToSelf(s.deps, mailboxId, self, s.workspace.name, await emailOrigins());
     refresh("/configuracoes/caixas");
     if (r.ok) return ok(fill(M.mailbox.testSent, { email: self }));
-    return err(mailboxError(r.error, r.waitUntil));
+    return err(mailboxError(r.error, t, r.waitUntil));
   } catch (e) {
     return err(e instanceof MailboxKeyError ? M.keyMissing : M.mailbox.errors.generic);
   }
 }
 
 export async function removeMailbox(mailboxId: string): Promise<ActionResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await sender();
-  if (!s || !uuid.safeParse(mailboxId).success) return err();
+  if (!s || !uuid.safeParse(mailboxId).success) return err(M.genericError);
   const { error } = await s.supabase.from("mailboxes").delete().eq("id", mailboxId);
   refresh("/configuracoes/caixas");
-  return error ? err() : ok();
+  return error ? err(M.genericError) : ok();
 }
 
 export async function setMailboxLimit(mailboxId: string, limit: number): Promise<ActionResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await emailSession();
-  if (!s || s.workspace.role !== "owner" || !uuid.safeParse(mailboxId).success || !Number.isInteger(limit) || limit < 1 || limit > 50) return err();
+  if (!s || s.workspace.role !== "owner" || !uuid.safeParse(mailboxId).success || !Number.isInteger(limit) || limit < 1 || limit > 50) return err(M.genericError);
   const { data, error } = await s.supabase.from("mailboxes").update({ daily_limit: limit }).eq("id", mailboxId).select("id");
   refresh("/configuracoes/caixas");
-  return error || !data?.length ? err() : ok(M.saved);
+  return error || !data?.length ? err(M.genericError) : ok(M.saved);
 }
 
 // ---------------------------------------------------------------- campaigns
 const campaignSchema = z.object({ list_id: uuid, mailbox_id: uuid, name: z.string().trim().min(1).max(120) });
 
 export async function createCampaign(_prev: FormState, form: FormData): Promise<FormState> {
+  const t = await getT();
+  const M = t.email;
   const parsed = campaignSchema.safeParse({ list_id: form.get("list_id"), mailbox_id: form.get("mailbox_id"), name: form.get("name") ?? "" });
   if (!parsed.success) return { status: "error", message: M.campaigns.errors.invalid };
   const s = await sender();
@@ -188,22 +203,26 @@ export async function createCampaign(_prev: FormState, form: FormData): Promise<
 }
 
 export async function setCampaignStatus(campaignId: string, status: "active" | "paused" | "done" | "archived"): Promise<ActionResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await sender();
-  if (!s || !uuid.safeParse(campaignId).success || !["active", "paused", "done", "archived"].includes(status)) return err();
+  if (!s || !uuid.safeParse(campaignId).success || !["active", "paused", "done", "archived"].includes(status)) return err(M.genericError);
   // 'archived' replaces deletion: history, unsubscribe links and the R2 counters stay (the database refuses to
   // delete a campaign that has claimed anything).
   const { data, error } = await s.supabase.from("email_campaigns").update({ status }).eq("id", campaignId).select("id");
   refresh(`/campanhas/${campaignId}`, "/campanhas");
-  return error || !data?.length ? err() : ok();
+  return error || !data?.length ? err(M.genericError) : ok();
 }
 
 /** "Pausar tudo": every campaign of this workspace that is sending. */
 export async function pauseAllCampaigns(): Promise<ActionResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await sender();
-  if (!s) return err();
+  if (!s) return err(M.genericError);
   const { data, error } = await s.supabase.from("email_campaigns").update({ status: "paused" }).eq("workspace_id", s.workspace.id).eq("status", "active").select("id");
   refresh("/campanhas");
-  return error ? err() : ok(fill(M.overview.pausedN, { n: data?.length ?? 0 }));
+  return error ? err(M.genericError) : ok(fill(M.overview.pausedN, { n: data?.length ?? 0 }));
 }
 
 /**
@@ -211,27 +230,33 @@ export async function pauseAllCampaigns(): Promise<ActionResult> {
  * While on, no claim of any kind happens (click, clock, rehearsal, real, answers).
  */
 export async function setSendingPaused(on: boolean): Promise<ActionResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await sender();
-  if (!s || typeof on !== "boolean") return err();
+  if (!s || typeof on !== "boolean") return err(M.genericError);
   if (!on && s.workspace.role !== "owner") return err(M.stop.onlyOwner);
   const { error } = await s.supabase.rpc("set_sending_paused", { p_ws: s.workspace.id, p_on: on });
   refresh("/campanhas", "/configuracoes/caixas");
-  return error ? err() : ok(on ? M.stop.done : M.stop.resumed);
+  return error ? err(M.genericError) : ok(on ? M.stop.done : M.stop.resumed);
 }
 
 /** E4: an owner puts a mailbox paused on bounces back to work. */
 export async function clearMailboxPause(mailboxId: string): Promise<ActionResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await emailSession();
-  if (!s || s.workspace.role !== "owner" || !uuid.safeParse(mailboxId).success) return err();
+  if (!s || s.workspace.role !== "owner" || !uuid.safeParse(mailboxId).success) return err(M.genericError);
   const { error } = await s.supabase.rpc("clear_mailbox_pause", { p_mailbox: mailboxId });
   refresh("/configuracoes/caixas");
-  return error ? err() : ok(M.saved);
+  return error ? err(M.genericError) : ok(M.saved);
 }
 
 /** Rehearsal <-> real. Real is owner-only, with a verified mailbox and postal address (checked again in SQL; R4). */
 export async function setSendMode(campaignId: string, mode: "dry_run" | "real"): Promise<ActionResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await sender();
-  if (!s || !uuid.safeParse(campaignId).success || !["dry_run", "real"].includes(mode)) return err();
+  if (!s || !uuid.safeParse(campaignId).success || !["dry_run", "real"].includes(mode)) return err(M.genericError);
   if (mode === "real" && s.workspace.role !== "owner") return err(M.campaign.ownerOnly);
   const { error } = await s.supabase.rpc("set_campaign_send_mode", { p_campaign: campaignId, p_mode: mode });
   refresh(`/campanhas/${campaignId}`);
@@ -240,6 +265,8 @@ export async function setSendMode(campaignId: string, mode: "dry_run" | "real"):
 }
 
 export async function setDelays(campaignId: string, step2: number, step3: number): Promise<ActionResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await sender();
   if (!s || !uuid.safeParse(campaignId).success || !validDelays({ step2, step3 })) return err(M.campaign.delaysError);
   const { error } = await s.supabase.rpc("set_campaign_delays", { p_campaign: campaignId, p_step2: step2, p_step3: step3 });
@@ -253,9 +280,11 @@ export async function setDelays(campaignId: string, step2: number, step3: number
  * the cap fits), then the new ones are added in screen order. The database re-checks workspace, role and the cap.
  */
 export async function setCampaignMailboxes(campaignId: string, mailboxIds: string[]): Promise<ActionResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await sender();
   const ids = z.array(uuid).min(1).max(MAX_CAMPAIGN_MAILBOXES).safeParse(mailboxIds);
-  if (!s || !uuid.safeParse(campaignId).success) return err();
+  if (!s || !uuid.safeParse(campaignId).success) return err(M.genericError);
   if (!ids.success) return err(M.campaign.mailboxesError);
   const { data: cur, error: readError } = await s.supabase.from("campaign_mailboxes").select("mailbox_id").eq("campaign_id", campaignId).order("seq", { ascending: true });
   if (readError) return err(M.campaign.mailboxesError);
@@ -277,12 +306,14 @@ export async function setCampaignMailboxes(campaignId: string, mailboxIds: strin
 
 /** Without AI (or by choice): honest template drafts that a person edits and approves. */
 export async function writeTemplateDrafts(campaignId: string): Promise<ActionResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await sender();
-  if (!s || !uuid.safeParse(campaignId).success) return err();
+  if (!s || !uuid.safeParse(campaignId).success) return err(M.genericError);
   try {
     await templateDrafts(s.deps, campaignId, s.workspace.name);
   } catch {
-    return err();
+    return err(M.genericError);
   }
   refresh(`/campanhas/${campaignId}`);
   return ok();
@@ -290,6 +321,8 @@ export async function writeTemplateDrafts(campaignId: string): Promise<ActionRes
 
 // ---------------------------------------------------------------- prospects
 export async function setProspectEmail(prospectId: string, raw: string): Promise<ActionResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await sender();
   const value = raw.trim().toLowerCase();
   if (!s || !uuid.safeParse(prospectId).success) return err(M.campaign.emailErrors.generic);
@@ -305,6 +338,8 @@ export async function setProspectEmail(prospectId: string, raw: string): Promise
 
 /** R18: a person confirms the address the research saw without proof; it becomes 'manual', confirmed by them. */
 export async function confirmSuggestedEmail(prospectId: string): Promise<ActionResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await sender();
   if (!s || !uuid.safeParse(prospectId).success) return err(M.campaign.emailErrors.generic);
   const { data } = await s.supabase.from("email_prospects").select("suggested_email").eq("id", prospectId).maybeSingle();
@@ -314,21 +349,25 @@ export async function confirmSuggestedEmail(prospectId: string): Promise<ActionR
 }
 
 export async function setProspectSkipped(prospectId: string, skipped: boolean): Promise<ActionResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await sender();
-  if (!s || !uuid.safeParse(prospectId).success) return err();
+  if (!s || !uuid.safeParse(prospectId).success) return err(M.genericError);
   const { data, error } = await s.supabase
     .from("email_prospects")
     .update({ status: skipped ? "skipped" : "active" })
     .eq("id", prospectId)
     .eq("status", skipped ? "active" : "skipped")
     .select("campaign_id");
-  if (error) return err();
+  if (error) return err(M.genericError);
   if (data?.length) refresh(`/campanhas/${(data[0] as { campaign_id: string }).campaign_id}`);
   return ok();
 }
 
 // ---------------------------------------------------------------- messages (R1, R4, R12)
 export async function saveMessage(messageId: string, subject: string, body: string): Promise<ActionResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await sender();
   if (!s || !uuid.safeParse(messageId).success) return err(M.review.errors.generic);
   const { data: row } = await s.supabase.from("email_messages").select("kind, campaign_id").eq("id", messageId).maybeSingle();
@@ -342,7 +381,8 @@ export async function saveMessage(messageId: string, subject: string, body: stri
   return error ? err(M.review.errors.generic) : ok(M.saved);
 }
 
-function approvalText(r: ApprovalResult, action: string): string | undefined {
+function approvalText(r: ApprovalResult, action: string, t: Messages): string | undefined {
+  const M = t.email;
   const parts: string[] = [];
   if (action === "approve") parts.push(fill(M.review.approvedN, { n: r.done }));
   if (r.changed) parts.push(fill(M.review.skippedChanged, { n: r.changed }));
@@ -356,17 +396,19 @@ function approvalText(r: ApprovalResult, action: string): string | undefined {
  * since it was shown is skipped and reported.
  */
 export async function decideMessages(items: MessageVersion[], action: "approve" | "reject" | "unapprove"): Promise<ActionResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await sender();
-  if (!s || !versions.safeParse(items).success || !["approve", "reject", "unapprove"].includes(action)) return err();
+  if (!s || !versions.safeParse(items).success || !["approve", "reject", "unapprove"].includes(action)) return err(M.genericError);
   const { data, error } = await s.supabase.rpc("set_email_approval", {
     p_ids: items.map((i) => i.id),
     p_versions: items.map((i) => i.updatedAt),
     p_action: action,
   });
   revalidatePath("/campanhas", "layout");
-  if (error) return err();
+  if (error) return err(M.genericError);
   const r = (data ?? { done: 0, changed: 0, skipped: 0 }) as ApprovalResult;
-  return { ok: r.changed === 0, message: approvalText(r, action) };
+  return { ok: r.changed === 0, message: approvalText(r, action, t) };
 }
 
 /**
@@ -375,14 +417,16 @@ export async function decideMessages(items: MessageVersion[], action: "approve" 
  * reply. Everything else is skipped and counted in the result.
  */
 export async function approveReviewed(items: MessageVersion[]): Promise<ActionResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await sender();
-  if (!s || !versions.safeParse(items).success) return err();
+  if (!s || !versions.safeParse(items).success) return err(M.genericError);
   const { data, error } = await s.supabase.from("email_messages").select("id, kind, status").in("id", items.map((i) => i.id));
-  if (error) return err();
+  if (error) return err(M.genericError);
   const eligible = new Set(((data ?? []) as { id: string; kind: string; status: string }[]).filter((m) => m.kind === "sequence" && m.status === "draft").map((m) => m.id));
   const chosen = items.filter((i) => eligible.has(i.id));
   const notDraft = items.length - chosen.length;
-  if (!chosen.length) return ok(approvalText({ done: 0, changed: 0, skipped: notDraft }, "approve"));
+  if (!chosen.length) return ok(approvalText({ done: 0, changed: 0, skipped: notDraft }, "approve", t));
   const r = await decideMessages(chosen, "approve");
   if (!notDraft) return r;
   return { ok: r.ok, message: [r.message, fill(M.review.skippedState, { n: notDraft })].filter(Boolean).join(" ") };
@@ -393,8 +437,10 @@ export async function approveReviewed(items: MessageVersion[]): Promise<ActionRe
  * confirmedNotSent: the person checked the Gmail Sent folder (R9); the database refuses it otherwise.
  */
 export async function retryMessage(messageId: string, confirmedNotSent = false): Promise<ActionResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await sender();
-  if (!s || !uuid.safeParse(messageId).success) return err();
+  if (!s || !uuid.safeParse(messageId).success) return err(M.genericError);
   const { data, error } = await s.supabase.rpc("retry_failed_email", { p_message: messageId, p_confirmed_not_sent: confirmedNotSent === true });
   revalidatePath("/campanhas", "layout");
   if (error) return err(/R9/.test(error.message) ? M.send.interrupted : M.genericError);
@@ -405,41 +451,49 @@ export async function retryMessage(messageId: string, confirmedNotSent = false):
 export type FetchResult = ActionResult & { stored?: number; bounces?: number; classified?: number };
 
 export async function fetchRepliesAction(mailboxId: string): Promise<FetchResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await sender();
-  if (!s || !uuid.safeParse(mailboxId).success) return err();
+  if (!s || !uuid.safeParse(mailboxId).success) return err(M.genericError);
   try {
     const r = await fetchReplies(s.deps, mailboxId);
     revalidatePath("/campanhas", "layout");
     const note = r.aiProblem && r.aiProblem !== "not_configured" ? ` ${M.ai[r.aiProblem] ?? ""}` : "";
     return { ok: true, message: fill(M.replies.fetched, { stored: r.stored, bounces: r.bounces, possible: r.possibleBounces, classified: r.classified }) + note, ...r };
   } catch (e) {
-    return err(e instanceof MailboxKeyError ? M.keyMissing : mailboxError(e instanceof Error && e.name === "SecretError" ? "mailbox_secret" : null));
+    return err(e instanceof MailboxKeyError ? M.keyMissing : mailboxError(e instanceof Error && e.name === "SecretError" ? "mailbox_secret" : null, t));
   }
 }
 
 /** "Possível devolução": a person confirms it (suppress and stop) or dismisses it. */
 export async function confirmBounce(replyId: string, isBounce: boolean): Promise<ActionResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await sender();
-  if (!s || !uuid.safeParse(replyId).success) return err();
+  if (!s || !uuid.safeParse(replyId).success) return err(M.genericError);
   const { error } = await s.supabase.rpc("confirm_possible_bounce", { p_reply: replyId, p_is_bounce: isBounce === true });
   revalidatePath("/campanhas", "layout");
-  return error ? err() : ok();
+  return error ? err(M.genericError) : ok();
 }
 
 export async function setReplyLabel(replyId: string, label: string): Promise<ActionResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await sender();
   const cls = z.enum(REPLY_CLASSES).safeParse(label);
-  if (!s || !uuid.safeParse(replyId).success || !cls.success) return err();
+  if (!s || !uuid.safeParse(replyId).success || !cls.success) return err(M.genericError);
   const { error } = await s.supabase.rpc("set_reply_class", { p_reply: replyId, p_class: cls.data, p_source: "human", p_reason: null, p_model: null });
   revalidatePath("/campanhas", "layout");
-  return error ? err() : ok();
+  return error ? err(M.genericError) : ok();
 }
 
 export async function draftAnswerAction(replyId: string): Promise<ActionResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await sender();
-  if (!s || !uuid.safeParse(replyId).success) return err();
+  if (!s || !uuid.safeParse(replyId).success) return err(M.genericError);
   const reply = await s.store.getReply(replyId);
-  if (!reply) return err();
+  if (!reply) return err(M.genericError);
   const r = await draftAnswer(s.deps, reply, s.workspace.name);
   revalidatePath("/campanhas", "layout");
   return r.ok ? ok() : err(M.ai[r.code] ?? M.genericError);
@@ -447,8 +501,10 @@ export async function draftAnswerAction(replyId: string): Promise<ActionResult> 
 
 /** "Revisar com modelo forte" (item 12): one Sonnet call in the user's AI caps; the result is a draft to review again. */
 export async function redraftStrongAction(prospectId: string): Promise<ActionResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await sender();
-  if (!s || !uuid.safeParse(prospectId).success) return err();
+  if (!s || !uuid.safeParse(prospectId).success) return err(M.genericError);
   const r = await redraftStrong(s.deps, prospectId, s.workspace.name);
   const p = await s.store.getProspect(prospectId);
   if (p) refresh(`/campanhas/${p.campaign_id}/revisar`);
@@ -459,21 +515,25 @@ export async function redraftStrongAction(prospectId: string): Promise<ActionRes
 
 // ---------------------------------------------------------------- closer
 export async function handOffAction(prospectId: string): Promise<ActionResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await sender();
-  if (!s || !uuid.safeParse(prospectId).success) return err();
+  if (!s || !uuid.safeParse(prospectId).success) return err(M.genericError);
   try {
     const r = await handOffWithBrief(s.deps, prospectId, s.workspace.name);
     revalidatePath("/campanhas", "layout");
-    if (!r.handedOff) return err();
+    if (!r.handedOff) return err(M.genericError);
     return r.aiProblem ? ok(M.ai[r.aiProblem] ?? undefined) : ok();
   } catch {
-    return err();
+    return err(M.genericError);
   }
 }
 
 export async function refreshBriefAction(prospectId: string): Promise<ActionResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await sender();
-  if (!s || !uuid.safeParse(prospectId).success) return err();
+  if (!s || !uuid.safeParse(prospectId).success) return err(M.genericError);
   const r = await refreshBrief(s.deps, prospectId, s.workspace.name);
   revalidatePath("/leads/closer");
   return r.brief ? ok() : err(r.aiProblem ? M.ai[r.aiProblem] : M.genericError);
@@ -487,6 +547,8 @@ const suppressionSchema = z.object({
 });
 
 export async function addSuppression(_prev: FormState, form: FormData): Promise<FormState> {
+  const t = await getT();
+  const M = t.email;
   const parsed = suppressionSchema.safeParse({ value: form.get("value") ?? "", reason: form.get("reason") ?? "manual", note: form.get("note") ?? "" });
   if (!parsed.success) return { status: "error", fieldErrors: { value: M.blocked.errors.invalid } };
   const v = parsed.data.value.replace(/^@/, "");
@@ -501,8 +563,10 @@ export async function addSuppression(_prev: FormState, form: FormData): Promise<
 }
 
 export async function removeSuppression(id: string): Promise<ActionResult> {
+  const t = await getT();
+  const M = t.email;
   const s = await emailSession();
-  if (!s || !uuid.safeParse(id).success) return err();
+  if (!s || !uuid.safeParse(id).success) return err(M.genericError);
   if (s.workspace.role !== "owner") return err(M.blocked.ownerOnly);
   const { data, error } = await s.supabase.from("suppressions").delete().eq("id", id).select("id");
   refresh("/configuracoes/bloqueados");

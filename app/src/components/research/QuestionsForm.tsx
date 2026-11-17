@@ -3,10 +3,8 @@
 import { useState, useTransition } from "react";
 import { answerQuestions } from "@/app/(app)/agentes/actions";
 import type { Answers, Question } from "@/lib/research/types";
-import { t } from "@/messages/pt";
+import { useT } from "@/lib/i18n/client";
 import { Choice, PrimaryButton } from "./controls";
-
-const M = t.research.conversation;
 
 export function QuestionsForm({
   runId,
@@ -23,6 +21,8 @@ export function QuestionsForm({
   places: string[];
   disabled: boolean;
 }) {
+  const t = useT();
+  const M = t.research.conversation;
   const [state, setState] = useState<Answers>(() =>
     Object.fromEntries(questions.map((q) => [q.id, answers[q.id] ?? { choices: [], text: "" }])),
   );

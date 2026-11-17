@@ -4,9 +4,8 @@ import { input, Label } from "@/components/email/bits";
 import { stepProblems, type SequenceStep } from "@/lib/email/template";
 import { validDelays } from "@/lib/email/schedule";
 import { TONES, type Tone } from "@/lib/email-agent/types";
-import { fill, t } from "@/messages/pt";
-
-const D = t.emailAgent.detail;
+import { fill } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 
 export type EditorValue = { steps: SequenceStep[]; tone: Tone; step2: string; step3: string };
 
@@ -18,6 +17,8 @@ export function parseDelays(v: Pick<EditorValue, "step2" | "step3">): { step2: n
 
 /** Controlled: every value lives in the parent, so a failed save keeps what was typed. Problems show live. */
 export function SequenceEditor({ value, onChange, disabled }: { value: EditorValue; onChange: (v: EditorValue) => void; disabled: boolean }) {
+  const t = useT();
+  const D = t.emailAgent.detail;
   const setStep = (i: number, patch: Partial<SequenceStep>) => onChange({ ...value, steps: value.steps.map((s, k) => (k === i ? { ...s, ...patch } : s)) });
   const delaysBad = value.steps.length > 1 && !parseDelays(value);
   return (

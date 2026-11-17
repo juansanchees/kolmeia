@@ -5,9 +5,10 @@ import { authenticate } from "./actions";
 import { idle } from "@/lib/form-state";
 import { Button, Field, LinkButton, TextInput } from "@/components/ui";
 import { KolmeiaMark } from "@/components/Logo";
-import { t } from "@/messages/pt";
+import { useT } from "@/lib/i18n/client";
 
 export function LoginForm({ next = "/" }: { next?: string }) {
+  const t = useT();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [state, action, pending] = useActionState(authenticate, idle);
   const signup = mode === "signup";

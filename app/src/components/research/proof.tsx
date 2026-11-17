@@ -4,19 +4,18 @@ import { useRef, useState } from "react";
 import { isStaleProof } from "@/lib/leads/view";
 import type { CandidateRow } from "@/lib/research/rows";
 import type { CheckWithEvidence } from "@/lib/research/store";
-import { t } from "@/messages/pt";
+import { useT } from "@/lib/i18n/client";
 import { Pill } from "./controls";
 import { date, host } from "./format";
 
-const L = t.research.list;
-const LB = t.research.labels;
-const K = t.research.plan.checks;
-
 function StaleTag() {
+  const t = useT();
   return <span className="ml-1.5 border border-line px-1 font-mono text-[11px] text-muted">{t.leads.stale}</span>;
 }
 
 export function Hook({ text }: { text: string }) {
+  const t = useT();
+  const L = t.research.list;
   const ref = useRef<HTMLQuoteElement>(null);
   const [label, setLabel] = useState<string>(L.copyHook);
   const copy = () => {
@@ -54,6 +53,10 @@ export function Hook({ text }: { text: string }) {
 }
 
 export function ProofList({ c, checks, now }: { c: CandidateRow; checks: CheckWithEvidence[]; now: Date }) {
+  const t = useT();
+  const L = t.research.list;
+  const LB = t.research.labels;
+  const K = t.research.plan.checks;
   const secondPass = c.second_pass;
   const byPass = [1, 2].map((p) => checks.filter((k) => k.pass === p));
   return (
@@ -64,7 +67,7 @@ export function ProofList({ c, checks, now }: { c: CandidateRow; checks: CheckWi
           <a href={c.found_at_url} target="_blank" rel="noopener noreferrer" className="text-blue underline underline-offset-2">
             {c.found_at_title || host(c.found_at_url)}
           </a>
-          {c.found_at_seen_at && ` · ${L.seenOn} ${date(c.found_at_seen_at)}`}
+          {c.found_at_seen_at && ` · ${L.seenOn} ${date(c.found_at_seen_at, t.intl)}`}
           {isStaleProof(c.found_at_seen_at, now) && <StaleTag />}
           {c.found_at_excerpt && <span className="block italic">“{c.found_at_excerpt}”</span>}
         </span>
@@ -92,7 +95,7 @@ export function ProofList({ c, checks, now }: { c: CandidateRow; checks: CheckWi
                       <a href={e.url} target="_blank" rel="noopener noreferrer" className="text-blue underline underline-offset-2">
                         {e.title || host(e.url)}
                       </a>{" "}
-                      · {L.seenOn} {date(e.seen_at)}
+                      · {L.seenOn} {date(e.seen_at, t.intl)}
                       {isStaleProof(e.seen_at, now) && <StaleTag />}
                       {e.excerpt && <span className="block italic">“{e.excerpt}”</span>}
                     </span>

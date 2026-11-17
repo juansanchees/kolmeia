@@ -5,14 +5,15 @@ import { useState, useTransition } from "react";
 import { estimateQualifyAction, requestQualifyAction } from "@/app/(app)/leads/qualify-actions";
 import { btn, Notice } from "@/components/email/bits";
 import { usd } from "@/components/research/format";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 
-const Q = t.qualifier;
-const S = t.spend.qualify;
 const NEXT = [10, 25, 50] as const;
 
 /** The checkbox at the start of a LEADS row (outside the row's link). */
 export function RowCheck({ checked, name, onChange }: { checked: boolean; name: string; onChange: (v: boolean) => void }) {
+  const t = useT();
+  const S = t.spend.qualify;
   return (
     <label className="flex min-h-11 min-w-11 items-center justify-center">
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} aria-label={fill(S.selectRow, { name })} className="h-5 w-5" />
@@ -24,6 +25,9 @@ type Est = { count: number; usd: number; leftTodayUsd: number };
 
 /** Manual qualification: the estimate comes first, the request only after [Confirmar]. */
 export function QualifyControls({ filteredIds, selected, onDone }: { filteredIds: string[]; selected: string[]; onDone: () => void }) {
+  const t = useT();
+  const Q = t.qualifier;
+  const S = t.spend.qualify;
   const [ids, setIds] = useState<string[] | null>(null);
   const [estimate, setEstimate] = useState<Est | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -105,8 +109,8 @@ export function QualifyControls({ filteredIds, selected, onDone }: { filteredIds
             <p className="text-sm text-muted">{S.estimating}</p>
           ) : (
             <>
-              <p className="font-mono text-sm font-semibold">{fill(Q.estimate, { usd: usd(estimate.usd) })}</p>
-              {over && <Notice tone="warn">{fill(Q.overDay, { left: usd(estimate.leftTodayUsd) })}</Notice>}
+              <p className="font-mono text-sm font-semibold">{fill(Q.estimate, { usd: usd(estimate.usd, t.intl) })}</p>
+              {over && <Notice tone="warn">{fill(Q.overDay, { left: usd(estimate.leftTodayUsd, t.intl) })}</Notice>}
             </>
           )}
           <div className="flex flex-wrap gap-2">

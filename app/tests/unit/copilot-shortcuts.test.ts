@@ -3,6 +3,7 @@ import type { AiContext, AiLedger } from "@/lib/ai/gateway";
 import { applyShortcut, BIG_PERMIT_USD, SHORTCUTS } from "@/lib/leads/shortcuts";
 import { DEFAULT_LEAD_FILTERS, parseLeadFilters } from "@/lib/leads/view";
 import { whyHotFacts } from "@/lib/leads/why-hot";
+import { t } from "@/messages/pt";
 import type { CandidateRow } from "@/lib/research/rows";
 import { FakeTransport } from "../engine/fake-ai";
 
@@ -44,7 +45,7 @@ describe("Por que este lead é quente?", () => {
         { id: "f3", lead_id: "l", field: "email", value: "pat@x.example", source: "pattern", source_ref: null, status: "unverified", excerpt: null, seen_at: "" },
       ],
       checks: [{ candidate_id: "c1", kind: "has_work", result: "ok", evidence: [{ url: "https://data.boston.gov/permit/1", title: "Permit", excerpt: "New 4-unit building", seen_at: "" }] }],
-    });
+    }, t);
     const texts = facts.map((f) => f.text);
     expect(texts[0]).toMatch(/^Dados 4 de 4/);
     expect(texts).toContain("5 alvarás, total US$ 4,8 mi, o último em 10/03/2026");

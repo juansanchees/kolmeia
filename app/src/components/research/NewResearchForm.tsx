@@ -4,11 +4,11 @@ import { useActionState } from "react";
 import { createResearch } from "@/app/(app)/agentes/actions";
 import { idle } from "@/lib/form-state";
 import { Button, Field, TextArea, TextInput } from "@/components/ui";
-import { t } from "@/messages/pt";
-
-const M = t.research.newForm;
+import { useT } from "@/lib/i18n/client";
 
 export function NewResearchForm() {
+  const t = useT();
+  const M = t.research.newForm;
   const [state, action, pending] = useActionState(createResearch, idle);
   const err = state.fieldErrors ?? {};
   return (

@@ -6,13 +6,14 @@ import { btn } from "@/components/email/bits";
 import { Field, TextInput } from "@/components/ui";
 import { MA_TOWNS } from "@/lib/coverage/ma-towns";
 import { idle, type FormState } from "@/lib/form-state";
-import { t } from "@/messages/pt";
+import { useT } from "@/lib/i18n/client";
 
-const F = t.coverage.form;
 const TOWN_NAMES = [...MA_TOWNS].map((x) => x.name).sort((a, b) => a.localeCompare(b));
 
 // Controlled fields: React 19 resets uncontrolled ones after an action, so an error must not wipe what was typed.
 function Fields({ state, pending }: { state: FormState; pending: boolean }) {
+  const t = useT();
+  const F = t.coverage.form;
   const [town, setTown] = useState("");
   const [day, setDay] = useState("");
   const [note, setNote] = useState("");

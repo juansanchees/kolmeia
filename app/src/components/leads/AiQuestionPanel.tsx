@@ -6,13 +6,14 @@ import { btn, Notice } from "@/components/email/bits";
 import { usd } from "@/components/research/format";
 import { ANSWER_TYPES, answerFilterValues, QUESTION_MAX, QUESTION_SOURCES, RUN_MAX, TEST_LEADS, type AiCell, type AiQuestion, type AnswerType, type QuestionSource } from "@/lib/ai-questions/types";
 import type { LeadFilters } from "@/lib/leads/view";
-import { fill, t } from "@/messages/pt";
+import { fill, type Messages } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 
-const A = t.leads.aiQuestion;
 const selectCls = "min-h-11 min-w-0 border border-line bg-surface px-2.5 text-sm text-ink";
 
 /** How a cell reads in the list: "Sim", "Não sei", "na fila…", a score or the short text. */
-export function answerText(cell: AiCell | undefined): string {
+export function answerText(cell: AiCell | undefined, t: Messages): string {
+  const A = t.leads.aiQuestion;
   if (!cell || cell.status === "queued") return A.answers.pending;
   if (cell.status !== "done" || cell.answer === null) return A.answers.failed;
   const own = A.answers as Record<string, string>;
@@ -33,6 +34,8 @@ type Props = {
 
 /** "Pergunta da IA para cada lead": pick the column, create a question, test on 3, run on N (stops at the AI caps). */
 export function AiQuestionPanel({ questions, f, set, selected, filtered, reserveUsd, nameOf, onDone }: Props) {
+  const t = useT();
+  const A = t.leads.aiQuestion;
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [type, setType] = useState<AnswerType>("yes_no_unknown");
@@ -169,7 +172,7 @@ export function AiQuestionPanel({ questions, f, set, selected, filtered, reserve
           <span className="font-mono text-xs text-muted">{A.before}</span>
           <ol className="m-0 flex list-none flex-col gap-1 p-0 text-[13px]">
             <li>{A.step1}</li>
-            <li>{fill(A.estimate, { n: target.length, usd: `US$ ${usd(Math.ceil(target.length * reserveUsd * 100) / 100)}` })}</li>
+            <li>{fill(A.estimate, { n: target.length, usd: `US$ ${usd(Math.ceil(target.length * reserveUsd * 100) / 100, t.intl)}` })}</li>
             <li>{A.step3}</li>
           </ol>
           {target.length === 0 && <p className="m-0 text-[13px] text-muted">{A.noLeads}</p>}
@@ -193,7 +196,7 @@ export function AiQuestionPanel({ questions, f, set, selected, filtered, reserve
             <ul className="m-0 flex list-none flex-col gap-1 p-0 text-sm">
               {tested.map((x) => (
                 <li key={x.leadId}>
-                  <span className="font-semibold">{nameOf(x.leadId)}</span>: {answerText({ status: x.answer === null ? "failed" : "done", answer: x.answer, url: null, excerpt: null, label: null })}
+                  <span className="font-semibold">{nameOf(x.leadId)}</span>: {answerText({ status: x.answer === null ? "failed" : "done", answer: x.answer, url: null, excerpt: null, label: null }, t)}
                 </li>
               ))}
             </ul>

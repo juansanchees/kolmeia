@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { t } from "@/messages/pt";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DEFAULT_AGENT_SOURCES, estimateLabel, parseAgentSources, parseApolloForm, parseMapsForm, parseShovelsForm, runStatusLabel, runTitle, todayLine } from "@/lib/sources/view";
@@ -10,43 +11,43 @@ const read = (f: string) => readFileSync(join(process.cwd(), f), "utf8");
 
 describe("F3d view", () => {
   test("estimate shows até US$ 0,50 for 50 places and 0,80 for 200", () => {
-    expect(estimateLabel("maps", 50)).toBe("até US$ 0,50");
-    expect(estimateLabel("maps", 200)).toBe("até US$ 0,80");
-    expect(estimateLabel("maps", 10)).toBe("até US$ 0,50");
-    expect(estimateLabel("apollo", 1)).not.toContain("US$ 0");
+    expect(estimateLabel("maps", 50, t)).toBe("até US$ 0,50");
+    expect(estimateLabel("maps", 200, t)).toBe("até US$ 0,80");
+    expect(estimateLabel("maps", 10, t)).toBe("até US$ 0,50");
+    expect(estimateLabel("apollo", 1, t)).not.toContain("US$ 0");
   });
 
   test("status labels for queued, running, imported, failed, refused", () => {
-    expect(runStatusLabel({ status: "queued", error: null })).toBe("na fila");
-    expect(runStatusLabel({ status: "running", error: null })).toBe("rodando");
-    expect(runStatusLabel({ status: "imported", error: null })).toBe("importada");
-    expect(runStatusLabel({ status: "failed", error: "stale" })).toBe("falhou · demorou demais");
-    expect(runStatusLabel({ status: "failed", error: "start_unknown" })).toContain("não sei se começou");
-    expect(runStatusLabel({ status: "failed", error: "interrupted" })).toBe("falhou · interrompida");
-    expect(runStatusLabel({ status: "failed", error: "not_found" })).toBe("falhou · execução sumiu");
-    expect(runStatusLabel({ status: "refused", error: "source_cap" })).toBe("recusada · teto atingido");
-    expect(runStatusLabel({ status: "refused", error: "disconnected" })).toBe("recusada · chave desconectada");
+    expect(runStatusLabel({ status: "queued", error: null }, t)).toBe("na fila");
+    expect(runStatusLabel({ status: "running", error: null }, t)).toBe("rodando");
+    expect(runStatusLabel({ status: "imported", error: null }, t)).toBe("importada");
+    expect(runStatusLabel({ status: "failed", error: "stale" }, t)).toBe("falhou · demorou demais");
+    expect(runStatusLabel({ status: "failed", error: "start_unknown" }, t)).toContain("não sei se começou");
+    expect(runStatusLabel({ status: "failed", error: "interrupted" }, t)).toBe("falhou · interrompida");
+    expect(runStatusLabel({ status: "failed", error: "not_found" }, t)).toBe("falhou · execução sumiu");
+    expect(runStatusLabel({ status: "refused", error: "source_cap" }, t)).toBe("recusada · teto atingido");
+    expect(runStatusLabel({ status: "refused", error: "disconnected" }, t)).toBe("recusada · chave desconectada");
     for (const code of ["refused", "import_refused", "start_refused", "start_unrecorded", "timeout", "network", "bad_json", "key_unreadable", "unsupported", "bad_state"]) {
-      const label = runStatusLabel({ status: "failed", error: code });
+      const label = runStatusLabel({ status: "failed", error: code }, t);
       expect(label, code).toMatch(/^falhou · .+/);
       expect(label, code).not.toBe("falhou · erro");
     }
-    expect(runStatusLabel({ status: "refused", error: "refused" })).toBe("recusada · chave recusada");
-    expect(runStatusLabel({ status: "failed", error: "http_503" })).toBe("falhou · erro do serviço");
-    expect(runStatusLabel({ status: "failed", error: null })).toBe("falhou");
-    expect(runStatusLabel({ status: "failed", error: "weird <x>" })).toBe("falhou · erro");
+    expect(runStatusLabel({ status: "refused", error: "refused" }, t)).toBe("recusada · chave recusada");
+    expect(runStatusLabel({ status: "failed", error: "http_503" }, t)).toBe("falhou · erro do serviço");
+    expect(runStatusLabel({ status: "failed", error: null }, t)).toBe("falhou");
+    expect(runStatusLabel({ status: "failed", error: "weird <x>" }, t)).toBe("falhou · erro");
   });
 
   test("today lines: USD for apify, searches for apollo, ? when unknown", () => {
-    expect(todayLine({ provider: "apify", today: 1.2, cap: 2 })).toBe("Hoje: US$ 1,20 de 2,00");
-    expect(todayLine({ provider: "apollo", today: 3, cap: 20 })).toBe("Hoje: 3 de 20 buscas");
-    expect(todayLine({ provider: "apify", today: null, cap: null })).toContain("?");
+    expect(todayLine({ provider: "apify", today: 1.2, cap: 2 }, t)).toBe("Hoje: US$ 1,20 de 2,00");
+    expect(todayLine({ provider: "apollo", today: 3, cap: 20 }, t)).toBe("Hoje: 3 de 20 buscas");
+    expect(todayLine({ provider: "apify", today: null, cap: null }, t)).toContain("?");
   });
 
   test("run title comes from the label or the query", () => {
-    expect(runTitle({ kind: "maps", query: { terms: ["a", "b"], location: "Worcester, MA" } })).toBe("a, b · Worcester, MA");
-    expect(runTitle({ kind: "maps", query: { terms: ["a"], location: "X", label: "Meu nome" } })).toBe("Meu nome");
-    expect(runTitle({ kind: "apollo", query: { locations: ["MA"], naics: ["2362"] } })).toContain("2362");
+    expect(runTitle({ kind: "maps", query: { terms: ["a", "b"], location: "Worcester, MA" } }, t)).toBe("a, b · Worcester, MA");
+    expect(runTitle({ kind: "maps", query: { terms: ["a"], location: "X", label: "Meu nome" } }, t)).toBe("Meu nome");
+    expect(runTitle({ kind: "apollo", query: { locations: ["MA"], naics: ["2362"] } }, t)).toContain("2362");
   });
 
   test("form validation: 0 or 6 terms, max 0 or 201, NAICS \"23a\" refused", () => {
@@ -168,8 +169,8 @@ describe("F3d routes", () => {
     expect(parseShovelsForm({ place: "90210", tag: "all", max: "10" }).ok).toBe(false);
     expect(parseShovelsForm({ place: "Boston", tag: "solar", max: "10" }).ok).toBe(false);
     expect(parseShovelsForm({ place: "Boston", tag: "all", max: "101" }).ok).toBe(false);
-    expect(todayLine({ provider: "shovels", today: 120, cap: 500 })).toBe("120 de 500 usados este mês");
-    expect(runTitle({ kind: "shovels", query: { place: "", tag: "new_construction" } })).toBe("MA · Obra nova");
+    expect(todayLine({ provider: "shovels", today: 120, cap: 500 }, t)).toBe("120 de 500 usados este mês");
+    expect(runTitle({ kind: "shovels", query: { place: "", tag: "new_construction" } }, t)).toBe("MA · Obra nova");
     const calls: unknown[] = [];
     const rpc: SearchRpc = async (fn, args) => (calls.push([fn, args]), { error: null });
     expect(await enqueueShovelsCore({ ws: WS, role: "sdr" }, { place: "01602", tag: "all", max: "5" }, { rpc })).toEqual({ ok: true });

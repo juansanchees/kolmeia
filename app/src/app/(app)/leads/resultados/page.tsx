@@ -5,13 +5,14 @@ import { OUTCOME_GROUPS, latestOutcomeGroups, type OutcomeGroup } from "@/lib/ca
 import { listLeads } from "@/lib/leads/queries";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace, getUser } from "@/lib/workspace";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 
-const R = t.results;
-const when = (iso: string) => new Date(iso).toLocaleString("pt-BR", { timeZone: "America/New_York", weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const when = (iso: string, intl: string) => new Date(iso).toLocaleString(intl, { timeZone: "America/New_York", weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
 // Leads by the result of their last registered contact. Read as the user (RLS: the closer sees only her own leads and calls).
 export default async function ResultsPage({ searchParams }: { searchParams: Promise<{ [k: string]: string | string[] | undefined }> }) {
+  const t = await getT();
+  const R = t.results;
   const supabase = await createClient();
   const workspace = await getCurrentWorkspace();
   if (!supabase || !workspace) return null;
@@ -76,8 +77,8 @@ export default async function ResultsPage({ searchParams }: { searchParams: Prom
                 <span title={r.notes} className="min-w-0 flex-[2_1_220px] truncate text-sm text-muted">{r.notes || R.unknown}</span>
                 <span className="text-sm">{who(r.called_by)}</span>
                 <span className="flex flex-col font-mono text-[13px] text-muted">
-                  <span>{when(r.called_at)}</span>
-                  {tab === "call_back" && r.next_step_at && <span className="text-ink">{R.callBack} {when(r.next_step_at)}</span>}
+                  <span>{when(r.called_at, t.intl)}</span>
+                  {tab === "call_back" && r.next_step_at && <span className="text-ink">{R.callBack} {when(r.next_step_at, t.intl)}</span>}
                 </span>
               </li>
             );

@@ -8,17 +8,19 @@ import { grandTotal, sourceRows, spendRows, spendTotal, type SpendBy, type Spend
 import type { QualifierStatus } from "@/lib/qualifier/view";
 import { createClient } from "@/lib/supabase/server";
 import { requireSender } from "@/lib/workspace";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { getT } from "@/lib/i18n/server";
 
-const S = t.spend;
 const BY: Record<string, SpendBy> = { agente: "agent", passo: "step", modelo: "model", lead: "lead", dia: "day" };
 const PERIOD: Record<string, SpendPeriod> = { hoje: "today", "7d": "7d", "30d": "30d" };
-const BY_LABEL: Record<SpendBy, string> = { agent: S.by.agent, step: S.by.step, model: S.by.model, lead: S.by.lead, day: S.by.day };
-const PERIOD_LABEL: Record<SpendPeriod, string> = { today: S.period.today, "7d": S.period.d7, "30d": S.period.d30 };
 const pick = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 const chip = "inline-flex min-h-11 items-center border px-4 text-sm no-underline";
 
 export default async function GastosPage({ searchParams }: { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
+  const t = await getT();
+  const S = t.spend;
+  const BY_LABEL: Record<SpendBy, string> = { agent: S.by.agent, step: S.by.step, model: S.by.model, lead: S.by.lead, day: S.by.day };
+  const PERIOD_LABEL: Record<SpendPeriod, string> = { today: S.period.today, "7d": S.period.d7, "30d": S.period.d30 };
   const workspace = await requireSender();
   const sp = await searchParams;
   const by = BY[pick(sp.por) ?? ""] ?? "agent";
@@ -32,7 +34,7 @@ export default async function GastosPage({ searchParams }: { searchParams: Promi
   try {
     const [spend, sources, ws, st] = await Promise.all([
       loadSpend(supabase, workspace.id, period),
-      loadSourceRuns(supabase, workspace.id, period),
+      loadSourceRuns(supabase, workspace.id, period, t),
       loadWorkspaceToday(supabase, workspace.id),
       supabase.rpc("qualifier_status", { p_ws: workspace.id }),
     ]);
@@ -42,8 +44,8 @@ export default async function GastosPage({ searchParams }: { searchParams: Promi
     return <Notice tone="warn">{S.failed}</Notice>;
   }
   const { spend, sources, ws, q } = data;
-  const rows = spendRows(spend.calls, by, spend);
-  const src = sourceRows(sources);
+  const rows = spendRows(spend.calls, by, spend, t);
+  const src = sourceRows(sources, t);
   const href = (b: string, p: string) => `/agentes/gastos?por=${b}&periodo=${p}`;
   const on = (active: boolean) => (active ? "border-blue bg-blue text-white" : "border-line bg-surface text-ink hover:bg-ground");
 
@@ -64,8 +66,8 @@ export default async function GastosPage({ searchParams }: { searchParams: Promi
         </Notice>
       )}
       <div className="flex flex-col gap-1 text-sm font-semibold">
-        <p>{fill(S.qualifierToday, { spent: money(q.spent_today), cap: money(q.daily_cap_usd) })}</p>
-        <p>{fill(S.workspaceToday, { spent: money(ws.spent), cap: money(ws.cap) })}</p>
+        <p>{fill(S.qualifierToday, { spent: money(q.spent_today, t.intl), cap: money(q.daily_cap_usd, t.intl) })}</p>
+        <p>{fill(S.workspaceToday, { spent: money(ws.spent, t.intl), cap: money(ws.cap, t.intl) })}</p>
       </div>
       <QualifierCapForm status={q} />
       <div className="flex flex-wrap gap-x-6 gap-y-2" aria-label="filtros">
@@ -84,13 +86,13 @@ export default async function GastosPage({ searchParams }: { searchParams: Promi
           ))}
         </div>
       </div>
-      <p className="text-sm font-semibold">{fill(S.total, { usd: money(spendTotal(spend.calls)) })}</p>
+      <p className="text-sm font-semibold">{fill(S.total, { usd: money(spendTotal(spend.calls), t.intl) })}</p>
       <SpendTable rows={rows} by={by} />
       <p className="text-[13px] text-muted">{S.pendingNote}</p>
       {spend.truncated && <Notice tone="warn">{S.truncated}</Notice>}
       <SourceSpend rows={src} />
-      <p className="text-sm font-semibold">{fill(S.sourcesTotal, { usd: money(src.reduce((s, r) => s + r.usd, 0)) })}</p>
-      <p className="text-sm font-semibold">{fill(S.grandTotal, { usd: money(grandTotal(spend.calls, sources)) })}{spend.truncated ? ` ${S.partial}` : ""}</p>
+      <p className="text-sm font-semibold">{fill(S.sourcesTotal, { usd: money(src.reduce((s, r) => s + r.usd, 0), t.intl) })}</p>
+      <p className="text-sm font-semibold">{fill(S.grandTotal, { usd: money(grandTotal(spend.calls, sources), t.intl) })}{spend.truncated ? ` ${S.partial}` : ""}</p>
     </div>
   );
 }

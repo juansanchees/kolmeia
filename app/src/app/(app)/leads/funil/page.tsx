@@ -2,13 +2,14 @@ import { requireSender } from "@/lib/workspace";
 import { createClient } from "@/lib/supabase/server";
 import { listLeads } from "@/lib/leads/queries";
 import { FUNNEL_STATUSES, funnelByOrigin } from "@/lib/leads/funnel";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 
 // Funnel by origin: numbers only, from the same list as LEADS (owner and sdr).
 export default async function FunnelPage() {
+  const t = await getT();
   const workspace = await requireSender();
   const supabase = await createClient();
-  const rows = supabase ? funnelByOrigin(await listLeads(supabase, workspace.id)) : [];
+  const rows = supabase ? funnelByOrigin(await listLeads(supabase, workspace.id), t) : [];
   const totals = Object.fromEntries([...FUNNEL_STATUSES, "discarded", "all"].map((k) => [k, 0])) as Record<string, number>;
   for (const r of rows) {
     for (const k of [...FUNNEL_STATUSES, "discarded"] as const) totals[k] += r.counts[k];

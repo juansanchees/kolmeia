@@ -5,9 +5,10 @@ import { INVITE_COLUMNS, type InviteRow, type Person } from "@/lib/team/types";
 import { Card, CardTitle } from "@/components/email/bits";
 import { InviteForm } from "@/components/team/InviteForm";
 import { PeopleList } from "@/components/team/PeopleList";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 
 export default async function TeamPage() {
+  const t = await getT();
   const workspace = await getCurrentWorkspace();
   if (!workspace || workspace.role !== "owner") redirect("/leads");
   const supabase = await createClient();

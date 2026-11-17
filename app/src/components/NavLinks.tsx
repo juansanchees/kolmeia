@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { t } from "@/messages/pt";
+import { useT } from "@/lib/i18n/client";
 import { areasFor, activeHref } from "@/lib/nav";
 import type { Role } from "@/lib/roles";
 
 export function NavLinks({ variant, role }: { variant: "top" | "bottom"; role: Role }) {
+  const t = useT();
   const pathname = usePathname();
-  const items = areasFor(role);
+  const items = areasFor(role, t);
   const active = activeHref(pathname, items.map((a) => a.href));
   const bottom = variant === "bottom";
   return (

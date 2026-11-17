@@ -11,9 +11,8 @@ import { inChunks, inLeadChunks, listLeads, originListsOf } from "@/lib/leads/qu
 import type { Segment } from "@/lib/leads/types";
 import { createClient } from "@/lib/supabase/server";
 import { requireSender } from "@/lib/workspace";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 
-const T = t.leads.toolbar;
 /** One batch call's deadline; 5 calls per click stay inside the page's maxDuration of 300 s. */
 const AI_MS = 45_000;
 
@@ -25,6 +24,8 @@ export type TypeResult = { ok: true; typed: number; untyped: number; stopText: s
  * set_leads_segment (sender check in SQL) only to leads whose stored type is still empty right before the write.
  */
 export async function classifyTypesAction(leadIds: string[]): Promise<TypeResult> {
+  const t = await getT();
+  const T = t.leads.toolbar;
   const ws = await requireSender();
   const ids = z.array(z.string().uuid()).min(1).max(AI_TYPE_MAX).safeParse(leadIds);
   const db = await createClient();

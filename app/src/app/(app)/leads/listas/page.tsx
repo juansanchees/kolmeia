@@ -4,13 +4,14 @@ import { NewListForm } from "@/components/lists/NewListForm";
 import { listStats } from "@/lib/lists/queries";
 import { createClient } from "@/lib/supabase/server";
 import { requireSender } from "@/lib/workspace";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 
-const L = t.lists;
 const pct = (n: number, of: number) => (of > 0 ? `${Math.round((100 * n) / of)}%` : "—");
 
 // Named lists of leads. Owner/sdr only (the closer is sent back to LEADS; RLS gives her no list rows anyway).
 export default async function ListsPage() {
+  const t = await getT();
+  const L = t.lists;
   const workspace = await requireSender();
   const supabase = await createClient();
   const rows = supabase ? await listStats(supabase, workspace.id) : [];

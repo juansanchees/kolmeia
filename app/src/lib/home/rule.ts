@@ -4,8 +4,8 @@ import { z } from "zod";
 import { telHref } from "@/lib/calls/view";
 import { effectiveTemperature, TEMP_SCORE } from "@/lib/leads/classify";
 import { SEGMENTS } from "@/lib/leads/types";
-import { DEFAULT_LEAD_FILTERS, filterLeads, ROLES, type FilterRow, type LeadFilters } from "@/lib/leads/view";
-import { fill, t } from "@/messages/pt";
+import { DEFAULT_LEAD_FILTERS, filterLeads, originKeyLabel, ROLES, type FilterRow, type LeadFilters } from "@/lib/leads/view";
+import { fill, type Messages } from "@/lib/i18n";
 
 /** How many leads the list shows. Fixed. */
 export const HOME_PICK = 5;
@@ -81,7 +81,7 @@ export function homeMatches<T extends HomeRow>(rows: T[], rule: HomeRule): T[] {
 export const pickFirst = <T extends HomeRow>(rows: T[], rule: HomeRule): T[] => homeMatches(rows, rule).slice(0, HOME_PICK);
 
 /** "Grande · tem telefone · nunca contatado · ordem recomendada" (the parts of the rule in words). */
-export function ruleParts(r: HomeRule): string[] {
+export function ruleParts(r: HomeRule, t: Messages): string[] {
   const P = t.home.rule.parts;
   const types = r.segments.map((s) => t.leads.segments[s]).join("/");
   return [
@@ -90,11 +90,11 @@ export function ruleParts(r: HomeRule): string[] {
     ...(r.hasEmail ? [P.email] : []),
     ...(r.hasContactName ? [P.contactName] : []),
     ...(r.city ? [fill(P.city, { v: r.city })] : []),
-    ...(r.origin ? [fill(P.origin, { v: r.origin })] : []),
+    ...(r.origin ? [fill(P.origin, { v: originKeyLabel(r.origin, t) })] : []),
     ...(r.minTemperature !== "any" ? [t.home.rule.tempWords[r.minTemperature]] : []),
     ...(r.role !== "all" ? [fill(P.role, { v: t.leads.facets.roleOpts[r.role].toLowerCase() })] : []),
     P.never,
     fill(P.order, { v: t.home.rule.orders[r.order] }),
   ];
 }
-export const ruleInWords = (r: HomeRule) => fill(t.home.first.rulePrefix, { parts: ruleParts(r).join(" · ") });
+export const ruleInWords = (r: HomeRule, t: Messages) => fill(t.home.first.rulePrefix, { parts: ruleParts(r, t).join(" · ") });

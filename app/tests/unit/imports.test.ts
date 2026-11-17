@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { t } from "@/messages/pt";
 import { readFileSync } from "node:fs";
 import { detectMapping, hasIdColumn, type Mapping } from "@/lib/imports/fields";
 import { ERROR_DATA_CAP, mapGrid, mapRow, previewOutcomes, revalidateRow, rowErrorText, type ImportRow, type RowError } from "@/lib/imports/rows";
@@ -171,8 +172,8 @@ describe("Task 5 server re-validation and screen helpers", () => {
     expect((out[1] as RowError).error).toBe("phone");
   });
   it("the phone error tells the user to format the column as text; the others do not", () => {
-    expect(rowErrorText(7, "phone")).toBe("linha 7: telefone inválido (formate a coluna como texto no Excel)");
-    expect(rowErrorText(8, "email")).toBe("linha 8: e-mail inválido");
+    expect(rowErrorText(7, "phone", t)).toBe("linha 7: telefone inválido (formate a coluna como texto no Excel)");
+    expect(rowErrorText(8, "email", t)).toBe("linha 8: e-mail inválido");
   });
   it("error rows carry short data, so a batch of 500 stays small", () => {
     const e = mapRow(["x".repeat(900), "123"], m("note", "phone"), 2) as RowError;

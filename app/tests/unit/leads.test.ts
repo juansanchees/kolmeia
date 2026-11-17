@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { t } from "@/messages/pt";
 import type { CandidateRow } from "@/lib/research/rows";
 import { DEFAULT_LEAD_FILTERS, displayOf, filterLeads, isStaleProof, leadsCsv, originLabel, proofCount } from "@/lib/leads/view";
 import type { LeadFieldRow, LeadListItem, LeadRow, LeadStatus } from "@/lib/leads/types";
@@ -100,13 +101,13 @@ describe("F3a leads", () => {
   });
 
   it("originLabel: the agent's name, or \"Pesquisa avulsa\"", () => {
-    expect(originLabel(item({}, { agent: "a1", agentName: "Caçador Cape" }))).toBe("Caçador Cape");
-    expect(originLabel(item({}, { agent: "a1", agentName: null }))).toBe("Pesquisa avulsa");
-    expect(originLabel(item({}))).toBe("Pesquisa avulsa");
+    expect(originLabel(item({}, { agent: "a1", agentName: "Caçador Cape" }), t)).toBe("Caçador Cape");
+    expect(originLabel(item({}, { agent: "a1", agentName: null }), t)).toBe("Pesquisa avulsa");
+    expect(originLabel(item({}), t)).toBe("Pesquisa avulsa");
   });
 
   it("leadsCsv: the research columns plus Status and Agente", () => {
-    const csv = leadsCsv([item({ name: "Acme" }, { agent: "a1", agentName: "Cape" }), item({ name: "Oak" })]);
+    const csv = leadsCsv([item({ name: "Acme" }, { agent: "a1", agentName: "Cape" }), item({ name: "Oak" })], t);
     const rows = csv.replace(/^﻿/, "").trim().split("\r\n");
     expect(rows).toHaveLength(3);
     expect(rows[0].endsWith("Status,Agente")).toBe(true);
@@ -146,8 +147,8 @@ describe("F3a leads", () => {
   });
 
   it("originLabel says Importado · list", () => {
-    expect(originLabel(importOnly([field({ field: "name", value: "A" })]))).toBe("Importado · Lista Teste");
-    expect(originLabel(importOnly([field({ field: "name", value: "A" })], { importName: null }))).toBe("Importado");
+    expect(originLabel(importOnly([field({ field: "name", value: "A" })]), t)).toBe("Importado · Lista Teste");
+    expect(originLabel(importOnly([field({ field: "name", value: "A" })], { importName: null }), t)).toBe("Importado");
   });
 
   it("leadsCsv writes import-only leads and neutralises a formula from an import", () => {
@@ -156,7 +157,7 @@ describe("F3a leads", () => {
       field({ field: "note", value: "=1+1" }),
       field({ field: "phone", value: "508-555-0142" }),
     ]);
-    const csv = leadsCsv([evil, item({ name: "Oak" })]);
+    const csv = leadsCsv([evil, item({ name: "Oak" })], t);
     expect(csv).toContain(`"'=HYPERLINK(""http://x"",""y"")"`);
     expect(csv).not.toContain("=1+1"); // a note is not exported
     const rows = csv.replace(/^﻿/, "").trim().split("\r\n");

@@ -1,4 +1,3 @@
-import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
@@ -25,21 +24,21 @@ const detail = (over: Record<string, unknown> = {}) =>
   }) as unknown as LeadDetail;
 
 describe("CallFacts", () => {
-  it("shows the tel: link for a normal lead", () => {
-    const html = renderToStaticMarkup(createElement(CallFacts, { detail: detail(), phone: "508-555-0101", now: new Date() }));
+  it("shows the tel: link for a normal lead", async () => {
+    const html = renderToStaticMarkup(await CallFacts({ detail: detail(), phone: "508-555-0101", now: new Date() }));
     expect(html).toContain('href="tel:+15085550101"');
   });
 
-  it("hides the tel: link when blocked (do_not_call)", () => {
-    const html = renderToStaticMarkup(createElement(CallFacts, { detail: detail({ do_not_call: true }), phone: "508-555-0101", now: new Date(), blocked: true }));
+  it("hides the tel: link when blocked (do_not_call)", async () => {
+    const html = renderToStaticMarkup(await CallFacts({ detail: detail({ do_not_call: true }), phone: "508-555-0101", now: new Date(), blocked: true }));
     expect(html).not.toContain("tel:");
     expect(html).toContain("Bloqueado: não ligar");
   });
 
-  it("drops proof links that are not safe http(s) URLs", () => {
+  it("drops proof links that are not safe http(s) URLs", async () => {
     const d = detail({ best_candidate_id: "c" });
     d.checks = [{ candidate_id: "c", evidence: [{ url: "javascript:alert(1)", title: "bad", excerpt: null, seen_at: null }, { url: "https://ok.example.com/x", title: "good", excerpt: null, seen_at: null }] }] as never;
-    const html = renderToStaticMarkup(createElement(CallFacts, { detail: d, phone: null, now: new Date() }));
+    const html = renderToStaticMarkup(await CallFacts({ detail: d, phone: null, now: new Date() }));
     expect(html).not.toContain("javascript:");
     expect(html).toContain("https://ok.example.com/x");
   });

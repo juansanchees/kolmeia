@@ -12,12 +12,12 @@ import { stepProblems, type SequenceStep } from "@/lib/email/template";
 import { SupabaseEmailStore } from "@/lib/email/supabase-store";
 import { createClient } from "@/lib/supabase/server";
 import { requireSender } from "@/lib/workspace";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
+import type { Messages } from "@/lib/i18n";
 
-const E = t.emailAgent;
 const name = z.string().trim().min(1).max(80);
 
-const AI_MESSAGES: Partial<Record<AiErrorCode, string>> = {
+const AI_MESSAGES = (t: Messages): Partial<Record<AiErrorCode, string>> => ({
   not_configured: t.ai.notConfigured,
   no_access: t.ai.noAccess,
   daily_cap: t.ai.dailyCap,
@@ -26,10 +26,12 @@ const AI_MESSAGES: Partial<Record<AiErrorCode, string>> = {
   refused: t.ai.refused,
   invalid_output: t.ai.invalidOutput,
   truncated: t.ai.truncated,
-};
+});
 
 /** Live counts for the leads card. Reads only; the workspace comes from the session. */
 export async function countLeadsAction(filter: LeadFilterConfig): Promise<{ ok: true; counts: LeadCounts } | { ok: false; error: string }> {
+  const t = await getT();
+  const E = t.emailAgent;
   const ws = await requireSender();
   const f = leadFilterSchema.safeParse(filter);
   if (!f.success) return { ok: false, error: E.invalid };
@@ -59,6 +61,8 @@ const keptDraftSchema = z.object({
  * A retry (reuseAgentId) ignores the new choices: it builds from the config stored with that agent.
  */
 export async function createEmailAgentAction(input: EmailAgentConfig, agentName: string, reuseAgentId: string | null = null, keptDraft: KeptDraft | null = null): Promise<Created> {
+  const t = await getT();
+  const E = t.emailAgent;
   const ws = await requireSender();
   const db = await createClient();
   if (!db) return { ok: false, error: E.failed };
@@ -166,7 +170,7 @@ export async function createEmailAgentAction(input: EmailAgentConfig, agentName:
         draft = r.data;
       } catch (e) {
         // the agent and its campaign stay (draft): the retry adds nothing twice
-        return { ok: false, error: (isAiError(e) && AI_MESSAGES[e.code]) || t.ai.generic, agentId };
+        return { ok: false, error: (isAiError(e) && AI_MESSAGES(t)[e.code]) || t.ai.generic, agentId };
       }
     }
 

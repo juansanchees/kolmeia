@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { t } from "@/messages/pt";
 import { b2bParams, mapDecisionMaker, quotaLeft, rapidApiClient, RapidApiError, siteEmails } from "@/lib/sources/rapidapi";
 import { parseB2bForm, runTitle, todayLine } from "@/lib/sources/view";
 import { sourceLabel } from "@/lib/spend/view";
@@ -161,11 +162,11 @@ describe("B2B form and labels", () => {
   });
 
   test("run title, month lines and spend rows", () => {
-    expect(runTitle({ kind: "b2b", query: { state: "MA", sector: "construction", page: 2 } })).toBe("Construção · MA · página 2");
-    expect(todayLine({ provider: "rapidapi", today: 3, cap: 10 })).toBe("3 de 10 buscas de decisores este mês");
-    expect(todayLine({ provider: "rapidapi_sites", today: null, cap: 30 })).toBe("? de 30 sites lidos este mês");
-    expect(sourceLabel("rapidapi", "b2b")).toBe("RapidAPI decisores");
-    expect(sourceLabel("rapidapi", "contact")).toBe("RapidAPI e-mails do site");
-    expect(sourceLabel("apify", "contact")).toBe("Apify contatos");
+    expect(runTitle({ kind: "b2b", query: { state: "MA", sector: "construction", page: 2 } }, t)).toBe("Construção · MA · página 2");
+    expect(todayLine({ provider: "rapidapi", today: 3, cap: 10 }, t)).toBe("3 de 10 buscas de decisores este mês");
+    expect(todayLine({ provider: "rapidapi_sites", today: null, cap: 30 }, t)).toBe("? de 30 sites lidos este mês");
+    expect(sourceLabel("rapidapi", "b2b", t)).toBe("RapidAPI decisores");
+    expect(sourceLabel("rapidapi", "contact", t)).toBe("RapidAPI e-mails do site");
+    expect(sourceLabel("apify", "contact", t)).toBe("Apify contatos");
   });
 });

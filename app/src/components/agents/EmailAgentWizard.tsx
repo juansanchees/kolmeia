@@ -9,14 +9,15 @@ import { PrimaryButton } from "@/components/research/controls";
 import { MAX_MAILBOXES, PICKABLE_STATUSES, TONES, type LeadCounts, type LeadFilterConfig, type Tone } from "@/lib/email-agent/types";
 import type { LeadStatus } from "@/lib/leads/types";
 import { TEMPERATURES } from "@/lib/research/types";
-import { fill, t } from "@/messages/pt";
-
-const E = t.emailAgent;
+import { fill } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 
 type Mailbox = { id: string; email: string; status: string };
 
 /** The 5 questions of the E-mail agent (spec §6.3). Controlled: values stay after an error. The AI writes only on the final click. */
 export function EmailAgentWizard({ mailboxes, hunters, ai, estimateUsd }: { mailboxes: Mailbox[]; hunters: { id: string; name: string }[]; ai: boolean; estimateUsd: number }) {
+  const t = useT();
+  const E = t.emailAgent;
   const router = useRouter();
   const [name, setName] = useState<string>(E.defaultName);
   const [statuses, setStatuses] = useState<LeadStatus[]>(["new"]);

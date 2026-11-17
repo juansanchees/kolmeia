@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { btn } from "@/components/email/bits";
-import { t } from "@/messages/pt";
-
-const A = t.home.ai;
+import { useT } from "@/lib/i18n/client";
 
 /** "Quem você quer achar hoje?": a plain GET to LEADS, which opens its own "Busca com IA" with this text (?ia=). No AI flow of its own. */
 export function AiBox() {
+  const t = useT();
+  const A = t.home.ai;
   const [text, setText] = useState("");
   return (
     <section aria-label={A.label} className="flex flex-col gap-2.5 border border-line bg-surface p-5">

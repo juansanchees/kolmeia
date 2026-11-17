@@ -16,13 +16,14 @@ import { DraftDriver, SendDriver } from "@/components/email/Drivers";
 import { FetchRepliesButton } from "@/components/email/ReplyControls";
 import { CampaignMailboxesForm, DelaysForm, ProspectEmailForm } from "@/components/email/forms";
 import { STATUS_TONE } from "@/components/email/MessageEditor";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { getT } from "@/lib/i18n/server";
 import { Paged } from "@/components/Pager";
 
-const M = t.email;
-const C = M.campaign;
-
 export default async function CampaignPage({ params }: { params: Promise<{ id: string }> }) {
+  const t = await getT();
+  const M = t.email;
+  const C = M.campaign;
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const s = await emailSession();
@@ -81,7 +82,7 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
           <Badge tone={campaign.send_mode === "real" ? "ink" : "soft"}>{M.campaigns.mode[campaign.send_mode]}</Badge>
         </div>
         <p className="break-all text-[13px] text-muted">{chosen.length ? chosen.map((m) => m.email).join(" · ") : M.send.outcomes.no_mailbox}</p>
-        <p className="text-[13px] text-muted">{fill(C.schedule, scheduleParts(campaign))}</p>
+        <p className="text-[13px] text-muted">{fill(C.schedule, scheduleParts(campaign, t))}</p>
       </div>
 
       {archived && <Notice tone="info">{C.archivedNotice}</Notice>}

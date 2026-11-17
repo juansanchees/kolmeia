@@ -4,15 +4,16 @@ import { SubNav } from "@/components/SubNav";
 import { ActionButton } from "@/components/email/ActionButton";
 import { CampaignWarnings } from "@/components/email/CampaignWarnings";
 import { when } from "@/components/email/format";
-import { CAMPAIGN_TABS } from "@/lib/nav";
+import { campaignTabs } from "@/lib/nav";
 import { setSendingPaused } from "./actions";
-import { fill, t } from "@/messages/pt";
-
-const S = t.email.stop;
+import { fill } from "@/lib/i18n";
+import { getT } from "@/lib/i18n/server";
 
 // The Campanhas de e-mail area: its own sub-navigation, separate from Pesquisa (connected only by the approved lists).
 // E4: the emergency stop lives in the header, on every Campanhas page.
 export default async function CampaignsLayout({ children }: { children: React.ReactNode }) {
+  const t = await getT();
+  const S = t.email.stop;
   const workspace = await requireSender();
   const s = await emailSession();
   const { data } = s
@@ -33,7 +34,7 @@ export default async function CampaignsLayout({ children }: { children: React.Re
         </div>
         {paused.sending_paused && (
           <div className="flex flex-wrap items-center gap-3">
-            <p role="alert" className="m-0 bg-warn-soft px-3 py-2.5 text-sm font-semibold text-warn">{fill(S.paused, { when: when(paused.sending_paused_at) })}</p>
+            <p role="alert" className="m-0 bg-warn-soft px-3 py-2.5 text-sm font-semibold text-warn">{fill(S.paused, { when: when(paused.sending_paused_at, t.intl) })}</p>
             {isOwner ? (
               <ActionButton action={setSendingPaused.bind(null, false)} label={S.resume} confirm={S.resumeConfirm} />
             ) : (
@@ -42,7 +43,7 @@ export default async function CampaignsLayout({ children }: { children: React.Re
           </div>
         )}
         {s && <CampaignWarnings db={s.supabase} workspaceId={workspace.id} />}
-        <SubNav label={t.email.nav.label} items={CAMPAIGN_TABS} />
+        <SubNav label={t.email.nav.label} items={campaignTabs(t)} />
       </div>
       {children}
     </div>

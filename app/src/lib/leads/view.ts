@@ -1,10 +1,10 @@
 // Client-safe rules of the LEADS list: filters, origin label, stale proof, proof count, CSV.
 import type { CandidateRow } from "@/lib/research/rows";
-import { inTab, SHEET_COLUMNS, toCsv, type Column, type Tab } from "@/lib/research/sheet";
+import { inTab, sheetColumns, toCsv, type Column, type Tab } from "@/lib/research/sheet";
 import type { CheckWithEvidence } from "@/lib/research/store";
 import { COMPANY_TYPES, type CompanyType, type Temperature } from "@/lib/research/types";
 import { z } from "zod";
-import { fill, t } from "@/messages/pt";
+import { fill, ptMessages, type Messages } from "@/lib/i18n";
 import { matchesAnswer } from "@/lib/ai-questions/types";
 import { EMAIL_QUALITIES, type EmailQuality } from "./email-quality";
 import { effectiveTemperature, fold, priorityOf, stageOf } from "./classify";
@@ -222,10 +222,21 @@ export const hasSiteNoEmail = (i: Pick<FilterRow, "display" | "lead">) =>
 /** Every origin a lead can show, as the Origem column does: its lists/imports, else the origin label; plus the agent. "Sem origem" when none. */
 export function originKeysOf(i: Pick<FilterRow, "lead" | "origins" | "agentName" | "importName">): string[] {
   const k = new Set((i.origins ?? []).map((o) => o.name));
-  if (k.size === 0) k.add(originLabel({ lead: i.lead, agentName: i.agentName ?? null, importName: i.importName ?? null }));
+  // These are filter keys (saved views, URLs), so they stay Portuguese whatever the UI language.
+  if (k.size === 0) k.add(originLabel({ lead: i.lead, agentName: i.agentName ?? null, importName: i.importName ?? null }, ptMessages));
   if (i.agentName) k.add(i.agentName);
   k.delete("");
-  return k.size > 0 ? [...k] : [t.leads.origin.noneOption];
+  return k.size > 0 ? [...k] : [ptMessages.leads.origin.noneOption];
+}
+
+/** How an origin filter key reads in the UI language: the Portuguese fallback keys are translated, list and agent names are data. */
+export function originKeyLabel(key: string, t: Messages): string {
+  const P = ptMessages.leads;
+  if (key === P.origin.noneOption) return t.leads.origin.noneOption;
+  if (key === P.oneOff) return t.leads.oneOff;
+  if (key === P.importedNoList) return t.leads.importedNoList;
+  const prefix = P.imported.split("{list}")[0];
+  return key.startsWith(prefix) ? fill(t.leads.imported, { list: key.slice(prefix.length) }) : key;
 }
 
 /** Left-panel and tab rules: trimmed display values (as lead_contact_values reads them), never-contacted = "new". */
@@ -256,7 +267,8 @@ export function displayOf(best: CandidateRow | null, fields: LeadFieldRow[]): Le
     return pick?.value ?? null;
   };
   return {
-    name: best?.name ?? oldest("name") ?? t.leads.noName,
+    // data, not copy: it feeds sorting, search and AI input on the server, so it stays Portuguese
+    name: best?.name ?? oldest("name") ?? ptMessages.leads.noName,
     city: best?.city ?? oldest("city"),
     phone: best?.phone ?? oldest("phone"),
     website: best?.website ?? oldest("website"),
@@ -383,7 +395,7 @@ export function leadFacetsOf<T extends FilterRow>(items: T[], f: LeadFilters): L
   };
 }
 
-export function originLabel(i: { lead: Pick<LeadListItem["lead"], "origin_kind">; agentName: string | null; importName?: string | null }): string {
+export function originLabel(i: { lead: Pick<LeadListItem["lead"], "origin_kind">; agentName: string | null; importName?: string | null }, t: Messages): string {
   if (i.lead.origin_kind === "import") return i.importName ? fill(t.leads.imported, { list: i.importName }) : t.leads.importedNoList;
   return i.agentName ?? t.leads.oneOff;
 }
@@ -403,13 +415,13 @@ function csvRowOf(i: LeadListItem): CandidateRow {
   };
 }
 
-export function leadsCsv(items: LeadListItem[]): string {
+export function leadsCsv(items: LeadListItem[], t: Messages): string {
   // toCsv reads one row per lead, so status and agent are looked up by row id (candidate id, or lead id when there is none).
   const rows = items.map(csvRowOf);
   const byId = new Map(items.map((i, n) => [rows[n].id, i]));
   const extra: Column[] = [
-    { id: "leadStatus", header: "Status", kind: "text", compact: false, get: (c) => { const i = byId.get(c.id); return i ? t.leads.statuses[i.lead.status] : null; } },
-    { id: "leadAgent", header: "Agente", kind: "text", compact: false, get: (c) => { const i = byId.get(c.id); return i ? originLabel(i) : null; } },
+    { id: "leadStatus", header: t.leads.columns.status, kind: "text", compact: false, get: (c) => { const i = byId.get(c.id); return i ? t.leads.statuses[i.lead.status] : null; } },
+    { id: "leadAgent", header: t.leads.columns.agent, kind: "text", compact: false, get: (c) => { const i = byId.get(c.id); return i ? originLabel(i, t) : null; } },
   ];
-  return toCsv(rows, [...SHEET_COLUMNS, ...extra]);
+  return toCsv(rows, [...sheetColumns(t), ...extra]);
 }

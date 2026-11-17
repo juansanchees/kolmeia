@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
+import { t } from "@/messages/pt";
 
 vi.mock("server-only", () => ({}));
 const { loadSourceRuns, loadWorkspaceToday } = await import("@/lib/spend/queries");
@@ -32,36 +33,36 @@ describe("F3c-2 spend view", () => {
     const total = 0.01 + 0.2 + 0.3 + 0.4 + 0.05 + 0.02 + 0.15 + 0.03;
     expect(spendTotal(calls)).toBeCloseTo(total, 6);
     for (const by of ["agent", "step", "model", "lead", "day"] as const) {
-      const rows = spendRows(calls, by, names);
+      const rows = spendRows(calls, by, names, t);
       expect(rows.reduce((s, r) => s + r.usd, 0)).toBeCloseTo(total, 6);
       for (let i = 1; i < rows.length; i++) expect(rows[i - 1].usd).toBeGreaterThanOrEqual(rows[i].usd);
     }
-    const byAgent = spendRows(calls, "agent", names);
+    const byAgent = spendRows(calls, "agent", names, t);
     expect(byAgent.find((r) => r.label === "Qualificador")?.usd).toBeCloseTo(0.66, 6);
     expect(byAgent.find((r) => r.label === "Caçador Boston")?.usd).toBeCloseTo(0.4, 6);
-    const byLead = spendRows(calls, "lead", names);
+    const byLead = spendRows(calls, "lead", names, t);
     const l2 = byLead.find((r) => r.key === "L2")!;
     expect(l2.label).toBe("Beta Fictícia");
     expect(l2.usd).toBeCloseTo(0.45, 6);
     expect(l2.leads).toEqual([{ id: "L2", name: "Beta Fictícia", usd: expect.closeTo(0.45, 6) }]);
-    const byStep = spendRows(calls, "step", names);
+    const byStep = spendRows(calls, "step", names, t);
     expect(byStep.find((r) => r.label === "P5 IA forte")).toMatchObject({ searches: 3, fetches: 2 });
     expect(byStep.find((r) => r.label === "P5 IA forte")!.leads.map((l) => l.id).sort()).toEqual(["L1", "L2"]);
-    const byDay = spendRows(calls, "day", names);
+    const byDay = spendRows(calls, "day", names, t);
     expect(byDay.map((r) => r.key).sort()).toEqual(["2026-11-13", "2026-11-14"]);
   });
 
   test("labels: Qualificador, Perfil aprendido, E-mail, the agent's name, Pesquisa avulsa; P3/P4/P5 step names", () => {
-    expect(agentLabel(call({ task: "qualify_places" }), names.runAgent)).toBe("Qualificador");
-    expect(agentLabel(call({ task: "profile_learn" }), names.runAgent)).toBe("Perfil aprendido");
-    expect(agentLabel(call({ task: "email_classify" }), names.runAgent)).toBe("E-mail");
-    expect(agentLabel(call({ task: "research_verify", run_id: "R1" }), names.runAgent)).toBe("Caçador Boston");
-    expect(agentLabel(call({ task: "research_verify", run_id: "R2" }), names.runAgent)).toBe("Pesquisa avulsa");
-    expect(agentLabel(call({ task: "research_verify" }), names.runAgent)).toBe("Pesquisa avulsa");
-    expect(stepLabel("qualify_places")).toBe("P3 Places");
-    expect(stepLabel("qualify_light")).toBe("P4 IA leve");
-    expect(stepLabel("qualify_deep")).toBe("P5 IA forte");
-    expect(stepLabel("nao_existe")).toBe("Outro passo");
+    expect(agentLabel(call({ task: "qualify_places" }), names.runAgent, t)).toBe("Qualificador");
+    expect(agentLabel(call({ task: "profile_learn" }), names.runAgent, t)).toBe("Perfil aprendido");
+    expect(agentLabel(call({ task: "email_classify" }), names.runAgent, t)).toBe("E-mail");
+    expect(agentLabel(call({ task: "research_verify", run_id: "R1" }), names.runAgent, t)).toBe("Caçador Boston");
+    expect(agentLabel(call({ task: "research_verify", run_id: "R2" }), names.runAgent, t)).toBe("Pesquisa avulsa");
+    expect(agentLabel(call({ task: "research_verify" }), names.runAgent, t)).toBe("Pesquisa avulsa");
+    expect(stepLabel("qualify_places", t)).toBe("P3 Places");
+    expect(stepLabel("qualify_light", t)).toBe("P4 IA leve");
+    expect(stepLabel("qualify_deep", t)).toBe("P5 IA forte");
+    expect(stepLabel("nao_existe", t)).toBe("Outro passo");
   });
 
   test("periodStart today is New York midnight, 7d and 30d count back from now", () => {
@@ -84,7 +85,7 @@ describe("F3c-2 spend view", () => {
       { provider: "apify", kind: "maps", status: "failed", cost_usd: null, reserve_usd: 2 },
       { provider: "apify", kind: "maps", status: "running", cost_usd: null, reserve_usd: 2 },
       { provider: "apollo", kind: "contact", status: "succeeded", cost_usd: 0.5, reserve_usd: 1 },
-    ]);
+    ], t);
     expect(rows.find((r) => r.provider === "apify")).toMatchObject({ runs: 3, usd: 3.5 });
     expect(rows.reduce((s, r) => s + r.usd, 0)).toBeCloseTo(4, 6);
   });
@@ -98,9 +99,9 @@ describe("Gastos shows the paid sources (F3d-2)", () => {
   });
 
   test("Gastos shows Fontes by source and totals match ai_calls + source_runs", () => {
-    expect(sourceLabel("apify", "maps")).toBe("Apify Maps");
-    expect(sourceLabel("apollo", "apollo")).toBe("Apollo");
-    expect(sourceLabel("apify", "contact")).toBe("Apify contatos");
+    expect(sourceLabel("apify", "maps", t)).toBe("Apify Maps");
+    expect(sourceLabel("apollo", "apollo", t)).toBe("Apollo");
+    expect(sourceLabel("apify", "contact", t)).toBe("Apify contatos");
     const calls = [call("a", 0.25), call("b", 0.1, { status: "pending", reserve_usd: 0.4 })];
     const runs = [
       { id: "r1", provider: "apify", kind: "maps", status: "imported", cost_usd: 0.3, reserve_usd: 0.5, leads: [] },
@@ -109,7 +110,7 @@ describe("Gastos shows the paid sources (F3d-2)", () => {
       { id: "r4", provider: "apify", kind: "contact", status: "running", cost_usd: null, reserve_usd: 0.5, leads: [{ id: "L1", name: "Acme" }] },
       { id: "r5", provider: "apify", kind: "contact", status: "refused", cost_usd: null, reserve_usd: 0.5, leads: [] },
     ];
-    const rows = sourceRows(runs);
+    const rows = sourceRows(runs, t);
     expect(rows.map((r) => [r.label, r.runs, Number(r.usd.toFixed(2))])).toEqual([
       ["Apify contatos", 3, 0.62],
       ["Apify Maps", 1, 0.3],
@@ -155,6 +156,6 @@ describe("M-4 spend queries read past PostgREST's 1000-row page", () => {
 
   test("loadSourceRuns returns every row", async () => {
     const db = fakeDb({ source_runs: many(2100, { provider: "apify", kind: "maps", status: "ok", cost_usd: 1, reserve_usd: 1 }) });
-    expect(await loadSourceRuns(db, "ws", "today" as never)).toHaveLength(2100);
+    expect(await loadSourceRuns(db, "ws", "today" as never, t)).toHaveLength(2100);
   });
 });

@@ -5,12 +5,12 @@ import { todayList, type TodayRow } from "@/lib/calls/list-queries";
 import { createClient } from "@/lib/supabase/server";
 import { isSender } from "@/lib/roles";
 import { getCurrentWorkspace } from "@/lib/workspace";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 import { Paged } from "@/components/Pager";
 
-const C = t.calls;
-
-function Row({ r, done }: { r: TodayRow; done?: boolean }) {
+async function Row({ r, done }: { r: TodayRow; done?: boolean }) {
+  const t = await getT();
+  const C = t.calls;
   const best = r.lead.best;
   const temp = effectiveTemperature(r.lead.lead.level, best?.temperature ?? null);
   return (
@@ -39,6 +39,8 @@ function Row({ r, done }: { r: TodayRow; done?: boolean }) {
 
 // Today's call list. Built for the signed-in caller on load (errors ignored), then read as the user: RLS decides the rows.
 export default async function CallPage({ searchParams }: { searchParams: Promise<{ [k: string]: string | string[] | undefined }> }) {
+  const t = await getT();
+  const C = t.calls;
   const supabase = await createClient();
   const workspace = await getCurrentWorkspace();
   if (!supabase || !workspace) return null;

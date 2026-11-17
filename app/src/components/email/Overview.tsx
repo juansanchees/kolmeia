@@ -6,11 +6,9 @@ import { ActionButton } from "./ActionButton";
 import { Badge, NextStep, Panel } from "./bits";
 import { timeOf } from "./format";
 import { NewCampaignForm } from "./forms";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { getT } from "@/lib/i18n/server";
 import { Paged } from "@/components/Pager";
-
-const M = t.email;
-const O = M.overview;
 
 export type OverviewMsg = { id: string; campaign_id: string; prospect_id: string; kind: string; step: number | null; status: string; subject: string; body: string };
 export type OverviewProspect = { id: string; campaign_id: string; company_name: string; contact_name: string | null; hook: string | null; status: string };
@@ -31,7 +29,10 @@ export type OverviewData = {
  * The E-mail overview (approved prototype docs/mvp/prototipo/Email.dc.html): today's sending at the top, then
  * three columns: campaigns (lists from Pesquisa), what waits for approval, and replies to answer. Pure view.
  */
-export function EmailOverview(d: OverviewData) {
+export async function EmailOverview(d: OverviewData) {
+  const t = await getT();
+  const M = t.email;
+  const O = M.overview;
   const s = { canSend: d.canSend };
   const mailboxes = d.mailboxes;
   const ready = d.ready;
@@ -83,7 +84,7 @@ export function EmailOverview(d: OverviewData) {
               <span className="font-display text-[26px] font-bold">{usage.real}</span> {fill(O.sentToday, { limit: usage.limit })}
             </span>
             {usage.dry_run > 0 && <span className="text-sm text-muted">{fill(O.rehearsedToday, { n: usage.dry_run })}</span>}
-            {usage.next_at && <span className="text-sm text-muted">{fill(O.nextAt, { time: timeOf(usage.next_at).slice(0, 5) })}</span>}
+            {usage.next_at && <span className="text-sm text-muted">{fill(O.nextAt, { time: timeOf(usage.next_at, t.intl).slice(0, 5) })}</span>}
             <span className="break-all text-sm text-muted">{fill(O.mailbox, { email: box.email })}</span>
             <Badge tone={atLimit ? "warn" : "ok"}>{atLimit ? O.atLimit : O.withinLimit}</Badge>
           </div>

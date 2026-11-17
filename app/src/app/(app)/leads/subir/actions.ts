@@ -8,11 +8,11 @@ import { revalidateRow, type ImportRow, type RowError } from "@/lib/imports/rows
 import { createImport, finishImport, importRows, previewRows, undoImport } from "@/lib/imports/store";
 import { createClient } from "@/lib/supabase/server";
 import { requireSender } from "@/lib/workspace";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 
 type Fail = { ok: false; error: string };
 const uuid = z.string().uuid();
-const generic: Fail = { ok: false, error: t.imports.errors.generic };
+const generic = async (): Promise<Fail> => ({ ok: false, error: (await getT()).imports.errors.generic });
 
 const metaSchema = z.object({
   fileName: z.string().trim().min(1).transform((s) => s.slice(0, 200)),
@@ -32,31 +32,31 @@ async function session() {
 export async function startImportAction(meta: unknown): Promise<{ ok: true; importId: string } | Fail> {
   const s = await session();
   const parsed = metaSchema.safeParse(meta);
-  if (!s || !parsed.success) return generic;
+  if (!s || !parsed.success) return generic();
   try {
     return { ok: true, importId: await createImport(s.db, s.workspace.id, parsed.data) };
   } catch {
-    return generic;
+    return generic();
   }
 }
 
 export async function previewBatchAction(importId: string, rows: unknown): Promise<{ ok: true; existing: [number, string | null][] } | Fail> {
   const s = await session();
   const parsed = rowsSchema.safeParse(rows);
-  if (!s || !uuid.safeParse(importId).success || !parsed.success) return generic;
+  if (!s || !uuid.safeParse(importId).success || !parsed.success) return generic();
   // The server's verdict: rows that fail are simply not looked up.
   const valid = (parsed.data as unknown as ImportRow[]).map(revalidateRow).filter((r): r is ImportRow => !("error" in r));
   try {
     return { ok: true, existing: [...(await previewRows(s.db, importId, valid)).entries()] };
   } catch {
-    return generic;
+    return generic();
   }
 }
 
 export async function importBatchAction(importId: string, rows: unknown): Promise<{ ok: true; new: number; merged: number; errors: number } | Fail> {
   const s = await session();
   const parsed = rowsSchema.safeParse(rows);
-  if (!s || !uuid.safeParse(importId).success || !parsed.success) return generic;
+  if (!s || !uuid.safeParse(importId).success || !parsed.success) return generic();
   const checked = (parsed.data as unknown as (ImportRow | RowError)[]).map(revalidateRow);
   try {
     const r = await importRows(s.db, importId, checked);
@@ -64,32 +64,32 @@ export async function importBatchAction(importId: string, rows: unknown): Promis
     revalidatePath("/inicio");
     return { ok: true, ...r };
   } catch {
-    return generic;
+    return generic();
   }
 }
 
 export async function finishImportAction(importId: string): Promise<{ ok: true } | Fail> {
   const s = await session();
-  if (!s || !uuid.safeParse(importId).success) return generic;
+  if (!s || !uuid.safeParse(importId).success) return generic();
   try {
     await finishImport(s.db, importId);
     revalidatePath("/leads", "layout");
     revalidatePath("/inicio");
     return { ok: true };
   } catch {
-    return generic;
+    return generic();
   }
 }
 
 export async function undoImportAction(importId: string): Promise<{ ok: true; deleted: number; kept: number } | Fail> {
   const s = await session();
-  if (!s || !uuid.safeParse(importId).success) return generic;
+  if (!s || !uuid.safeParse(importId).success) return generic();
   try {
     const r = await undoImport(s.db, importId);
     revalidatePath("/leads", "layout");
     revalidatePath("/inicio");
     return { ok: true, ...r };
   } catch {
-    return generic;
+    return generic();
   }
 }

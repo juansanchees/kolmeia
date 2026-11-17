@@ -4,18 +4,19 @@ import { useState, useTransition } from "react";
 import { checkEmailsAction, findEmailAction } from "@/app/(app)/leads/email-actions";
 import { btn, Notice } from "@/components/email/bits";
 import type { FindEmailResult } from "@/lib/leads/email-cascade";
-import { fill, t } from "@/messages/pt";
+import { fill, type Messages } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 
-const Q = t.leads.emailQuality;
-const FE = t.leads.findEmail;
-
-export function summary(results: FindEmailResult[]): string {
+export function summary(results: FindEmailResult[], t: Messages): string {
+  const FE = t.leads.findEmail;
   const n = (s: FindEmailResult["step"]) => results.filter((r) => r.step === s).length;
   return fill(FE.summary, { site: n("site"), queued: n("queued"), pattern: n("pattern"), verifier: n("verifier"), none: n("none") });
 }
 
 /** One lead's result: which step found what. */
 function ResultLine({ r }: { r: FindEmailResult }) {
+  const t = useT();
+  const FE = t.leads.findEmail;
   return (
     <span>
       <span className="font-semibold">{FE.steps[r.step]}</span>
@@ -28,6 +29,9 @@ function ResultLine({ r }: { r: FindEmailResult }) {
 
 /** "Checar e-mails" (free: syntax + DNS) and "Achar e-mail" (the cascade) for the selected leads, or for one lead. */
 export function EmailTools({ selected, onDone, single = false }: { selected: string[]; onDone?: () => void; single?: boolean }) {
+  const t = useT();
+  const Q = t.leads.emailQuality;
+  const FE = t.leads.findEmail;
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ tone: "ok" | "warn" | "info"; node: React.ReactNode } | null>(null);
   const none = selected.length === 0;
@@ -48,7 +52,7 @@ export function EmailTools({ selected, onDone, single = false }: { selected: str
         tone: "info",
         node: (
           <>
-            {single && r.results[0] ? <ResultLine r={r.results[0]} /> : summary(r.results)}
+            {single && r.results[0] ? <ResultLine r={r.results[0]} /> : summary(r.results, t)}
             {offNote}
           </>
         ),

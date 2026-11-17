@@ -10,10 +10,8 @@ import { LEAD_FIELD_COLUMNS, type LeadFieldRow } from "@/lib/leads/types";
 import { emailVerifier } from "@/lib/leads/email-verifier";
 import { createClient } from "@/lib/supabase/server";
 import { requireSender } from "@/lib/workspace";
-import { fill, t } from "@/messages/pt";
-
-const Q = t.leads.emailQuality;
-const FE = t.leads.findEmail;
+import { fill } from "@/lib/i18n";
+import { getT } from "@/lib/i18n/server";
 
 /** Leads per "Checar e-mails" click and addresses looked up per click. */
 const CHECK_MAX_LEADS = 500;
@@ -39,6 +37,8 @@ type CheckOut = { ok: true; message: string } | { ok: false; error: string };
  * shown one and each non-refuted e-mail value that is not a guess. Saved 25 at a time, so a timeout keeps what was done.
  */
 export async function checkEmailsAction(leadIds: string[]): Promise<CheckOut> {
+  const t = await getT();
+  const Q = t.leads.emailQuality;
   const workspace = await requireSender();
   const parsed = idsOf(CHECK_MAX_LEADS).safeParse(leadIds);
   if (!parsed.success) return { ok: false, error: fill(Q.tooMany, { n: CHECK_MAX_LEADS }) };
@@ -77,6 +77,8 @@ type FindOut = { ok: true; results: FindEmailResult[]; verifierConfigured: boole
 
 /** The e-mail cascade for the selected leads: e-mail on file -> the site via RapidAPI -> pattern guesses -> paid verifier (EMAIL_VERIFIER). */
 export async function findEmailAction(leadIds: string[]): Promise<FindOut> {
+  const t = await getT();
+  const FE = t.leads.findEmail;
   const workspace = await requireSender();
   const parsed = idsOf(FIND_MAX_LEADS).safeParse(leadIds);
   if (!parsed.success) return { ok: false, error: fill(FE.tooMany, { n: FIND_MAX_LEADS }) };

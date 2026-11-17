@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { RunStatus } from "@/lib/research/types";
-import { t } from "@/messages/pt";
+import { useT } from "@/lib/i18n/client";
 import { Paged } from "@/components/Pager";
 
 export type RunListItem = { id: string; title: string; status: RunStatus; is_partial: boolean; created_at: string };
 
-const M = t.research;
-
 export function RunList({ runs }: { runs: RunListItem[] }) {
+  const t = useT();
+  const M = t.research;
   const pathname = usePathname();
   return (
     <>

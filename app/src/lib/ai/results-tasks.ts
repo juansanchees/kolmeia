@@ -4,7 +4,10 @@ import { townOf } from "@/lib/coverage/region";
 import { sampleResults, type ResultRow } from "@/lib/learning/results";
 import { LIST_POINT_KEYS, type LearnedProfile } from "@/lib/profile/types";
 import { COMPANY_TYPES, type CompanyType } from "@/lib/research/types";
-import { fill, t } from "@/messages/pt";
+import { fill, ptMessages } from "@/lib/i18n";
+
+// The learned profile is stored text, written in Portuguese like the rest of it (the prompt asks for pt-BR).
+const t = ptMessages;
 import { reserveFor, runTask, type AiContext, type TaskDef, type TaskResult } from "./gateway";
 import { MODELS } from "./models";
 import { cutAtWord, SOCIAL } from "./profile-tasks";

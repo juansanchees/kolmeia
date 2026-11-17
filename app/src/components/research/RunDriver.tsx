@@ -3,11 +3,12 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { RunStatus } from "@/lib/research/types";
-import { t } from "@/messages/pt";
+import type { Messages } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 
 type StepReply = { outcome?: string; code?: string; status?: RunStatus; more?: boolean; error?: string };
 
-const AI_MESSAGES: Record<string, string> = {
+const aiMessages = (t: Messages): Record<string, string> => ({
   not_configured: t.ai.notConfigured,
   no_access: t.ai.noAccess,
   daily_cap: t.ai.dailyCap,
@@ -19,7 +20,7 @@ const AI_MESSAGES: Record<string, string> = {
   invalid_output: t.ai.invalidOutput,
   truncated: t.ai.truncated,
   transport: t.ai.generic,
-};
+});
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -28,6 +29,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * Closing the page simply stops the loop; the run waits in the database and continues when someone comes back.
  */
 export function RunDriver({ runId, status }: { runId: string; status: RunStatus }) {
+  const t = useT();
   const router = useRouter();
   const [note, setNote] = useState<string>(status === "questions" ? t.research.conversation.thinking : t.research.running.working);
   const [problem, setProblem] = useState<string | null>(null);
@@ -59,7 +61,7 @@ export function RunDriver({ runId, status }: { runId: string; status: RunStatus 
           continue;
         }
         if (reply.outcome === "ai_error") {
-          setProblem(AI_MESSAGES[reply.code ?? "transport"] ?? t.ai.generic);
+          setProblem(aiMessages(t)[reply.code ?? "transport"] ?? t.ai.generic);
           if (!reply.more) break;
           await sleep(3_000);
           continue;
@@ -74,6 +76,8 @@ export function RunDriver({ runId, status }: { runId: string; status: RunStatus 
       stopped = true;
       ctl.abort();
     };
+    // t is left out on purpose: switching language must not restart the run loop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runId, router]);
 
   return (

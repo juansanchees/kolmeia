@@ -6,15 +6,17 @@ import { btn } from "@/components/email/bits";
 import { DarkChoice } from "@/components/research/controls";
 import { saveHomeRuleAction } from "@/app/(app)/inicio/actions";
 import { DEFAULT_HOME_RULE, HOME_MIN_TEMPS, HOME_ORDERS, HOME_SEGMENTS, homeMatches, type HomeRow, type HomeRule } from "@/lib/home/rule";
-import { ROLES } from "@/lib/leads/view";
-import { fill, t } from "@/messages/pt";
+import { originKeyLabel, ROLES } from "@/lib/leads/view";
+import { fill } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 
-const E = t.home.editor;
 const field = "flex flex-col gap-1 text-sm";
 const select = "min-h-11 border border-edge bg-surface px-2 text-[15px] text-ink";
 
 /** "Editar regra": the panel of the Regra mockup. The preview counts with the same pure matcher the list uses. */
 export function RuleEditor({ rule, rows, cities, origins }: { rule: HomeRule; rows: HomeRow[]; cities: string[]; origins: string[] }) {
+  const t = useT();
+  const E = t.home.editor;
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<HomeRule>(rule);
   const [error, setError] = useState<string | null>(null);
@@ -112,7 +114,7 @@ export function RuleEditor({ rule, rows, cities, origins }: { rule: HomeRule; ro
                   {E.origin}
                   <select value={draft.origin} onChange={(e) => set({ origin: e.target.value })} className={select}>
                     <option value="">{E.any}</option>
-                    {withCurrent(origins, draft.origin).map((o) => <option key={o} value={o}>{o}</option>)}
+                    {withCurrent(origins, draft.origin).map((o) => <option key={o} value={o}>{originKeyLabel(o, t)}</option>)}
                   </select>
                 </label>
                 <label className={field}>
@@ -153,7 +155,7 @@ export function RuleEditor({ rule, rows, cities, origins }: { rule: HomeRule; ro
             </section>
 
             <p role="status" className="bg-blue-wash px-3 py-2.5 text-[15px] text-blue-ink">
-              {n === 1 ? E.previewOne : fill(E.preview, { n: n.toLocaleString("pt-BR") })}
+              {n === 1 ? E.previewOne : fill(E.preview, { n: n.toLocaleString(t.intl) })}
             </p>
             {error && <p role="alert" className="bg-warn-soft px-3 py-2.5 text-sm text-warn">{error}</p>}
 

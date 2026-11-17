@@ -4,12 +4,13 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { addToListAction } from "@/app/(app)/leads/view-actions";
 import { btn } from "@/components/email/bits";
-import { fill, t } from "@/messages/pt";
-
-const A = t.lists.add;
+import { fill } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 
 /** "Adicionar à lista" for the ticked leads: an existing list, or a new name. */
 export function AddToList({ selected, lists }: { selected: string[]; lists: { id: string; name: string }[] }) {
+  const t = useT();
+  const A = t.lists.add;
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [listId, setListId] = useState("");

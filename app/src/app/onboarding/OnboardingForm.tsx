@@ -4,9 +4,10 @@ import { useActionState } from "react";
 import { createWorkspace } from "./actions";
 import { idle } from "@/lib/form-state";
 import { Button, Field, TextInput } from "@/components/ui";
-import { t } from "@/messages/pt";
+import { useT } from "@/lib/i18n/client";
 
 export function OnboardingForm() {
+  const t = useT();
   const [state, action, pending] = useActionState(createWorkspace, idle);
   return (
     <form action={action} className="flex flex-col gap-5 border border-line bg-surface p-6" noValidate>

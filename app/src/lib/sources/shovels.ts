@@ -6,7 +6,7 @@ import { z } from "zod";
 import { pickEmail } from "@/lib/imports/rows";
 import { nameKey, phoneKey } from "@/lib/research/dedupe";
 import { sanitizeUrl } from "@/lib/safe-url";
-import { fill, t } from "@/messages/pt";
+import { fill, ptMessages } from "@/lib/i18n";
 import type { HttpJson } from "./http";
 import type { ImportRowIn } from "./types";
 import { placeQuery, SHOVELS_TAGS, type ShovelsTag } from "./view";
@@ -108,7 +108,8 @@ export function mapContractor(item: unknown, row = 1): ImportRowIn | null {
   const industry = cap(c.primary_industry, 300);
   if (industry) out.company_type = industry;
 
-  const N = t.sources.shovels.note;
+  // stored lead note (import data): Portuguese whatever the UI language
+  const N = ptMessages.sources.shovels.note;
   const tags = Object.entries(c.tag_tally ?? {})
     .filter(([k, n]) => /^[a-z_]{1,40}$/.test(k) && n > 0)
     .sort((x, y) => y[1] - x[1])

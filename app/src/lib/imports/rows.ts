@@ -1,7 +1,7 @@
 // Row validation for "Subir lista": pure, runs in the browser. A row with any error is not imported.
 import { dedupe, domainKey, nameKey, phoneKey } from "@/lib/research/dedupe";
 import { hostOf, sanitizeUrl } from "@/lib/safe-url";
-import { fill, t } from "@/messages/pt";
+import { fill, type Messages } from "@/lib/i18n";
 import { IMPORT_FIELDS, type ImportField, type Mapping } from "./fields";
 
 export type ImportRow = { row: number; name: string; name_key: string } & Partial<Record<Exclude<ImportField, "name">, string>>;
@@ -133,7 +133,7 @@ export function mapGrid(grid: string[][], mapping: Mapping): (ImportRow | RowErr
 }
 
 /** "linha 7: telefone inválido (formate a coluna como texto no Excel)". */
-export function rowErrorText(row: number, code: RowErrorCode): string {
+export function rowErrorText(row: number, code: RowErrorCode, t: Messages): string {
   const hint = (t.imports.rowErrorHints as Partial<Record<RowErrorCode, string>>)[code];
   const base = t.imports.rowErrors[code];
   return fill(t.imports.rowError, { row, error: hint ? `${base} (${hint})` : base });

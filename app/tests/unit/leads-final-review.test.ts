@@ -12,7 +12,7 @@ describe("leads final review fixes", () => {
   });
   it("hides type tabs and the empty origin group for the closer", () => {
     expect(src("src/components/leads/LeadsTable.tsx")).toMatch(/\{canCreate && \(\s*<div role="group" aria-label=\{L\.segments\.label\}/);
-    expect(src("src/components/leads/FacetPanel.tsx")).toContain("{lists.some((l) => l !== t.leads.origin.noneOption) && (");
+    expect(src("src/components/leads/FacetPanel.tsx")).toContain("{lists.some((l) => l !== ptMessages.leads.origin.noneOption) && (");
   });
   it("reports the RPC count in bulk notices", () => {
     const s = src("src/app/(app)/leads/lead-actions.ts");

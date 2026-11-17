@@ -7,9 +7,9 @@ import { btn, input, Notice } from "@/components/email/bits";
 import { detectMapping, hasIdColumn, IMPORT_FIELDS, type ImportField, type Mapping } from "@/lib/imports/fields";
 import { ImportFileError, IMPORT_LIMITS, readFileGrid } from "@/lib/imports/parse";
 import { mapGrid, previewOutcomes, rowErrorText, type ImportRow, type RowError } from "@/lib/imports/rows";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 
-const M = t.imports;
 type Step = "file" | "columns" | "preview" | "done";
 type Counts = { new: number; merged: number; errors: number };
 type Entry = ImportRow | RowError;
@@ -27,6 +27,8 @@ function chunk<T>(list: T[], size: number): T[][] {
 }
 
 export function ImportWizard() {
+  const t = useT();
+  const M = t.imports;
   const [step, setStep] = useState<Step>("file");
   const [file, setFile] = useState<File | null>(null);
   const [grid, setGrid] = useState<string[][]>([]);
@@ -253,7 +255,7 @@ export function ImportWizard() {
             <div className="flex flex-col gap-1">
               <h3 className="m-0 text-base">{M.errorsTitle}</h3>
               <ul className="m-0 list-none p-0 text-[13px]">
-                {errs.slice(0, 50).map((e) => <li key={e.row}>{rowErrorText(e.row, e.error)}</li>)}
+                {errs.slice(0, 50).map((e) => <li key={e.row}>{rowErrorText(e.row, e.error, t)}</li>)}
               </ul>
               {errs.length > 50 && <p className="m-0 text-[13px] text-muted">{fill(M.moreErrors, { n: errs.length - 50 })}</p>}
             </div>

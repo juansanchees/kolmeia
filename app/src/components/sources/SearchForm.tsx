@@ -6,12 +6,10 @@ import { btn, Card, CardTitle, input, Notice } from "@/components/email/bits";
 import { Field } from "@/components/ui";
 import type { SearchResult } from "@/lib/sources/search";
 import { B2B_ROLES, B2B_SECTORS, B2B_SIZES, B2B_STATES, estimateLabel, SHOVELS_TAGS } from "@/lib/sources/view";
-import { t } from "@/messages/pt";
-
-const S = t.sources;
-const Q = S.search;
+import { useT } from "@/lib/i18n/client";
 
 function Result({ r }: { r: SearchResult | null }) {
+  const Q = useT().sources.search;
   if (!r) return null;
   if ("ok" in r) return <Notice tone="ok">{Q.queuedOk}</Notice>;
   return <Notice role="alert">{Q.errors[r.error]}</Notice>;
@@ -21,6 +19,9 @@ const area = `${input} min-h-24`;
 
 /** One search form: the terms copy first, then the fields, the cost estimate and the button. */
 export function SearchForm({ kind }: { kind: "maps" | "apollo" | "shovels" | "b2b" }) {
+  const t = useT();
+  const S = t.sources;
+  const Q = S.search;
   const [state, action, pending] = useActionState({ maps: enqueueMaps, apollo: enqueueApollo, shovels: enqueueShovels, b2b: enqueueB2b }[kind], null);
   const [max, setMax] = useState(kind === "shovels" ? "25" : "50");
   const [place, setPlace] = useState("");
@@ -33,7 +34,7 @@ export function SearchForm({ kind }: { kind: "maps" | "apollo" | "shovels" | "b2
   const [label, setLabel] = useState("");
   const [b2b, setB2b] = useState({ state: "MA", sector: "construction", size: "11-50", role: "founder" });
   const n = Number(max);
-  const estimate = kind === "maps" ? (Number.isInteger(n) && n >= 1 && n <= 200 ? estimateLabel("maps", n) : null) : estimateLabel(kind, 25);
+  const estimate = kind === "maps" ? (Number.isInteger(n) && n >= 1 && n <= 200 ? estimateLabel("maps", n, t) : null) : estimateLabel(kind, 25, t);
   return (
     <Card id={kind} aria-labelledby={`buscar-${kind}`} className="flex-[1_1_340px]">
       <CardTitle id={`buscar-${kind}`}>{Q[kind]}</CardTitle>

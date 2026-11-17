@@ -5,13 +5,15 @@ import { resultsEstimateUsd } from "@/lib/ai/results-tasks";
 import { learnBlock, resultCounts, type ResultsData } from "@/lib/learning/results";
 import { createClient } from "@/lib/supabase/server";
 import { requireSender } from "@/lib/workspace";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { getT } from "@/lib/i18n/server";
 
-const R = t.profile.results;
 type Row = { id: string; status: "approved" | "proposed"; version: number | null; source: "list" | "results"; created_at: string };
 
 // Sender-only. The profiles in use and waiting, and "Aprender com os resultados". Reading changes nothing.
 export default async function ProfilesPage() {
+  const t = await getT();
+  const R = t.profile.results;
   const workspace = await requireSender();
   const db = await createClient();
   if (!db) notFound();

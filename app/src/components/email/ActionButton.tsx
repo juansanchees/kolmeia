@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { t } from "@/messages/pt";
+import { useT } from "@/lib/i18n/client";
 import { btn } from "./bits";
 
 type Result = { ok: boolean; message?: string };
@@ -26,6 +26,7 @@ export function ActionButton({
   variant?: keyof typeof btn;
   className?: string;
 }) {
+  const t = useT();
   const router = useRouter();
   const [pending, start] = useTransition();
   const [asking, setAsking] = useState(false);

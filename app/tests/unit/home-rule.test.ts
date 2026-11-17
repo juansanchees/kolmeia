@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { t } from "@/messages/pt";
 import { DEFAULT_HOME_RULE, HOME_PICK, homeMatches, parseHomeRule, pickFirst, ruleInWords, type HomeRow, type HomeRule } from "@/lib/home/rule";
 import type { Segment } from "@/lib/leads/types";
 
@@ -151,8 +152,8 @@ describe("rule parsing (stored value is not trusted)", () => {
 });
 
 test("the rule in words", () => {
-  expect(ruleInWords(DEFAULT_HOME_RULE)).toBe("Regra: Grande · tem telefone · nunca contatado · ordem recomendada.");
-  expect(ruleInWords(rule({ segments: ["large", "none"], hasPhone: false, hasEmail: true, city: "Salem", minTemperature: "hot", role: "owner", order: "newest" }))).toBe(
+  expect(ruleInWords(DEFAULT_HOME_RULE, t)).toBe("Regra: Grande · tem telefone · nunca contatado · ordem recomendada.");
+  expect(ruleInWords(rule({ segments: ["large", "none"], hasPhone: false, hasEmail: true, city: "Salem", minTemperature: "hot", role: "owner", order: "newest" }), t)).toBe(
     "Regra: Grande/Sem tipo · tem e-mail · em Salem · quente ou mais · cargo: dono/fundador · nunca contatado · ordem mais novos primeiro.",
   );
 });

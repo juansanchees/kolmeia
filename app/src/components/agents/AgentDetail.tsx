@@ -5,15 +5,13 @@ import type { RunRow } from "@/lib/research/rows";
 import type { AgentRow } from "@/lib/agents/types";
 import { agentMetrics } from "@/lib/agents/view";
 import Link from "next/link";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
+import type { Messages } from "@/lib/i18n";
 import { AgentPowerButton } from "./AgentPowerButton";
 import { ArchiveButton } from "./ArchiveButton";
 import { Paged } from "@/components/Pager";
 
-const A = t.agents;
-const R = A.review;
-
-type Cfg = { audience?: string; audienceText?: string; region?: string; rigor?: keyof typeof t.research.plan.rigorNames; caps?: { maxCandidates: number; maxCostUsd: number; maxMinutes: number } };
+type Cfg = { audience?: string; audienceText?: string; region?: string; rigor?: keyof Messages["research"]["plan"]["rigorNames"]; caps?: { maxCandidates: number; maxCostUsd: number; maxMinutes: number } };
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -26,7 +24,10 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 const CAP_REASONS = ["daily_cap", "user_cap", "global_cap"];
 
-export function AgentDetail({ agent, setupRun, runs, now }: { agent: AgentRow; setupRun: RunRow | null; runs: RunRow[]; now: Date }) {
+export async function AgentDetail({ agent, setupRun, runs, now }: { agent: AgentRow; setupRun: RunRow | null; runs: RunRow[]; now: Date }) {
+  const t = await getT();
+  const A = t.agents;
+  const R = A.review;
   const m = agentMetrics(runs, setupRun?.spent_cost_usd ?? 0);
   const running = agent.status === "running";
   const upcoming = running && agent.next_run_at && new Date(agent.next_run_at).getTime() > now.getTime();
@@ -50,12 +51,12 @@ export function AgentDetail({ agent, setupRun, runs, now }: { agent: AgentRow; s
         <Row label={R.sources}>{R.sourcesValue}</Row>
         {c.caps && (
           <>
-            <Row label={R.maxCost}>US$ {usd(c.caps.maxCostUsd)}</Row>
+            <Row label={R.maxCost}>US$ {usd(c.caps.maxCostUsd, t.intl)}</Row>
             <Row label={R.maxTime}>{R.maxTimeValue.replace("{minutes}", String(c.caps.maxMinutes))}</Row>
             <Row label={R.limit}>{R.limitValue.replace("{n}", String(c.caps.maxCandidates))}</Row>
           </>
         )}
-        {setupRun && <Row label={A.detail.creationCost}>US$ {usd(setupRun.spent_cost_usd)}</Row>}
+        {setupRun && <Row label={A.detail.creationCost}>US$ {usd(setupRun.spent_cost_usd, t.intl)}</Row>}
       </dl>
       {agent.status === "paused" && agent.paused_reason && (
         <Notice tone="warn">{CAP_REASONS.includes(agent.paused_reason) ? A.capWarning : A.paused[agent.paused_reason]}</Notice>
@@ -63,13 +64,13 @@ export function AgentDetail({ agent, setupRun, runs, now }: { agent: AgentRow; s
       {agent.status === "paused" && agent.paused_reason && CAP_REASONS.includes(agent.paused_reason) && (
         <p className="text-sm">{A.paused[agent.paused_reason]}</p>
       )}
-      {upcoming && <p className="text-sm">{A.detail.nextRun.replace("{when}", when(agent.next_run_at))}</p>}
+      {upcoming && <p className="text-sm">{A.detail.nextRun.replace("{when}", when(agent.next_run_at, t.intl))}</p>}
       <dl className="m-0">
         <Row label={A.metrics.runs}>{m.runs}</Row>
         <Row label={A.metrics.found}>{m.found}</Row>
         <Row label={A.metrics.verified}>{m.verified}</Row>
         <Row label={A.metrics.refuted}>{m.refuted}</Row>
-        <Row label={A.metrics.cost}>US$ {usd(m.costUsd)}</Row>
+        <Row label={A.metrics.cost}>US$ {usd(m.costUsd, t.intl)}</Row>
       </dl>
       {runs.length > 0 && (
         <div className="flex flex-col gap-1">
@@ -81,7 +82,7 @@ export function AgentDetail({ agent, setupRun, runs, now }: { agent: AgentRow; s
                   {r.title}
                 </Link>
                 <span className="font-mono text-xs text-muted">
-                  {t.research.status[r.status]} · {when(r.created_at)} · {r.progress?.counts?.verified ?? 0} {A.metrics.verified.toLowerCase()}
+                  {t.research.status[r.status]} · {when(r.created_at, t.intl)} · {r.progress?.counts?.verified ?? 0} {A.metrics.verified.toLowerCase()}
                 </span>
               </li>
             ))}

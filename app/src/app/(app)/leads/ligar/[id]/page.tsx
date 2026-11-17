@@ -9,10 +9,11 @@ import { callsOf } from "@/lib/calls/call-queries";
 import { getLead } from "@/lib/leads/queries";
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/workspace";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 
 // The call screen. Read as the user: RLS hides a lead that is not hers, so it is a 404.
 export default async function CallPage({ params }: { params: Promise<{ id: string }> }) {
+  const t = await getT();
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const supabase = await createClient();

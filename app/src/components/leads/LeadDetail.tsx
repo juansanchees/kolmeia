@@ -33,15 +33,17 @@ import { WhyHot } from "@/components/leads/WhyHot";
 import { whyHotFacts } from "@/lib/leads/why-hot";
 import { reserveFor } from "@/lib/ai/gateway";
 import { explainDef } from "@/lib/ai/lead-ai-tasks";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { getT } from "@/lib/i18n/server";
 
-const L = t.research.list;
-const LB = t.research.labels;
-const H = t.handoff;
 const CLOSED = ["won", "lost", "discarded"];
 
 // One lead, read-only in F3a. Read as the user, so a closer only opens a lead assigned to her (RLS); anything else is a 404.
 export async function LeadDetail({ id, modal = false }: { id: string; modal?: boolean }) {
+  const t = await getT();
+  const L = t.research.list;
+  const LB = t.research.labels;
+  const H = t.handoff;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const supabase = await createClient();
   if (!supabase) notFound();
@@ -103,7 +105,7 @@ export async function LeadDetail({ id, modal = false }: { id: string; modal?: bo
       emailBrief: parseCloserBrief(emailBrief),
       talkedNotes: (callsRes.data as { notes: string } | null)?.notes ?? null,
       proofUrls,
-    });
+    }, t);
   }
   const now = new Date();
   const stale = candidates.some(
@@ -132,20 +134,20 @@ export async function LeadDetail({ id, modal = false }: { id: string; modal?: bo
         <p className="text-[13px] text-muted">
           {[
             t.leads.statuses[lead.status],
-            originLabel({ lead, agentName, importName }),
-            fill(t.leads.firstSeen, { date: date(lead.first_seen_at) }),
+            originLabel({ lead, agentName, importName }, t),
+            fill(t.leads.firstSeen, { date: date(lead.first_seen_at, t.intl) }),
           ]
             .filter(Boolean)
             .join(" · ")}
         </p>
         <p className="text-[13px] text-muted">
-          <span className="font-semibold text-ink">{t.qualifier.levelLabel} {lead.level}</span> · {levelReason(fields, lead.level)}
-          {queue && <> · {nextStepLabel(queue.next_step, queue.done_reason)}</>}
+          <span className="font-semibold text-ink">{t.qualifier.levelLabel} {lead.level}</span> · {levelReason(fields, lead.level, t)}
+          {queue && <> · {nextStepLabel(queue.next_step, queue.done_reason, t)}</>}
         </p>
         {sender && (
           <p className="text-[13px] text-muted">
             <span className="font-semibold text-ink">{t.leads.origin.cameFrom}</span>{" "}
-            {origins.length > 0 ? origins.map((o) => fill(t.leads.origin.item, { name: o.name, date: date(o.at) })).join(", ") : t.leads.origin.none}
+            {origins.length > 0 ? origins.map((o) => fill(t.leads.origin.item, { name: o.name, date: date(o.at, t.intl) })).join(", ") : t.leads.origin.none}
           </p>
         )}
         {sender && (
@@ -190,9 +192,9 @@ export async function LeadDetail({ id, modal = false }: { id: string; modal?: bo
 
             <dl className="m-0 grid grid-cols-3 gap-2 border-y border-line py-2.5">
               {[
-                [L.permits, count(best.permit_count)],
-                [L.totalValue, money(best.total_value_usd)],
-                [L.lastPermit, date(best.last_permit_date)],
+                [L.permits, count(best.permit_count, t.intl)],
+                [L.totalValue, money(best.total_value_usd, t.intl)],
+                [L.lastPermit, date(best.last_permit_date, t.intl)],
               ].map(([k, v]) => (
                 <div key={k} className="flex min-w-0 flex-col">
                   <dt className="font-mono text-xs text-muted">{k}</dt>
@@ -203,7 +205,7 @@ export async function LeadDetail({ id, modal = false }: { id: string; modal?: bo
 
             {best.biggest_job_address && (
               <p className="text-sm">
-                <span className="font-semibold">{L.biggestJob}</span> {best.biggest_job_address} · {money(best.biggest_job_value_usd)}
+                <span className="font-semibold">{L.biggestJob}</span> {best.biggest_job_address} · {money(best.biggest_job_value_usd, t.intl)}
               </p>
             )}
             {best.hook && <Hook text={best.hook} />}
@@ -234,7 +236,7 @@ export async function LeadDetail({ id, modal = false }: { id: string; modal?: bo
         </dl>
       </section>
 
-      <WhyHot leadId={lead.id} facts={whyHotFacts({ level: lead.level, best, fields, checks })} canSummarize={sender} reserveUsd={reserveFor(explainDef)} />
+      <WhyHot leadId={lead.id} facts={whyHotFacts({ level: lead.level, best, fields, checks }, t)} canSummarize={sender} reserveUsd={reserveFor(explainDef)} />
 
       {brief && (
         <section aria-labelledby="brief-title" className="flex flex-col gap-2 border border-ink bg-surface p-4">
@@ -299,7 +301,7 @@ export async function LeadDetail({ id, modal = false }: { id: string; modal?: bo
           {candidates.map((c) => (
             <div key={c.id} className="flex flex-col gap-2 border border-line bg-surface p-4">
               <span className="font-mono text-xs text-muted">
-                {c.run_title || UNKNOWN} · {date(c.run_created_at)}
+                {c.run_title || UNKNOWN} · {date(c.run_created_at, t.intl)}
               </span>
               <ProofList c={c} checks={checks.filter((k) => k.candidate_id === c.id)} now={now} />
             </div>

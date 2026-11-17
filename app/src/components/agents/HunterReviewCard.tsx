@@ -8,11 +8,7 @@ import { usd } from "@/components/research/format";
 import type { RunRow } from "@/lib/research/rows";
 import { DEFAULT_CAPS, RIGORS, type Rigor } from "@/lib/research/types";
 import { SCHEDULES, type Schedule } from "@/lib/agents/types";
-import { t } from "@/messages/pt";
-
-const H = t.agents.hunter;
-const R = t.agents.review;
-const P = t.research.plan;
+import { useT } from "@/lib/i18n/client";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -25,6 +21,10 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 /** Setup chat, last step: pick rigor and frequency, review, create PAUSED. Never approves or runs a search. */
 export function HunterReviewCard({ agentId, run, defaultName }: { agentId: string; run: RunRow; defaultName: string }) {
+  const t = useT();
+  const H = t.agents.hunter;
+  const R = t.agents.review;
+  const P = t.research.plan;
   const plan = run.plan!;
   const [stage, setStage] = useState<"pick" | "review">("pick");
   const [rigor, setRigor] = useState<Rigor>(run.rigor);
@@ -67,7 +67,7 @@ export function HunterReviewCard({ agentId, run, defaultName }: { agentId: strin
           <Row label={R.rigor}>{P.rigorNames[rigor]}</Row>
           <Row label={R.schedule}>{H.schedules[schedule]}</Row>
           <Row label={R.sources}>{R.sourcesValue}</Row>
-          <Row label={R.maxCost}>US$ {usd(caps.maxCostUsd)}</Row>
+          <Row label={R.maxCost}>US$ {usd(caps.maxCostUsd, t.intl)}</Row>
           <Row label={R.maxTime}>{R.maxTimeValue.replace("{minutes}", String(caps.maxMinutes))}</Row>
           <Row label={R.limit}>{R.limitValue.replace("{n}", String(caps.maxCandidates))}</Row>
         </dl>

@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { loadMailboxes, loadSender } from "@/lib/email/queries";
 import { campaignWarnings, hasContentProblem } from "@/lib/email/warnings";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Warning strip at the top of Campanhas. Server component, read-only queries as the logged-in user (RLS). */
 export async function CampaignWarnings({ db, workspaceId }: { db: SupabaseClient; workspaceId: string }) {
+  const t = await getT();
   const [mailboxes, campaigns, prospects, sent, c12, sender, links, drafts] = await Promise.all([
     loadMailboxes(db, workspaceId),
     db.from("email_campaigns").select("id, name, status, send_mode, agent_id").eq("workspace_id", workspaceId).neq("status", "archived"),
@@ -36,7 +37,7 @@ export async function CampaignWarnings({ db, workspaceId }: { db: SupabaseClient
     sender,
     gateOpen: Object.keys(t.email.c12.items).every((i) => done.has(i)),
     spamDrafts: count(((drafts.data ?? []) as { campaign_id: string; step: number | null; subject: string; body: string }[]).filter((m) => hasContentProblem(m))),
-  });
+  }, t);
   if (warnings.length === 0) return null;
   return (
     <ul aria-label={t.email.warnings.label} className="m-0 flex list-none flex-col gap-1.5 p-0">

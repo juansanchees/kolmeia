@@ -8,7 +8,7 @@ import type { AgentRow } from "@/lib/agents/types";
 import { SupabaseEmailStore } from "@/lib/email/supabase-store";
 import { CAMPAIGN_COLUMNS, type CampaignRow, type SenderProfile } from "@/lib/email/types";
 import type { SequenceStep } from "@/lib/email/template";
-import { t } from "@/messages/pt";
+import { ptMessages } from "@/lib/i18n";
 import { MAX_LEADS, type EmailAgentMetrics, type LeadFilterConfig, type SequencePreview, type Tone } from "./types";
 
 /** The leads a filter picks (as the user: RLS applies), newest first, at most 500. Ids go to add_leads_to_campaign. */
@@ -120,6 +120,6 @@ export async function loadEmailAgent(db: SupabaseClient, agentId: string): Promi
     preview: (preview.data as SequencePreview | null) ?? null,
     metrics,
     sender,
-    c12Ready: Object.keys(t.email.c12.items).every((i) => done.has(i)),
+    c12Ready: Object.keys(ptMessages.email.c12.items).every((i) => done.has(i)),
   };
 }

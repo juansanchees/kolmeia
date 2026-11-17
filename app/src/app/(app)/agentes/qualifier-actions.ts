@@ -5,9 +5,8 @@ import { z } from "zod";
 import type { FormState } from "@/lib/form-state";
 import { createClient } from "@/lib/supabase/server";
 import { requireSender } from "@/lib/workspace";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 
-const E = t.qualifier.errors;
 const uuid = z.string().uuid();
 
 // Only these four keys exist; anything else is refused. The database enforces the ranges (guard_qualifier, Q1) and
@@ -22,6 +21,8 @@ const patchSchema = z
   .strict();
 
 export async function setQualifierAction(patch: { status?: "on" | "paused"; daily_cap_usd?: number; lead_cap_usd?: number; auto_deep?: boolean }): Promise<FormState> {
+  const t = await getT();
+  const E = t.qualifier.errors;
   const workspace = await requireSender(); // a closer is sent to LEADS before anything is read or written
   const parsed = patchSchema.safeParse(patch);
   if (!parsed.success || Object.keys(parsed.data).length === 0) return { status: "error", message: E.cap };
@@ -34,6 +35,8 @@ export async function setQualifierAction(patch: { status?: "on" | "paused"; dail
 }
 
 export async function ackLevelNoteAction(leadId: string): Promise<FormState> {
+  const t = await getT();
+  const E = t.qualifier.errors;
   await requireSender();
   if (!uuid.safeParse(leadId).success) return { status: "error", message: E.failed };
   const supabase = await createClient();
@@ -47,6 +50,8 @@ export async function ackLevelNoteAction(leadId: string): Promise<FormState> {
 
 /** Owner only (the database enforces it with 42501; the server action reports a fixed code, never the raw error). */
 export async function takeOverChargeAction(): Promise<FormState> {
+  const t = await getT();
+  const E = t.qualifier.errors;
   const workspace = await requireSender();
   const supabase = await createClient();
   if (!supabase) return { status: "error", message: E.failed };

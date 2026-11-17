@@ -8,18 +8,18 @@ import { dateLineOf, firstNameOf, funnelOf, greetingOf, parsePeriod, PERIODS, re
 import { stageOf } from "@/lib/leads/classify";
 import { listLeads, originListsOf } from "@/lib/leads/queries";
 import { toTableRow } from "@/lib/leads/table";
-import { originKeysOf } from "@/lib/leads/view";
+import { originKeyLabel, originKeysOf } from "@/lib/leads/view";
 import { isSender } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
 import { openTasks } from "@/lib/tasks/queries";
 import { getCurrentWorkspace, getUser } from "@/lib/workspace";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { getT } from "@/lib/i18n/server";
 
-const H = t.home;
 const label = "!font-mono text-sm font-medium uppercase tracking-wide text-muted";
 const ghost = "inline-flex min-h-12 items-center border border-edge bg-surface px-5 font-medium text-ink no-underline hover:border-ink";
 const num = "font-display text-[44px] font-extrabold leading-none";
-const day = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/New_York", day: "2-digit", month: "2-digit" });
+const day = (iso: string, intl: string) => new Date(iso).toLocaleDateString(intl, { timeZone: "America/New_York", day: "2-digit", month: "2-digit" });
 
 function Has({ on, yes, no, children }: { on: boolean; yes: string; no: string; children: React.ReactNode }) {
   return (
@@ -33,6 +33,8 @@ const svg = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke:
 
 // Início: what to do today, read as the user (RLS: the closer only sees her own leads). One read of the leads feeds every number.
 export default async function HomePage({ searchParams }: { searchParams: Promise<{ [k: string]: string | string[] | undefined }> }) {
+  const t = await getT();
+  const H = t.home;
   const supabase = await createClient();
   const workspace = await getCurrentWorkspace();
   const user = await getUser();
@@ -55,7 +57,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   });
 
   const today = todayCounts(rows, tasks.map((x) => x.due_at), now);
-  const funnel = funnelOf(rows, period, now);
+  const funnel = funnelOf(rows, period, now, t);
   const picked = pickFirst(rows, rule);
   const topOrigin = topOrigins(rows);
   const maxOrigin = topOrigin[0]?.n ?? 1;
@@ -83,9 +85,9 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     <div className="flex min-w-0 flex-col gap-7">
       <section className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="mb-1.5 font-mono text-[13px] tracking-wide text-muted">{dateLineOf(now)}</p>
-          <h1 className="text-5xl font-extrabold uppercase leading-none">{name ? `${greetingOf(now)}, ${name}` : greetingOf(now)}</h1>
-          <p className="mt-2.5 text-[17px] text-muted">{readyLine(today.ready)}</p>
+          <p className="mb-1.5 font-mono text-[13px] tracking-wide text-muted">{dateLineOf(now, t)}</p>
+          <h1 className="text-5xl font-extrabold uppercase leading-none">{name ? `${greetingOf(now, t)}, ${name}` : greetingOf(now, t)}</h1>
+          <p className="mt-2.5 text-[17px] text-muted">{readyLine(today.ready, t)}</p>
         </div>
         <div className="flex flex-wrap gap-2.5">
           {sender && <Link href="/leads/subir" className={ghost}>{H.upload}</Link>}
@@ -101,7 +103,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           {todayCards.map((c) => (
             <Link key={c.label} href={c.href} className="flex min-h-[120px] flex-col gap-1.5 border border-line bg-surface p-5 text-ink no-underline hover:border-ink">
               <span className="text-[15px] text-muted">{c.label}</span>
-              <span className={num}>{c.n.toLocaleString("pt-BR")}</span>
+              <span className={num}>{c.n.toLocaleString(t.intl)}</span>
               <span className="text-sm font-medium text-blue">{c.cta}</span>
             </Link>
           ))}
@@ -124,7 +126,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             <div key={f.stage} className="flex flex-col gap-1.5 pb-1 pr-4 pt-4">
               <dt className="text-sm text-muted">{t.leads.stages[f.stage]}</dt>
               <dd className="m-0 flex flex-col gap-1.5">
-                <span className="font-display text-4xl font-extrabold leading-none">{f.n.toLocaleString("pt-BR")}</span>
+                <span className="font-display text-4xl font-extrabold leading-none">{f.n.toLocaleString(t.intl)}</span>
                 <span className="font-mono text-xs text-muted">{f.note}</span>
               </dd>
             </div>
@@ -137,7 +139,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
             <div className="min-w-0">
               <h2 id="ligar-t" className="text-[26px] font-extrabold uppercase">{H.first.title}</h2>
-              <p className="mt-1 text-sm text-muted">{ruleInWords(rule)} {H.first.ruleTail}</p>
+              <p className="mt-1 text-sm text-muted">{ruleInWords(rule, t)} {H.first.ruleTail}</p>
             </div>
             <div className="flex items-center gap-4">
               <RuleEditor rule={rule} rows={slim} cities={cities} origins={originNames} />
@@ -176,7 +178,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
                           </Has>
                         </span>
                       </td>
-                      <td className="max-w-[200px] truncate px-2 py-3.5 text-sm text-muted">{originKeysOf(r)[0]}</td>
+                      <td className="max-w-[200px] truncate px-2 py-3.5 text-sm text-muted">{originKeyLabel(originKeysOf(r)[0], t)}</td>
                       <td className="px-5 py-3.5 text-right">
                         <Link href={`/leads/ligar/${r.lead.id}`} aria-label={fill(H.first.callFor, { name: r.display.name })} className="inline-flex min-h-11 items-center border border-edge bg-surface px-4 font-medium text-ink no-underline hover:border-ink">
                           {H.first.call} ▸
@@ -198,8 +200,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
               {agents.map((a) => {
                 const n = found.get(a.id) ?? 0;
                 const parts = [
-                  ...(a.type === "hunter" ? [n === 1 ? H.agents.foundOne : fill(H.agents.found, { n: n.toLocaleString("pt-BR") })] : []),
-                  ...(a.status === "running" && a.next_run_at ? [fill(H.agents.next, { d: day(a.next_run_at) })] : []),
+                  ...(a.type === "hunter" ? [n === 1 ? H.agents.foundOne : fill(H.agents.found, { n: n.toLocaleString(t.intl) })] : []),
+                  ...(a.status === "running" && a.next_run_at ? [fill(H.agents.next, { d: day(a.next_run_at, t.intl) })] : []),
                 ];
                 return (
                   <div key={a.id} className="flex items-start justify-between gap-3">
@@ -224,7 +226,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
               <dl className="m-0 grid grid-cols-3 gap-2">
                 {[[email.sent, H.email.sent], [email.replies, H.email.replies], [rows.filter((r) => r.display.email?.trim()).length, H.email.withEmail]].map(([n, l]) => (
                   <div key={l}>
-                    <dd className="m-0 font-display text-[28px] font-extrabold leading-tight">{Number(n).toLocaleString("pt-BR")}</dd>
+                    <dd className="m-0 font-display text-[28px] font-extrabold leading-tight">{Number(n).toLocaleString(t.intl)}</dd>
                     <dt className="text-[13px] text-muted">{l}</dt>
                   </div>
                 ))}
@@ -240,8 +242,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             {topOrigin.map((o) => (
               <div key={o.name} className="flex flex-col gap-1">
                 <div className="flex justify-between gap-2 text-sm">
-                  <span className="truncate">{o.name}</span>
-                  <span className="font-mono text-ink">{o.n.toLocaleString("pt-BR")}</span>
+                  <span className="truncate">{originKeyLabel(o.name, t)}</span>
+                  <span className="font-mono text-ink">{o.n.toLocaleString(t.intl)}</span>
                 </div>
                 <div aria-hidden className="h-1.5 bg-cold"><div className="h-1.5 bg-blue" style={{ width: `${Math.max(2, Math.round((o.n / maxOrigin) * 100))}%` }} /></div>
               </div>

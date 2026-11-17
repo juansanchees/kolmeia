@@ -5,11 +5,10 @@ import { useState, useTransition } from "react";
 import { approveReviewed, decideMessages, saveMessage } from "@/app/(app)/campanhas/actions";
 import { bodyProblem, subjectProblem } from "@/lib/email/compose";
 import type { MessageStatus, MessageVersion } from "@/lib/email/types";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 import { Badge, btn, input, type Tone } from "./bits";
 import { Paged } from "@/components/Pager";
-
-const M = t.email;
 
 export const STATUS_TONE: Record<MessageStatus, Tone> = {
   draft: "cold",
@@ -43,6 +42,8 @@ export type EditableMessage = {
 
 /** One e-mail: edit subject/body, approve / reject. Editing an approved e-mail drops the approval (R1). */
 export function MessageEditor({ m, canSend }: { m: EditableMessage; canSend: boolean }) {
+  const t = useT();
+  const M = t.email;
   const router = useRouter();
   const [subject, setSubject] = useState(m.subject);
   const [body, setBody] = useState(m.body);
@@ -139,6 +140,8 @@ export function MessageEditor({ m, canSend }: { m: EditableMessage; canSend: boo
 
 /** "Aprovar os 3" for one prospect: the versions on this screen. */
 export function ApproveAllButton({ items }: { items: MessageVersion[] }) {
+  const t = useT();
+  const M = t.email;
   const router = useRouter();
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -181,6 +184,8 @@ export type ReviewRow = {
  * says how many and why).
  */
 export function ReviewList({ rows, campaignId }: { rows: ReviewRow[]; campaignId: string }) {
+  const t = useT();
+  const M = t.email;
   const router = useRouter();
   const [opened, setOpened] = useState<Set<string>>(new Set());
   const [checked, setChecked] = useState<Set<string>>(new Set());

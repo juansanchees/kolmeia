@@ -6,12 +6,12 @@ import { connectedSources, listRuns } from "@/lib/sources/queries";
 import { todayLine } from "@/lib/sources/view";
 import { createClient } from "@/lib/supabase/server";
 import { requireSender } from "@/lib/workspace";
-import { t } from "@/messages/pt";
-
-const Q = t.sources.search;
+import { getT } from "@/lib/i18n/server";
 
 // Sender-only (the closer is sent back to LEADS). Forms show only for connected sources; reads run as the user.
 export default async function SearchPage() {
+  const t = await getT();
+  const Q = t.sources.search;
   const workspace = await requireSender();
   const supabase = await createClient();
   const conn = supabase ? await connectedSources(supabase, workspace.id) : null;
@@ -24,13 +24,13 @@ export default async function SearchPage() {
         {conn && (conn.maps || conn.apollo || conn.shovels || conn.rapidapi) ? (
           <>
             <div className="flex flex-col gap-1 font-mono text-xs text-muted">
-              {conn.maps && <span>{t.sources.providers.apify}: {todayLine({ provider: "apify", today: conn.today.apify.spent, cap: conn.today.apify.cap })}</span>}
-              {conn.apollo && <span>{t.sources.providers.apollo}: {todayLine({ provider: "apollo", today: conn.today.apollo.calls, cap: conn.today.apollo.cap })}</span>}
-              {conn.shovels && <span>{t.sources.providers.shovels}: {todayLine({ provider: "shovels", today: conn.month.shovels.used, cap: conn.month.shovels.cap })}</span>}
+              {conn.maps && <span>{t.sources.providers.apify}: {todayLine({ provider: "apify", today: conn.today.apify.spent, cap: conn.today.apify.cap }, t)}</span>}
+              {conn.apollo && <span>{t.sources.providers.apollo}: {todayLine({ provider: "apollo", today: conn.today.apollo.calls, cap: conn.today.apollo.cap }, t)}</span>}
+              {conn.shovels && <span>{t.sources.providers.shovels}: {todayLine({ provider: "shovels", today: conn.month.shovels.used, cap: conn.month.shovels.cap }, t)}</span>}
               {conn.rapidapi && (
                 <span>
-                  {t.sources.providers.rapidapi}: {todayLine({ provider: "rapidapi", today: conn.month.rapidapi.calls, cap: conn.month.rapidapi.callsCap })} ·{" "}
-                  {todayLine({ provider: "rapidapi_sites", today: conn.month.rapidapi.sites, cap: conn.month.rapidapi.sitesCap })}
+                  {t.sources.providers.rapidapi}: {todayLine({ provider: "rapidapi", today: conn.month.rapidapi.calls, cap: conn.month.rapidapi.callsCap }, t)} ·{" "}
+                  {todayLine({ provider: "rapidapi_sites", today: conn.month.rapidapi.sites, cap: conn.month.rapidapi.sitesCap }, t)}
                 </span>
               )}
             </div>

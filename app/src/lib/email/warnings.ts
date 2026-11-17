@@ -1,7 +1,7 @@
 import type { EmailQuality } from "@/lib/leads/email-quality";
 import { senderComplete } from "./compose";
 import type { SenderProfile } from "./types";
-import { fill, t } from "@/messages/pt";
+import { fill, ptMessages, type Messages } from "@/lib/i18n";
 
 // Warning strip for Campanhas. Pure: the layout loads the rows, this decides what to say (read-only, no side effects).
 
@@ -27,11 +27,11 @@ export type WarningsInput = {
   spamDrafts?: Record<string, number>;
 };
 
-const W = t.email.warnings;
 const BOUNCE_MIN = 3; // same rule as the mailbox auto-pause (D7): >= 3 bounces and >= 5 %
 const BOUNCE_RATE = 0.05;
 
-export function campaignWarnings(i: WarningsInput): CampaignWarning[] {
+export function campaignWarnings(i: WarningsInput, t: Messages): CampaignWarning[] {
+  const W = t.email.warnings;
   const active = i.campaigns.filter((c) => c.status === "active");
   const box = (kind: CampaignWarning["kind"], text: string): CampaignWarning => ({ kind, text, href: "/campanhas" });
   return [
@@ -79,10 +79,10 @@ export type ContentInput = {
   recipient?: EmailQuality | null;
 };
 
-const C = t.email.checks;
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-export function contentChecks(i: ContentInput): ContentCheck[] {
+export function contentChecks(i: ContentInput, t: Messages): ContentCheck[] {
+  const C = t.email.checks;
   const all = `${i.subject}\n${i.body}`;
   // "feel free" is a polite phrase, not the spam word "free"
   const low = all.toLowerCase().replace(/feel\s+free/g, " ");
@@ -107,5 +107,5 @@ export function contentChecks(i: ContentInput): ContentCheck[] {
 
 /** True when the e-mail's own text (recipient aside) fails a check. */
 export function hasContentProblem(m: Omit<ContentInput, "recipient">): boolean {
-  return contentChecks(m).some((c) => !c.ok);
+  return contentChecks(m, ptMessages).some((c) => !c.ok); // only ok/not ok is read: any language works
 }

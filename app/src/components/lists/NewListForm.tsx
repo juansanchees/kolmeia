@@ -4,9 +4,10 @@ import { useActionState, useState } from "react";
 import { createListAction } from "@/app/(app)/leads/listas/actions";
 import { btn } from "@/components/email/bits";
 import { idle, type FormState } from "@/lib/form-state";
-import { t } from "@/messages/pt";
+import { useT } from "@/lib/i18n/client";
 
 export function NewListForm() {
+  const t = useT();
   const [state, action, pending] = useActionState<FormState, FormData>(createListAction, idle);
   // Controlled on purpose: React 19 resets uncontrolled fields after a form action.
   const [name, setName] = useState("");

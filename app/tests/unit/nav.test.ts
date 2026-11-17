@@ -1,7 +1,19 @@
 import { describe, expect, test } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { CAMPAIGN_TABS, LEADS_TABS, MAIN_AREAS, SETTINGS_HREF, SETTINGS_TABS, activeHref, areasFor, leadsTabsFor, settingsTabsFor } from "@/lib/nav";
+import { SETTINGS_HREF, activeHref, areasFor as areasForT, campaignTabs, leadsTabs, leadsTabsFor as leadsTabsForT, mainAreas, settingsTabs, settingsTabsFor as settingsTabsForT } from "@/lib/nav";
+import { t } from "@/messages/pt";
+import { en } from "@/messages/en";
+import type { Role } from "@/lib/roles";
+
+// The tab builders take the messages; these tests check the Portuguese ones (and English once, below).
+const CAMPAIGN_TABS = campaignTabs(t);
+const LEADS_TABS = leadsTabs(t);
+const MAIN_AREAS = mainAreas(t);
+const SETTINGS_TABS = settingsTabs(t);
+const areasFor = (role: Role) => areasForT(role, t);
+const leadsTabsFor = (role: Role) => leadsTabsForT(role, t);
+const settingsTabsFor = (role: Role) => settingsTabsForT(role, t);
 import { isSender } from "@/lib/roles";
 
 const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
@@ -57,6 +69,16 @@ describe("F1 nav", () => {
     expect(LEADS_TABS).toEqual(leadsTabsFor("closer"));
     expect(settingsTabsFor("owner").map((i) => i.href)).toContain("/configuracoes/equipe");
     for (const role of ["sdr", "closer"] as const) expect(settingsTabsFor(role).map((i) => i.href)).not.toContain("/configuracoes/equipe");
+  });
+});
+
+describe("i18n nav", () => {
+  test("the tabs come out in English with the English messages", () => {
+    expect(mainAreas(en).map((i) => i.label)).toEqual(["Home", "Agents", "Leads", "Email campaigns"]);
+    expect(leadsTabsForT("owner", en).map((i) => i.label)).toEqual(["All", "Call", "Tasks", "Results", "Lists", "Funnel", "Coverage", "Profile"]);
+    expect(settingsTabsForT("owner", en).map((i) => i.label)).toEqual(["Your company", "Mailboxes", "Blocked", "Connected sources", "Team"]);
+    expect(campaignTabs(en).map((i) => i.label)).toEqual(["Campaigns", "Replies"]);
+    expect(areasForT("closer", en).map((i) => [i.label, i.href])).toEqual([["Home", "/inicio"], ["Leads", "/leads"]]);
   });
 });
 
@@ -150,7 +172,7 @@ describe("F2 roles", () => {
     expect(read("src/app/(app)/configuracoes/empresa/page.tsx")).toContain("isSender(");
     expect(read("src/app/(app)/configuracoes/empresa/ProfileForm.tsx")).toContain("disabled={readOnly}");
     const nav = read("src/components/NavLinks.tsx");
-    expect(nav).toContain("areasFor(role)");
+    expect(nav).toContain("areasFor(role, t)");
     expect(nav).toContain("auto-cols-fr");
     expect(nav).not.toContain("grid-cols-3");
     expect(read("src/components/Header.tsx")).toContain("role=");

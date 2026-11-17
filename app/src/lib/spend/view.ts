@@ -1,7 +1,6 @@
 // Client-safe: how Gastos groups the money ledger. No server imports.
-import { t } from "@/messages/pt";
+import { type Messages } from "@/lib/i18n";
 
-const S = t.spend;
 const TZ = "America/New_York";
 
 export type SpendCall = {
@@ -46,12 +45,14 @@ export function spendTotal(calls: SpendCall[]): number {
   return calls.reduce((s, c) => s + callUsd(c), 0);
 }
 
-export function stepLabel(task: string): string {
+export function stepLabel(task: string, t: Messages): string {
+  const S = t.spend;
   const own = S.steps as Record<string, string>;
   return Object.hasOwn(own, task) && task !== "other" ? own[task] : S.steps.other;
 }
 
-export function agentLabel(c: SpendCall, runAgent: Map<string, string | null>): string {
+export function agentLabel(c: SpendCall, runAgent: Map<string, string | null>, t: Messages): string {
+  const S = t.spend;
   if (c.task.startsWith("qualify_")) return S.agents.qualifier;
   if (c.task === "profile_learn") return S.agents.learned;
   if (c.task === "lead_search") return S.agents.leadSearch;
@@ -98,15 +99,16 @@ type Names = { runAgent: Map<string, string | null>; leads: Map<string, string> 
 /** Shown only when every call in the group agrees; else empty. */
 const same = (xs: string[]) => (xs.length > 0 && xs.every((x) => x === xs[0]) ? xs[0] : "");
 
-export function spendRows(calls: SpendCall[], by: SpendBy, names: Names): SpendRow[] {
+export function spendRows(calls: SpendCall[], by: SpendBy, names: Names, t: Messages): SpendRow[] {
+  const S = t.spend;
   const groups = new Map<string, { label: string; calls: SpendCall[] }>();
   for (const c of calls) {
     let key: string;
     let label: string;
-    if (by === "agent") key = label = agentLabel(c, names.runAgent);
+    if (by === "agent") key = label = agentLabel(c, names.runAgent, t);
     else if (by === "step") {
       key = c.task;
-      label = stepLabel(c.task);
+      label = stepLabel(c.task, t);
     }
     else if (by === "model") key = label = c.model;
     else if (by === "day") key = label = nyDay(c.created_at);
@@ -125,8 +127,8 @@ export function spendRows(calls: SpendCall[], by: SpendBy, names: Names): SpendR
     rows.push({
       key,
       label: g.label,
-      agent: same(g.calls.map((c) => agentLabel(c, names.runAgent))),
-      step: same(g.calls.map((c) => stepLabel(c.task))),
+      agent: same(g.calls.map((c) => agentLabel(c, names.runAgent, t))),
+      step: same(g.calls.map((c) => stepLabel(c.task, t))),
       model: same(g.calls.map((c) => c.model)),
       inputTokens: g.calls.reduce((s, c) => s + c.input_tokens, 0),
       outputTokens: g.calls.reduce((s, c) => s + c.output_tokens, 0),
@@ -155,7 +157,8 @@ export type SourceRun = {
 export type SourceRow = { provider: string; kind: string; label: string; runs: number; usd: number; leads: { id: string; name: string; usd: number }[] };
 
 /** "Apify Maps", "Apollo" or "Apify contatos": the step the source shows as. */
-export function sourceLabel(provider: string, kind: string): string {
+export function sourceLabel(provider: string, kind: string, t: Messages): string {
+  const S = t.spend;
   const own = S.sources.labels as Record<string, string>;
   if (Object.hasOwn(own, `${provider}_${kind}`)) return own[`${provider}_${kind}`]; // RapidAPI's site reader is kind 'contact' too
   return Object.hasOwn(own, kind) ? own[kind] : `${(S.sources.provider as Record<string, string>)[provider] ?? provider}`;
@@ -167,13 +170,13 @@ export function runUsd(r: SourceRun): number {
   return r.cost_usd ?? (open ? r.reserve_usd : 0);
 }
 
-export function sourceRows(runs: SourceRun[]): SourceRow[] {
+export function sourceRows(runs: SourceRun[], t: Messages): SourceRow[] {
   const m = new Map<string, SourceRow>();
   const perLead = new Map<string, Map<string, { id: string; name: string; usd: number }>>();
   for (const r of runs) {
     const usd = runUsd(r);
     const k = `${r.provider}:${r.kind}`;
-    const row = m.get(k) ?? { provider: r.provider, kind: r.kind, label: sourceLabel(r.provider, r.kind), runs: 0, usd: 0, leads: [] };
+    const row = m.get(k) ?? { provider: r.provider, kind: r.kind, label: sourceLabel(r.provider, r.kind, t), runs: 0, usd: 0, leads: [] };
     row.runs += 1;
     row.usd += usd;
     m.set(k, row);

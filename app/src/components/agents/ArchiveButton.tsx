@@ -3,9 +3,10 @@
 import { useState, useTransition } from "react";
 import { archiveAgentAction } from "@/app/(app)/agentes/agent-actions";
 import { GhostButton } from "@/components/research/controls";
-import { t } from "@/messages/pt";
+import { useT } from "@/lib/i18n/client";
 
 export function ArchiveButton({ agentId }: { agentId: string }) {
+  const t = useT();
   const [pending, start] = useTransition();
   const [asking, setAsking] = useState(false);
   const [error, setError] = useState<string | null>(null);

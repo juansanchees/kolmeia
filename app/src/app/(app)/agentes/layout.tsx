@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { getCurrentWorkspace } from "@/lib/workspace";
 import { isSender } from "@/lib/roles";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 
 export default async function AgentsLayout({ children }: { children: React.ReactNode }) {
+  const t = await getT();
   const workspace = await getCurrentWorkspace();
   return (
     <div className="flex flex-col gap-6">

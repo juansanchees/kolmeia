@@ -1,15 +1,18 @@
+"use client";
+
 import { buildFooter } from "@/lib/email/compose";
 import type { SenderProfile } from "@/lib/email/types";
 import type { SequenceExample } from "@/lib/email-agent/types";
-import { fill, t } from "@/messages/pt";
-
-const D = t.emailAgent.detail;
+import { fill } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 
 /**
  * The examples exactly as the recipient gets them: subject, body and the CAN-SPAM footer (sender, postal address,
  * unsubscribe line). The link itself is a placeholder here: the real one is made per message at send time.
  */
 export function SequenceExamples({ examples, sender, rehearsalOnly }: { examples: SequenceExample[]; sender: SenderProfile | null; rehearsalOnly: boolean }) {
+  const t = useT();
+  const D = t.emailAgent.detail;
   return (
     <section aria-labelledby="examples-title" className="flex flex-col gap-3">
       <h3 id="examples-title" className="text-base font-semibold">

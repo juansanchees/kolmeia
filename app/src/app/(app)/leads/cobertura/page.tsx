@@ -6,15 +6,17 @@ import { loadCoverage } from "@/lib/coverage/queries";
 import { coverageTable, placesOf } from "@/lib/coverage/view";
 import { createClient } from "@/lib/supabase/server";
 import { requireSender } from "@/lib/workspace";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { getT } from "@/lib/i18n/server";
 import { deleteMarkAction } from "./actions";
 import { Paged } from "@/components/Pager";
 
-const C = t.coverage;
 const LIST_MAX = 50;
 
 // Sender-only. Read-only view of what was searched; the only writes are the manual marks.
 export default async function CoveragePage() {
+  const t = await getT();
+  const C = t.coverage;
   const workspace = await requireSender();
   const db = await createClient();
   if (!db) return <Notice tone="info">{t.ai.notConfigured}</Notice>;
@@ -34,7 +36,7 @@ export default async function CoveragePage() {
               const place = placesOf(s);
               return (
                 <li key={i} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-line pb-2 text-sm">
-                  <span className="font-mono text-xs text-muted">{date(s.at)}</span>
+                  <span className="font-mono text-xs text-muted">{date(s.at, t.intl)}</span>
                   <Badge tone="soft">{C.kinds[s.kind]}</Badge>
                   <span className="min-w-0 break-words font-medium">{s.label}</span>
                   <span className="min-w-0 break-words text-muted">{s.kind === "import" ? C.imported : s.regionText ?? place.towns.join(", ")}</span>
@@ -63,7 +65,7 @@ export default async function CoveragePage() {
           <Paged as="ul" className="m-0 flex list-none flex-col gap-2 p-0">
             {data.marks.map((m) => (
               <li key={m.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                <span className="font-mono text-xs text-muted">{date(m.searched_at)}</span>
+                <span className="font-mono text-xs text-muted">{date(m.searched_at, t.intl)}</span>
                 <span className="font-medium">{m.town}</span>
                 <span className="min-w-0 break-words text-muted">{m.note}</span>
                 <form action={deleteMarkAction.bind(null, m.id)}>

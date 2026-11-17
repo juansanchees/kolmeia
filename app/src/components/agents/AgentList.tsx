@@ -3,13 +3,15 @@ import { agentRowView } from "@/lib/agents/view";
 import type { AgentRow } from "@/lib/agents/types";
 import { ArchiveButton } from "./ArchiveButton";
 import { Paged } from "@/components/Pager";
+import { getT } from "@/lib/i18n/server";
 
-export function AgentList({ agents, listSizes = {} }: { agents: AgentRow[]; listSizes?: Record<string, number> }) {
+export async function AgentList({ agents, listSizes = {} }: { agents: AgentRow[]; listSizes?: Record<string, number> }) {
+  const t = await getT();
   const now = new Date();
   return (
     <Paged as="ul" className="m-0 flex list-none flex-col border border-line bg-surface p-0">
       {agents.map((a) => {
-        const v = agentRowView(a, now, { listSize: a.type === "call" ? (listSizes[a.id] ?? 0) : undefined });
+        const v = agentRowView(a, now, t, { listSize: a.type === "call" ? (listSizes[a.id] ?? 0) : undefined });
         return (
           <li key={a.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line px-4 py-3 last:border-b-0">
             <div className="flex min-w-0 flex-[1_1_220px] flex-col gap-0.5">

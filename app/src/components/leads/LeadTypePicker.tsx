@@ -5,9 +5,11 @@ import { useState, useTransition } from "react";
 import { setLeadSegmentAction } from "@/app/(app)/leads/lead-actions";
 import { SEGMENTS, type Segment } from "@/lib/leads/types";
 import { input } from "@/components/email/bits";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 
 export function LeadTypePicker({ leadId, value, derived }: { leadId: string; value: Segment | null; derived: Segment | null }) {
+  const t = useT();
   const router = useRouter();
   const [pending, start] = useTransition();
   const [result, setResult] = useState<{ ok: boolean; message?: string } | null>(null);

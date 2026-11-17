@@ -1,4 +1,5 @@
 import type { CampaignRow } from "./types";
+import { fill, type Messages } from "@/lib/i18n";
 // Business days (Mon-Fri, UTC calendar, no holidays). Mirrors public.add_business_days() in migration 0003.
 
 export function addBusinessDays(from: Date, days: number): Date {
@@ -24,10 +25,8 @@ export function sequenceDates(step1SentAt: Date, d: StepDelays): { step1: Date; 
   return { step1: step1SentAt, step2: addBusinessDays(step1SentAt, d.step2), step3: addBusinessDays(step1SentAt, d.step3) };
 }
 
-const WEEKDAYS_PT = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"];
-
 /** The pieces of the read-only schedule line on the campaign page (ISO days: 1 = Monday .. 7 = Sunday). */
-export function scheduleParts(c: Pick<CampaignRow, "send_days" | "window_start" | "window_end" | "timezone" | "daily_limit">): {
+export function scheduleParts(c: Pick<CampaignRow, "send_days" | "window_start" | "window_end" | "timezone" | "daily_limit">, t: Messages): {
   days: string;
   start: string;
   end: string;
@@ -36,24 +35,24 @@ export function scheduleParts(c: Pick<CampaignRow, "send_days" | "window_start" 
 } {
   const sorted = [...new Set(c.send_days)].sort((a, b) => a - b);
   const contiguous = sorted.length >= 3 && sorted.every((d, i) => i === 0 || d === sorted[i - 1]! + 1);
-  const name = (d: number) => WEEKDAYS_PT[d - 1] ?? String(d);
-  const days = contiguous ? `${name(sorted[0]!)} a ${name(sorted[sorted.length - 1]!)}` : sorted.map(name).join(", ");
+  const name = (d: number) => t.email.schedule.weekdays[d - 1] ?? String(d);
+  const days = contiguous ? fill(t.email.schedule.range, { from: name(sorted[0]!), to: name(sorted[sorted.length - 1]!) }) : sorted.map(name).join(", ");
   return { days, start: c.window_start.slice(0, 5), end: c.window_end.slice(0, 5), tz: c.timezone, limit: c.daily_limit };
 }
 
 /**
  * When sending resumes, for the screens: "às 09:00" when the moment is still on today's date in the campaign's time
- * zone, "segunda às 09:00" (pt-BR weekday) when it is another day. "?" for a missing or invalid instant.
+ * zone, "segunda às 09:00" (weekday in the UI language) when it is another day. "?" for a missing or invalid instant.
  */
-export function nextSendLabel(iso: string | null | undefined, tz: string, now: Date = new Date()): string {
+export function nextSendLabel(iso: string | null | undefined, tz: string, t: Messages, now: Date = new Date()): string {
   if (!iso) return "?";
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return "?";
   const day = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: tz });
-  const hhmm = at.toLocaleTimeString("pt-BR", { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-  if (day(at) === day(now)) return `às ${hhmm}`;
-  const weekday = at.toLocaleDateString("pt-BR", { timeZone: tz, weekday: "long" }).replace(/-feira$/, "");
-  return `${weekday} às ${hhmm}`;
+  const hhmm = at.toLocaleTimeString(t.intl, { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  if (day(at) === day(now)) return fill(t.email.schedule.at, { time: hhmm });
+  const weekday = at.toLocaleDateString(t.intl, { timeZone: tz, weekday: "long" }).replace(/-feira$/, "");
+  return fill(t.email.schedule.dayAt, { day: weekday, time: hhmm });
 }
 
 /** Offset of `tz` from UTC at instant `t`, in ms: the wall clock of `t` in `tz` read as UTC, minus `t`. */

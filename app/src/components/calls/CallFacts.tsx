@@ -9,10 +9,7 @@ import { Notice } from "@/components/email/bits";
 import { LevelBadge } from "@/components/qualifier/LevelBadge";
 import { Pill } from "@/components/research/controls";
 import { date, host, UNKNOWN } from "@/components/research/format";
-import { t } from "@/messages/pt";
-
-const C = t.calls;
-const LB = t.research.labels;
+import { getT } from "@/lib/i18n/server";
 
 type Proof = { url: string; title: string; excerpt: string | null; seenAt: string | null };
 
@@ -29,7 +26,10 @@ function proofs(candidates: LeadDetail["candidates"], checks: LeadDetail["checks
 }
 
 /** What the caller needs before dialing: the number (tel: link and plain text), who to ask for, the hook, the proof. */
-export function CallFacts({ detail, phone, now, blocked = false }: { detail: LeadDetail; phone: string | null; now: Date; blocked?: boolean }) {
+export async function CallFacts({ detail, phone, now, blocked = false }: { detail: LeadDetail; phone: string | null; now: Date; blocked?: boolean }) {
+  const t = await getT();
+  const C = t.calls;
+  const LB = t.research.labels;
   const { lead, candidates, checks, fields } = detail;
   const best: CandidateRow | null = candidates.find((c) => c.id === lead.best_candidate_id) ?? candidates[0] ?? null;
   const display = displayOf(best, fields);
@@ -97,7 +97,7 @@ export function CallFacts({ detail, phone, now, blocked = false }: { detail: Lea
                 <a href={p.url} target="_blank" rel="noopener noreferrer" className="text-blue underline underline-offset-2">
                   {p.title || host(p.url)}
                 </a>
-                {p.seenAt && <span className="text-muted"> · {t.research.list.seenOn} {date(p.seenAt)}</span>}
+                {p.seenAt && <span className="text-muted"> · {t.research.list.seenOn} {date(p.seenAt, t.intl)}</span>}
                 {isStaleProof(p.seenAt, now) && <span className="ml-1.5 border border-line px-1 font-mono text-[11px] text-muted">{C.stale}</span>}
                 {p.excerpt && <span className="block italic text-muted">“{p.excerpt}”</span>}
               </li>

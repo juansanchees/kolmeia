@@ -4,12 +4,9 @@ import { useState, useTransition } from "react";
 import { adjustResearch, approveResearch } from "@/app/(app)/agentes/actions";
 import type { RunRow } from "@/lib/research/rows";
 import { CHECKS_BY_RIGOR, DEFAULT_CAPS, HARD_CEILING, RIGORS, SECOND_PASS_BY_RIGOR, type Rigor } from "@/lib/research/types";
-import { t } from "@/messages/pt";
+import { useT } from "@/lib/i18n/client";
 import { DarkChoice, GhostButton, PrimaryButton } from "./controls";
 import { usd } from "./format";
-
-const P = t.research.plan;
-const C = t.research.conversation;
 
 function Row({ children, accent }: { children: React.ReactNode; accent?: boolean }) {
   return <li className={`border-t border-line py-2 text-sm ${accent ? "text-[13px] text-blue-ink" : ""}`}>{children}</li>;
@@ -17,6 +14,9 @@ function Row({ children, accent }: { children: React.ReactNode; accent?: boolean
 
 /** The plan to approve (rule P4): where, what is checked, rigor, caps, cost ceiling. */
 export function PlanCard({ run, readOnly }: { run: RunRow; readOnly: boolean }) {
+  const t = useT();
+  const P = t.research.plan;
+  const C = t.research.conversation;
   const plan = run.plan!;
   const [rigor, setRigor] = useState<Rigor>(run.rigor);
   const [maxCandidates, setMaxCandidates] = useState(run.max_candidates);
@@ -165,7 +165,7 @@ export function PlanCard({ run, readOnly }: { run: RunRow; readOnly: boolean }) 
         </div>
         <p className="text-[13px] text-muted">{P.capsHint}</p>
         <p className="text-sm font-semibold">
-          {P.costCeiling} {usd(Number.isFinite(maxCost) ? maxCost : 0)}
+          {P.costCeiling} {usd(Number.isFinite(maxCost) ? maxCost : 0, t.intl)}
         </p>
       </fieldset>
 

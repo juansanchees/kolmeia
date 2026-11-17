@@ -7,9 +7,8 @@ import { archiveAgent, finishHunter, pauseHunter, startHunter, turnOnHunter, typ
 import { SupabaseAgentStore } from "@/lib/agents/store";
 import type { FormState } from "@/lib/form-state";
 import { researchSession } from "@/lib/research/session";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 
-const E = t.agents.hunter.errors;
 const uuid = z.string().uuid();
 
 function actorOf(s: NonNullable<Awaited<ReturnType<typeof researchSession>>>): Actor {
@@ -17,6 +16,8 @@ function actorOf(s: NonNullable<Awaited<ReturnType<typeof researchSession>>>): A
 }
 
 export async function startHunterAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const t = await getT();
+  const E = t.agents.hunter.errors;
   const s = await researchSession();
   if (!s) return { status: "error", message: E.failed };
   const str = (k: string) => String(formData.get(k) ?? "");
@@ -43,6 +44,8 @@ export async function startHunterAction(_prev: FormState, formData: FormData): P
 }
 
 async function archive(agentId: string): Promise<FormState | null> {
+  const t = await getT();
+  const E = t.agents.hunter.errors;
   const s = await researchSession();
   if (!s || !uuid.safeParse(agentId).success) return { status: "error", message: E.failed };
   const res = await archiveAgent(new SupabaseAgentStore(s.supabase), actorOf(s), agentId);
@@ -70,6 +73,8 @@ export async function restartHunterAction(agentId: string): Promise<FormState> {
 
 /** "Criar agente (pausado)". The agent is born paused; nothing runs. */
 export async function finishHunterAction(agentId: string, input: { name: string; rigor: string; schedule: string }): Promise<FormState> {
+  const t = await getT();
+  const E = t.agents.hunter.errors;
   const s = await researchSession();
   if (!s || !uuid.safeParse(agentId).success) return { status: "error", message: E.failed };
   const res = await finishHunter(new SupabaseAgentStore(s.supabase), actorOf(s), agentId, input);
@@ -85,6 +90,8 @@ export async function finishHunterAction(agentId: string, input: { name: string;
 
 /** "Ligar". The database refuses a 4th running hunter (A7); the message says so. */
 export async function turnOnHunterAction(agentId: string): Promise<FormState> {
+  const t = await getT();
+  const E = t.agents.hunter.errors;
   const s = await researchSession();
   if (!s || !uuid.safeParse(agentId).success) return { status: "error", message: E.failed };
   const res = await turnOnHunter(new SupabaseAgentStore(s.supabase), actorOf(s), agentId);
@@ -98,6 +105,8 @@ export async function turnOnHunterAction(agentId: string): Promise<FormState> {
 
 /** "Pausar". */
 export async function pauseHunterAction(agentId: string): Promise<FormState> {
+  const t = await getT();
+  const E = t.agents.hunter.errors;
   const s = await researchSession();
   if (!s || !uuid.safeParse(agentId).success) return { status: "error", message: E.failed };
   const res = await pauseHunter(new SupabaseAgentStore(s.supabase), s.store, actorOf(s), agentId);

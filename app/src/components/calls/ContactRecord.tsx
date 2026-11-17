@@ -5,10 +5,9 @@ import { useState, useTransition } from "react";
 import { recordContactAction } from "@/app/(app)/leads/ligar/[id]/actions";
 import { btn, input, Notice } from "@/components/email/bits";
 import { callBackRange, chipLocal, CONTACT_EXTRA_OUTCOMES, CONTACT_OUTCOMES, type ContactOutcome } from "@/lib/calls/call-input";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 
-const C = t.calls;
-const R = t.calls.record;
 const tap = "inline-flex min-h-11 items-center justify-center border px-2 text-center text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60";
 
 /**
@@ -17,6 +16,9 @@ const tap = "inline-flex min-h-11 items-center justify-center border px-2 text-c
  * "next" opens the next lead of today's list (call screen). "Caixa postal" and "Número errado" sit in a small second row.
  */
 export function ContactRecord({ leadId, afterSave }: { leadId: string; afterSave: "stay" | "next" }) {
+  const t = useT();
+  const C = t.calls;
+  const R = t.calls.record;
   const router = useRouter();
   const [note, setNote] = useState("");
   const [pick, setPick] = useState<"talked" | "do_not_call" | null>(null);

@@ -4,12 +4,12 @@ import { useState } from "react";
 import { addToCallListAction } from "@/app/(app)/leads/lead-actions";
 import { ActionButton } from "@/components/email/ActionButton";
 import { Field } from "@/components/ui";
-import { t } from "@/messages/pt";
-
-const H = t.handoff;
+import { useT } from "@/lib/i18n/client";
 
 /** Puts the lead on the list of a running call agent. */
 export function AddToCallList({ leadId, agents }: { leadId: string; agents: { id: string; name: string }[] }) {
+  const t = useT();
+  const H = t.handoff;
   const [agentId, setAgentId] = useState(agents[0]?.id ?? "");
   if (agents.length === 0) return <p className="text-sm text-muted">{H.noCallAgent}</p>;
   return (

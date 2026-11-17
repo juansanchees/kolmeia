@@ -5,15 +5,16 @@ import { createClient } from "@/lib/supabase/server";
 import { openTasks } from "@/lib/tasks/queries";
 import { TASK_TABS, taskTab, type TaskTab } from "@/lib/tasks/view";
 import { getCurrentWorkspace } from "@/lib/workspace";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 import { Paged } from "@/components/Pager";
 
-const T = t.tasks;
-const when = (iso: string) =>
-  new Date(iso).toLocaleString("pt-BR", { timeZone: "America/New_York", weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const when = (iso: string, intl: string) =>
+  new Date(iso).toLocaleString(intl, { timeZone: "America/New_York", weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
 // Open tasks by New York day: Hoje / Atrasadas / Próximas. Read as the user (RLS: the closer sees those of her leads).
 export default async function TasksPage({ searchParams }: { searchParams: Promise<{ [k: string]: string | string[] | undefined }> }) {
+  const t = await getT();
+  const T = t.tasks;
   const supabase = await createClient();
   const workspace = await getCurrentWorkspace();
   if (!supabase || !workspace) return null;
@@ -63,7 +64,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
                   )}
                   <span className="text-sm text-muted">{r.title || T.defaultTitle[r.kind]}</span>
                 </span>
-                <span className={`font-mono text-[13px] ${tab === "late" ? "font-medium text-danger" : "text-muted"}`}>{when(r.due_at)}</span>
+                <span className={`font-mono text-[13px] ${tab === "late" ? "font-medium text-danger" : "text-muted"}`}>{when(r.due_at, t.intl)}</span>
                 <TaskButtons id={r.id} />
               </li>
             );

@@ -8,12 +8,13 @@ import { btn } from "@/components/email/bits";
 import { QualifierCapForm } from "@/components/qualifier/QualifierCapForm";
 import { TakeOverButton } from "@/components/qualifier/TakeOverButton";
 import { cardLines, type QualifierStatus } from "@/lib/qualifier/view";
-import { fill, t } from "@/messages/pt";
-
-const Q = t.qualifier;
+import { fill } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 
 /** Pausar / Ligar. Same pattern as AgentPowerButton, but the Qualificador is not an agent row. */
 function Power({ running }: { running: boolean }) {
+  const t = useT();
+  const Q = t.qualifier;
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   return (
@@ -43,7 +44,9 @@ function Power({ running }: { running: boolean }) {
 
 /** The Qualificador on top of AGENTES. Caps can be edited here or on the Gastos screen. */
 export function QualifierCard({ status, placesOn, isOwner = false }: { status: QualifierStatus; placesOn: boolean; isOwner?: boolean }) {
-  const lines = cardLines(status, placesOn);
+  const t = useT();
+  const Q = t.qualifier;
+  const lines = cardLines(status, placesOn, t);
   const running = status.status === "on";
   return (
     <section aria-labelledby="qualifier-title" className="flex flex-col gap-3 border border-line bg-surface p-4">

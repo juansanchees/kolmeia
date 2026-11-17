@@ -2,12 +2,13 @@ import { describe, expect, test } from "vitest";
 import { baselineReport } from "@/lib/leads/baseline";
 import { cardLines, citeRows } from "@/lib/profile/view";
 import type { LearnedProfile } from "@/lib/profile/types";
+import { t } from "@/messages/pt";
 
 describe("profile card", () => {
   test("the card cites up to 5 row numbers per point, in the spec's order", () => {
-    expect(citeRows([3, 1, 2])).toBe("(linhas 3, 1, 2)");
-    expect(citeRows([1, 2, 3, 4, 5])).toBe("(linhas 1, 2, 3, 4, 5)");
-    expect(citeRows([1, 2, 3, 4, 5, 6, 7])).toBe("(linhas 1, 2, 3, 4, 5…)");
+    expect(citeRows([3, 1, 2], t)).toBe("(linhas 3, 1, 2)");
+    expect(citeRows([1, 2, 3, 4, 5], t)).toBe("(linhas 1, 2, 3, 4, 5)");
+    expect(citeRows([1, 2, 3, 4, 5, 6, 7], t)).toBe("(linhas 1, 2, 3, 4, 5…)");
     const p: LearnedProfile = {
       points: [
         { key: "where_to_find", text: "Listas de associações", rows: [9] },
@@ -18,7 +19,7 @@ describe("profile card", () => {
       filter: { companyTypes: [], towns: [] },
       searchQueries: [],
     };
-    expect(cardLines(p).map((l) => [l.key, l.label, l.text, l.cite])).toEqual([
+    expect(cardLines(p, t).map((l) => [l.key, l.label, l.text, l.cite])).toEqual([
       ["type", "Tipo", "Construtoras", "(linhas 1)"],
       ["region", "Região", "Worcester", "(linhas 1, 2, 3, 4, 5…)"],
       ["region", "Região", "Cape Cod", "(linhas 7)"],

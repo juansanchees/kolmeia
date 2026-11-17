@@ -8,12 +8,13 @@ import { btn } from "@/components/email/bits";
 import { Field, TextArea, TextInput } from "@/components/ui";
 import type { BriefDraft } from "@/lib/leads/brief";
 import type { Person } from "@/lib/team/types";
-import { fill, t } from "@/messages/pt";
-
-const H = t.handoff;
+import { fill } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 
 /** "Passar pra closer": the draft is editable, the proof links are shown as they are. Values stay after an error. */
 export function HandOffForm({ leadId, closers, draft }: { leadId: string; closers: Person[]; draft: BriefDraft }) {
+  const t = useT();
+  const H = t.handoff;
   const router = useRouter();
   const list = closers.filter((p) => p.role === "closer");
   const [closerId, setCloserId] = useState(list[0]?.user_id ?? "");

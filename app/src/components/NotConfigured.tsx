@@ -1,6 +1,7 @@
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 
-export function NotConfigured() {
+export async function NotConfigured() {
+  const t = await getT();
   return (
     <main className="mx-auto max-w-xl px-4 py-16">
       <div role="status" className="border border-line bg-surface p-6">

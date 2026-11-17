@@ -7,12 +7,13 @@ import { PrimaryButton } from "@/components/research/controls";
 import { input } from "@/components/email/bits";
 import type { Person } from "@/lib/team/types";
 import { TEMPERATURES, type Temperature } from "@/lib/research/types";
-import { fill, t } from "@/messages/pt";
-
-const C = t.callAgent;
+import { fill } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 
 /** The 3 questions of the Ligação agent (spec §6.3): which leads, how many a day, who calls. Controlled: values stay after an error. */
 export function CallAgentForm({ people }: { people: Person[] }) {
+  const t = useT();
+  const C = t.callAgent;
   const router = useRouter();
   const [name, setName] = useState<string>(C.defaultName);
   const [minLevel, setMinLevel] = useState(1);

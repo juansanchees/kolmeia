@@ -11,13 +11,13 @@ const emailBrief = { who: "Ana, owner", what_they_said: "Asked for a quote.", ne
 
 describe("draftBrief", () => {
   it("uses the e-mail brief when there is one, else ask-for and call notes; at most 4 safe proof URLs; model manual", () => {
-    const withEmail = draftBrief({ company: "Acme", askForName: "Bo", askForTitle: "PM", emailBrief, talkedNotes: "ignored", proofUrls: [] });
+    const withEmail = draftBrief({ company: "Acme", askForName: "Bo", askForTitle: "PM", emailBrief, talkedNotes: "ignored", proofUrls: [] }, t);
     expect(withEmail.who).toBe("Ana, owner");
     expect(withEmail.what_they_said).toBe("Asked for a quote.");
     expect(withEmail.model).toBe("manual");
 
     const urls = ["https://a.example.com/x", "https://b.example.com", "javascript:alert(1)", "http://10.0.0.1/x", "https://c.example.com", "https://d.example.com", "https://e.example.com"];
-    const manual = draftBrief({ company: "Acme", askForName: "Bo", askForTitle: "PM", emailBrief: null, talkedNotes: "  Liked the offer.  ", proofUrls: urls });
+    const manual = draftBrief({ company: "Acme", askForName: "Bo", askForTitle: "PM", emailBrief: null, talkedNotes: "  Liked the offer.  ", proofUrls: urls }, t);
     expect(manual.who).toContain("Bo");
     expect(manual.who).toContain("PM");
     expect(manual.who).toContain("Acme");
@@ -29,13 +29,13 @@ describe("draftBrief", () => {
   });
 
   it("cuts strings to the SQL limits", () => {
-    const b = draftBrief({ company: "x".repeat(900), askForName: null, askForTitle: null, emailBrief: null, talkedNotes: "y".repeat(2000), proofUrls: [] });
+    const b = draftBrief({ company: "x".repeat(900), askForName: null, askForTitle: null, emailBrief: null, talkedNotes: "y".repeat(2000), proofUrls: [] }, t);
     expect(b.who.length).toBeLessThanOrEqual(600);
     expect(b.what_they_said.length).toBeLessThanOrEqual(800);
   });
 
   it("a lead that never got an e-mail can be handed off", () => {
-    const b = draftBrief({ company: "Acme", askForName: null, askForTitle: null, emailBrief: null, talkedNotes: null, proofUrls: [] });
+    const b = draftBrief({ company: "Acme", askForName: null, askForTitle: null, emailBrief: null, talkedNotes: null, proofUrls: [] }, t);
     expect(b.what_they_said).toBe(t.handoff.noTalkYet);
     expect(b.who).toBe("Acme");
     expect(parseCloserBrief(b)).not.toBeNull();

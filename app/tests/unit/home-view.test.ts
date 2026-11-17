@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { t } from "@/messages/pt";
 import { dateLineOf, firstNameOf, funnelOf, greetingOf, isReady, parsePeriod, readyLine, todayCounts, topOrigins } from "@/lib/home/view";
 import type { HomeRow } from "@/lib/home/rule";
 
@@ -17,7 +18,7 @@ function row(id: string, o: { status?: string; contacted?: boolean; dnc?: boolea
 }
 
 describe("greeting by New York hour", () => {
-  const at = (iso: string) => greetingOf(new Date(iso));
+  const at = (iso: string) => greetingOf(new Date(iso), t);
   test("morning, afternoon, evening, night", () => {
     expect(at("2026-11-17T15:00:00Z")).toBe("Bom dia"); // 10:00 NY
     expect(at("2026-11-17T16:59:00Z")).toBe("Bom dia"); // 11:59
@@ -35,9 +36,9 @@ describe("greeting by New York hour", () => {
 });
 
 test("date line in pt-BR, New York day, upper case", () => {
-  expect(dateLineOf(NOW)).toBe("TERÇA, 17 DE NOVEMBRO");
-  expect(dateLineOf(new Date("2026-11-18T03:00:00Z"))).toBe("TERÇA, 17 DE NOVEMBRO"); // still the 17th in NY
-  expect(dateLineOf(new Date("2026-11-21T15:00:00Z"))).toBe("SÁBADO, 21 DE NOVEMBRO");
+  expect(dateLineOf(NOW, t)).toBe("TERÇA, 17 DE NOVEMBRO");
+  expect(dateLineOf(new Date("2026-11-18T03:00:00Z"), t)).toBe("TERÇA, 17 DE NOVEMBRO"); // still the 17th in NY
+  expect(dateLineOf(new Date("2026-11-21T15:00:00Z"), t)).toBe("SÁBADO, 21 DE NOVEMBRO");
 });
 
 test("first name: profile name, else the e-mail before the @", () => {
@@ -49,9 +50,9 @@ test("first name: profile name, else the e-mail before the @", () => {
 });
 
 test("the ready line", () => {
-  expect(readyLine(0)).toBe("Nenhuma empresa pronta para ligar hoje.");
-  expect(readyLine(1)).toBe("Hoje você tem 1 empresa pronta para ligar.");
-  expect(readyLine(1641)).toBe("Hoje você tem 1.641 empresas prontas para ligar.");
+  expect(readyLine(0, t)).toBe("Nenhuma empresa pronta para ligar hoje.");
+  expect(readyLine(1, t)).toBe("Hoje você tem 1 empresa pronta para ligar.");
+  expect(readyLine(1641, t)).toBe("Hoje você tem 1.641 empresas prontas para ligar.");
 });
 
 describe("HOJE counts", () => {
@@ -90,18 +91,18 @@ describe("funnel period", () => {
     row("x1", { status: "won", seen: "2026-11-12T12:00:00Z" }),
     row("x2", { status: "lost", seen: "2026-02-12T12:00:00Z" }),
   ];
-  const n = (p: "7" | "30" | "all") => funnelOf(rows, p, NOW).map((t) => t.n);
+  const n = (p: "7" | "30" | "all") => funnelOf(rows, p, NOW, t).map((t) => t.n);
   test("Tudo counts everyone by stage; 30 and 7 days by entry date (New York midnight)", () => {
     expect(n("all")).toEqual([3, 2, 1, 1, 2]);
     expect(n("30")).toEqual([2, 1, 1, 1, 1]); // n3, c2, x2 entered before 19/10
     expect(n("7")).toEqual([1, 1, 1, 1, 1]); // since 11/11 00:00 NY: n1 (16/11), c1 (14/11), r1, m1, x1 (12/11)
   });
   test("notes: Novo splits by type, the others are a share of the period's leads, never invented", () => {
-    const all = funnelOf(rows, "all", NOW);
+    const all = funnelOf(rows, "all", NOW, t);
     expect(all[0].note).toBe("2 grandes · 1 residenciais");
     expect(all[1].note).toBe("22% do total"); // 2 of 9
     expect(all[4].note).toBe("ganhos e perdidos");
-    expect(funnelOf([], "all", NOW)[1].note).toBe("—");
+    expect(funnelOf([], "all", NOW, t)[1].note).toBe("—");
   });
   test("period param: anything else is Tudo", () => {
     expect(["7", "30", "all", "90", undefined, ["7"]].map(parsePeriod)).toEqual(["7", "30", "all", "all", "all", "all"]);

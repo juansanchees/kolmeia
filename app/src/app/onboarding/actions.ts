@@ -4,9 +4,10 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { workspaceNameSchema } from "@/lib/profile-schema";
 import type { FormState } from "@/lib/form-state";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 
 export async function createWorkspace(_prev: FormState, formData: FormData): Promise<FormState> {
+  const t = await getT();
   const parsed = workspaceNameSchema.safeParse(formData.get("name"));
   if (!parsed.success) return { status: "error", fieldErrors: { name: t.onboarding.errors.invalid } };
 

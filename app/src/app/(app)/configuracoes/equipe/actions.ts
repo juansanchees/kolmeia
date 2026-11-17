@@ -8,7 +8,7 @@ import { configuredPublicOrigin } from "@/lib/email/config";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace, getUser } from "@/lib/workspace";
 import type { FormState } from "@/lib/form-state";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 
 const inviteSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -23,6 +23,7 @@ async function requireOwner() {
 }
 
 export async function createInviteAction(_prev: FormState, form: FormData): Promise<FormState & { link?: string }> {
+  const t = await getT();
   const workspace = await requireOwner();
   const parsed = inviteSchema.safeParse({ name: form.get("name"), email: form.get("email") });
   if (!parsed.success) return { status: "error", message: t.team.invalid };
@@ -55,6 +56,7 @@ export async function revokeInviteAction(id: string): Promise<void> {
 }
 
 export async function removeMemberAction(userId: string): Promise<FormState> {
+  const t = await getT();
   const workspace = await requireOwner();
   const user = await getUser();
   if (!z.string().uuid().safeParse(userId).success) return { status: "error", message: t.team.generic };

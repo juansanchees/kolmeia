@@ -2,12 +2,12 @@
 
 import { useState, useTransition } from "react";
 import { controlResearch } from "@/app/(app)/agentes/actions";
-import { t } from "@/messages/pt";
+import { useT } from "@/lib/i18n/client";
 import { GhostButton } from "./controls";
 
-const R = t.research.running;
-
 export function RunControls({ runId, paused }: { runId: string; paused: boolean }) {
+  const t = useT();
+  const R = t.research.running;
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const run = (action: "pause" | "resume" | "cancel") =>

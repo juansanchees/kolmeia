@@ -6,17 +6,14 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import { createResearchList, setDecision } from "@/app/(app)/agentes/actions";
 import type { CandidateRow, JobRow, RunRow } from "@/lib/research/rows";
 import { TEMPERATURE_RULE } from "@/lib/research/rules";
-import { byTemperature, coverage, inTab, JOB_SHEET_COLUMNS, SHEET_COLUMNS, TABS, toCsv, toJobsCsv, type Column, type JobColumn, type Tab } from "@/lib/research/sheet";
+import { byTemperature, coverage, inTab, jobSheetColumns, sheetColumns, TABS, toCsv, toJobsCsv, type Column, type JobColumn, type Tab } from "@/lib/research/sheet";
 import type { CheckWithEvidence } from "@/lib/research/store";
 import { TEMPERATURES, type Decision } from "@/lib/research/types";
-import { fill, t } from "@/messages/pt";
+import { fill, type Messages } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 import { DarkChoice, GhostButton, Pill, PrimaryButton } from "./controls";
 import { count, date, host, money, moneyFull, UNKNOWN } from "./format";
 import { Hook, ProofList } from "./proof";
-
-const L = t.research.list;
-const LB = t.research.labels;
-const J = t.research.jobs;
 
 type Props = {
   run: Pick<RunRow, "id" | "title" | "region_text" | "status" | "is_partial" | "partial_reason" | "limits_notes">;
@@ -28,6 +25,9 @@ type Props = {
 
 /** Prototypes "Lista" (Fichas) and "Planilha": the same list two ways, with proof, limits and coverage. */
 export function Results({ run, candidates, checks, jobs = [] }: Props) {
+  const t = useT();
+  const L = t.research.list;
+  const LB = t.research.labels;
   const now = useMemo(() => new Date(), []);
   const [mode, setMode] = useState<"cards" | "sheet">("cards");
   const [tab, setTab] = useState<Tab>("call");
@@ -94,7 +94,7 @@ export function Results({ run, candidates, checks, jobs = [] }: Props) {
               <span className="font-mono text-xs text-muted">{LB.temperatureTitle[x]}</span>
               <span className="font-display text-4xl font-bold leading-none">{temps[x]}</span>
               <span className="text-[13px] text-muted">
-                {fill(L.tempRule[x], { large: new Intl.NumberFormat("pt-BR").format(TEMPERATURE_RULE.largeJobUsd), days: TEMPERATURE_RULE.veryRecentDays, reviews: TEMPERATURE_RULE.strongPresenceReviews })}
+                {fill(L.tempRule[x], { large: new Intl.NumberFormat(t.intl).format(TEMPERATURE_RULE.largeJobUsd), days: TEMPERATURE_RULE.veryRecentDays, reviews: TEMPERATURE_RULE.strongPresenceReviews })}
               </span>
             </div>
           ))}
@@ -161,6 +161,9 @@ export function Results({ run, candidates, checks, jobs = [] }: Props) {
 
 // ---------------------------------------------------------------- card
 function Card({ c, selected, onSelect, onDecide }: { c: CandidateRow; selected: boolean; onSelect: () => void; onDecide: (d: Decision) => void }) {
+  const t = useT();
+  const L = t.research.list;
+  const LB = t.research.labels;
   return (
     <article className={`flex flex-col gap-3.5 border bg-surface p-4 ${selected ? "border-blue shadow-[inset_3px_0_0_var(--color-blue)]" : "border-line"}`}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -207,9 +210,9 @@ function Card({ c, selected, onSelect, onDecide }: { c: CandidateRow; selected: 
 
       <dl className="m-0 grid grid-cols-3 gap-2 border-y border-line py-2.5">
         {[
-          [L.permits, count(c.permit_count)],
-          [L.totalValue, money(c.total_value_usd)],
-          [L.lastPermit, date(c.last_permit_date)],
+          [L.permits, count(c.permit_count, t.intl)],
+          [L.totalValue, money(c.total_value_usd, t.intl)],
+          [L.lastPermit, date(c.last_permit_date, t.intl)],
         ].map(([k, v]) => (
           <div key={k} className="flex min-w-0 flex-col">
             <dt className="font-mono text-xs text-muted">{k}</dt>
@@ -220,7 +223,7 @@ function Card({ c, selected, onSelect, onDecide }: { c: CandidateRow; selected: 
 
       {c.biggest_job_address && (
         <p className="text-sm">
-          <span className="font-semibold">{L.biggestJob}</span> {c.biggest_job_address} · {money(c.biggest_job_value_usd)}
+          <span className="font-semibold">{L.biggestJob}</span> {c.biggest_job_address} · {money(c.biggest_job_value_usd, t.intl)}
           {c.biggest_job_description ? ` · ${c.biggest_job_description}` : ""}
         </p>
       )}
@@ -260,6 +263,8 @@ function Card({ c, selected, onSelect, onDecide }: { c: CandidateRow; selected: 
 }
 
 function Decide({ c, onDecide, extra }: { c: CandidateRow; onDecide: (d: Decision) => void; extra?: React.ReactNode }) {
+  const t = useT();
+  const L = t.research.list;
   return (
     <div role="group" aria-label={c.name} className="flex flex-wrap gap-2">
       <button
@@ -285,6 +290,8 @@ function Decide({ c, onDecide, extra }: { c: CandidateRow; onDecide: (d: Decisio
 
 // ---------------------------------------------------------------- proof, limits, coverage
 function Limits({ notes }: { notes: RunRow["limits_notes"] }) {
+  const t = useT();
+  const L = t.research.list;
   return (
     <section aria-labelledby="limits-title" className="flex flex-col gap-2 border border-line bg-surface p-4">
       <h2 id="limits-title" className="font-mono text-xs font-normal normal-case tracking-normal text-muted">
@@ -305,6 +312,8 @@ function Limits({ notes }: { notes: RunRow["limits_notes"] }) {
 }
 
 function Coverage({ rows }: { rows: CandidateRow[] }) {
+  const t = useT();
+  const L = t.research.list;
   const c = coverage(rows);
   const line = (label: string, n: number) => (
     <li className="flex justify-between gap-2 border-t border-line py-1.5 text-sm">
@@ -330,16 +339,19 @@ function Coverage({ rows }: { rows: CandidateRow[] }) {
 }
 
 // ---------------------------------------------------------------- sheet
-function cellText(col: Column, c: CandidateRow): string {
+function cellText(col: Column, c: CandidateRow, t: Messages): string {
   const v = col.get(c);
   if (v === null || v === undefined || v === "") return "";
-  if (col.kind === "money") return moneyFull(Number(v));
-  if (col.kind === "date") return date(String(v));
-  if (col.kind === "number") return new Intl.NumberFormat("pt-BR").format(Number(v));
+  if (col.kind === "money") return moneyFull(Number(v), t.intl);
+  if (col.kind === "date") return date(String(v), t.intl);
+  if (col.kind === "number") return new Intl.NumberFormat(t.intl).format(Number(v));
   return String(v);
 }
 
 function Sheet({ rows, checksBy, onDecide }: { rows: CandidateRow[]; checksBy: Map<string, CheckWithEvidence[]>; onDecide: (id: string, d: Decision) => void }) {
+  const t = useT();
+  const L = t.research.list;
+  const LB = t.research.labels;
   const now = useMemo(() => new Date(), []);
   const [q, setQ] = useState("");
   const [ft, setFt] = useState("");
@@ -348,6 +360,7 @@ function Sheet({ rows, checksBy, onDecide }: { rows: CandidateRow[]; checksBy: M
   const [sort, setSort] = useState<{ id: string; dir: 1 | -1 } | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const detailRef = useRef<HTMLElement>(null);
+  const SHEET_COLUMNS = useMemo(() => sheetColumns(t), [t]);
 
   const cols = SHEET_COLUMNS.filter((c) => all || c.compact);
   const view = useMemo(() => {
@@ -361,11 +374,11 @@ function Sheet({ rows, checksBy, onDecide }: { rows: CandidateRow[]; checksBy: M
         const x = col.get(a);
         const y = col.get(b);
         if (numeric) return ((x === null ? -Infinity : Number(x)) - (y === null ? -Infinity : Number(y))) * sort.dir;
-        return String(x ?? "").localeCompare(String(y ?? ""), "pt-BR") * sort.dir;
+        return String(x ?? "").localeCompare(String(y ?? ""), t.intl) * sort.dir;
       });
     }
     return out;
-  }, [rows, q, ft, fc, sort]);
+  }, [rows, q, ft, fc, sort, SHEET_COLUMNS, t.intl]);
 
   const { pageItems: viewPage, pager } = usePaged(view, JSON.stringify([q, ft, fc, sort]));
   const toggleSort = (col: Column) =>
@@ -458,7 +471,7 @@ function Sheet({ rows, checksBy, onDecide }: { rows: CandidateRow[]; checksBy: M
                 className={`cursor-pointer odd:bg-surface even:bg-[#fafbfc] hover:bg-blue-wash ${open === c.id ? "!bg-blue-soft" : ""}`}
               >
                 {cols.map((col, i) => {
-                  const text = cellText(col, c);
+                  const text = cellText(col, c, t);
                   const numeric = col.kind === "number" || col.kind === "money";
                   return (
                     <td
@@ -498,7 +511,7 @@ function Sheet({ rows, checksBy, onDecide }: { rows: CandidateRow[]; checksBy: M
           <dl className="m-0 grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-x-6">
             {SHEET_COLUMNS.filter((col) => col.id !== "name" && col.id !== "hook").map((col) => {
               const v = col.get(openC);
-              const text = cellText(col, openC);
+              const text = cellText(col, openC, t);
               return (
                 <div key={col.id} className="flex min-w-0 flex-col gap-0.5 border-b border-line py-2">
                   <dt className="font-mono text-xs text-muted">{col.header}</dt>
@@ -527,15 +540,18 @@ function Sheet({ rows, checksBy, onDecide }: { rows: CandidateRow[]; checksBy: M
 }
 
 // ---------------------------------------------------------------- jobs without a builder (G10)
-function jobCell(col: JobColumn, j: JobRow): string {
+function jobCell(col: JobColumn, j: JobRow, t: Messages): string {
   const v = col.get(j);
   if (v === null || v === undefined || v === "") return "";
-  if (col.kind === "money") return moneyFull(Number(v));
-  if (col.kind === "date") return date(String(v));
+  if (col.kind === "money") return moneyFull(Number(v), t.intl);
+  if (col.kind === "date") return date(String(v), t.intl);
   return String(v);
 }
 
 function Jobs({ jobs, mode }: { jobs: JobRow[]; mode: "cards" | "sheet" }) {
+  const t = useT();
+  const L = t.research.list;
+  const J = t.research.jobs;
   const { pageItems, pager } = usePaged(jobs);
   if (jobs.length === 0) return <p className="border border-line bg-surface p-4 text-sm text-muted">{J.empty}</p>;
   return (
@@ -548,13 +564,13 @@ function Jobs({ jobs, mode }: { jobs: JobRow[]; mode: "cards" | "sheet" }) {
               <span className="text-[17px] font-semibold">{j.address ?? j.project_name}</span>
               {j.address && j.project_name && <span className="text-sm">{j.project_name}</span>}
               <span className="text-sm text-muted">
-                {[j.job_type, j.declared_value_usd !== null ? money(j.declared_value_usd) : null, j.job_date ? date(j.job_date) : null].filter(Boolean).join(" · ") || UNKNOWN}
+                {[j.job_type, j.declared_value_usd !== null ? money(j.declared_value_usd, t.intl) : null, j.job_date ? date(j.job_date, t.intl) : null].filter(Boolean).join(" · ") || UNKNOWN}
               </span>
               <span className="text-[12px] text-muted">
                 <a href={j.source_url} target="_blank" rel="noopener noreferrer" className="text-blue underline underline-offset-2">
                   {host(j.source_url)}
                 </a>{" "}
-                · {L.seenOn} {date(j.seen_at)}
+                · {L.seenOn} {date(j.seen_at, t.intl)}
                 {j.excerpt && <span className="block italic">“{j.excerpt}”</span>}
               </span>
             </li>
@@ -565,7 +581,7 @@ function Jobs({ jobs, mode }: { jobs: JobRow[]; mode: "cards" | "sheet" }) {
           <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
             <thead>
               <tr>
-                {JOB_SHEET_COLUMNS.map((col) => (
+                {jobSheetColumns(t).map((col) => (
                   <th key={col.id} scope="col" className="sticky top-0 whitespace-nowrap border-b border-ink bg-ground px-3 py-2.5 text-left font-mono text-xs font-medium">
                     {col.header}
                   </th>
@@ -575,8 +591,8 @@ function Jobs({ jobs, mode }: { jobs: JobRow[]; mode: "cards" | "sheet" }) {
             <tbody>
               {pageItems.map((j) => (
                 <tr key={j.id} className="odd:bg-surface even:bg-[#fafbfc]">
-                  {JOB_SHEET_COLUMNS.map((col) => {
-                    const text = jobCell(col, j);
+                  {jobSheetColumns(t).map((col) => {
+                    const text = jobCell(col, j, t);
                     return (
                       <td key={col.id} title={text || undefined} className="max-w-[320px] overflow-hidden text-ellipsis whitespace-nowrap border-b border-line px-3 py-2">
                         {col.kind === "url" && text ? (
@@ -602,12 +618,14 @@ function Jobs({ jobs, mode }: { jobs: JobRow[]; mode: "cards" | "sheet" }) {
 
 // ---------------------------------------------------------------- bottom bar
 function BottomBar({ runId, kept, tabRows, jobs, tab }: { runId: string; kept: number; tabRows: CandidateRow[]; jobs: JobRow[]; tab: Tab }) {
+  const t = useT();
+  const L = t.research.list;
   const [name, setName] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
 
   const download = () => {
-    const blob = new Blob([tab === "jobs" ? toJobsCsv(jobs) : toCsv(tabRows)], { type: "text/csv;charset=utf-8" });
+    const blob = new Blob([tab === "jobs" ? toJobsCsv(jobs, t) : toCsv(tabRows, sheetColumns(t))], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;

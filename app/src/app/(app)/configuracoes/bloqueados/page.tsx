@@ -7,12 +7,12 @@ import { ActionButton } from "@/components/email/ActionButton";
 import { Badge, Card, CardTitle } from "@/components/email/bits";
 import { SuppressionForm } from "@/components/email/forms";
 import { when } from "@/components/email/format";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 import { Paged } from "@/components/Pager";
 
-const B = t.email.blocked;
-
 export default async function BlockedPage() {
+  const t = await getT();
+  const B = t.email.blocked;
   const s = await emailSession();
   if (!s) return null;
   if (!isSender(s.workspace.role)) notFound();
@@ -41,7 +41,7 @@ export default async function BlockedPage() {
                 <span className="flex flex-wrap items-center gap-1.5">
                   <Badge>{B.kind[r.kind]}</Badge>
                   <Badge tone={r.reason === "manual" ? "cold" : "warn"}>{B.reasons[r.reason]}</Badge>
-                  <span className="font-mono text-xs text-muted">{when(r.created_at)}</span>
+                  <span className="font-mono text-xs text-muted">{when(r.created_at, t.intl)}</span>
                 </span>
                 {r.note && <span className="text-[13px] text-muted">{r.note}</span>}
               </span>

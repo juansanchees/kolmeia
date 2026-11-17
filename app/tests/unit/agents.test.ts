@@ -82,8 +82,8 @@ describe("F2 agents", () => {
       next_run_at: null, paused_reason: null, archived_at: null, created_at: "", updated_at: "", ...o,
     });
     const now = new Date("2026-11-14T12:00:00Z");
-    expect(agentRowView(row({}), now)).toMatchObject({ status: "rascunho", metric: t.agents.metric.draft, cta: "Continuar", href: "/agentes/a1" });
-    expect(agentRowView(row({ status: "paused" }), now)).toMatchObject({ type: "Caçador", status: "pausado", metric: t.agents.metric.neverRan, cta: "Abrir" });
+    expect(agentRowView(row({}), now, t)).toMatchObject({ status: "rascunho", metric: t.agents.metric.draft, cta: "Continuar", href: "/agentes/a1" });
+    expect(agentRowView(row({ status: "paused" }), now, t)).toMatchObject({ type: "Caçador", status: "pausado", metric: t.agents.metric.neverRan, cta: "Abrir" });
   });
 
   test("agentRowView: next search, searching now, the pause reason, done", () => {
@@ -93,14 +93,14 @@ describe("F2 agents", () => {
     });
     const now = new Date("2026-11-14T12:00:00Z");
     const future = "2026-11-21T12:00:00Z";
-    expect(agentRowView(row({ next_run_at: future }), now).metric).toBe(t.agents.detail.nextRun.replace("{when}", when(future)));
-    expect(agentRowView(row({ next_run_at: "2026-11-14T11:00:00Z" }), now).metric).toBe(t.agents.metric.searching);
-    expect(agentRowView(row({ next_run_at: null }), now).metric).toBe(t.agents.metric.searching);
-    expect(agentRowView(row({ status: "paused", paused_reason: "daily_cap" }), now).metric).toBe(t.agents.paused.daily_cap);
-    expect(agentRowView(row({ status: "paused", paused_reason: "error" }), now).metric).toBe(t.agents.paused.error);
-    expect(agentRowView(row({ status: "paused" }), now).metric).toBe(t.agents.metric.neverRan);
-    expect(agentRowView(row({ status: "paused", next_run_at: "2026-11-10T12:00:00Z" }), now).metric).toBe(t.agents.metric.pausedByYou);
-    expect(agentRowView(row({ status: "done" }), now).metric).toBe(t.agents.metric.done);
+    expect(agentRowView(row({ next_run_at: future }), now, t).metric).toBe(t.agents.detail.nextRun.replace("{when}", when(future, t.intl)));
+    expect(agentRowView(row({ next_run_at: "2026-11-14T11:00:00Z" }), now, t).metric).toBe(t.agents.metric.searching);
+    expect(agentRowView(row({ next_run_at: null }), now, t).metric).toBe(t.agents.metric.searching);
+    expect(agentRowView(row({ status: "paused", paused_reason: "daily_cap" }), now, t).metric).toBe(t.agents.paused.daily_cap);
+    expect(agentRowView(row({ status: "paused", paused_reason: "error" }), now, t).metric).toBe(t.agents.paused.error);
+    expect(agentRowView(row({ status: "paused" }), now, t).metric).toBe(t.agents.metric.neverRan);
+    expect(agentRowView(row({ status: "paused", next_run_at: "2026-11-10T12:00:00Z" }), now, t).metric).toBe(t.agents.metric.pausedByYou);
+    expect(agentRowView(row({ status: "done" }), now, t).metric).toBe(t.agents.metric.done);
   });
 
   test("agentMetrics sums runs, companies, verified, refuted and AI cost with the setup", () => {

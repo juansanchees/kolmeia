@@ -1,14 +1,16 @@
+"use client";
+
 import { date, host } from "@/components/research/format";
 import { EmailBadge } from "@/components/leads/EmailBadge";
 import type { EmailQuality } from "@/lib/leads/email-quality";
 import type { LeadFieldRow } from "@/lib/leads/types";
 import { sanitizeUrl } from "@/lib/safe-url";
-import { t } from "@/messages/pt";
-
-const L = t.leads;
+import { useT } from "@/lib/i18n/client";
 
 /** Every value of a lead with where it came from. Values are text only (a "=HYPERLINK" cell is just text here). */
 export function FieldList({ fields, importNames, emailQuality = {} }: { fields: LeadFieldRow[]; importNames: Record<string, string>; emailQuality?: Record<string, EmailQuality> }) {
+  const t = useT();
+  const L = t.leads;
   if (fields.length === 0) return null;
   return (
     <ul className="m-0 flex list-none flex-col border border-line p-0">
@@ -35,7 +37,7 @@ export function FieldList({ fields, importNames, emailQuality = {} }: { fields: 
               ) : (
                 source
               )}{" "}
-              · {date(f.seen_at)}
+              · {date(f.seen_at, t.intl)}
             </span>
             {f.status === "confirmed" && <span className="font-mono text-xs text-ok" title={L.confirmed}>✓ {L.confirmed}</span>}
             {f.status === "unverified" && <span className="font-mono text-xs text-muted">⚠ {L.unproven}</span>}

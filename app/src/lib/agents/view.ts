@@ -1,9 +1,9 @@
 import { when } from "@/components/email/format";
 import type { RunRow } from "@/lib/research/rows";
-import { t } from "@/messages/pt";
+import type { Messages } from "@/lib/i18n";
 import type { AgentRow } from "./types";
 
-function metricOf(a: AgentRow, now: Date, listSize?: number): string {
+function metricOf(a: AgentRow, now: Date, t: Messages, listSize?: number): string {
   // A call agent has no runs: its number is the size of today's list (when the page knows it).
   if (a.type === "call" && listSize !== undefined && a.status !== "draft") return `${listSize} ${t.callAgent.metrics.inList}`;
   switch (a.status) {
@@ -11,7 +11,7 @@ function metricOf(a: AgentRow, now: Date, listSize?: number): string {
       return t.agents.metric.draft;
     case "running":
       return a.next_run_at && new Date(a.next_run_at).getTime() > now.getTime()
-        ? t.agents.detail.nextRun.replace("{when}", when(a.next_run_at))
+        ? t.agents.detail.nextRun.replace("{when}", when(a.next_run_at, t.intl))
         : t.agents.metric.searching;
     case "paused":
       return a.paused_reason ? t.agents.paused[a.paused_reason] : a.next_run_at ? t.agents.metric.pausedByYou : t.agents.metric.neverRan;
@@ -20,12 +20,12 @@ function metricOf(a: AgentRow, now: Date, listSize?: number): string {
   }
 }
 
-export function agentRowView(a: AgentRow, now: Date, opts: { listSize?: number } = {}): { href: string; type: string; status: string; metric: string; cta: string } {
+export function agentRowView(a: AgentRow, now: Date, t: Messages, opts: { listSize?: number } = {}): { href: string; type: string; status: string; metric: string; cta: string } {
   return {
     href: `/agentes/${a.id}`,
     type: t.agents.types[a.type],
     status: t.agents.statuses[a.status],
-    metric: metricOf(a, now, opts.listSize),
+    metric: metricOf(a, now, t, opts.listSize),
     cta: a.status === "draft" ? t.agents.continue : t.agents.open,
   };
 }

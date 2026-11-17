@@ -2,18 +2,18 @@ import Link from "next/link";
 import { Badge } from "@/components/email/bits";
 import { usd } from "@/components/research/format";
 import type { SourceRow, SpendBy, SpendRow } from "@/lib/spend/view";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 import { Paged } from "@/components/Pager";
 
-const S = t.spend;
-
 /** Small costs keep their fractions of a cent: nothing rounds down to "0,00". */
-export function money(v: number): string {
-  return v > 0 && v < 0.01 ? new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(v) : usd(v);
+export function money(v: number, intl: string): string {
+  return v > 0 && v < 0.01 ? new Intl.NumberFormat(intl, { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(v) : usd(v, intl);
 }
 
 /** One row per group; open a row to see the leads behind it with their cost. */
-export function SpendTable({ rows, by }: { rows: SpendRow[]; by: SpendBy }) {
+export async function SpendTable({ rows, by }: { rows: SpendRow[]; by: SpendBy }) {
+  const t = await getT();
+  const S = t.spend;
   if (rows.length === 0) return <p className="text-sm text-muted">{S.empty}</p>;
   return (
     <Paged as="ul" resetKey={by} className="m-0 flex list-none flex-col border border-line bg-surface p-0">
@@ -22,7 +22,7 @@ export function SpendTable({ rows, by }: { rows: SpendRow[]; by: SpendBy }) {
           <details>
             <summary className="grid min-h-11 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-3.5 py-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1fr)_auto]">
               <span className="min-w-0 truncate text-sm font-semibold">{r.label}</span>
-              <span className="text-right font-mono text-sm font-semibold md:order-last">US$ {money(r.usd)}</span>
+              <span className="text-right font-mono text-sm font-semibold md:order-last">US$ {money(r.usd, t.intl)}</span>
               <span className="col-span-2 flex flex-wrap gap-x-4 gap-y-0.5 text-[13px] text-muted md:contents">
                 <span className="truncate">{by !== "agent" && r.agent}</span>
                 <span className="truncate">{by !== "step" && r.step}</span>
@@ -44,7 +44,7 @@ export function SpendTable({ rows, by }: { rows: SpendRow[]; by: SpendBy }) {
                       <Link href={`/leads/${l.id}`} className="min-w-0 truncate text-blue underline underline-offset-4">
                         {l.name}
                       </Link>
-                      <span className="font-mono">US$ {money(l.usd)}</span>
+                      <span className="font-mono">US$ {money(l.usd, t.intl)}</span>
                     </li>
                   ))}
                 </Paged>
@@ -58,7 +58,9 @@ export function SpendTable({ rows, by }: { rows: SpendRow[]; by: SpendBy }) {
 }
 
 /** F3d's paid sources, one line per provider and kind. */
-export function SourceSpend({ rows }: { rows: SourceRow[] }) {
+export async function SourceSpend({ rows }: { rows: SourceRow[] }) {
+  const t = await getT();
+  const S = t.spend;
   return (
     <section aria-labelledby="src-title" className="flex flex-col gap-2">
       <h2 id="src-title" className="text-2xl">
@@ -76,7 +78,7 @@ export function SourceSpend({ rows }: { rows: SourceRow[] }) {
                   <span className="text-sm font-semibold">{r.label}</span>
                   <span className="flex items-center gap-3">
                     <Badge tone="cold">{r.runs}</Badge>
-                    <span className="font-mono text-sm">US$ {money(r.usd)}</span>
+                    <span className="font-mono text-sm">US$ {money(r.usd, t.intl)}</span>
                   </span>
                 </div>
               ) : (
@@ -85,7 +87,7 @@ export function SourceSpend({ rows }: { rows: SourceRow[] }) {
                     <span className="text-sm font-semibold">{r.label}</span>
                     <span className="flex items-center gap-3">
                       <Badge tone="cold">{r.runs}</Badge>
-                      <span className="font-mono text-sm">US$ {money(r.usd)}</span>
+                      <span className="font-mono text-sm">US$ {money(r.usd, t.intl)}</span>
                     </span>
                   </summary>
                   {(
@@ -97,7 +99,7 @@ export function SourceSpend({ rows }: { rows: SourceRow[] }) {
                             <Link href={`/leads/${l.id}`} className="min-w-0 truncate text-blue underline underline-offset-4">
                               {l.name}
                             </Link>
-                            <span className="font-mono">US$ {money(l.usd)}</span>
+                            <span className="font-mono">US$ {money(l.usd, t.intl)}</span>
                           </li>
                         ))}
                       </ul>

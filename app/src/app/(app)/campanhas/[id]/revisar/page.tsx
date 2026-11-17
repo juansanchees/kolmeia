@@ -14,10 +14,8 @@ import { ActionButton } from "@/components/email/ActionButton";
 import { Badge, Card, Label } from "@/components/email/bits";
 import { isPast, when } from "@/components/email/format";
 import { ApproveAllButton, MessageEditor, ReviewList, type EditableMessage, type ReviewRow } from "@/components/email/MessageEditor";
-import { fill, t } from "@/messages/pt";
-
-const M = t.email;
-const R = M.review;
+import { fill } from "@/lib/i18n";
+import { getT } from "@/lib/i18n/server";
 
 /** Review screen: one prospect at a time (default) or a list where reviewed prospects are approved together. */
 export default async function ReviewPage({
@@ -27,6 +25,9 @@ export default async function ReviewPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+  const t = await getT();
+  const M = t.email;
+  const R = M.review;
   const { id } = await params;
   const sp = await searchParams;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
@@ -106,11 +107,11 @@ export default async function ReviewPage({
     const pv = previewMessage(m, p, sender, fromAddress, origin);
     const dueText =
       m.status === "sent" || m.status === "dry_run"
-        ? when(m.sent_at)
+        ? when(m.sent_at, t.intl)
         : m.due_at
           ? isPast(m.due_at)
             ? R.dueNow
-            : fill(R.due, { when: when(m.due_at) })
+            : fill(R.due, { when: when(m.due_at, t.intl) })
           : fill(R.dueAfter, { n: m.step === 2 ? campaign.step2_delay_days : campaign.step3_delay_days });
     return {
       id: m.id,
@@ -134,7 +135,7 @@ export default async function ReviewPage({
   // item 11: local checks before approval, the recipient's quality from 0028 email_checks (no row = never checked)
   const recipient = p.email ? ((await emailChecksOf(s.supabase, campaign.workspace_id, [p.email])).get(p.email.trim().toLowerCase())?.status ?? null) : null;
   const toCheck = ms.filter((m) => m.kind === "sequence" && (m.status === "draft" || m.status === "rejected"));
-  const checks = toCheck.map((m) => ({ step: m.step ?? 1, list: contentChecks({ subject: m.subject, body: m.body, step: m.step, recipient: m.step === 1 ? recipient : undefined }) }));
+  const checks = toCheck.map((m) => ({ step: m.step ?? 1, list: contentChecks({ subject: m.subject, body: m.body, step: m.step, recipient: m.step === 1 ? recipient : undefined }, t) }));
   const C = M.checks;
 
   return (
@@ -232,7 +233,7 @@ export default async function ReviewPage({
               {pending.length > 0 && (
                 <ActionButton
                   action={redraftStrongAction.bind(null, p.id)}
-                  label={fill(R.strong, { strong: usd(reserveFor(draftStrongDef)), cheap: usd(reserveFor(draftDef)) })}
+                  label={fill(R.strong, { strong: usd(reserveFor(draftStrongDef), t.intl), cheap: usd(reserveFor(draftDef), t.intl) })}
                 />
               )}
               {p.status === "active" && <ActionButton action={setProspectSkipped.bind(null, p.id, true)} label={R.skipCompany} />}

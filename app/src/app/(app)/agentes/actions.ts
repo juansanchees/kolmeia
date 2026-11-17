@@ -20,9 +20,8 @@ import {
 } from "@/lib/research/commands";
 import { researchSession } from "@/lib/research/session";
 import type { Answers } from "@/lib/research/types";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 
-const M = t.research;
 const uuid = z.string().uuid();
 
 async function loadRun(runId: string) {
@@ -33,6 +32,8 @@ async function loadRun(runId: string) {
 }
 
 export async function createResearch(_prev: FormState, formData: FormData): Promise<FormState> {
+  const t = await getT();
+  const M = t.research;
   const parsed = newRunSchema.safeParse({
     request: formData.get("request") ?? "",
     region: formData.get("region") ?? "",
@@ -64,6 +65,8 @@ const answersSchema = z.record(
 );
 
 export async function answerQuestions(runId: string, answers: Answers, region: string): Promise<FormState> {
+  const t = await getT();
+  const M = t.research;
   const ctx = await loadRun(runId);
   const parsed = answersSchema.safeParse(answers);
   if (!ctx || !parsed.success) return { status: "error", message: M.plan.errors.generic };
@@ -78,6 +81,8 @@ export async function answerQuestions(runId: string, answers: Answers, region: s
 }
 
 export async function adjustResearch(runId: string, text: string, region?: string): Promise<FormState> {
+  const t = await getT();
+  const M = t.research;
   const ctx = await loadRun(runId);
   if (!ctx) return { status: "error", message: M.plan.errors.generic };
   if (!adjustmentSchema.safeParse(text).success) {
@@ -94,6 +99,8 @@ export async function adjustResearch(runId: string, text: string, region?: strin
 }
 
 export async function approveResearch(runId: string, input: { rigor: string; maxCandidates: number; maxCostUsd: number }): Promise<FormState> {
+  const t = await getT();
+  const M = t.research;
   const ctx = await loadRun(runId);
   if (!ctx) return { status: "error", message: M.plan.errors.generic };
   try {
@@ -107,6 +114,8 @@ export async function approveResearch(runId: string, input: { rigor: string; max
 }
 
 export async function controlResearch(runId: string, action: "pause" | "resume" | "cancel"): Promise<FormState> {
+  const t = await getT();
+  const M = t.research;
   const parsed = controlActionSchema.safeParse(action);
   if (!parsed.success) return { status: "error", message: M.plan.errors.generic };
   const ctx = await loadRun(runId);
@@ -124,6 +133,8 @@ export async function controlResearch(runId: string, action: "pause" | "resume" 
 }
 
 export async function setDecision(runId: string, candidateId: string, decision: string): Promise<FormState> {
+  const t = await getT();
+  const M = t.research;
   const s = await researchSession();
   const d = decisionSchema.safeParse(decision);
   if (!s || !d.success || !uuid.safeParse(candidateId).success) return { status: "error", message: M.list.decisionError };
@@ -137,6 +148,8 @@ export async function setDecision(runId: string, candidateId: string, decision: 
 }
 
 export async function createResearchList(runId: string, name: string): Promise<FormState> {
+  const t = await getT();
+  const M = t.research;
   const ctx = await loadRun(runId);
   const n = listNameSchema.safeParse(name);
   if (!ctx || !n.success) return { status: "error", message: M.list.listError };

@@ -3,14 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { btn } from "@/components/email/bits";
 import { isEmptyNl, parseLeadQuery, type NlFilters } from "@/lib/leads/nl-search";
-import { fill, t } from "@/messages/pt";
+import { fill, type Messages } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 
-const N = t.leads.nlSearch;
 const RULES_MS = 200;
 const AI_MS = 800;
 
 /** The chips of the detected filters, in the order the panel shows them. */
-export function nlChips(f: NlFilters): string[] {
+export function nlChips(f: NlFilters, t: Messages): string[] {
+  const N = t.leads.nlSearch;
   const c = N.chips;
   return [
     ...(f.cities ?? []).map((v) => fill(c.city, { v })),
@@ -31,6 +32,8 @@ export function nlChips(f: NlFilters): string[] {
  * "Aplicar filtros".
  */
 export function NlSearch({ cities, onApply, initialText = "" }: { cities: string[]; onApply: (f: NlFilters) => void; initialText?: string }) {
+  const t = useT();
+  const N = t.leads.nlSearch;
   const [text, setText] = useState(initialText);
   const [found, setFound] = useState<NlFilters | null>(null);
   const [thinking, setThinking] = useState(false);
@@ -72,7 +75,7 @@ export function NlSearch({ cities, onApply, initialText = "" }: { cities: string
   }, [text, cities]);
 
   const active = text.trim() !== "";
-  const chips = active && found ? nlChips(found) : [];
+  const chips = active && found ? nlChips(found, t) : [];
   const settled = active && found !== null && !thinking;
   return (
     <div className="flex flex-col gap-2">

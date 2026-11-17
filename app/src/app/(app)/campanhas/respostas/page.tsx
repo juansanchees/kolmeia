@@ -9,13 +9,14 @@ import { Badge, Card, Label, Notice } from "@/components/email/bits";
 import { when } from "@/components/email/format";
 import { MessageEditor } from "@/components/email/MessageEditor";
 import { FetchRepliesButton, ReplyLabelSelect, ReplySendButton } from "@/components/email/ReplyControls";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { getT } from "@/lib/i18n/server";
 import { Paged } from "@/components/Pager";
 
-const M = t.email;
-const R = M.replies;
-
 export default async function RepliesPage() {
+  const t = await getT();
+  const M = t.email;
+  const R = M.replies;
   const s = await emailSession();
   if (!s) return null;
   const ws = s.workspace.id;
@@ -65,7 +66,7 @@ export default async function RepliesPage() {
               <article className="flex min-w-0 flex-col gap-3 border border-line bg-surface p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="m-0 break-words font-display text-xl uppercase">{p?.company_name ?? r.from_address}</h3>
-                  <span className="font-mono text-xs text-muted">{when(r.received_at)}</span>
+                  <span className="font-mono text-xs text-muted">{when(r.received_at, t.intl)}</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="break-all text-muted">
@@ -122,7 +123,7 @@ export default async function RepliesPage() {
                   return (
                     <div key={`${m.id}-${m.updated_at}`} className="flex min-w-0 flex-col gap-2">
                       <MessageEditor
-                        m={{ id: m.id, updatedAt: m.updated_at, toAddress: to, kind: m.kind, step: null, subject: m.subject, body: m.body, status: m.status, ai_drafted: m.ai_drafted, human_edited: m.human_edited, dueText: m.sent_at ? when(m.sent_at) : "", preview: pv.preview, previewProblem: pv.problem }}
+                        m={{ id: m.id, updatedAt: m.updated_at, toAddress: to, kind: m.kind, step: null, subject: m.subject, body: m.body, status: m.status, ai_drafted: m.ai_drafted, human_edited: m.human_edited, dueText: m.sent_at ? when(m.sent_at, t.intl) : "", preview: pv.preview, previewProblem: pv.problem }}
                         canSend={s.canSend}
                       />
                       {s.canSend && m.status === "approved" && <ReplySendButton messageId={m.id} timezone={p ? tzOf.get(p.campaign_id) : undefined} />}

@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { inChunks } from "@/lib/leads/queries";
-import { t } from "@/messages/pt";
+import { type Messages } from "@/lib/i18n";
 import { periodStart, type SourceRun, type SpendCall, type SpendPeriod } from "./view";
 
 const PAGE = 1000;
@@ -90,7 +90,7 @@ async function allRows<T>(label: string, page: (from: number, to: number) => Pro
 }
 
 /** F3d's paid sources in the period (source_runs; RLS: owner/sdr only), with the leads each contact run covered (source_run_leads). */
-export async function loadSourceRuns(db: SupabaseClient, ws: string, p: SpendPeriod, now: Date = new Date()): Promise<SourceRun[]> {
+export async function loadSourceRuns(db: SupabaseClient, ws: string, p: SpendPeriod, t: Messages, now: Date = new Date()): Promise<SourceRun[]> {
   const since = periodStart(p, now).toISOString();
   const rows = await allRows<Record<string, unknown>>("loadSourceRuns", (from, to) =>
     db.from("source_runs").select("id, provider, kind, status, cost_usd, reserve_usd").eq("workspace_id", ws).gte("created_at", since).order("id", { ascending: true }).range(from, to),

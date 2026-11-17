@@ -5,9 +5,9 @@ import { addLeadsToCampaignAction } from "@/app/(app)/leads/campaign-actions";
 import { btn } from "@/components/email/bits";
 import { Field } from "@/components/ui";
 import { joinsApprovedSequence, type CampaignChoice } from "@/lib/leads/campaign-note";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 
-const C = t.leads.campaign;
 // Count key from add_leads_to_campaign -> message key.
 const LINES = [
   ["added", "added"],
@@ -20,6 +20,8 @@ const LINES = [
 
 /** Adds leads to one non-archived campaign and shows what happened to each. Never sends. */
 export function AddToCampaign({ leadIds, campaigns }: { leadIds: string[]; campaigns: CampaignChoice[] }) {
+  const t = useT();
+  const C = t.leads.campaign;
   const open = campaigns.filter((c) => c.status !== "archived");
   const [campaignId, setCampaignId] = useState(open[0]?.id ?? "");
   const [confirmed, setConfirmed] = useState(false);

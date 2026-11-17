@@ -9,7 +9,8 @@ import { AddToList } from "@/components/leads/AddToList";
 import { EmailTools } from "@/components/leads/EmailTools";
 import type { FormState } from "@/lib/form-state";
 import { SEGMENTS, type Segment } from "@/lib/leads/types";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 
 export type BulkNotice = { ok: boolean; text: string };
 const noticeOf = (r: FormState, failed: string): BulkNotice => ({ ok: r.status === "success", text: r.message ?? failed });
@@ -19,6 +20,7 @@ const noticeOf = (r: FormState, failed: string): BulkNotice => ({ ok: r.status =
  * (the table shows them), because a success clears the selection and this bar unmounts with it.
  */
 export function SelectionBar({ selected, lists, onOpenQualifier, onResult }: { selected: string[]; lists: { id: string; name: string }[]; onOpenQualifier: () => void; onResult: (n: BulkNotice) => void }) {
+  const t = useT();
   const router = useRouter();
   const [pending, start] = useTransition();
 

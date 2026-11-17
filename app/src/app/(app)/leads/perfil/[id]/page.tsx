@@ -5,13 +5,15 @@ import { isUuid } from "@/lib/profile/view";
 import { getProfile, listHunters, profileBaseline } from "@/lib/profile/queries";
 import { createClient } from "@/lib/supabase/server";
 import { requireSender } from "@/lib/workspace";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { getT } from "@/lib/i18n/server";
 
-const M = t.profile;
 const pct = (x: number) => Math.round(x * 1000) / 10;
 
 // Sender-only. Reading never applies anything: approving is a click on the card (a Server Action).
 export default async function ProfilePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ [k: string]: string | string[] | undefined }> }) {
+  const t = await getT();
+  const M = t.profile;
   const workspace = await requireSender();
   const { id } = await params;
   if (!isUuid(id)) notFound();

@@ -1,15 +1,17 @@
 // The spreadsheet view and the CSV export share one column list: the 24 columns of the gold "Ligar direto" sheet
 // (docs/pesquisa-padrao-ouro.md, G6) plus approach, supplier portal and the user's decision.
-import { t } from "@/messages/pt";
+import type { Messages } from "@/lib/i18n";
 import type { CandidateRow, JobRow } from "./rows";
-
-const L = t.research.labels;
-const H = t.research.sheet;
 
 export type ColumnKind = "text" | "number" | "money" | "date" | "url" | "pill";
 export type Column = { id: string; header: string; kind: ColumnKind; compact: boolean; get: (c: CandidateRow) => string | number | null };
 
-export const SHEET_COLUMNS: Column[] = [
+/** The columns with headers and labels in the UI language. */
+export function sheetColumns(t: Messages): Column[] {
+  const L = t.research.labels;
+  const H = t.research.sheet;
+  return [
+
   { id: "name", header: H.name, kind: "text", compact: true, get: (c) => c.name },
   { id: "askFor", header: H.askFor, kind: "text", compact: true, get: (c) => c.ask_for_name },
   { id: "title", header: H.title, kind: "text", compact: true, get: (c) => c.ask_for_title },
@@ -40,7 +42,8 @@ export const SHEET_COLUMNS: Column[] = [
   // Finding 5: where the phone was seen; empty = the phone is shown as unverified.
   { id: "phoneSource", header: H.phoneSource, kind: "url", compact: false, get: (c) => (c.phone ? c.phone_source_url : null) },
   { id: "foundAt", header: H.foundAt, kind: "url", compact: false, get: (c) => c.found_at_url },
-];
+  ];
+}
 
 // ---------------------------------------------------------------- tabs (G1, G10)
 // Order fixed by the brief: Ligar direto · Grandes · Empresas novas · Com sinal · Todos · Obras sem construtora.
@@ -104,18 +107,20 @@ export function csvCell(v: string | number | null | undefined, phone = false): s
   return /[",\r\n;]/.test(s) || s !== s.trim() ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-/** UTF-8 with BOM (Excel opens accents correctly), CRLF line endings, every column in SHEET_COLUMNS order. */
-export function toCsv(rows: CandidateRow[], columns: Column[] = SHEET_COLUMNS): string {
+/** UTF-8 with BOM (Excel opens accents correctly), CRLF line endings, the given columns in order (sheetColumns(t), maybe plus extras). */
+export function toCsv(rows: CandidateRow[], columns: Column[]): string {
   const lines = [columns.map((c) => csvCell(c.header)).join(",")];
   for (const r of rows) lines.push(columns.map((c) => csvCell(c.get(r), c.id === "phone")).join(","));
   return BOM + lines.join("\r\n") + "\r\n";
 }
 
 // ---------------------------------------------------------------- jobs without a builder (G10)
-const J = t.research.jobs;
 export type JobColumn = { id: string; header: string; kind: ColumnKind; get: (j: JobRow) => string | number | null };
 
-export const JOB_SHEET_COLUMNS: JobColumn[] = [
+export function jobSheetColumns(t: Messages): JobColumn[] {
+  const J = t.research.jobs;
+  return [
+
   { id: "address", header: J.address, kind: "text", get: (j) => j.address },
   { id: "project", header: J.project, kind: "text", get: (j) => j.project_name },
   { id: "type", header: J.type, kind: "text", get: (j) => j.job_type },
@@ -124,10 +129,12 @@ export const JOB_SHEET_COLUMNS: JobColumn[] = [
   { id: "source", header: J.source, kind: "url", get: (j) => j.source_url },
   { id: "excerpt", header: J.excerpt, kind: "text", get: (j) => j.excerpt || null },
   { id: "seen", header: J.seen, kind: "date", get: (j) => (j.seen_at ? j.seen_at.slice(0, 10) : null) },
-];
+  ];
+}
 
-export function toJobsCsv(rows: JobRow[]): string {
-  const lines = [JOB_SHEET_COLUMNS.map((c) => csvCell(c.header)).join(",")];
-  for (const r of rows) lines.push(JOB_SHEET_COLUMNS.map((c) => csvCell(c.get(r))).join(","));
+export function toJobsCsv(rows: JobRow[], t: Messages): string {
+  const cols = jobSheetColumns(t);
+  const lines = [cols.map((c) => csvCell(c.header)).join(",")];
+  for (const r of rows) lines.push(cols.map((c) => csvCell(c.get(r))).join(","));
   return BOM + lines.join("\r\n") + "\r\n";
 }

@@ -12,13 +12,11 @@ import type { AgentRow } from "@/lib/agents/types";
 import type { SequenceRow } from "@/lib/email-agent/queries";
 import type { EmailAgentMetrics, SequencePreview } from "@/lib/email-agent/types";
 import type { SenderProfile } from "@/lib/email/types";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 import { ArchiveButton } from "./ArchiveButton";
 import { parseDelays, SequenceEditor, type EditorValue } from "./SequenceEditor";
 import { SequenceExamples } from "./SequenceExamples";
-
-const A = t.agents;
-const D = t.emailAgent.detail;
 
 export type EmailAgentDetailProps = {
   agent: AgentRow;
@@ -46,6 +44,9 @@ export function EmailAgentDetail(props: EmailAgentDetailProps) {
 }
 
 function Inner({ agent, campaignId, sequence, preview, metrics, sender, c12Ready, sendMode, isOwner, estimateUsd }: EmailAgentDetailProps) {
+  const t = useT();
+  const A = t.agents;
+  const D = t.emailAgent.detail;
   const router = useRouter();
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ tone: "ok" | "warn"; text: string } | null>(null);

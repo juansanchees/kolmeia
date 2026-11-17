@@ -5,9 +5,10 @@ import { createClient } from "@/lib/supabase/server";
 import { safeNext } from "./next";
 import { credentialsSchema } from "@/lib/profile-schema";
 import type { FormState } from "@/lib/form-state";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 
 export async function authenticate(_prev: FormState, formData: FormData): Promise<FormState> {
+  const t = await getT();
   const mode = formData.get("mode") === "signup" ? "signup" : "signin";
   const next = safeNext(formData.get("next"));
   const parsed = credentialsSchema.safeParse({ email: formData.get("email"), password: formData.get("password") });

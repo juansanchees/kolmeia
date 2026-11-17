@@ -1,7 +1,7 @@
-import type { EmailQuality } from "@/lib/leads/email-quality";
-import { t } from "@/messages/pt";
+"use client";
 
-const Q = t.leads.emailQuality;
+import type { EmailQuality } from "@/lib/leads/email-quality";
+import { useT } from "@/lib/i18n/client";
 
 // Fixed colours of the four verdicts (Fase 2 brief); text on its own wash keeps AA contrast.
 const CLS: Record<EmailQuality, string> = {
@@ -14,6 +14,8 @@ const CLS: Record<EmailQuality, string> = {
 
 /** The quality of a lead's e-mail; nothing when it was never checked. */
 export function EmailBadge({ quality }: { quality: EmailQuality | null | undefined }) {
+  const t = useT();
+  const Q = t.leads.emailQuality;
   if (!quality) return null;
   return (
     <span title={Q.hints[quality]} className={`inline-block whitespace-nowrap px-1.5 py-0.5 font-mono text-xs ${CLS[quality]}`}>

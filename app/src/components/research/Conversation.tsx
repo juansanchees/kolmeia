@@ -1,9 +1,7 @@
 import type { RunRow } from "@/lib/research/rows";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 import { PlanCard } from "./PlanCard";
 import { QuestionsForm } from "./QuestionsForm";
-
-const M = t.research;
 
 function UserBubble({ children }: { children: React.ReactNode }) {
   return <div className="max-w-[80%] self-end bg-blue px-3.5 py-3 text-[15px] leading-normal text-white">{children}</div>;
@@ -19,7 +17,9 @@ function AiBubble({ children, label }: { children: React.ReactNode; label?: stri
 }
 
 /** Prototype "Pedido": the request, the AI's questions, the plan to approve. */
-export function Conversation({ run, readOnly }: { run: RunRow; readOnly: boolean }) {
+export async function Conversation({ run, readOnly }: { run: RunRow; readOnly: boolean }) {
+  const t = await getT();
+  const M = t.research;
   const questions = run.questions ?? [];
   const answered = run.status !== "questions";
   return (

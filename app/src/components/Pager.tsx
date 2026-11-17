@@ -2,9 +2,9 @@
 
 import { Children, useMemo, useState, type ReactNode } from "react";
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES, pageBounds } from "@/lib/paging";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 
-const P = t.paging;
 const btnCls = "min-h-11 border border-blue bg-surface px-4 text-sm font-semibold text-blue hover:bg-blue-wash disabled:opacity-40";
 
 /** Client-side paging: always starts at 15 per page; page 1 again whenever `resetKey` changes. */
@@ -21,6 +21,8 @@ export type PagerState = ReturnType<typeof pageBounds> & { total: number; size: 
 
 /** Hidden while everything fits in the smallest page. */
 export function Pager({ pager: p }: { pager: PagerState }) {
+  const t = useT();
+  const P = t.paging;
   if (p.total <= PAGE_SIZES[0]) return null;
   return (
     <nav aria-label={P.label} className="flex flex-wrap items-center justify-between gap-2">

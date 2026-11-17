@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { baselineReport, parseCsv, reportMarkdown, rowsFromCsv } from "@/lib/leads/baseline";
-import { toCsv } from "@/lib/research/sheet";
+import { sheetColumns, toCsv } from "@/lib/research/sheet";
+import { t } from "@/messages/pt";
 import type { CandidateRow } from "@/lib/research/rows";
 
 const candidate = (over: { name: string; phone?: string; website?: string }) => ({ phone: null, website: null, ...over }) as unknown as CandidateRow;
@@ -13,12 +14,12 @@ describe("baseline", () => {
       ["x, y", "line1\nline2"],
       ['say "hi"', "z"],
     ]);
-    const rows = parseCsv(toCsv([candidate({ name: 'Acme, "Best" Builders' })]));
+    const rows = parseCsv(toCsv([candidate({ name: 'Acme, "Best" Builders' })], sheetColumns(t)));
     expect(rows[1]).toContain('Acme, "Best" Builders');
   });
 
   test("rowsFromCsv reads Empresa, Telefone and Site from our export and from a gold sheet", () => {
-    const ours = rowsFromCsv(toCsv([candidate({ name: "Acme Builders", phone: "+1 508-555-0100", website: "https://acme.example/" })]));
+    const ours = rowsFromCsv(toCsv([candidate({ name: "Acme Builders", phone: "+1 508-555-0100", website: "https://acme.example/" })], sheetColumns(t)));
     expect(ours).toEqual([{ name: "Acme Builders", phone: "+1 508-555-0100", website: "https://acme.example/" }]);
     const gold = rowsFromCsv("Site,Empresa,Cidade,Telefone\nhttps://g.example,Gold Co,Boston,5085550111\nhttps://x.example,,Boston,5085550112\n");
     expect(gold).toEqual([{ name: "Gold Co", phone: "5085550111", website: "https://g.example" }]);

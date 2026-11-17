@@ -4,16 +4,17 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { fetchRepliesAction, setReplyLabel } from "@/app/(app)/campanhas/actions";
 import { REPLY_CLASSES, type ReplyClass } from "@/lib/email/types";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { useT } from "@/lib/i18n/client";
 import { btn, input } from "./bits";
 import { outcomeTime, timeOf } from "./format";
 
-const M = t.email.replies;
-const S = t.email.send;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** "Buscar respostas": reads the mailbox on demand (no background worker). */
 export function FetchRepliesButton({ mailboxes }: { mailboxes: { id: string; email: string }[] }) {
+  const t = useT();
+  const M = t.email.replies;
   const router = useRouter();
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -54,6 +55,8 @@ export function FetchRepliesButton({ mailboxes }: { mailboxes: { id: string; ema
 
 /** A person can correct the AI label. "Pediu para sair" suppresses the address (the safe direction). */
 export function ReplyLabelSelect({ replyId, value, disabled }: { replyId: string; value: ReplyClass | null; disabled?: boolean }) {
+  const t = useT();
+  const M = t.email.replies;
   const router = useRouter();
   const [pending, start] = useTransition();
   const id = `label-${replyId}`;
@@ -92,6 +95,9 @@ type SendReply = { outcome?: string; waitUntil?: string; error?: string; stop?: 
  * mailbox is inside its gap (9 + 5 min), it waits on the screen and tries again (while the page stays open).
  */
 export function ReplySendButton({ messageId, timezone }: { messageId: string; timezone?: string }) {
+  const t = useT();
+  const M = t.email.replies;
+  const S = t.email.send;
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -110,11 +116,11 @@ export function ReplySendButton({ messageId, timezone }: { messageId: string; ti
       }
       const outcome = (r.outcome ?? "not_found") as keyof typeof S.outcomes;
       if (outcome === "gap" && r.waitUntil) {
-        setMsg({ ok: true, text: fill(S.waitGap, { time: timeOf(r.waitUntil) }) });
+        setMsg({ ok: true, text: fill(S.waitGap, { time: timeOf(r.waitUntil, t.intl) }) });
         await sleep(Math.max(1_000, new Date(r.waitUntil).getTime() - Date.now() + 1_500));
         continue;
       }
-      const text = r.stop ? fill(S.mailboxStop, { error: r.error ?? "?" }) : fill(S.outcomes[outcome] ?? t.email.genericError, { time: outcomeTime(outcome, r.waitUntil, timezone), error: r.error ?? "?" });
+      const text = r.stop ? fill(S.mailboxStop, { error: r.error ?? "?" }) : fill(S.outcomes[outcome] ?? t.email.genericError, { time: outcomeTime(outcome, r.waitUntil, t, timezone), error: r.error ?? "?" });
       setMsg({ ok: outcome === "sent" || outcome === "dry_run", text });
       break;
     }

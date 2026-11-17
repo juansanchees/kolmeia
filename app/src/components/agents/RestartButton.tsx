@@ -3,9 +3,10 @@
 import { useState, useTransition } from "react";
 import { restartHunterAction } from "@/app/(app)/agentes/agent-actions";
 import { PrimaryButton } from "@/components/research/controls";
-import { t } from "@/messages/pt";
+import { useT } from "@/lib/i18n/client";
 
 export function RestartButton({ agentId }: { agentId: string }) {
+  const t = useT();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   return (

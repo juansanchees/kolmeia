@@ -167,6 +167,12 @@ export const email = {
     mode: { dry_run: "rehearsal", real: "real sending" },
     counts: "{prospects} companies · {approved} approved · {sent} sent",
   },
+  schedule: {
+    weekdays: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    range: "{from} to {to}",
+    at: "at {time}",
+    dayAt: "{day} at {time}",
+  },
   campaign: {
     back: "← Campaigns",
     schedule: "Sends {days}, {start} to {end} ({tz}), up to {limit} per day",

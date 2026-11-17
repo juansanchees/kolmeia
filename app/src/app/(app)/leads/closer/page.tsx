@@ -8,14 +8,14 @@ import { refreshBriefAction } from "@/app/(app)/campanhas/actions";
 import { ActionButton } from "@/components/email/ActionButton";
 import { Badge, Label } from "@/components/email/bits";
 import { when } from "@/components/email/format";
-import { fill, t } from "@/messages/pt";
+import { fill } from "@/lib/i18n";
+import { getT } from "@/lib/i18n/server";
 import { Paged } from "@/components/Pager";
 
-const M = t.email;
-const C = M.closer;
-const H = t.handoff;
-
 export default async function CloserPage() {
+  const t = await getT();
+  const H = t.handoff;
+  const C = t.email.closer;
   const s = await emailSession();
   if (!s) return null;
   // Read as the user: owner/sdr get every hand-off; a closer only those of leads assigned to her (RLS, 0017).
@@ -55,7 +55,7 @@ export default async function CloserPage() {
                   <span className="font-mono text-xs text-muted">
                     {t.leads.statuses[i.lead.status]}
                     {s.canSend && i.lead.owner_id && labels.get(i.lead.owner_id) ? ` · ${H.assignedTo}: ${labels.get(i.lead.owner_id)}` : ""}
-                    {i.lead.handed_off_at ? ` · ${fill(H.handedAt, { when: when(i.lead.handed_off_at) })}` : ""}
+                    {i.lead.handed_off_at ? ` · ${fill(H.handedAt, { when: when(i.lead.handed_off_at, t.intl) })}` : ""}
                   </span>
                 </div>
                 {b ? (
@@ -101,7 +101,7 @@ export default async function CloserPage() {
             <article className="flex min-w-0 flex-col gap-3 border border-ink bg-surface p-5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="m-0 break-words font-display text-2xl uppercase">{p.company_name}</h3>
-                <span className="font-mono text-xs text-muted">{fill(C.handedBy, { when: when(p.handed_off_at) })}</span>
+                <span className="font-mono text-xs text-muted">{fill(C.handedBy, { when: when(p.handed_off_at, t.intl) })}</span>
               </div>
               <div className="text-sm">
                 <Label>{C.contact}</Label>

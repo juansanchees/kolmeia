@@ -7,7 +7,7 @@ import type { FormState } from "@/lib/form-state";
 import type { LeadStatus } from "@/lib/leads/types";
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/workspace";
-import { t } from "@/messages/pt";
+import { getT } from "@/lib/i18n/server";
 
 type Input = { leadId: string; outcome: ContactOutcome; note: string; callBackOn: string | null };
 
@@ -16,6 +16,7 @@ type Input = { leadId: string; outcome: ContactOutcome; note: string; callBackOn
  * (0027 trigger) and the callback task. Returns the new status and the next lead of today's call list.
  */
 export async function recordContactAction(input: Input): Promise<FormState & { status_after?: LeadStatus; next?: string | null }> {
+  const t = await getT();
   const parsed = contactSchema.safeParse(input);
   if (!parsed.success) return { status: "error", message: t.calls.errors.invalid };
   const d = parsed.data;
