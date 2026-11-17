@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { OUTCOME_GROUPS, latestOutcomeGroups } from "@/lib/calls/outcome-groups";
 import type { CallOutcome } from "@/lib/calls/types";
 
-const log = (id: string, lead_id: string, outcome: CallOutcome, called_at: string) => ({ id, lead_id, outcome, called_at });
+const log = (id: string, lead_id: string, outcome: CallOutcome, called_at: string, created_at = called_at) => ({ id, lead_id, outcome, called_at, created_at });
 const sizes = (g: ReturnType<typeof latestOutcomeGroups>) => Object.fromEntries(OUTCOME_GROUPS.map((k) => [k, g[k].length]));
 
 describe("latestOutcomeGroups", () => {
@@ -19,6 +19,12 @@ describe("latestOutcomeGroups", () => {
   test("input order does not matter", () => {
     const g = latestOutcomeGroups([log("b", "L1", "meeting_booked", "2026-11-02T10:00:00Z"), log("a", "L1", "no_answer", "2026-11-01T10:00:00Z")]);
     expect(g.meeting_booked).toHaveLength(1);
+  });
+  test("same called_at: the later created_at wins over a higher id", () => {
+    const at = "2026-11-02T10:00:00Z";
+    const g = latestOutcomeGroups([log("9", "L1", "voicemail", at, "2026-11-02T10:00:01Z"), log("1", "L1", "wrong_number", at, "2026-11-02T10:00:02Z")]);
+    expect(g.wrong_number.map((l) => l.id)).toEqual(["1"]);
+    expect(g.voicemail).toEqual([]);
   });
   test("same called_at: the higher id wins", () => {
     const g = latestOutcomeGroups([log("1", "L1", "voicemail", "2026-11-02T10:00:00Z"), log("2", "L1", "wrong_number", "2026-11-02T10:00:00Z")]);

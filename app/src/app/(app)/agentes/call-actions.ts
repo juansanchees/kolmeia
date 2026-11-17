@@ -46,6 +46,7 @@ export async function buildListAction(agentId: string): Promise<FormState> {
   if (error) return { status: "error", message: /not a running call agent/.test(error.message) ? C.buildNeedsRunning : C.failed };
   revalidatePath(`/agentes/${agentId}`);
   revalidatePath("/leads/ligar");
+  revalidatePath("/inicio");
   const n = Number(data ?? 0);
   return { status: "success", message: n > 0 ? fill(C.built, { n }) : C.buildNone };
 }

@@ -91,6 +91,29 @@ describe("rule filters reuse the Leads ones", () => {
   });
 });
 
+describe("has phone means a callable number (same test as Prontas para ligar)", () => {
+  test("a text like 'ext 4' does not pass; a real number does", () => {
+    const rows = [row({ id: "ext", phone: "ext 4" }), row({ id: "ok", phone: "(508) 555-0102" }), row({ id: "short", phone: "555-0101" })];
+    expect(ids(homeMatches(rows, DEFAULT_HOME_RULE))).toEqual(["ok"]);
+    expect(ids(homeMatches(rows, rule({ hasPhone: false })))).toHaveLength(3);
+  });
+});
+
+describe("preview parity: the slim row the editor gets matches like the full row", () => {
+  test("same result for several rules", () => {
+    const full = [
+      row({ id: "a", temp: "hot", usd: 900_000, email: "a@x.example", contact: "Ana", title: "Owner" }),
+      row({ id: "b", segment: "residential", temp: "warm", usd: 10_000, city: "Salem", origin: "Lista B" }),
+      row({ id: "c", segment: null, phone: null, temp: "cold" }),
+      row({ id: "d", phone: "ext 4", temp: "very_hot" }),
+    ];
+    // as the page slims it: only the best-candidate fields the rule reads, no ai
+    const slim = full.map((r) => ({ ...r, ai: undefined, best: r.best && ({ temperature: r.best.temperature, company_type: r.best.company_type, biggest_job_value_usd: r.best.biggest_job_value_usd } as typeof r.best) }));
+    const rules = [DEFAULT_HOME_RULE, rule({ segments: [], hasPhone: false, order: "biggest" }), rule({ segments: ["residential"], city: "Salem", origin: "Lista B" }), rule({ segments: [], minTemperature: "hot", order: "hottest" }), rule({ hasEmail: true, role: "owner" })];
+    for (const r of rules) expect(ids(homeMatches(slim, r))).toEqual(ids(homeMatches(full, r)));
+  });
+});
+
 describe("orders, nulls last", () => {
   const any: Partial<HomeRule> = { segments: [], hasPhone: false };
   test("Maior obra primeiro", () => {

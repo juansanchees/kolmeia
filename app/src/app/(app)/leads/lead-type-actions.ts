@@ -81,7 +81,10 @@ export async function classifyTypesAction(leadIds: string[]): Promise<TypeResult
       const { data, error } = await db.rpc("set_leads_segment", { p_ws: ws.id, p_leads: group, p_segment: seg });
       if (!error) typed += typeof data === "number" ? data : group.length;
     }
-    if (typed > 0) revalidatePath("/leads", "layout");
+    if (typed > 0) {
+      revalidatePath("/leads", "layout");
+      revalidatePath("/inicio");
+    }
   }
   return { ok: true, typed, untyped: todo.length - typed, stopText, failed };
 }

@@ -49,7 +49,7 @@ export async function nextInList(db: SupabaseClient, userId: string, afterLeadId
   return rest.find((i) => !called.has(i.lead_id))?.lead_id ?? null;
 }
 
-export type ResultLog = { id: string; lead_id: string; outcome: CallOutcome; called_at: string; called_by: string | null; notes: string; next_step_at: string | null };
+export type ResultLog = { id: string; lead_id: string; outcome: CallOutcome; called_at: string; created_at: string; called_by: string | null; notes: string; next_step_at: string | null };
 
 /** Every call of the workspace the user can see (RLS), newest first, only the columns "Resultados" needs; paged 1000 at a time, at most 10 000. */
 export async function callResultLogs(db: SupabaseClient, workspaceId: string): Promise<ResultLog[]> {
@@ -57,9 +57,10 @@ export async function callResultLogs(db: SupabaseClient, workspaceId: string): P
   for (let from = 0; from < 10_000; from += 1000) {
     const { data, error } = await db
       .from("call_logs")
-      .select("id, lead_id, outcome, called_at, called_by, notes, next_step_at")
+      .select("id, lead_id, outcome, called_at, created_at, called_by, notes, next_step_at")
       .eq("workspace_id", workspaceId)
       .order("called_at", { ascending: false })
+      .order("created_at", { ascending: false })
       .order("id", { ascending: false })
       .range(from, from + 999);
     if (error) throw new Error(`callResultLogs: ${error.message}`);

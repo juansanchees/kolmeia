@@ -17,5 +17,6 @@ export async function createListAction(_prev: FormState, form: FormData): Promis
   const { error } = await supabase.from("lists").insert({ workspace_id: workspace.id, name: name.data });
   if (error) return { status: "error", message: error.code === "23505" ? t.lists.duplicate : t.lists.failed };
   revalidatePath("/leads/listas");
+  revalidatePath("/inicio");
   return { status: "success", message: t.lists.created };
 }

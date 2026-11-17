@@ -63,5 +63,6 @@ export async function requestQualifyAction(leadIds: string[]): Promise<{ ok: tru
   if (error) return { ok: false, error: E.failed };
   revalidatePath("/leads");
   revalidatePath("/agentes", "layout");
+  revalidatePath("/inicio");
   return { ok: true, count: typeof data === "number" ? data : 0 };
 }

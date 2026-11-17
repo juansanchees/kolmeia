@@ -2,7 +2,6 @@ import Link from "next/link";
 import { Paged } from "@/components/Pager";
 import { callResultLogs } from "@/lib/calls/call-queries";
 import { OUTCOME_GROUPS, latestOutcomeGroups, type OutcomeGroup } from "@/lib/calls/outcome-groups";
-import { firstNameOf } from "@/lib/home/view";
 import { listLeads } from "@/lib/leads/queries";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWorkspace, getUser } from "@/lib/workspace";
@@ -29,8 +28,14 @@ export default async function ResultsPage({ searchParams }: { searchParams: Prom
     workspace.role === "closer" ? null : supabase.rpc("list_workspace_people", { p_ws: workspace.id }),
   ]);
   const lead = new Map(leads.map((i) => [i.lead.id, i]));
-  const label = new Map(((people?.data ?? []) as { user_id: string; label: string }[]).map((p) => [p.user_id, p.label]));
-  const who = (id: string | null) => (id && id === user?.id ? firstNameOf(user) : ((id && label.get(id)) || R.unknown));
+  const person = new Map(((people?.data ?? []) as { user_id: string; role: keyof typeof t.team.roles; label: string }[]).map((p) => [p.user_id, p]));
+  // the RPC's label is the invited name, or the raw role when there is none: show the Portuguese role then, never "owner"
+  const who = (id: string | null) => {
+    if (id && id === user?.id) return R.you;
+    const p = id ? person.get(id) : undefined;
+    // a closer cannot list people: the other calls are the team's
+    return p ? (p.label === p.role ? t.team.roles[p.role] : p.label) : people === null && id ? R.team : R.unknown;
+  };
 
   return (
     <div className="flex min-w-0 flex-col gap-4">

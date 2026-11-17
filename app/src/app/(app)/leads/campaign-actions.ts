@@ -23,5 +23,6 @@ export async function addLeadsToCampaignAction(
   if (error) return { ok: false, error: error.code === "55000" ? C.archived : error.code === "42501" ? C.notAllowed : error.code === "22023" ? C.badInput : C.failed };
   revalidatePath("/leads", "layout");
   revalidatePath("/campanhas", "layout");
+  revalidatePath("/inicio");
   return { ok: true, counts: (data ?? {}) as Record<string, number> };
 }

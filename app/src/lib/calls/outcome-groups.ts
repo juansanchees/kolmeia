@@ -5,14 +5,15 @@ import type { CallOutcome } from "./types";
 export const OUTCOME_GROUPS = ["no_answer", "meeting_booked", "call_back", "not_interested", "do_not_call", "voicemail", "wrong_number"] as const;
 export type OutcomeGroup = (typeof OUTCOME_GROUPS)[number];
 
-export type OutcomeLog = { id: string; lead_id: string; outcome: CallOutcome; called_at: string };
+export type OutcomeLog = { id: string; lead_id: string; outcome: CallOutcome; called_at: string; created_at: string };
 
 /** gatekeeper (Recepção) counts as Não atendeu; talked is Ligar depois. */
 export const groupOf = (o: CallOutcome): OutcomeGroup => (o === "gatekeeper" ? "no_answer" : o === "talked" ? "call_back" : o);
 
-/** Latest call per lead wins (called_at, then id); returns each group's logs, newest first. */
+/** Latest call per lead wins (called_at, created_at, then id: the order of lead_callable in 0020, ISO strings compared as text); returns each group's logs, newest first. */
 export function latestOutcomeGroups<T extends OutcomeLog>(logs: T[]): Record<OutcomeGroup, T[]> {
-  const newer = (a: T, b: T) => (a.called_at !== b.called_at ? Date.parse(a.called_at) - Date.parse(b.called_at) : a.id.localeCompare(b.id));
+  const cmp = (x: string, y: string) => (x < y ? -1 : x > y ? 1 : 0);
+  const newer = (a: T, b: T) => cmp(a.called_at, b.called_at) || cmp(a.created_at, b.created_at) || cmp(a.id, b.id);
   const last = new Map<string, T>();
   for (const l of logs) {
     const cur = last.get(l.lead_id);

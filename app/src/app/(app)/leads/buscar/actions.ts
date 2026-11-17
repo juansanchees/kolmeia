@@ -20,7 +20,10 @@ async function context() {
 }
 
 const done = (r: SearchResult): SearchResult => {
-  if ("ok" in r) revalidatePath("/leads/buscar");
+  if ("ok" in r) {
+    revalidatePath("/leads/buscar");
+    revalidatePath("/inicio"); // new leads
+  }
   return r;
 };
 

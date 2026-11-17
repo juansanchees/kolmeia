@@ -1,6 +1,7 @@
 // Client-safe: the Home's "Ligar primeiro" rule. It is a subset of the Leads filters plus an order, so the matching is
 // the Leads one (filterLeads); only what the filters cannot say (several types, a minimum temperature, the order) is here.
 import { z } from "zod";
+import { telHref } from "@/lib/calls/view";
 import { effectiveTemperature, TEMP_SCORE } from "@/lib/leads/classify";
 import { SEGMENTS } from "@/lib/leads/types";
 import { DEFAULT_LEAD_FILTERS, filterLeads, ROLES, type FilterRow, type LeadFilters } from "@/lib/leads/view";
@@ -66,7 +67,8 @@ export function homeMatches<T extends HomeRow>(rows: T[], rule: HomeRule): T[] {
   const min = rule.minTemperature === "any" ? 0 : TEMP_SCORE[rule.minTemperature];
   // filterLeads already sorts by the recommended order (priorityOf, then name); the sort below is stable, so it breaks ties that way
   const out = filterLeads(rows.filter((i) => !i.lead.do_not_call), ruleFilters(rule)).filter(
-    (i) => (rule.segments.length === 0 || rule.segments.includes(i.segment ?? "none")) && (min === 0 || (tempScore(i) ?? 0) >= min),
+    // "has phone" means a number a call can use (the same test as "Prontas para ligar"), not just any text
+    (i) => (!rule.hasPhone || telHref(i.display.phone ?? "") !== null) && (rule.segments.length === 0 || rule.segments.includes(i.segment ?? "none")) && (min === 0 || (tempScore(i) ?? 0) >= min),
   );
   if (rule.order === "recommended") return out;
   const key = ORDER_KEY[rule.order];

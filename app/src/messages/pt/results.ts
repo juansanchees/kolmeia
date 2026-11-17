@@ -19,4 +19,6 @@ export const results = {
   callBack: "Ligar em",
   open: "Abrir",
   unknown: "—",
+  you: "Você",
+  team: "Equipe",
 } as const;

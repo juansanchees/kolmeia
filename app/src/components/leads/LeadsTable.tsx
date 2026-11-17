@@ -21,7 +21,7 @@ import { originText } from "@/lib/leads/table";
 import { Pager, usePaged } from "@/components/Pager";
 import { LEAD_STAGES, type LeadStage, type LeadTableRow } from "@/lib/leads/types";
 import { QualifyControls, RowCheck } from "@/components/qualifier/QualifyControls";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { openedFromList } from "@/components/leads/LeadModal";
 import { fill, t } from "@/messages/pt";
 
@@ -133,12 +133,20 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
   const [menuOpen, setMenuOpen] = useState(false);
   const search = useSearchParams();
   // The Home's "Quem você quer achar hoje?" sends ?ia=<text>: open "Busca com IA" with it (senders only, like the menu item)
+  const pathname = usePathname();
   const iaText = canCreate ? search.get("ia")?.slice(0, 200) ?? null : null;
   const [openPanel, setOpenPanel] = useState<Panel | null>(iaText === null ? null : "nl");
   const [csvError, setCsvError] = useState<string | null>(null);
   // the last bulk result (status / type); kept here because a success unmounts the selection bar
   const [notice, setNotice] = useState<BulkNotice | null>(null);
   const router = useRouter();
+  // read once, then drop ?ia from the URL (other params stay) so a reload or a lead link does not reopen the panel
+  useEffect(() => {
+    if (!search.has("ia")) return;
+    const p = new URLSearchParams(search);
+    p.delete("ia");
+    router.replace(`${pathname}${p.size ? `?${p}` : ""}`, { scroll: false });
+  }, [search, pathname, router]);
   // The lead opens as a modal over this list (?lead=): same page, so filters/pager/scroll stay.
   const leadHref = (id: string) => `?${new URLSearchParams({ ...Object.fromEntries(search), lead: id })}`;
   const [picked, setPicked] = useState<Set<string>>(new Set());
