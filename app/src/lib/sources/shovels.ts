@@ -74,9 +74,8 @@ export function permitWindow(nowMs: number): { from: string; to: string } {
 
 const cap = (v: string | undefined, n: number): string | undefined => {
   const s = v?.trim();
-  return s ? s.slice(0, n) : undefined;
+  return s ? Array.from(s).slice(0, n).join("") : undefined; // by code point: never a lone surrogate
 };
-const first = (list: string | undefined): string | undefined => list?.split(",").map((x) => x.trim()).find(Boolean);
 const money = (cents: number) => Math.round(cents / 100).toLocaleString("pt-BR");
 
 /** One contractor -> one import row (null = no usable name). URLs pass sanitizeUrl (social profiles and bad hosts dropped). */
@@ -90,8 +89,8 @@ export function mapContractor(item: unknown, row = 1): ImportRowIn | null {
   if (!nk) return null;
   const out: ImportRowIn = { row, name, name_key: nk };
 
-  const phone = cap(c.primary_phone, 300) ?? cap(first(c.phone), 300);
-  if (phone && phoneKey(phone)) out.phone = phone;
+  const phone = [c.primary_phone, ...(c.phone?.split(",") ?? [])].map((s) => cap(s, 300)).find((p) => p && phoneKey(p));
+  if (phone) out.phone = phone;
   const email = pickEmail(`${c.primary_email ?? ""},${c.email ?? ""}`);
   if (email && email.length <= 300) out.email = email;
   const site = cap(c.website, 300);

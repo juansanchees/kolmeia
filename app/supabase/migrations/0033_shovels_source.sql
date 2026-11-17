@@ -44,8 +44,9 @@ create trigger requeue_lead_on_import
 
 -- ---------------------------------------------------------------- Shovels records in the rolling 30 days
 -- A queued/running run counts its max_results (the most it may take); an imported one what Shovels returned (found).
--- A failed run counts 0, except when it may have been charged without an import (import_refused, interrupted,
--- start_unknown): then its max_results. Refused runs count 0.
+-- A failed run counts its max_results (Shovels may have served and billed the records before the failure: a timeout,
+-- an unreadable answer, a failed import), except for the codes that happen before any record is asked for (no
+-- credits, place not found, key refused or unreadable, disconnected, unsupported, a 4xx). Refused runs count 0.
 create or replace function public.source_month_records(p_ws uuid)
 returns integer
 language sql
@@ -55,7 +56,8 @@ as $$
   select coalesce(sum(
     case when r.status in ('queued', 'running') then r.max_results
          when r.status = 'imported' then coalesce(r.found, r.max_results)
-         when r.status = 'failed' and r.error in ('import_refused', 'interrupted', 'start_unknown') then r.max_results
+         when r.status = 'failed' and coalesce(r.error, '') not in ('credits', 'place_not_found', 'key', 'key_unreadable', 'disconnected', 'unsupported')
+              and coalesce(r.error, '') !~ '^http_4' then r.max_results
          else 0 end), 0)::int
     from public.source_runs r
    where r.workspace_id = p_ws and r.provider = 'shovels' and r.created_at >= now() - interval '30 days';

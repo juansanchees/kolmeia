@@ -75,6 +75,18 @@ describe("0033 shovels source", () => {
     expect((await enqueue(owner, ws, Q, 5)).error?.message).toBe("source_cap");
   });
 
+  test("a failed run counts its size when records may have been billed; not when it failed before asking for any", async () => {
+    const { ws, owner } = await connected();
+    const failed = (error: string, max: number) =>
+      db.admin("insert into public.source_runs (workspace_id, provider, kind, max_results, status, error) values ($1,'shovels','shovels',$2,'failed',$3)", [ws, max, error]);
+    for (const e of ["credits", "place_not_found", "key", "key_unreadable", "disconnected", "http_422"]) await failed(e, 40);
+    expect((await month(owner, ws)).used_month).toBe(0);
+    await failed("network", 30); // the contractors call timed out: Shovels may have served the page
+    await failed("bad_response", 20);
+    await failed("failed", 10); // the import itself failed after the records came back
+    expect((await month(owner, ws)).used_month).toBe(60);
+  });
+
   test("tick path: import makes a 'Shovels: <label> (dd/mm)' list of kind shovels; the month counts what Shovels returned; undo works", async () => {
     const { ws, owner } = await connected();
     // other tests' queued runs would take the 3 start slots first

@@ -50,6 +50,7 @@ describe("mapContractor", () => {
     const r = mapContractor(item({ primary_phone: 5, phone: "123", total_job_value: "lots", status_tally: "x", tag_tally: null, address: 3 }));
     expect(r?.name).toBe("Acme Builders LLC");
     expect(r?.phone).toBeUndefined(); // "123" is not a phone
+    expect(mapContractor(item({ primary_phone: "n/a" }))?.phone).toBe("(508) 555-0101"); // a bad primary falls back to the list
     expect(r?.city).toBeUndefined();
     expect(r?.note).toBe("Shovels: ? alvarás ativos (12 meses) · licença 123456");
   });
@@ -93,6 +94,7 @@ describe("budget and places", () => {
     expect(placeQuery("Worcester, MA")).toEqual({ lookup: "cities", q: "Worcester" });
     expect(placeQuery("Middlesex County")).toEqual({ lookup: "counties", q: "Middlesex County" });
     expect(placeQuery("a&b=c")).toBeNull();
+    expect(placeQuery("Xyzma")).toEqual({ lookup: "cities", q: "Xyzma" }); // a name ending in "ma" keeps its tail
   });
 });
 

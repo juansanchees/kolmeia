@@ -68,7 +68,7 @@ export type PlaceLookup = { geoId: string } | { lookup: "cities" | "counties"; q
  * "... County" looks up a county; anything else looks up a city. null = not a MA place.
  */
 export function placeQuery(raw: string): PlaceLookup {
-  const p = raw.trim().replace(/\s+/g, " ").replace(/,?\s*(MA|Mass\.?|Massachusetts)$/i, "").trim();
+  const p = raw.trim().replace(/\s+/g, " ").replace(/(?:,\s*|\s+)(MA|Mass\.?|Massachusetts)$/i, "").trim();
   if (!p || /^(MA|Massachusetts)$/i.test(p)) return { geoId: "MA" };
   if (/^\d{5}$/.test(p)) return /^0[12]\d{3}$/.test(p) ? { geoId: p } : null;
   if (p.length > 80 || !/^[\p{L} .'-]+$/u.test(p)) return null;
