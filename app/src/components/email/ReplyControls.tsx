@@ -43,9 +43,9 @@ export function FetchRepliesButton({ mailboxes }: { mailboxes: { id: string; ema
           {pending ? M.fetching : M.fetch}
         </button>
       </div>
-      <p className="text-[13px] text-muted">{M.fetchHint}</p>
+      <p className="m-0 text-[14px] text-[#4a5361]">{M.fetchHint}</p>
       {msg?.text && (
-        <p role={msg.ok ? "status" : "alert"} className={`text-sm ${msg.ok ? "text-ok" : "text-danger"}`}>
+        <p role={msg.ok ? "status" : "alert"} className={`m-0 text-[15px] ${msg.ok ? "text-ok" : "text-danger"}`}>
           {msg.text}
         </p>
       )}
@@ -62,10 +62,10 @@ export function ReplyLabelSelect({ replyId, value, disabled }: { replyId: string
   const id = `label-${replyId}`;
   return (
     <label htmlFor={id} className="flex flex-col gap-1">
-      <span className="font-mono text-xs text-muted">{M.label}</span>
+      <span className="font-mono text-[13px] font-medium uppercase tracking-wide text-ink">{M.label}</span>
       <select
         id={id}
-        className={`${input} max-w-56 py-1.5 text-sm`}
+        className={`${input} max-w-60 pr-9`}
         value={value ?? ""}
         disabled={disabled || pending}
         onChange={(e) =>
@@ -134,7 +134,7 @@ export function ReplySendButton({ messageId, timezone }: { messageId: string; ti
         {busy ? M.sendingAnswer : M.sendAnswer}
       </button>
       {msg && (
-        <span role={msg.ok ? "status" : "alert"} className={`text-sm ${msg.ok ? "text-ok" : "text-warn"}`}>
+        <span role={msg.ok ? "status" : "alert"} className={`text-[15px] ${msg.ok ? "text-ok" : "text-warn"}`}>
           {msg.text}
         </span>
       )}

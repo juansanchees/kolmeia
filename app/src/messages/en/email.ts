@@ -456,6 +456,31 @@ export const email = {
     ownerOnly: "Only the owner removes someone from the list.",
     errors: { invalid: "Type a valid email or domain.", generic: "Could not save." },
   },
+  // Plain-language lines of the redesigned screens (step hints, empty states, count pills).
+  ui: {
+    counts: { prospects: "companies", approved: "approved", sent: "sent" },
+    noCampaignsNext: "Approve a list in Research, then tap \"New campaign\".",
+    nothingToApproveNext: "When the AI finishes the drafts, they show up here for you to read.",
+    noRepliesNext: "Tap \"See all\", then \"Fetch replies\" to read the inbox.",
+    repliesNext: "Tap \"Fetch replies\" to read the inbox. Anyone who answers shows up here.",
+    detail: {
+      nextHint: "What to do now in this campaign.",
+      summaryHint: "How many emails are at each stage.",
+      modeHint: "Rehearsal or real sending, delays and the mailboxes that send.",
+      c12Hint: "Only the owner approves. Without it no email goes out for real.",
+      prospectsHint: "Each company on the list and where its 3 emails stand.",
+    },
+    review: {
+      subtitle: "Nothing goes out without your approval. Read, adjust if needed, and approve.",
+      factsHint: "Check that the facts make sense for this company.",
+      emails: "Read and approve each email",
+      emailsHint: "You can change the subject and the text before approving.",
+      finish: "Approve and move on",
+      finishHint: "Approve this company's emails at once, or skip the company.",
+      listHint: "Open each company's emails, tick \"Reviewed\" and approve them all at the end.",
+      nothingNext: "When the AI writes new drafts, they show up here.",
+    },
+  },
   ai: {
     not_configured: "AI not configured. You can still write the emails by hand.",
     daily_cap: "The daily AI spend cap was reached. Continue tomorrow or ask the owner to raise the cap.",

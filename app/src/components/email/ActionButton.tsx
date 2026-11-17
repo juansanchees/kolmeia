@@ -42,8 +42,8 @@ export function ActionButton({
 
   if (asking && confirm) {
     return (
-      <div role="alertdialog" aria-label={label} className="flex flex-col gap-2 border border-ink bg-surface p-3">
-        <p className="text-sm">{confirm}</p>
+      <div role="alertdialog" aria-label={label} className="k-pop flex flex-col gap-3 rounded-[14px] border-2 border-honey-edge bg-honey-soft p-4">
+        <p className="m-0 text-base">{confirm}</p>
         <div className="flex flex-wrap gap-2">
           <button type="button" className={btn.primary} onClick={run} disabled={pending}>
             {t.email.confirm}

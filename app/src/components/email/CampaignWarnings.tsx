@@ -2,6 +2,7 @@ import Link from "next/link";
 import { loadMailboxes, loadSender } from "@/lib/email/queries";
 import { campaignWarnings, hasContentProblem } from "@/lib/email/warnings";
 import { getT } from "@/lib/i18n/server";
+import { Notice } from "@/components/ui";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Warning strip at the top of Campanhas. Server component, read-only queries as the logged-in user (RLS). */
@@ -40,10 +41,12 @@ export async function CampaignWarnings({ db, workspaceId }: { db: SupabaseClient
   }, t);
   if (warnings.length === 0) return null;
   return (
-    <ul aria-label={t.email.warnings.label} className="m-0 flex list-none flex-col gap-1.5 p-0">
+    <ul aria-label={t.email.warnings.label} className="k-in m-0 flex list-none flex-col gap-2 p-0">
       {warnings.map((w, i) => (
-        <li key={`${w.kind}-${i}`} className="bg-warn-soft px-3 py-2.5 text-sm text-warn">
-          <Link href={w.href} className="underline">{w.text}</Link>
+        <li key={`${w.kind}-${i}`}>
+          <Notice tone="warn">
+            <Link href={w.href} className="k-link underline">{w.text}</Link>
+          </Notice>
         </li>
       ))}
     </ul>

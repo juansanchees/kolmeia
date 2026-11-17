@@ -6,6 +6,7 @@ import { approveC12Item, setClockReal, type C12Item } from "@/app/(app)/campanha
 import { fill, ptMessages } from "@/lib/i18n";
 import { useT } from "@/lib/i18n/client";
 import { Badge, btn, Card, CardTitle, input, Notice } from "./bits";
+import { CountPill, StepTitle } from "@/components/ui";
 
 // the item keys are the same in every language
 const ITEMS = Object.keys(ptMessages.email.c12.items) as C12Item[];
@@ -20,28 +21,30 @@ export function clockRealGate({ approved, total, isOwner, enabled }: { approved:
   return { canTurnOn: isOwner && !enabled && missing === 0, canTurnOff: isOwner && enabled, missing };
 }
 
-/** C12 (0018): the owner approves each item by hand with a note; everyone else sees the status only. */
-export function C12Checklist({ campaignId, approvals, isOwner, clock, userId, envName }: { campaignId: string; approvals: C12Approval[]; isOwner: boolean; clock: ClockReal; userId: string; envName: string }) {
+/** C12 (0018): the owner approves each item by hand with a note; everyone else sees the status only. `step` shows the
+ *  title as a numbered step of the campaign page; without it the card keeps its own title. */
+export function C12Checklist({ campaignId, approvals, isOwner, clock, userId, envName, step }: { campaignId: string; approvals: C12Approval[]; isOwner: boolean; clock: ClockReal; userId: string; envName: string; step?: number }) {
   const t = useT();
   const M = t.email.c12;
   const done = new Map(approvals.map((a) => [a.item, a]));
   const count = ITEMS.filter((i) => done.has(i)).length;
-  return (
+  const card = (
     <Card aria-labelledby="c12-title">
-      <CardTitle id="c12-title">{M.title}</CardTitle>
+      {step === undefined && <CardTitle id="c12-title">{M.title}</CardTitle>}
       <Notice tone={count === ITEMS.length ? "ok" : "warn"}>{count === ITEMS.length ? M.ready : M.blocked}</Notice>
-      <p className="m-0 text-[13px] text-muted">
-        {fill(M.progress, { n: count })} · {isOwner ? M.intro : M.viewOnly}
+      <p className="m-0 flex flex-wrap items-center gap-2 text-[15px] text-[#4a5361]">
+        <CountPill tone={count === ITEMS.length ? "honey" : "soft"}>{fill(M.progress, { n: count })}</CountPill>
+        {isOwner ? M.intro : M.viewOnly}
       </p>
-      <ul className="m-0 flex list-none flex-col gap-2 p-0">
+      <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
         {ITEMS.map((item) => (
-          <li key={item} className="flex min-w-0 flex-col gap-2 border border-line p-3">
+          <li key={item} className={`flex min-w-0 flex-col gap-2.5 rounded-[14px] border-2 p-4 ${done.has(item) ? "border-[#9fd3bc] bg-ok-soft/40" : "border-[#e3e6ec] bg-surface"}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="break-words text-sm font-semibold">{M.items[item]}</span>
+              <span className="break-words text-base font-semibold">{M.items[item]}</span>
               <Badge tone={done.has(item) ? "ok" : "warn"}>{done.has(item) ? "OK" : M.pending}</Badge>
             </div>
             {done.has(item) && (
-              <span className="break-words text-[13px] text-muted">
+              <span className="break-words text-[14px] text-[#4a5361]">
                 {fill(M.approvedOn, { date: new Date(done.get(item)!.approved_at).toLocaleDateString(t.intl), evidence: done.get(item)!.evidence })}
               </span>
             )}
@@ -51,6 +54,15 @@ export function C12Checklist({ campaignId, approvals, isOwner, clock, userId, en
       </ul>
       <ClockRealSwitch campaignId={campaignId} missing={ITEMS.length - count} total={ITEMS.length} isOwner={isOwner} clock={clock} userId={userId} envName={envName} />
     </Card>
+  );
+  if (step === undefined) return card;
+  return (
+    <section aria-labelledby="c12-title" className="k-step flex min-w-0 flex-col gap-3">
+      <StepTitle n={step} hint={t.email.ui.detail.c12Hint}>
+        <span id="c12-title">{M.title}</span>
+      </StepTitle>
+      {card}
+    </section>
   );
 }
 
@@ -74,16 +86,16 @@ function ClockRealSwitch({ campaignId, missing, total, isOwner, clock, userId, e
       router.refresh();
     });
   return (
-    <section aria-labelledby="clock-real-title" className="flex min-w-0 flex-col gap-2 border border-line p-3">
+    <section aria-labelledby="clock-real-title" className="flex min-w-0 flex-col gap-2.5 rounded-[14px] border-2 border-honey-edge bg-honey-soft p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 id="clock-real-title" className="m-0 text-sm font-semibold">
+        <h3 id="clock-real-title" className="m-0 text-base font-semibold">
           {C.title}
         </h3>
         <Badge tone={clock.enabled ? "ok" : "warn"}>{clock.enabled ? C.on : C.off}</Badge>
       </div>
-      <p className="m-0 break-words text-[13px] text-muted">{state}</p>
-      <p className="m-0 break-words text-[13px] text-muted">{fill(C.serverNote, { env: envName })}</p>
-      {!isOwner && <p className="m-0 text-[13px] text-muted">{C.viewOnly}</p>}
+      <p className="m-0 break-words text-[15px]">{state}</p>
+      <p className="m-0 break-words text-[14px] text-[#4a5361]">{fill(C.serverNote, { env: envName })}</p>
+      {!isOwner && <p className="m-0 text-[14px] text-[#4a5361]">{C.viewOnly}</p>}
       {isOwner && !clock.enabled && gate.missing > 0 && <Notice tone="warn">{fill(C.needsC12, { n: gate.missing })}</Notice>}
       {isOwner && confirming && (
         <Notice tone="warn">
@@ -149,12 +161,12 @@ function C12ItemForm({ campaignId, item, again }: { campaignId: string; item: C1
         });
       }}
     >
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} className="size-4" />
+      <label className="flex min-h-11 items-center gap-2.5 text-[15px]">
+        <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} className="size-5 accent-ink" />
         {M.confirm}
       </label>
       <label className="flex flex-col gap-1">
-        <span className="font-mono text-xs text-muted">{M.evidence}</span>
+        <span className="font-mono text-[13px] font-medium uppercase tracking-wide text-ink">{M.evidence}</span>
         <input
           type="text"
           required

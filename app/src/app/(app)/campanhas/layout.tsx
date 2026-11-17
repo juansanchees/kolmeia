@@ -1,6 +1,7 @@
 import { requireSender } from "@/lib/workspace";
 import { emailSession } from "@/lib/email/session";
 import { SubNav } from "@/components/SubNav";
+import { PageHeader } from "@/components/ui";
 import { ActionButton } from "@/components/email/ActionButton";
 import { CampaignWarnings } from "@/components/email/CampaignWarnings";
 import { when } from "@/components/email/format";
@@ -23,22 +24,20 @@ export default async function CampaignsLayout({ children }: { children: React.Re
   const isOwner = workspace.role === "owner";
 
   return (
-    <div className="flex min-w-0 flex-col gap-5">
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex flex-col gap-1.5">
-            <h1 className="text-4xl">{t.email.title}</h1>
-            <p className="m-0 text-base text-muted">{t.email.overview.subtitle}</p>
-          </div>
-          {!paused.sending_paused && <ActionButton action={setSendingPaused.bind(null, true)} label={S.button} variant="danger" confirm={S.confirm} />}
-        </div>
+    <div className="flex min-w-0 flex-col gap-5 text-[17px]">
+      <div className="flex flex-col gap-4">
+        <PageHeader
+          title={t.email.title}
+          subtitle={t.email.overview.subtitle}
+          actions={!paused.sending_paused && <ActionButton action={setSendingPaused.bind(null, true)} label={S.button} variant="danger" confirm={S.confirm} />}
+        />
         {paused.sending_paused && (
-          <div className="flex flex-wrap items-center gap-3">
-            <p role="alert" className="m-0 bg-warn-soft px-3 py-2.5 text-sm font-semibold text-warn">{fill(S.paused, { when: when(paused.sending_paused_at, t.intl) })}</p>
+          <div className="k-in flex flex-wrap items-center gap-3 rounded-[14px] border-2 border-[#f1b0ab] bg-[#fde8e7] px-4 py-3">
+            <p role="alert" className="m-0 flex-1 text-base font-semibold text-danger">{fill(S.paused, { when: when(paused.sending_paused_at, t.intl) })}</p>
             {isOwner ? (
               <ActionButton action={setSendingPaused.bind(null, false)} label={S.resume} confirm={S.resumeConfirm} />
             ) : (
-              <span className="text-sm text-muted">{S.onlyOwner}</span>
+              <span className="text-base text-[#4a5361]">{S.onlyOwner}</span>
             )}
           </div>
         )}

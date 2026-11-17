@@ -456,6 +456,31 @@ export const email = {
     ownerOnly: "Só o dono tira alguém da lista.",
     errors: { invalid: "Digite um e-mail ou domínio válido.", generic: "Não foi possível salvar." },
   },
+  // Plain-language lines of the redesigned screens (step hints, empty states, count pills).
+  ui: {
+    counts: { prospects: "empresas", approved: "aprovados", sent: "enviados" },
+    noCampaignsNext: "Aprove uma lista na Pesquisa e depois toque em \"Nova campanha\".",
+    nothingToApproveNext: "Quando a IA terminar os rascunhos, eles aparecem aqui para você ler.",
+    noRepliesNext: "Toque em \"Ver todas\" e depois em \"Buscar respostas\" para ler a caixa de entrada.",
+    repliesNext: "Toque em \"Buscar respostas\" para ler a caixa de entrada. Quem responder aparece aqui.",
+    detail: {
+      nextHint: "O que fazer agora nesta campanha.",
+      summaryHint: "Quantos e-mails estão em cada fase.",
+      modeHint: "Ensaio ou envio real, prazos e caixas que enviam.",
+      c12Hint: "Só o dono aprova. Sem isso nenhum e-mail sai de verdade.",
+      prospectsHint: "Cada empresa da lista e a situação dos seus 3 e-mails.",
+    },
+    review: {
+      subtitle: "Nada sai sem a sua aprovação. Leia, ajuste se precisar e aprove.",
+      factsHint: "Confira se os fatos fazem sentido para esta empresa.",
+      emails: "Leia e aprove cada e-mail",
+      emailsHint: "Você pode mudar o assunto e o texto antes de aprovar.",
+      finish: "Aprovar e seguir",
+      finishHint: "Aprove os e-mails desta empresa de uma vez, ou pule a empresa.",
+      listHint: "Abra os e-mails de cada empresa, marque \"Revisei\" e aprove todos no fim.",
+      nothingNext: "Quando a IA escrever rascunhos novos, eles aparecem aqui.",
+    },
+  },
   ai: {
     not_configured: "IA não configurada. Você ainda pode escrever os e-mails à mão.",
     daily_cap: "O teto diário de gasto com IA foi atingido. Continue amanhã ou peça ao dono para subir o teto.",

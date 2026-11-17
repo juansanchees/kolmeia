@@ -99,16 +99,16 @@ export function MailboxLimitForm({ mailboxId, limit }: { mailboxId: string; limi
       }}
     >
       <label htmlFor={id} className="flex flex-col gap-1">
-        <span className="font-mono text-xs text-muted">{M.mailbox.limit}</span>
+        <span className="font-mono text-[13px] font-medium uppercase tracking-wide text-ink">{M.mailbox.limit}</span>
         <input id={id} type="number" min={1} max={50} step={1} value={value} onChange={(e) => setValue(e.target.value)} className={`${input} w-24`} aria-describedby={`${id}-hint`} />
       </label>
       <button type="submit" className={btn.ghost} disabled={pending}>
         {M.mailbox.saveLimit}
       </button>
-      <span id={`${id}-hint`} className="w-full text-[13px] text-muted">
+      <span id={`${id}-hint`} className="w-full text-[14px] text-[#4a5361]">
         {M.mailbox.limitHint}
       </span>
-      {msg?.text && <span role={msg.ok ? "status" : "alert"} className={`text-sm ${msg.ok ? "text-ok" : "text-danger"}`}>{msg.text}</span>}
+      {msg?.text && <span role={msg.ok ? "status" : "alert"} className={`text-[15px] ${msg.ok ? "text-ok" : "text-danger"}`}>{msg.text}</span>}
     </form>
   );
 }
@@ -179,11 +179,11 @@ export function ProspectEmailForm({ prospectId, company }: { prospectId: string;
       <label htmlFor={id} className="sr-only">
         {`${M.campaign.typeEmail}: ${company}`}
       </label>
-      <input id={id} type="email" inputMode="email" value={value} onChange={(e) => setValue(e.target.value)} placeholder={M.campaign.typeEmail} className={`${input} max-w-60 py-1.5 text-sm`} />
-      <button type="submit" className={`${btn.ghost} min-h-9 px-3 text-sm`} disabled={pending || !value.trim()}>
+      <input id={id} type="email" inputMode="email" value={value} onChange={(e) => setValue(e.target.value)} placeholder={M.campaign.typeEmail} className={`${input} max-w-64`} />
+      <button type="submit" className={btn.ghost} disabled={pending || !value.trim()}>
         {M.campaign.saveEmail}
       </button>
-      {msg && <span role="alert" className="text-sm text-danger">{msg}</span>}
+      {msg && <span role="alert" className="text-[15px] text-danger">{msg}</span>}
     </form>
   );
 }
@@ -209,17 +209,17 @@ export function DelaysForm({ campaignId, step2, step3 }: { campaignId: string; s
       }}
     >
       <label className="flex flex-col gap-1">
-        <span className="font-mono text-xs text-muted">{M.campaign.step2}</span>
+        <span className="font-mono text-[13px] font-medium uppercase tracking-wide text-ink">{M.campaign.step2}</span>
         <input type="number" min={1} max={30} value={s2} onChange={(e) => setS2(e.target.value)} className={`${input} w-24`} />
       </label>
       <label className="flex flex-col gap-1">
-        <span className="font-mono text-xs text-muted">{M.campaign.step3}</span>
+        <span className="font-mono text-[13px] font-medium uppercase tracking-wide text-ink">{M.campaign.step3}</span>
         <input type="number" min={2} max={60} value={s3} onChange={(e) => setS3(e.target.value)} className={`${input} w-24`} />
       </label>
       <button type="submit" className={btn.ghost} disabled={pending}>
         {M.campaign.saveDelays}
       </button>
-      {msg?.text && <span role={msg.ok ? "status" : "alert"} className={`text-sm ${msg.ok ? "text-ok" : "text-danger"}`}>{msg.text}</span>}
+      {msg?.text && <span role={msg.ok ? "status" : "alert"} className={`text-[15px] ${msg.ok ? "text-ok" : "text-danger"}`}>{msg.text}</span>}
     </form>
   );
 }
@@ -255,22 +255,22 @@ export function CampaignMailboxesForm({
       <ul className="m-0 flex list-none flex-col gap-2 p-0">
         {options.map((o) => (
           <li key={o.id}>
-            <label className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
-              <input type="checkbox" checked={ticked.includes(o.id)} onChange={() => toggle(o.id)} />
+            <label className="flex min-h-11 min-w-0 flex-wrap items-center gap-2.5 text-[15px]">
+              <input type="checkbox" className="size-5 accent-ink" checked={ticked.includes(o.id)} onChange={() => toggle(o.id)} />
               <span className="break-all">{o.email}</span>
-              <span className="text-[13px] text-muted">
+              <span className="text-[14px] text-[#4a5361]">
                 {M.mailbox.statuses[o.status]} · {fill(M.campaign.sentToday, { n: o.sentToday })}
               </span>
             </label>
           </li>
         ))}
       </ul>
-      <p className="m-0 text-[13px] text-muted">{M.campaign.mailboxesHint}</p>
+      <p className="m-0 text-[14px] text-[#4a5361]">{M.campaign.mailboxesHint}</p>
       <div className="flex flex-wrap items-center gap-3">
         <button type="submit" className={btn.ghost} disabled={pending || ticked.length === 0}>
           {M.campaign.saveMailboxes}
         </button>
-        {msg?.text && <span role={msg.ok ? "status" : "alert"} className={`text-sm ${msg.ok ? "text-ok" : "text-danger"}`}>{msg.text}</span>}
+        {msg?.text && <span role={msg.ok ? "status" : "alert"} className={`text-[15px] ${msg.ok ? "text-ok" : "text-danger"}`}>{msg.text}</span>}
       </div>
     </form>
   );

@@ -78,8 +78,8 @@ export function DraftDriver({ campaignId, remaining: initial, autoStart }: { cam
   return (
     <div aria-live="polite" className="flex flex-col gap-2">
       {running ? (
-        <p className="flex items-center gap-2 font-mono text-xs text-blue-ink">
-          <span aria-hidden="true" className="inline-block h-2 w-2 animate-pulse bg-blue" />
+        <p className="m-0 flex items-center gap-2 font-mono text-[14px] text-ink">
+          <span aria-hidden="true" className="inline-block size-2.5 animate-pulse rounded-full bg-honey" />
           {note ?? fill(M.campaign.drafting, { n: remaining })}
         </p>
       ) : remaining > 0 ? (
@@ -89,10 +89,10 @@ export function DraftDriver({ campaignId, remaining: initial, autoStart }: { cam
           </button>
         </div>
       ) : (
-        <p className="text-sm text-ok">{M.campaign.draftingDone}</p>
+        <p className="m-0 text-base font-medium text-ok">{M.campaign.draftingDone}</p>
       )}
       {problem && (
-        <p role="alert" className="bg-warn-soft px-3 py-2.5 text-sm text-warn">
+        <p role="alert" className="m-0 rounded-[14px] border-2 border-[#f0c48f] bg-warn-soft px-4 py-3 text-base text-warn">
           {problem}
         </p>
       )}
@@ -182,19 +182,19 @@ export function SendDriver({ campaignId, disabled, timezone }: { campaignId: str
           </button>
         )}
       </div>
-      <p className="text-[13px] text-muted">{M.send.limitation}</p>
+      <p className="m-0 text-[14px] text-[#4a5361]">{M.send.limitation}</p>
       <div aria-live="polite" className="flex flex-col gap-1.5">
         {running && (
-          <p className="flex items-center gap-2 font-mono text-xs text-blue-ink">
-            <span aria-hidden="true" className="inline-block h-2 w-2 animate-pulse bg-blue" />
+          <p className="m-0 flex items-center gap-2 font-mono text-[14px] text-ink">
+            <span aria-hidden="true" className="inline-block size-2.5 animate-pulse rounded-full bg-honey" />
             {waitUntil ? `${fill(M.send.waitGap, { time: timeOf(waitUntil, t.intl) })} (${secondsLeft}s)` : M.send.running}
           </p>
         )}
         {log.length > 0 && (
           <ul className="m-0 flex list-none flex-col gap-1 p-0">
             {log.map((l, i) => (
-              <li key={`${l.at}-${i}`} className={`text-sm ${l.tone === "ok" ? "text-ok" : l.tone === "warn" ? "text-warn" : "text-ink"}`}>
-                <span className="font-mono text-xs text-muted">{timeOf(l.at, t.intl)}</span> {l.text}
+              <li key={`${l.at}-${i}`} className={`text-[15px] ${l.tone === "ok" ? "text-ok" : l.tone === "warn" ? "text-warn" : "text-ink"}`}>
+                <span className="font-mono text-[13px] text-[#4a5361]">{timeOf(l.at, t.intl)}</span> {l.text}
               </li>
             ))}
           </ul>

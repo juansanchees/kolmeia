@@ -6,6 +6,7 @@ import { MESSAGE_COLUMNS, PROSPECT_COLUMNS, REPLY_COLUMNS, type MessageRow, type
 import { confirmBounce, draftAnswerAction, handOffAction } from "../actions";
 import { ActionButton } from "@/components/email/ActionButton";
 import { Badge, Card, Label, Notice } from "@/components/email/bits";
+import { EmptyState } from "@/components/ui";
 import { when } from "@/components/email/format";
 import { MessageEditor } from "@/components/email/MessageEditor";
 import { FetchRepliesButton, ReplyLabelSelect, ReplySendButton } from "@/components/email/ReplyControls";
@@ -49,27 +50,29 @@ export default async function RepliesPage() {
   return (
     <div className="flex min-w-0 flex-col gap-5">
       {s.canSend && (
-        <Card aria-label={R.fetch}>
+        <Card aria-label={R.fetch} className="k-in">
           <FetchRepliesButton mailboxes={mailboxes.filter((m) => m.status === "ok").map((m) => ({ id: m.id, email: m.email }))} />
-          <p className="text-[13px] text-muted">
+          <p className="m-0 text-[14px] text-[#4a5361]">
             {R.unsubscribeNote} {R.sendNote}
           </p>
         </Card>
       )}
-      {replies.length === 0 && <p className="text-sm text-muted">{R.none}</p>}
-      <Paged as="ul" className="m-0 flex list-none flex-col gap-4 p-0">
+      {replies.length === 0 && <EmptyState title={R.none}>{M.ui.repliesNext}</EmptyState>}
+      <Paged as="ul" className="m-0 flex list-none flex-col gap-3 p-0">
         {replies.map((r) => {
           const p = r.prospect_id ? prospects.get(r.prospect_id) : undefined;
           const mine = answers.filter((a) => a.reply_to_id === r.id);
+          // honey band: a person who wants to talk and is not with the closer yet
+          const hot = !r.is_bounce && !r.possible_bounce && r.classification === "interested" && p?.status !== "handed_off";
           return (
             <li key={r.id}>
-              <article className="flex min-w-0 flex-col gap-3 border border-line bg-surface p-4">
+              <article className={`k-in flex min-w-0 flex-col gap-3 rounded-2xl border-2 p-5 ${hot ? "border-honey-edge bg-honey-soft" : "border-[#e3e6ec] bg-surface"}`}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="m-0 break-words font-display text-xl uppercase">{p?.company_name ?? r.from_address}</h3>
-                  <span className="font-mono text-xs text-muted">{when(r.received_at, t.intl)}</span>
+                  <span className="font-mono text-[13px] text-[#4a5361]">{when(r.received_at, t.intl)}</span>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 text-sm">
-                  <span className="break-all text-muted">
+                <div className="flex flex-wrap items-center gap-2 text-[15px]">
+                  <span className="break-all text-[#4a5361]">
                     {R.from}: {r.from_address}
                   </span>
                   {r.is_bounce ? (
@@ -87,14 +90,14 @@ export default async function RepliesPage() {
                 <div>
                   <Label>{r.subject}</Label>
                   {/* Untrusted text from the internet: rendered as plain text only (React escapes it; no HTML). */}
-                  <p className="m-0 mt-1 whitespace-pre-wrap break-words border-l-2 border-line pl-3 text-sm" title={R.untrusted}>
+                  <p className="m-0 mt-1.5 whitespace-pre-wrap break-words rounded-[12px] border border-[#e3e6ec] bg-surface p-3.5 text-base leading-relaxed" title={R.untrusted}>
                     {r.body_text}
                   </p>
-                  {r.class_reason && (r.class_source === "ai" || r.class_source === "rule") && <p className="mt-1 text-[13px] text-muted">{r.class_reason}</p>}
+                  {r.class_reason && (r.class_source === "ai" || r.class_source === "rule") && <p className="m-0 mt-1.5 text-[14px] text-[#4a5361]">{r.class_reason}</p>}
                 </div>
                 {r.possible_bounce && (
-                  <div className="flex flex-col gap-2 border border-warn-soft bg-warn-soft/40 p-3">
-                    <p className="m-0 break-words text-sm">{fill(R.possibleBounceHelp, { email: r.bounced_address ?? p?.email ?? "?" })}</p>
+                  <div className="flex flex-col gap-2.5 rounded-[14px] border-2 border-[#f0c48f] bg-warn-soft p-4">
+                    <p className="m-0 break-words text-[15px] text-warn">{fill(R.possibleBounceHelp, { email: r.bounced_address ?? p?.email ?? "?" })}</p>
                     {s.canSend && (
                       <div className="flex flex-wrap gap-2">
                         <ActionButton action={confirmBounce.bind(null, r.id, true)} label={R.confirmBounce} variant="danger" />
@@ -104,12 +107,12 @@ export default async function RepliesPage() {
                   </div>
                 )}
                 {!r.is_bounce && !r.possible_bounce && (
-                  <div className="flex flex-wrap items-end gap-3">
+                  <div className="flex flex-wrap items-end gap-3 border-t border-[#e3e6ec] pt-3">
                     <ReplyLabelSelect replyId={r.id} value={r.classification} disabled={!s.canSend} />
                     {s.canSend && mine.length === 0 && <ActionButton action={draftAnswerAction.bind(null, r.id)} label={R.draft} pendingLabel={R.drafting} />}
                     {s.canSend && p && p.status !== "handed_off" && p.status !== "stopped" && <ActionButton action={handOffAction.bind(null, p.id)} label={`${R.handOff} →`} variant="cta" />}
                     {p && (
-                      <Link href={`/campanhas/${p.campaign_id}`} className="text-sm text-blue underline underline-offset-4">
+                      <Link href={`/campanhas/${p.campaign_id}`} className="k-link inline-flex min-h-11 items-center text-[15px] underline">
                         {R.openCampaign}
                       </Link>
                     )}

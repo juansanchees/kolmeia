@@ -12,6 +12,7 @@ import { contentChecks } from "@/lib/email/warnings";
 import { usd } from "@/components/research/format";
 import { ActionButton } from "@/components/email/ActionButton";
 import { Badge, Card, Label } from "@/components/email/bits";
+import { buttonClass, CountPill, EmptyState, segItemCls, segWrapCls, StepTitle } from "@/components/ui";
 import { isPast, when } from "@/components/email/format";
 import { ApproveAllButton, MessageEditor, ReviewList, type EditableMessage, type ReviewRow } from "@/components/email/MessageEditor";
 import { fill } from "@/lib/i18n";
@@ -49,20 +50,23 @@ export default async function ReviewPage({
   const listMode = sp.modo === "lista";
 
   const header = (
-    <div className="flex flex-col gap-3">
-      <Link href={`/campanhas/${id}`} className="text-sm text-blue underline underline-offset-4">
+    <div className="k-in flex flex-col gap-3">
+      <Link href={`/campanhas/${id}`} className="k-link self-start text-[15px] underline">
         ← {campaign.name}
       </Link>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-3xl">{R.title}</h2>
-        <div className="flex border border-ink" role="group" aria-label={R.title}>
-          <Link href={`/campanhas/${id}/revisar`} aria-current={!listMode ? "page" : undefined} className={`inline-flex min-h-11 items-center px-4 text-sm no-underline ${!listMode ? "bg-ink font-semibold text-white" : "bg-surface text-ink"}`}>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-1">
+          <h2 className="text-3xl">{R.title}</h2>
+          <p className="m-0 text-base text-[#4a5361]">{M.ui.review.subtitle}</p>
+        </div>
+        <nav className={segWrapCls} aria-label={R.title}>
+          <Link href={`/campanhas/${id}/revisar`} aria-current={!listMode ? "page" : undefined} className={segItemCls(!listMode)}>
             {R.oneByOne}
           </Link>
-          <Link href={`/campanhas/${id}/revisar?modo=lista`} aria-current={listMode ? "page" : undefined} className={`inline-flex min-h-11 items-center px-4 text-sm no-underline ${listMode ? "bg-ink font-semibold text-white" : "bg-surface text-ink"}`}>
+          <Link href={`/campanhas/${id}/revisar?modo=lista`} aria-current={listMode ? "page" : undefined} className={segItemCls(listMode)}>
             {R.listMode}
           </Link>
-        </div>
+        </nav>
       </div>
     </div>
   );
@@ -71,7 +75,7 @@ export default async function ReviewPage({
     return (
       <div className="flex flex-col gap-5">
         {header}
-        <p className="text-sm">{R.nothing}</p>
+        <EmptyState title={R.nothing}>{M.ui.review.nothingNext}</EmptyState>
       </div>
     );
   }
@@ -91,6 +95,7 @@ export default async function ReviewPage({
     return (
       <div className="flex flex-col gap-5">
         {header}
+        <p className="m-0 text-base text-[#4a5361]">{M.ui.review.listHint}</p>
         {s.canSend ? <ReviewList rows={rows} campaignId={id} /> : null}
       </div>
     );
@@ -139,18 +144,18 @@ export default async function ReviewPage({
   const C = M.checks;
 
   return (
-    <div className="flex min-w-0 flex-col gap-5">
+    <div className="flex min-w-0 flex-col gap-6">
       {header}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <span className="font-mono text-xs text-muted">{fill(R.of, { i: i + 1, n })}</span>
+        <CountPill tone="navy" className="text-[15px]">{fill(R.of, { i: i + 1, n })}</CountPill>
         <div className="flex gap-2">
           {i > 0 && (
-            <Link href={`/campanhas/${id}/revisar?i=${i - 1}`} className="inline-flex min-h-11 items-center border border-edge bg-surface px-4 text-sm text-ink no-underline hover:border-ink">
+            <Link href={`/campanhas/${id}/revisar?i=${i - 1}`} className={buttonClass("secondary", "sm")}>
               {R.prev}
             </Link>
           )}
           {i < n - 1 && (
-            <Link href={`/campanhas/${id}/revisar?i=${i + 1}`} className="inline-flex min-h-11 items-center border border-edge bg-surface px-4 text-sm text-ink no-underline hover:border-ink">
+            <Link href={`/campanhas/${id}/revisar?i=${i + 1}`} className={buttonClass("secondary", "sm")}>
               {R.next}
             </Link>
           )}
@@ -158,95 +163,109 @@ export default async function ReviewPage({
       </div>
 
       <div className="flex flex-wrap items-start gap-5">
-        <Card aria-labelledby="who" className="flex-[1_1_280px]">
-          <h3 id="who" className="m-0 break-words font-display text-2xl uppercase">
-            {p.company_name}
-          </h3>
-          <div className="text-sm">
-            {[p.contact_name, p.contact_title].filter(Boolean).join(" · ")}
-            {p.email && <div className="break-all text-muted">{p.email}</div>}
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label>{R.facts}</Label>
-            {p.hook && <p className="border border-blue-soft bg-blue-wash p-3 text-sm">“{p.hook}”</p>}
-            {p.evidence.length === 0 ? (
-              <p className="text-sm text-muted">{R.noFacts}</p>
-            ) : (
-              <ul className="m-0 flex list-none flex-col gap-2 p-0">
-                {p.evidence.map((e, k) => (
-                  <li key={`${e.url}-${k}`} className="text-[13px]">
-                    <a href={e.url} target="_blank" rel="noopener noreferrer nofollow" className="break-words text-blue underline underline-offset-4">
-                      {e.title || e.url} ↗
-                    </a>
-                    {e.excerpt && <span className="block text-muted">“{e.excerpt}”</span>}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          {aiStep && (
-            <div className="flex flex-col gap-2 border-t border-line pt-3">
-              <span className="flex flex-wrap items-center gap-2">
-                <Label>{R.factsUsed}</Label>
-                <Badge tone="soft">{t.ai.suggestion}</Badge>
-              </span>
-              {facts.length > 0 && !aiStep.ai_no_fact ? (
-                <ul className="m-0 flex list-disc flex-col gap-1 pl-5 text-sm">
-                  {facts.map((f, k) => (
-                    <li key={`${k}-${f}`} className="break-words">
-                      {f}
-                    </li>
-                  ))}
-                </ul>
+        <section aria-labelledby="who" className="k-step flex min-w-0 flex-[1_1_280px] flex-col gap-3">
+          <StepTitle n={1} hint={M.ui.review.factsHint}>
+            {R.facts}
+          </StepTitle>
+          <Card>
+            <h3 id="who" className="m-0 break-words font-display text-2xl uppercase">
+              {p.company_name}
+            </h3>
+            <div className="text-[15px]">
+              {[p.contact_name, p.contact_title].filter(Boolean).join(" · ")}
+              {p.email && <div className="break-all font-mono text-[14px] text-[#4a5361]">{p.email}</div>}
+            </div>
+            <div className="flex flex-col gap-2">
+              {p.hook && <p className="m-0 rounded-[12px] border-2 border-honey-edge bg-honey-soft p-3 text-[15px]">“{p.hook}”</p>}
+              {p.evidence.length === 0 ? (
+                <p className="m-0 text-[15px] text-[#4a5361]">{R.noFacts}</p>
               ) : (
-                <p className="m-0 text-sm text-warn">{R.noFact}</p>
-              )}
-              {aiStep.ai_signal && (
-                <p className="m-0 text-sm">
-                  <span className="font-semibold">{R.signal}</span> {aiStep.ai_signal}
-                </p>
-              )}
-              {aiStep.ai_model && (
-                <p className="m-0 font-mono text-xs text-muted">{fill(R.model, { model: aiStep.ai_model === MODELS.sonnet ? R.modelStrong : R.modelCheap })}</p>
-              )}
-            </div>
-          )}
-          {checks.length > 0 && (
-            <div className="flex flex-col gap-2 border-t border-line pt-3">
-              <Label>{C.title}</Label>
-              {checks.map(({ step, list }) => (
-                <ul key={step} aria-label={fill(C.step, { n: step })} className="m-0 flex list-none flex-col gap-1 p-0 text-[13px]">
-                  <li className="font-mono text-xs text-muted">{fill(C.step, { n: step })}</li>
-                  {list.filter((c) => step === 1 || !c.ok).map((c) => (
-                    <li key={c.kind} className={c.ok ? "" : "text-warn"}>
-                      <span className="font-semibold">{c.ok ? C.ok : C.warn}</span> {c.text}
+                <ul className="m-0 flex list-none flex-col gap-2 p-0">
+                  {p.evidence.map((e, k) => (
+                    <li key={`${e.url}-${k}`} className="text-[14px]">
+                      <a href={e.url} target="_blank" rel="noopener noreferrer nofollow" className="k-link break-words underline">
+                        {e.title || e.url} ↗
+                      </a>
+                      {e.excerpt && <span className="block text-[#4a5361]">“{e.excerpt}”</span>}
                     </li>
                   ))}
                 </ul>
-              ))}
-              <p className="m-0 text-[13px] text-muted">{C.ok} {C.footer}</p>
-            </div>
-          )}
-          {s.canSend && (
-            <div className="flex flex-wrap gap-2">
-              <ApproveAllButton items={pending} />
-              {pending.length > 0 && (
-                <ActionButton
-                  action={redraftStrongAction.bind(null, p.id)}
-                  label={fill(R.strong, { strong: usd(reserveFor(draftStrongDef), t.intl), cheap: usd(reserveFor(draftDef), t.intl) })}
-                />
               )}
-              {p.status === "active" && <ActionButton action={setProspectSkipped.bind(null, p.id, true)} label={R.skipCompany} />}
             </div>
-          )}
-        </Card>
+            {aiStep && (
+              <div className="flex flex-col gap-2 border-t border-[#e3e6ec] pt-3">
+                <span className="flex flex-wrap items-center gap-2">
+                  <Label>{R.factsUsed}</Label>
+                  <Badge tone="soft">{t.ai.suggestion}</Badge>
+                </span>
+                {facts.length > 0 && !aiStep.ai_no_fact ? (
+                  <ul className="m-0 flex list-disc flex-col gap-1 pl-5 text-[15px]">
+                    {facts.map((f, k) => (
+                      <li key={`${k}-${f}`} className="break-words">
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="m-0 text-[15px] text-warn">{R.noFact}</p>
+                )}
+                {aiStep.ai_signal && (
+                  <p className="m-0 text-[15px]">
+                    <span className="font-semibold">{R.signal}</span> {aiStep.ai_signal}
+                  </p>
+                )}
+                {aiStep.ai_model && (
+                  <p className="m-0 font-mono text-[13px] text-[#4a5361]">{fill(R.model, { model: aiStep.ai_model === MODELS.sonnet ? R.modelStrong : R.modelCheap })}</p>
+                )}
+              </div>
+            )}
+            {checks.length > 0 && (
+              <div className="flex flex-col gap-2 border-t border-[#e3e6ec] pt-3">
+                <Label>{C.title}</Label>
+                {checks.map(({ step, list }) => (
+                  <ul key={step} aria-label={fill(C.step, { n: step })} className="m-0 flex list-none flex-col gap-1.5 p-0 text-[14px]">
+                    <li className="font-mono text-[13px] text-[#4a5361]">{fill(C.step, { n: step })}</li>
+                    {list.filter((c) => step === 1 || !c.ok).map((c) => (
+                      <li key={c.kind} className="flex items-start gap-2">
+                        <Badge tone={c.ok ? "ok" : "warn"}>{c.ok ? C.ok : C.warn}</Badge>
+                        <span className={c.ok ? "" : "text-warn"}>{c.text}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ))}
+                <p className="m-0 text-[14px] text-[#4a5361]">{C.ok} {C.footer}</p>
+              </div>
+            )}
+          </Card>
+        </section>
 
-        <div className="flex min-w-0 flex-[2_1_420px] flex-col gap-4">
+        <section aria-labelledby="emails-title" className="k-step flex min-w-0 flex-[2_1_420px] flex-col gap-3">
+          <StepTitle n={2} hint={M.ui.review.emailsHint}>
+            <span id="emails-title">{M.ui.review.emails}</span>
+          </StepTitle>
           {editable.map((m) => (
             <MessageEditor key={`${m.id}-${m.updatedAt}`} m={m} canSend={s.canSend} />
           ))}
-        </div>
+        </section>
       </div>
+
+      {s.canSend && (
+        <section aria-labelledby="finish-title" className="k-step flex min-w-0 flex-col gap-3">
+          <StepTitle n={3} hint={M.ui.review.finishHint}>
+            <span id="finish-title">{M.ui.review.finish}</span>
+          </StepTitle>
+          <div className="flex flex-wrap items-start gap-3">
+            <ApproveAllButton items={pending} />
+            {pending.length > 0 && (
+              <ActionButton
+                action={redraftStrongAction.bind(null, p.id)}
+                label={fill(R.strong, { strong: usd(reserveFor(draftStrongDef), t.intl), cheap: usd(reserveFor(draftDef), t.intl) })}
+              />
+            )}
+            {p.status === "active" && <ActionButton action={setProspectSkipped.bind(null, p.id, true)} label={R.skipCompany} />}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
