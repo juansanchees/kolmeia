@@ -1,7 +1,7 @@
 "use client";
 
 import { EMAIL_QUALITIES } from "@/lib/leads/email-quality";
-import type { LeadFacets, LeadFilters } from "@/lib/leads/view";
+import { ENTERED_PRESETS, LAST_TOUCH_PICKS, ROLES, type LeadFacets, type LeadFilters } from "@/lib/leads/view";
 import { TEMPERATURES } from "@/lib/research/types";
 import { t } from "@/messages/pt";
 
@@ -56,6 +56,29 @@ export function FacetPanel({ facets, f, set, agents, hasOneOff }: { facets: Lead
           ))}
         </Group>
       )}
+      <Group title={P.entered}>
+        <select aria-label={P.entered} value={f.entered} onChange={(e) => set({ entered: e.target.value as LeadFilters["entered"] })} className={selectCls}>
+          {ENTERED_PRESETS.map((x) => <option key={x} value={x}>{P.enteredOpts[x]}</option>)}
+        </select>
+      </Group>
+      <Group title={P.lastTouch}>
+        <select aria-label={P.lastTouch} value={f.lastTouch} onChange={(e) => set({ lastTouch: e.target.value as LeadFilters["lastTouch"] })} className={selectCls}>
+          {LAST_TOUCH_PICKS.map((x) => <option key={x} value={x}>{P.lastTouchOpts[x]}</option>)}
+        </select>
+      </Group>
+      <Group title={P.nameQ}>
+        <select aria-label={P.nameQ} value={f.nameNot ? "not" : "yes"} onChange={(e) => set({ nameNot: e.target.value === "not" })} className={selectCls}>
+          <option value="yes">{P.nameContains}</option>
+          <option value="not">{P.nameNotContains}</option>
+        </select>
+        <input type="text" aria-label={P.nameQ} value={f.nameQ} maxLength={100} onChange={(e) => set({ nameQ: e.target.value })} className={selectCls} />
+      </Group>
+      <Group title={P.role}>
+        <select aria-label={P.role} value={f.role} onChange={(e) => set({ role: e.target.value as LeadFilters["role"] })} className={selectCls}>
+          {(["all", ...ROLES] as const).map((x) => <option key={x} value={x}>{P.roleOpts[x]}</option>)}
+        </select>
+        <Check label={P.hasContactName} n={null} checked={f.hasContactName} onChange={(on) => set({ hasContactName: on })} />
+      </Group>
       <Group title={P.contact}>
         <Check label={P.hasEmail} n={facets.email} checked={f.hasEmail} onChange={(on) => set({ hasEmail: on })} />
         <Check label={P.siteNoEmail} n={facets.siteNoEmail} checked={f.siteNoEmail} onChange={(on) => set({ siteNoEmail: on })} />

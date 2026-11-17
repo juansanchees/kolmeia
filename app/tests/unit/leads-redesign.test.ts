@@ -114,7 +114,7 @@ test("parseLeadFilters keeps stage, segment, lists and temperature 'none'", () =
 
 function prow(name: string, o: { phone?: string; email?: string; website?: string; temp?: "hot" | "warm" | "cold"; level?: number; status?: string; first?: string } = {}): FilterRow {
   return {
-    lead: { id: name, status: o.status ?? "new", level: o.level ?? 0, origin_kind: "import", origin_agent_id: null, first_contacted_at: o.first ?? null, last_touch_at: null, segment: null },
+    lead: { id: name, status: o.status ?? "new", level: o.level ?? 0, origin_kind: "import", origin_agent_id: null, first_contacted_at: o.first ?? null, last_touch_at: null, segment: null, first_seen_at: "2026-01-01T00:00:00Z" },
     best: o.temp ? ({ temperature: o.temp } as never) : null,
     display: { name, city: null, phone: o.phone ?? null, website: o.website ?? null, email: o.email ?? null },
     segment: null,

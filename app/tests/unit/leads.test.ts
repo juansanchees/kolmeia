@@ -120,7 +120,7 @@ describe("F3a leads", () => {
       field({ field: "city", value: "Worcester" }),
       field({ field: "phone", value: "508-555-0111", seen_at: "2026-11-05T00:00:00Z" }),
     ];
-    expect(displayOf(best, fields)).toEqual({ companyType: "builder", name: "Acme Builders", city: "Worcester", phone: "+1 508-555-0100", website: null, email: null });
+    expect(displayOf(best, fields)).toEqual({ companyType: "builder", name: "Acme Builders", city: "Worcester", phone: "+1 508-555-0100", website: null, email: null, contactName: null, contactTitle: null });
     const only = [
       field({ field: "name", value: "Refuted Co", status: "refuted", seen_at: "2026-10-01T00:00:00Z" }),
       field({ field: "name", value: "Newer Name", seen_at: "2026-11-05T00:00:00Z" }),

@@ -73,11 +73,81 @@ export type LeadFilters = FacetFilters & {
   segment: SegmentTab | "all";
   /** "all" = every lead. */
   stage: LeadStage | "all";
+  /** Entered (first_seen_at) today / in the last 7 or 30 days. */
+  entered: EnteredPreset;
+  /** Company name contains (or, with nameNot, does not contain) this text. */
+  nameQ: string;
+  nameNot: boolean;
+  hasContactName: boolean;
+  role: RolePick;
+  /** Last touch: never, or older than N days. */
+  lastTouch: LastTouchPick;
 };
+
+export const ENTERED_PRESETS = ["all", "today", "7", "30"] as const;
+export type EnteredPreset = (typeof ENTERED_PRESETS)[number];
+export const LAST_TOUCH_PICKS = ["all", "never", "7", "30", "90"] as const;
+export type LastTouchPick = (typeof LAST_TOUCH_PICKS)[number];
+export const ROLES = ["owner", "pm", "estimator", "other"] as const;
+export type Role = (typeof ROLES)[number];
+export type RolePick = Role | "all";
+
+/** Contact-title keywords (folded: lower case, no accents), matched as whole words. "other" = a title none of these matched. */
+export const ROLE_KEYWORDS: Record<Exclude<Role, "other">, string[]> = {
+  owner: ["owner", "founder", "co-founder", "president", "principal", "ceo", "proprietor", "dono", "socio"],
+  pm: ["project manager", "pm", "project executive", "construction manager", "superintendent"],
+  estimator: ["estimator", "estimating", "preconstruction", "pre-construction"],
+};
+const roleRe = Object.entries(ROLE_KEYWORDS).map(([r, kws]) => [r as Role, new RegExp(`(^|[^a-z])(${kws.map((k) => k.replace(/[-\s]/g, "[- ]")).join("|")})($|[^a-z])`)] as const);
+
+/** The role of a contact title; null = no title. */
+export function roleOf(title: string | null | undefined): Role | null {
+  const x = fold((title ?? "").trim());
+  if (!x) return null;
+  return roleRe.find(([, re]) => re.test(x))?.[0] ?? "other";
+}
+
+/** Local midnight of today minus n days. */
+export function daysAgoStart(n: number, now: Date): Date {
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() - n);
+}
+
+const ENTERED_DAYS: Record<Exclude<EnteredPreset, "all">, number> = { today: 0, "7": 6, "30": 29 };
+/** "Today" starts at local midnight; "7"/"30" = today plus the 6/29 days before. Unknown date = out. */
+export function enteredOk(iso: string | null | undefined, p: EnteredPreset, now: Date): boolean {
+  if (p === "all") return true;
+  const ms = iso ? Date.parse(iso) : NaN;
+  return !Number.isNaN(ms) && ms >= daysAgoStart(ENTERED_DAYS[p], now).getTime();
+}
+
+/** "never" = no last touch; "7/30/90" = last touch before that many days ago (midnight). */
+export function lastTouchOk(iso: string | null | undefined, p: LastTouchPick, now: Date): boolean {
+  if (p === "all") return true;
+  if (p === "never") return !iso;
+  return !!iso && Date.parse(iso) < daysAgoStart(Number(p), now).getTime();
+}
+
+export const SORT_KEYS = ["company", "entered", "lastContact"] as const;
+export type SortKey = (typeof SORT_KEYS)[number];
+export type Sort = { key: SortKey; dir: "asc" | "desc" } | null;
+
+/** Stable sort by a column; empty values always last, either direction. Null sort = the order given. */
+export function sortRows<T extends Pick<FilterRow, "lead" | "display">>(rows: T[], sort: Sort): T[] {
+  if (!sort) return rows;
+  const val = (i: T): string | null =>
+    sort.key === "company" ? i.display.name : (sort.key === "entered" ? i.lead.first_seen_at : i.lead.last_touch_at) ?? null;
+  const sign = sort.dir === "asc" ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const x = val(a), y = val(b);
+    if (x === null || y === null) return x === y ? 0 : x === null ? 1 : -1;
+    return sign * (sort.key === "company" ? x.localeCompare(y, "pt") : Date.parse(x) - Date.parse(y));
+  });
+}
 
 export const DEFAULT_LEAD_FILTERS: LeadFilters = {
   q: "", temperature: "all", agent: "all", status: "all", tab: "all", minLevel: 0, companyTypes: [], minPermitUsd: 0, aiQuestion: "", aiAnswer: "all",
   contact: "all", cities: [], levels: [], hasPhone: false, hasEmail: false, siteNoEmail: false, origins: [], emailQuality: [], lists: [], segment: "all", stage: "all",
+  entered: "all", nameQ: "", nameNot: false, hasContactName: false, role: "all", lastTouch: "all",
 };
 
 export type FacetCount<T> = { value: T; n: number };
@@ -118,6 +188,12 @@ const filtersSchema = z.object({
   // an old saved view may still hold "archived" (removed 16/11): only the stage falls back
   stage: z.enum([...LEAD_STAGES, "all"]).catch("all"),
   lists: z.array(z.string().max(120)).max(50),
+  entered: z.enum(ENTERED_PRESETS),
+  nameQ: z.string().max(100),
+  nameNot: z.boolean(),
+  hasContactName: z.boolean(),
+  role: z.enum(["all", ...ROLES]),
+  lastTouch: z.enum(LAST_TOUCH_PICKS),
 }).partial();
 
 /** A saved view's filters over the defaults; anything unreadable falls back to the default. */
@@ -173,6 +249,8 @@ export function displayOf(best: CandidateRow | null, fields: LeadFieldRow[]): Le
     website: best?.website ?? oldest("website"),
     email: best?.public_email ?? oldest("email"),
     companyType: best?.company_type ?? oldest("company_type"),
+    contactName: best?.ask_for_name?.trim() || oldest("contact_name"),
+    contactTitle: best?.ask_for_title?.trim() || oldest("contact_title"),
   };
 }
 
@@ -185,7 +263,13 @@ export function leadInTab(i: Pick<FilterRow, "best">, tab: LeadTab): boolean {
 function otherFiltersOf(f: LeadFilters): (i: FilterRow) => boolean {
   const q = fold(f.q.trim());
   const qDigits = f.q.replace(/\D/g, "");
+  const nameQ = fold(f.nameQ.trim());
+  const now = new Date();
   return ({ lead, best, display, ai }) => {
+    if (!enteredOk(lead.first_seen_at, f.entered, now) || !lastTouchOk(lead.last_touch_at, f.lastTouch, now)) return false;
+    if (nameQ && fold(display.name).includes(nameQ) === f.nameNot) return false;
+    if (f.hasContactName && !display.contactName?.trim()) return false;
+    if (f.role !== "all" && roleOf(display.contactTitle) !== f.role) return false;
     if (!leadInTab({ best }, f.tab)) return false;
     // "none" = no research at all; named temperatures use the effective (display) one
     if (f.temperature === "none" ? best !== null : f.temperature !== "all" && effectiveTemperature(lead.level, best?.temperature ?? null) !== f.temperature) return false;
@@ -197,7 +281,7 @@ function otherFiltersOf(f: LeadFilters): (i: FilterRow) => boolean {
     if (f.agent === "one_off" ? lead.origin_kind !== "one_off" : f.agent !== "all" && lead.origin_agent_id !== f.agent) return false;
     if (q) {
       const phone = (display.phone ?? "").replace(/\D/g, "");
-      const hit = fold(display.name).includes(q) || fold(display.city ?? "").includes(q) || (qDigits.length > 0 && phone.includes(qDigits));
+      const hit = fold(display.name).includes(q) || fold(display.contactName ?? "").includes(q) || fold(display.city ?? "").includes(q) || (qDigits.length > 0 && phone.includes(qDigits));
       if (!hit) return false;
     }
     return true;
@@ -235,7 +319,7 @@ export const TOP_CITIES = 12;
 
 /** Filters that differ from the defaults and need a removable chip; q, the tabs and the AI column have their own control. */
 export function activeFilterKeys(f: LeadFilters): (keyof LeadFilters)[] {
-  const own = new Set<keyof LeadFilters>(["q", "segment", "stage", "aiQuestion"]);
+  const own = new Set<keyof LeadFilters>(["q", "segment", "stage", "aiQuestion", "nameNot"]);
   return (Object.keys(DEFAULT_LEAD_FILTERS) as (keyof LeadFilters)[]).filter(
     (k) => !own.has(k) && JSON.stringify(f[k]) !== JSON.stringify(DEFAULT_LEAD_FILTERS[k]),
   );

@@ -3,7 +3,7 @@ import { segmentOf, segmentInputOf } from "./classify";
 import { originLabel } from "./view";
 import { TABLE_BEST_COLUMNS, type LeadListItem, type LeadTableRow, type OriginList, type TableBest, type TableLead } from "./types";
 
-const LEAD_KEYS = ["id", "status", "level", "origin_kind", "origin_agent_id", "first_contacted_at", "last_touch_at", "segment"] as const;
+const LEAD_KEYS = ["id", "status", "level", "origin_kind", "origin_agent_id", "first_contacted_at", "last_touch_at", "segment", "first_seen_at"] as const;
 
 const pick = <T extends object, K extends keyof T>(o: T, keys: readonly K[]) => Object.fromEntries(keys.map((k) => [k, o[k]])) as Pick<T, K>;
 

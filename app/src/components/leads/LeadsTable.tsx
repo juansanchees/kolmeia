@@ -11,7 +11,7 @@ import { SelectionBar, type BulkNotice } from "@/components/leads/SelectionBar";
 import { ViewBar } from "@/components/leads/ViewBar";
 import type { LeadView } from "@/lib/leads/queries";
 import { usd } from "@/components/research/format";
-import { activeFilterKeys, DEFAULT_LEAD_FILTERS, filterLeads, hasSiteNoEmail, leadFacetsOf, type LeadFilters, type SegmentTab } from "@/lib/leads/view";
+import { activeFilterKeys, DEFAULT_LEAD_FILTERS, filterLeads, hasSiteNoEmail, leadFacetsOf, sortRows, type LeadFilters, type SegmentTab, type Sort, type SortKey } from "@/lib/leads/view";
 import { leadsCsvAction } from "@/app/(app)/leads/lead-actions";
 import { AI_TYPE_BATCH, AI_TYPE_MAX, stageOf } from "@/lib/leads/classify";
 import { classifyTypesAction } from "@/app/(app)/leads/lead-type-actions";
@@ -32,9 +32,9 @@ const P = t.leads.paging;
 const SEGMENT_TABS: (SegmentTab | "all")[] = ["residential", "small", "large", "none", "all"];
 const STAGE_TABS: (LeadStage | "all")[] = [...LEAD_STAGES, "all"];
 
-const GRID = "md:grid-cols-[minmax(0,2fr)_minmax(0,0.8fr)_minmax(0,0.6fr)_minmax(0,0.9fr)_minmax(0,1.2fr)_minmax(0,0.9fr)]";
+const GRID = "md:grid-cols-[minmax(0,2fr)_minmax(0,0.8fr)_minmax(0,0.6fr)_minmax(0,0.9fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.8fr)]";
 // the same columns plus the AI question's (Tailwind needs both class names written out)
-const GRID_AI = "md:grid-cols-[minmax(0,2fr)_minmax(0,0.8fr)_minmax(0,0.6fr)_minmax(0,0.9fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,1.6fr)]";
+const GRID_AI = "md:grid-cols-[minmax(0,2fr)_minmax(0,0.8fr)_minmax(0,0.6fr)_minmax(0,0.9fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_minmax(0,1.6fr)]";
 
 const linkBtn = "inline-flex min-h-11 items-center border border-blue bg-surface px-4 text-sm font-semibold text-blue no-underline hover:bg-blue-wash";
 const tabCls = (on: boolean) => `-mb-px min-h-11 border-b-[3px] px-3 text-[15px] ${on ? "border-blue font-semibold text-ink" : "border-transparent text-muted hover:text-ink"}`;
@@ -63,12 +63,24 @@ type Props = {
 
 const lastTouch = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/New_York" }) : L.never);
 
+/** Column headers in grid order (null = not sortable); the Entrou em column sits after Último contato. */
+const HEADERS: ({ key: SortKey; label: string } | null)[] = [
+  { key: "company", label: COL.company }, null, null, null, null, { key: "lastContact", label: COL.lastContact }, { key: "entered", label: COL.entered },
+];
+
+/** none -> A-Z/oldest first -> reverse -> back to the default order. */
+const nextSort = (s: Sort, key: SortKey): Sort => (s?.key !== key ? { key, dir: "asc" } : s.dir === "asc" ? { key, dir: "desc" } : null);
+
 /** The value part of an active-filter chip ("" = the label says it all). */
 function chipValue(k: keyof LeadFilters, f: LeadFilters, agents: [string, string][]): string {
   switch (k) {
     case "contact": return L.contactTabs[f.contact];
     case "cities": return f.cities.join(", ");
     case "lists": return f.lists.join(", ");
+    case "entered": return L.facets.enteredOpts[f.entered];
+    case "nameQ": return `${f.nameNot ? L.facets.nameNotContains : L.facets.nameContains} "${f.nameQ}"`;
+    case "role": return L.facets.roleOpts[f.role];
+    case "lastTouch": return L.facets.lastTouchOpts[f.lastTouch];
     case "levels": return f.levels.map((l) => L.facets.levelName[l as 0 | 1 | 2 | 3 | 4]).join(", ");
     case "origins": return f.origins.map((o) => L.facets.origins[o]).join(", ");
     case "emailQuality": return f.emailQuality.map((q) => L.emailQuality.labels[q]).join(", ");
@@ -136,11 +148,12 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
       return n;
     });
   const set = useCallback((patch: Partial<LeadFilters>) => setF((x) => ({ ...x, ...patch })), []);
-  const filtered = useMemo(() => filterLeads(items, f), [items, f]);
+  const [sort, setSort] = useState<Sort>(null);
+  const filtered = useMemo(() => sortRows(filterLeads(items, f), sort), [items, f, sort]);
   const filteredIds = useMemo(() => filtered.map((i) => i.lead.id), [filtered]);
   const selected = useMemo(() => filteredIds.filter((id) => picked.has(id)), [filteredIds, picked]);
   // Paging only slices what is rendered; any filter/size change goes back to page 1.
-  const { pageItems, pager } = usePaged(filtered, JSON.stringify(f));
+  const { pageItems, pager } = usePaged(filtered, JSON.stringify([f, sort]));
   const pageAllPicked = pageItems.length > 0 && pageItems.every((i) => picked.has(i.lead.id));
   const togglePage = (on: boolean) =>
     setPicked((p) => {
@@ -408,6 +421,25 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
       {notice && <p role="status" className={`m-0 text-sm ${notice.ok ? "text-ok" : "text-danger"}`}>{notice.text}</p>}
       <span className="font-mono text-xs text-muted">{filtered.length} / {items.length}</span>
       <p className="m-0 text-xs text-muted">{TB.order}</p>
+      {filtered.length > 0 && (
+        <div className="hidden md:flex" role="row">
+          {canCreate && <span className="w-11 shrink-0" />}
+          <div className={`grid min-w-0 flex-1 px-3.5 ${aiQ ? GRID_AI : GRID} gap-3 font-mono text-xs uppercase tracking-wide text-muted`}>
+            {HEADERS.map((h, n) => {
+              if (!h) return <span key={n} />;
+              const on = sort?.key === h.key;
+              return (
+                <span key={n} role="columnheader" aria-sort={on ? (sort.dir === "asc" ? "ascending" : "descending") : "none"} className="min-w-0">
+                  <button type="button" aria-label={fill(L.facets.sortBy, { col: h.label })} onClick={() => setSort(nextSort(sort, h.key))} className="min-h-9 max-w-full truncate text-left uppercase hover:text-ink">
+                    {h.label}{on ? (sort.dir === "asc" ? " ▲" : " ▼") : ""}
+                  </button>
+                </span>
+              );
+            })}
+            {aiQ && <span />}
+          </div>
+        </div>
+      )}
 
       {filtered.length === 0 ? (
         <p className="text-sm text-muted">{t.research.list.emptyTab}</p>
@@ -458,6 +490,10 @@ export function LeadsTable({ items, canCreate, sources = { maps: false, apollo: 
                     <span className="font-mono text-[13px] text-muted">
                       <span className="sr-only">{COL.lastContact}: </span>
                       {lastTouch(i.lead.last_touch_at)}
+                    </span>
+                    <span className="font-mono text-[13px] text-muted">
+                      <span className="sr-only">{COL.entered}: </span>
+                      {lastTouch(i.lead.first_seen_at)}
                     </span>
                     {aiQ && (
                       <span className="min-w-0 text-[13px]">

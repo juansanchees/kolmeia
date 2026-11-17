@@ -69,7 +69,7 @@ export type LeadFieldRow = {
 export const LEAD_FIELD_COLUMNS = "id, lead_id, field, value, source, source_ref, status, excerpt, seen_at";
 
 /** What the LEADS list shows for a lead: the best candidate's values, else the lead's own (imported) fields. */
-export type LeadDisplay = { name: string; city: string | null; phone: string | null; website: string | null; email: string | null; companyType?: string | null };
+export type LeadDisplay = { name: string; city: string | null; phone: string | null; website: string | null; email: string | null; companyType?: string | null; contactName?: string | null; contactTitle?: string | null };
 
 /** A list (or import) a lead came from; `at` = ISO date the lead entered it. */
 export type OriginList = { name: string; at: string; kind: "import" | "list" };
@@ -81,7 +81,7 @@ export const TABLE_BEST_COLUMNS = [
 ] as const;
 export type TableBest = Pick<CandidateRow, (typeof TABLE_BEST_COLUMNS)[number]>;
 
-export type TableLead = Pick<LeadRow, "id" | "status" | "level" | "origin_kind" | "origin_agent_id" | "first_contacted_at" | "last_touch_at" | "segment">;
+export type TableLead = Pick<LeadRow, "id" | "status" | "level" | "origin_kind" | "origin_agent_id" | "first_contacted_at" | "last_touch_at" | "segment" | "first_seen_at">;
 
 export type LeadTableRow = {
   lead: TableLead;
