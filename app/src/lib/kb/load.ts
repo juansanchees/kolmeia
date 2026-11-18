@@ -163,7 +163,7 @@ export function massbuildsProjectItems(csv: string, town: string): Mapped {
 
 // ---------------------------------------------------------------- Falmouth permit CSV (private collector)
 // The applicant phone is used only to match a company in memory (`memo`); it never enters an item.
-export type PermitMemo = { applicantName?: string; applicantPhone?: string };
+export type PermitMemo = { applicantName?: string; contractorName?: string; applicantPhone?: string };
 export function falmouthPermitItems(csv: string): Mapped & { unlinked: number; memo: Record<string, PermitMemo> } {
   const items: KbItem[] = [];
   const skipped: Record<string, number> = {};
@@ -187,7 +187,7 @@ export function falmouthPermitItems(csv: string): Mapped & { unlinked: number; m
       items.push({ match_only: true, signals: [sig] });
       unlinked++;
     }
-    if (r.applicant_name || r.applicant_phone) memo[ref] = clean({ applicantName: r.applicant_name, applicantPhone: r.applicant_phone });
+    if (r.applicant_name || r.applicant_phone || r.contractor_name) memo[ref] = clean({ applicantName: r.applicant_name, contractorName: r.contractor_name, applicantPhone: r.applicant_phone });
   }
   return { items, skipped, unlinked, memo };
 }

@@ -67,7 +67,7 @@ describe("falmouthPermitItems", () => {
   test("applicant phone is memo only, never in items", () => {
     const r = falmouthPermitItems(`${h}\nexample_town,P-1,2026-03-04,12 Example Rd,Exampleton,New,Residential,400000,new house,Pat Person,(508) 555-0123,Acme Builders LLC,https://example.com/p1\n`);
     expect(JSON.stringify(r.items)).not.toMatch(/0123|Pat Person/);
-    expect(r.memo["example_town:P-1"]).toEqual({ applicantName: "Pat Person", applicantPhone: "(508) 555-0123" });
+    expect(r.memo["example_town:P-1"]).toEqual({ applicantName: "Pat Person", contractorName: "Acme Builders LLC", applicantPhone: "(508) 555-0123" });
     expect(r.items[0].signals?.[0].permit_no).toBe("P-1");
   });
   test("blank contractor keeps the permit with no company; company-like applicant stands in; person applicant is not stored", () => {

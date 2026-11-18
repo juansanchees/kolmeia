@@ -30,6 +30,8 @@ const WEAK_NEW_PHRASE = /\bnew construction\b/i;
 const NOT_NEW = /\b(repair|re-?roof\w*|roof\w*|solar|photovoltaic|pool|fence|demo(lition|lish)?|deck|siding|windows?|replacement)\b/i;
 // Small-scope work is never a new build, whatever "new" word is in front of it.
 const SMALL_SCOPE = /\b(service|water heater|electrical|panel|meter|sign|signs|window|windows|door|doors|roof|roofing|deck|fence|pool|solar|siding|generator|furnace|boiler|chimney|gutters?|plumbing)\b/i;
+// Trade-only or temporary permits (Falmouth codes like ELECT., GAS, PLUMB., SHT MTL, SIGN, TENT): never a new build, whatever the description says.
+const TRADE_CLASS = /^\s*(elect\w*|gas\b|plumb\w*|sht\b|sheet\s*metal|sign\w*|tent\w*|chimney|stove|wood\s*stove|pool|solar|roof\w*|fence|deck|demo\w*)/i;
 const OTHER_TRADE_HVAC = /\b(hvac|mechanical|heat pump|furnace|air handler)\b/i;
 
 const text = (s: OfferSignal) => `${s.work_class ?? ""} ${s.use ?? ""} ${s.description ?? ""}`;
@@ -96,7 +98,8 @@ function evaluate(input: OfferInput, now: Date, params?: CampaignParams): OfferV
   const url = s.source_url;
 
   // new_build: strong words win over a "repair/solar/..." word; a bare "New ..." work class only counts when none of those appear.
-  const newBuild: Check = anyField(s, STRONG_NEW) ? chk("confirmed", (s.description || s.work_class || "").slice(0, 120), url)
+  const newBuild: Check = TRADE_CLASS.test(s.work_class ?? "") ? chk("no", `trade permit: ${s.work_class}`.slice(0, 120), url)
+    : anyField(s, STRONG_NEW) ? chk("confirmed", (s.description || s.work_class || "").slice(0, 120), url)
     : NOT_NEW.test(t) ? chk("no", (s.description || s.work_class || "").slice(0, 120), url)
     : !SMALL_SCOPE.test(t) && (WEAK_NEW_CLASS.test(s.work_class ?? "") || anyField(s, WEAK_NEW_PHRASE)) ? chk("confirmed", (s.work_class || s.description || "").slice(0, 120), url)
     : chk("missing");
@@ -126,6 +129,7 @@ function evaluate(input: OfferInput, now: Date, params?: CampaignParams): OfferV
   if (newBuild.state === "missing") q.push("confirm_new_build");
   if (hvacFit.state === "missing") q.push("ask_hvac_scope");
   if (party.state === "missing") q.push("ask_gc");
+  if (input.link_status === "confirmed" && input.link_note === "unique_name_statewide") q.push("confirm_job_is_theirs");
   if (canBid.state === "missing") q.push("ask_taking_bids");
   // A campaign that wants the bid door asks about it first.
   const openQuestions = params?.wantBidPath ? [...q.filter((x) => x === "ask_taking_bids"), ...q.filter((x) => x !== "ask_taking_bids")] : q;

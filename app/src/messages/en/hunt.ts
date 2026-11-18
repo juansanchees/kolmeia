@@ -224,6 +224,7 @@ export const hunt = {
     ask_taking_bids: "Are they taking HVAC bids? Where to send them?",
     ask_hvac_scope: "Who handles the HVAC on this job?",
     confirm_new_build: "Is it really a new build?",
+    confirm_job_is_theirs: "Is this job really theirs? The link is by an identical name only.",
     hvac_by_other_trade: "Another trade is already listed for HVAC",
   },
   cov: {
@@ -244,6 +245,7 @@ export const hunt = {
       "kb_match:permit_no": "Base: permit number",
       "kb_match:applicant_phone": "Base: applicant phone",
       "kb_match:name_town": "Base: name and town",
+      "kb_match:name_statewide": "Base: unique name statewide",
     },
     detail: "Technical detail: {reason}",
     failed: "Could not read coverage by source.",

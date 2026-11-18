@@ -214,3 +214,22 @@ describe("profileFit", () => {
     expect(f({ what_we_do: "hvac", service_area: "x" }).assumptionCodes).toEqual(["assume_new_construction_ok"]);
   });
 });
+describe("trade-only and temporary permits", () => {
+  test.each(["ELECT.", "GAS", "PLUMB.", "SHT MTL", "SIGN", "TENT", "CHIMNEY", "POOL", "SOLAR", "ROOF", "FENCE", "DECK", "DEMO"])("work class %s is never a new build, even with a new-build description", (wc) => {
+    const v = ev(base({ work_class: wc, description: "New single family dwelling" }));
+    expect(v.checks.new_build.state).toBe("no");
+    expect(v.fit).toBe("no");
+    expect(v.priority).toBe(0);
+  });
+  test.each(["RESI.", "COMM.", "CI", "REP"])("building class %s keeps the description logic", (wc) => {
+    expect(ev(base({ work_class: wc, use: null, description: "New single family dwelling" })).fit).not.toBe("no");
+  });
+  test("REP (repair) with a plain description is not confirmed new", () => {
+    expect(ev(base({ work_class: "REP", use: null, description: "interior work" })).checks.new_build.state).toBe("missing");
+  });
+  test("unique_name_statewide link note asks the caller to confirm the job", () => {
+    expect(ev(base({}, { link_note: "unique_name_statewide" })).openQuestions).toContain("confirm_job_is_theirs");
+    expect(ev(base()).openQuestions).not.toContain("confirm_job_is_theirs");
+  });
+});
+

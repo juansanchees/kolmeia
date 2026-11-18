@@ -9,7 +9,7 @@ import { expect, test } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { reduceCoverage, type CoverageRow } from "@/lib/kb/coverage";
 import { resolveGaps, type GapDeps, type GapOpp } from "@/lib/kb/gaps";
-import { falmouthPermitItems, mapsItems, massbuildsProjectItems } from "@/lib/kb/load";
+import { falmouthPermitItems, mapsItems, massbuildsProjectItems, type PermitMemo } from "@/lib/kb/load";
 import type { KbItem } from "@/lib/kb/types";
 import { supabaseHuntDb } from "@/lib/hunt/db";
 import { effectiveParams, rescore } from "@/lib/hunt/rescore";
@@ -23,7 +23,7 @@ import { getOffer, toOpportunityRow, type CampaignParams, type OfferInput, type 
 import { nameKey } from "@/lib/research/dedupe";
 import { nodeRawHttp } from "@/lib/qualifier/site/net";
 import { readSite } from "@/lib/qualifier/site/reader";
-import { adminClient, filterCsv, need, pilotDataDir, pilotOutDir, readSeed, userClient } from "./pilot-env";
+import { adminClient, need, pilotDataDir, pilotOutDir, readSeed, userClient } from "./pilot-env";
 import { ingestLinks, linkItem, permitNoHits, type KbHit } from "./pilot-link";
 
 const TOWN = "Falmouth";
@@ -84,7 +84,8 @@ test.skipIf(process.env.PILOT_RUN !== "1")("pilot round", async () => {
   const items: KbItem[] = [];
   const mapsCsv = readOpt("ma_sweep/maps/universe.csv");
   if (mapsCsv) {
-    const m = mapsItems(filterCsv(mapsCsv, (r) => (r.city ?? "").toLowerCase() === TOWN.toLowerCase()), seenAt);
+    // whole statewide builder universe: firms work across towns (mapsItems keeps only builder categories)
+    const m = mapsItems(mapsCsv, seenAt);
     items.push(...m.items);
     addCov("maps_robot", m.items.length ? "ok" : "empty", m.items.length + Object.values(m.skipped).reduce((a, b) => a + b, 0), m.items.length);
   } else addCov("maps_robot", "skipped", 0, 0, "no maps file");
@@ -94,7 +95,7 @@ test.skipIf(process.env.PILOT_RUN !== "1")("pilot round", async () => {
     items.push(...p.items);
     addCov("project", p.items.length ? "ok" : "empty", p.items.length, p.items.length);
   } else addCov("project", "skipped", 0, 0, "no projects file");
-  let memo: Record<string, { applicantName?: string; applicantPhone?: string }> = {};
+  let memo: Record<string, PermitMemo> = {};
   const permitCsv = readOpt("permits_2026/falmouth.csv");
   if (permitCsv) {
     const p = falmouthPermitItems(permitCsv);
@@ -137,6 +138,7 @@ test.skipIf(process.env.PILOT_RUN !== "1")("pilot round", async () => {
       companies: (ids) => lookup((db) => db.from("kb_companies").select(cols).in("id", ids).is("removed_at", null) as never),
     }, no, town),
     byPhone: (k) => lookup((db) => db.from("kb_companies").select(cols).eq("phone_key", k).is("removed_at", null).limit(5) as never),
+    byNameStatewide: (k) => lookup((db) => db.from("kb_companies").select(cols).eq("name_key", k).is("removed_at", null).limit(5) as never),
     byNameTown: (k, town) => lookup((db) => db.from("kb_companies").select(cols).eq("name_key", k).ilike("city", town).is("removed_at", null).limit(5) as never),
   };
   type Done = { sig: Sig; co: Co | null; input: OfferInput; row: ReturnType<typeof toOpportunityRow>; v: ReturnType<typeof offer.evaluate>; linkVia?: string; pending: number };
@@ -147,11 +149,11 @@ test.skipIf(process.env.PILOT_RUN !== "1")("pilot round", async () => {
     const co = (s.company_id && cos.get(s.company_id)) || null;
     const sig = nn({ kind: s.kind, source: s.source, source_ref: s.source_ref, address: s.address, town: s.town, value_usd: s.value_usd == null ? null : Number(s.value_usd), work_class: s.work_class, use: s.use, issued_on: s.issued_on, description: s.description, source_url: s.source_url }) as OfferSignal;
     const m = memo[s.source_ref];
-    const opp: GapOpp = { signal: { ...sig, permit_no: s.permit_no }, company: co ? hitOf(co) : null, link_status: s.link_status, contacts: {}, applicant: nn({ name: m?.applicantName ?? s.applicant_name ?? undefined, phone: m?.applicantPhone }) };
+    const opp: GapOpp = { signal: { ...sig, permit_no: s.permit_no }, company: co ? hitOf(co) : null, link_status: s.link_status, contacts: {}, applicant: nn({ name: m?.applicantName ?? s.applicant_name ?? undefined, contractor: m?.contractorName, phone: m?.applicantPhone }) };
     const g = await resolveGaps(opp, deps, params);
     cov.push(...g.coverage);
     const linked = g.link?.status === "confirmed" ? (g.company as KbHit | null) : co ? hitOf(co) : null;
-    const input: OfferInput = { signal: sig, company: g.company ? nn({ name: g.company.name, phone: g.company.phone, website: g.company.website }) as OfferInput["company"] : null, link_status: g.link?.status ?? s.link_status, contacts: g.contacts };
+    const input: OfferInput = { signal: sig, company: g.company ? nn({ name: g.company.name, phone: g.company.phone, website: g.company.website }) as OfferInput["company"] : null, link_status: g.link?.status ?? s.link_status, contacts: g.contacts, ...(g.link?.note ? { link_note: g.link.note } : {}) };
     const v = offer.evaluate(input, now, params);
     if (v.fit === "no") { noFit++; continue; }
     const linkedCo = linked ? known.get(linked.id) ?? ({ id: linked.id, name: linked.name, name_key: nameKey(linked.name), domain: null, phone: linked.phone ?? null, address: null, city: null, state: null, zip: null, company_type: null } as Co) : null;

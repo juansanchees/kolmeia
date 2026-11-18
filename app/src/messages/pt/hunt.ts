@@ -223,6 +223,7 @@ export const hunt = {
     ask_taking_bids: "Estão recebendo orçamentos de HVAC? Por onde enviar?",
     ask_hvac_scope: "Quem cuida do HVAC desta obra?",
     confirm_new_build: "É obra nova mesmo?",
+    confirm_job_is_theirs: "Esta obra é mesmo deles? O vínculo é só pelo nome idêntico.",
     hvac_by_other_trade: "Outro profissional já aparece para HVAC",
   },
   cov: {
@@ -243,6 +244,7 @@ export const hunt = {
       "kb_match:permit_no": "Base: número do alvará",
       "kb_match:applicant_phone": "Base: telefone do requerente",
       "kb_match:name_town": "Base: nome e cidade",
+      "kb_match:name_statewide": "Base: nome único no estado",
     },
     detail: "Detalhe técnico: {reason}",
     failed: "Não deu para ler a cobertura por fonte.",

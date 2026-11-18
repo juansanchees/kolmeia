@@ -1,5 +1,5 @@
 // Gap resolver: tries to fill what an opportunity is missing (who is the company, how to reach it, where to bid).
-// Ordered steps: permit number, applicant phone, name + town (all against the base), then the company's own site.
+// Ordered steps: permit number, applicant phone, name + town, unique name statewide (all against the base), then the company's own site.
 // Every step that cannot run or fails leaves a coverage row and the next step still runs. Network goes only through the
 // injected readSite (robots.txt, 1 req/s, honest User-Agent live there); archived lookups are injected too.
 import { nameKey, phoneKey } from "@/lib/research/dedupe";
@@ -14,7 +14,7 @@ export type GapOpp = {
   link_status: "confirmed" | "pending" | "none";
   contacts: OfferContacts;
   /** In memory only (never stored): the applicant of a permit. */
-  applicant?: { name?: string; phone?: string };
+  applicant?: { name?: string; contractor?: string; phone?: string };
 };
 export type GapDeps = {
   /** false = no live network: the site step is recorded as skipped (`live off`). */
@@ -25,8 +25,10 @@ export type GapDeps = {
   byPermitNo?: (permitNo: string, town: string) => Promise<CompanyHit[]>;
   byPhone?: (phoneKey: string) => Promise<CompanyHit[]>;
   byNameTown?: (nameKey: string, town: string) => Promise<CompanyHit[]>;
+  /** Live companies in the whole base with this exact name key (statewide). */
+  byNameStatewide?: (nameKey: string) => Promise<CompanyHit[]>;
 };
-export type GapLink = { status: "confirmed" | "pending"; via: "permit_no" | "applicant_phone" | "name_town"; company?: CompanyHit; candidates?: CompanyHit[] };
+export type GapLink = { status: "confirmed" | "pending"; via: "permit_no" | "applicant_phone" | "name_town" | "name_statewide"; company?: CompanyHit; candidates?: CompanyHit[]; /** `unique_name_statewide`: linked by an identical unique name only, the caller confirms. */ note?: string };
 export type GapResult = { contacts: OfferContacts; company: CompanyHit | null; link?: GapLink; coverage: CoverageRow[] };
 
 const VENDOR_RE = /(vendor|supplier|procore|buildingconnected|planhub|bidcontender)/i;
@@ -85,10 +87,13 @@ export async function resolveGaps(opp: GapOpp, deps: GapDeps, params?: CampaignP
   if (params?.wantBidPath) await siteStep();
 
   // Steps 1-3: only while the responsible company is not confirmed. One hit = linked; several = pending, never guessed.
+  // The contractor, when the permit has one, is a better name than the applicant.
+  const matchName = opp.applicant?.contractor || opp.applicant?.name;
   const steps: { source: GapLink["via"]; run: (() => Promise<CompanyHit[]>) | null }[] = [
     { source: "permit_no", run: opp.signal.permit_no && deps.byPermitNo ? () => deps.byPermitNo!(opp.signal.permit_no!, town) : null },
     { source: "applicant_phone", run: phoneKey(opp.applicant?.phone) && deps.byPhone ? () => deps.byPhone!(phoneKey(opp.applicant!.phone)!) : null },
-    { source: "name_town", run: opp.applicant?.name && nameKey(opp.applicant.name) && deps.byNameTown ? () => deps.byNameTown!(nameKey(opp.applicant!.name!), town) : null },
+    { source: "name_town", run: matchName && nameKey(matchName) && deps.byNameTown ? () => deps.byNameTown!(nameKey(matchName), town) : null },
+    { source: "name_statewide", run: matchName && nameKey(matchName) && deps.byNameStatewide ? () => deps.byNameStatewide!(nameKey(matchName)) : null },
   ];
   if (opp.link_status !== "confirmed") {
     for (const st of steps) {
@@ -98,7 +103,7 @@ export async function resolveGaps(opp: GapOpp, deps: GapDeps, params?: CampaignP
         const hits = await st.run();
         if (hits.length === 1) {
           company = hits[0];
-          link = { status: "confirmed", via: st.source, company: hits[0] };
+          link = { status: "confirmed", via: st.source, company: hits[0], ...(st.source === "name_statewide" ? { note: "unique_name_statewide" } : {}) };
           row(source, "ok", 1, 1);
           break;
         }

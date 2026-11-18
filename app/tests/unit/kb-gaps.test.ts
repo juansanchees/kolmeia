@@ -105,4 +105,24 @@ describe("matching steps", () => {
     await resolveGaps(opp(), deps({ byPermitNo }));
     expect(byPermitNo).not.toHaveBeenCalled();
   });
+  describe("unique name statewide", () => {
+    const deps2 = (hits: Record<string, { name: string }[]>, seen: string[] = []) => deps({ byNameTown: async () => [], byNameStatewide: async (k) => { seen.push(k); return hits[k] ?? []; } });
+    test("one company with that name key: confirmed, flagged unique_name_statewide", async () => {
+      const r = await resolveGaps(unlinked({ applicant: { name: "Pat Builders LLC" } }), deps2({ "pat builders": [acme] }));
+      expect(r.link).toMatchObject({ status: "confirmed", via: "name_statewide", note: "unique_name_statewide" });
+      expect(r.company?.name).toBe("Acme Builders LLC");
+      expect(r.coverage.map((c) => c.source)).toContain("kb_match:name_statewide");
+    });
+    test("two firms with the same name key stay pending with candidates", async () => {
+      const r = await resolveGaps(unlinked({ applicant: { name: "Pat Builders LLC" } }), deps2({ "pat builders": [acme, { name: "Pat Builders Inc" }] }));
+      expect(r.link).toMatchObject({ status: "pending", via: "name_statewide", candidates: [expect.anything(), expect.anything()] });
+      expect(r.link?.note).toBeUndefined();
+      expect(r.company).toBeNull();
+    });
+    test("contractor name is matched before the applicant name", async () => {
+      const seen: string[] = [];
+      await resolveGaps(unlinked({ applicant: { name: "Pat Person", contractor: "Zed Builders LLC" } }), deps2({}, seen));
+      expect(seen).toEqual(["zed builders"]);
+    });
+  });
 });

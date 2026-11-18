@@ -30,6 +30,8 @@ export type OfferInput = {
   company: { name: string; phone?: string; website?: string } | null;
   link_status: "confirmed" | "pending" | "none";
   contacts: OfferContacts;
+  /** How the company link was found when it is weaker than proof (e.g. `unique_name_statewide`): the caller confirms it. */
+  link_note?: string;
 };
 
 export type OfferVerdict = {
