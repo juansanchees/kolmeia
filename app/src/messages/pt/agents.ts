@@ -95,6 +95,48 @@ export const agents = {
     back: "Voltar",
     create: "Criar agente (pausado)",
   },
+  live: {
+    "title": "Andamento agora",
+    "live": "Ao vivo",
+    "states": {
+      "idle": "Parado",
+      "queued": "Na fila",
+      "running": "Trabalhando",
+      "paused": "Pausado",
+      "done": "Terminou",
+      "failed": "Parou com erro"
+    },
+    "paused": {
+      "default": "Pausado",
+      "user": "Pausado por você",
+      "daily_cap": "Pausado: teto de IA do workspace atingido",
+      "user_cap": "Pausado: teto de IA do usuário atingido",
+      "global_cap": "Pausado: teto de IA geral atingido",
+      "no_access": "Pausado: sem acesso à IA",
+      "error": "Pausado: a configuração do agente está incompleta"
+    },
+    "stages": {
+      "discover_sources": "Procurando fontes",
+      "collect": "Juntando empresas",
+      "verify": "Conferindo cada empresa",
+      "second_pass": "Segunda conferência",
+      "finalize": "Fechando a lista"
+    },
+    "runNow": "Rodar agora",
+    "starting": "Começando...",
+    "found": "Empresas achadas: {n} de {max}",
+    "foundNoMax": "Empresas achadas: {n}",
+    "spent": "Gasto: US$ {spent} de US$ {max}",
+    "spentNoMax": "Gasto: US$ {spent}",
+    "started": "Começou há {m} min",
+    "startedNow": "Começou agora há pouco",
+    "last": "Último achado: {name}",
+    "queuedHint": "Na fila. A busca começa em instantes.",
+    "stale": "Ainda não começou. O relógio passa a cada minuto; se passar de alguns minutos, avise o responsável.",
+    "failedLine": "A última busca parou com um erro. Tente rodar de novo.",
+    "idleLine": "Nenhuma busca rodando agora.",
+    "next": "Próxima busca: {when}"
+  },
   detail: {
     creationCost: "Custo da criação (IA)",
     turnOn: "Ligar",

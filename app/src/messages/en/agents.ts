@@ -97,6 +97,48 @@ export const agents = {
     back: "Back",
     create: "Create agent (paused)",
   },
+  live: {
+    "title": "Progress right now",
+    "live": "Live",
+    "states": {
+      "idle": "Stopped",
+      "queued": "In line",
+      "running": "Working",
+      "paused": "Paused",
+      "done": "Finished",
+      "failed": "Stopped with an error"
+    },
+    "paused": {
+      "default": "Paused",
+      "user": "Paused by you",
+      "daily_cap": "Paused: workspace AI cap reached",
+      "user_cap": "Paused: user AI cap reached",
+      "global_cap": "Paused: overall AI cap reached",
+      "no_access": "Paused: no AI access",
+      "error": "Paused: the agent setup is incomplete"
+    },
+    "stages": {
+      "discover_sources": "Looking for sources",
+      "collect": "Gathering companies",
+      "verify": "Checking each company",
+      "second_pass": "Second check",
+      "finalize": "Closing the list"
+    },
+    "runNow": "Run now",
+    "starting": "Starting...",
+    "found": "Companies found: {n} of {max}",
+    "foundNoMax": "Companies found: {n}",
+    "spent": "Spent: US$ {spent} of US$ {max}",
+    "spentNoMax": "Spent: US$ {spent}",
+    "started": "Started {m} min ago",
+    "startedNow": "Just started",
+    "last": "Latest find: {name}",
+    "queuedHint": "In line. The search starts in a moment.",
+    "stale": "It has not started yet. The clock ticks every minute; if it takes more than a few minutes, tell the person in charge.",
+    "failedLine": "The last search stopped with an error. Try running it again.",
+    "idleLine": "No search running right now.",
+    "next": "Next search: {when}"
+  },
   detail: {
     creationCost: "Setup cost (AI)",
     turnOn: "Turn on",

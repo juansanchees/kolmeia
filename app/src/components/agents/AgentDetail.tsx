@@ -12,12 +12,14 @@ import { AgentPowerButton } from "./AgentPowerButton";
 import { ArchiveButton } from "./ArchiveButton";
 import { Paged } from "@/components/Pager";
 import { AgentHead, DlStat } from "./AgentHead";
+import { AgentLivePanel } from "./AgentLivePanel";
+import type { AgentLive } from "@/lib/agents/live";
 
 type Cfg = { audience?: string; audienceText?: string; region?: string; rigor?: keyof Messages["research"]["plan"]["rigorNames"]; caps?: { maxCandidates: number; maxCostUsd: number; maxMinutes: number } };
 
 const CAP_REASONS = ["daily_cap", "user_cap", "global_cap"];
 
-export async function AgentDetail({ agent, setupRun, runs, now }: { agent: AgentRow; setupRun: RunRow | null; runs: RunRow[]; now: Date }) {
+export async function AgentDetail({ agent, setupRun, runs, now, live }: { agent: AgentRow; setupRun: RunRow | null; runs: RunRow[]; now: Date; live: AgentLive | null }) {
   const t = await getT();
   const A = t.agents;
   const R = A.review;
@@ -28,6 +30,7 @@ export async function AgentDetail({ agent, setupRun, runs, now }: { agent: Agent
   const aud = c.audience === "other" ? c.audienceText : c.audience ? (A.hunter.audiences as Record<string, string>)[c.audience] : undefined;
   return (
     <div className="flex min-w-0 flex-col gap-5">
+      {live && agent.status !== "draft" && <AgentLivePanel agentId={agent.id} initial={live} canRun />}
       <HexPanel as="section" aria-labelledby="agent-title" raised wrapClassName="k-in" className="flex flex-col gap-7 py-7">
         <AgentHead id="agent-title" name={agent.name} type={agent.type} typeLabel={A.types[agent.type]} status={agent.status} statusLabel={A.statuses[agent.status]} />
 

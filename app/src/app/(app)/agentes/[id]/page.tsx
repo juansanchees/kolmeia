@@ -11,6 +11,7 @@ import { CallAgentDetail, type CallDetailRow } from "@/components/agents/CallAge
 import { effectiveTemperature } from "@/lib/leads/classify";
 import { agentCallStats, todayList } from "@/lib/calls/list-queries";
 import type { Person } from "@/lib/team/types";
+import { loadAgentLive } from "@/lib/agents/live-query";
 import { AgentDetail } from "@/components/agents/AgentDetail";
 import { HunterReviewCard } from "@/components/agents/HunterReviewCard";
 import { QuestionsForm } from "@/components/research/QuestionsForm";
@@ -89,9 +90,11 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
     const runs = await store.listRuns(id);
     const conn = await connectedSources(supabase, workspace.id);
     const settings = (await agentSourceSettings(supabase, id)) ?? DEFAULT_AGENT_SOURCES;
+    const now = new Date();
+    const live = await loadAgentLive(supabase, id, now);
     return (
       <div className="flex min-w-0 flex-col gap-5">
-        <AgentDetail agent={agent} setupRun={run} runs={runs} now={new Date()} />
+        <AgentDetail agent={agent} setupRun={run} runs={runs} now={now} live={live} />
         <AgentSources agentId={agent.id} connected={{ maps: conn.maps, apollo: conn.apollo }} settings={settings} />
       </div>
     );
