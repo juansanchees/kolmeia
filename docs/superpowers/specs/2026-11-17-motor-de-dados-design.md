@@ -39,9 +39,10 @@ A Kolmeia passa a ter **a própria base de leads, compartilhada entre todos os c
 | D7 | Régua de qualidade: o app tem que bater as listas padrão-ouro feitas no Claude Code (`data/gold/`), mesma lista e mesma cidade (acertos de empresa + provas). O painel oferece "Rápido / Caprichado" (modelo e tempo maiores = lead mais caro) | Claude — conferir (vem da pergunta do Juan: "vai funcionar tão bem quanto aqui?") |
 | D8 | Carga inicial da base: só o que é coleta nossa (CSVs de `data/ma_sweep`: Maps do robô próprio, alvarás, projetos, crosswalk) e o que o Caçador acha na web. Valor com `source` de terceiro (Apollo, Google Places API, Shovels, RapidAPI) **não entra** na base compartilhada (termos de uso + D2) | Claude — conferir |
 | D9 | Entrega na Fase 1: script de operador (Juan/Claude), com chave de serviço, cria um `lead_imports` de `kind = 'kb'` no workspace da Air HVAC. Não há tela de admin na Fase 1 | Claude — conferir |
-| D10 | Entrega é **cópia** + ligação guardada (lead do cliente ↔ `kb_companies.id`). Valores novos não sobrescrevem o lead do cliente. **Remoção propaga**: apaga/suprime a pessoa ou empresa em todos os workspaces | Claude — conferir |
-| D11 | Canal de remoção na Fase 1: e-mail público na landing + página de privacidade; tratamento manual pelo operador, registrado em `kb_removals`. Formulário público só depois | Claude — conferir |
+| D10 | Entrega é **cópia** + ligação guardada (lead do cliente ↔ `kb_companies.id`). Valores novos não sobrescrevem o lead do cliente. **Remoção propaga** (adiado, D14): apaga/suprime a pessoa ou empresa em todos os workspaces | Claude — conferir |
+| D11 | (adiado, D14) Canal de remoção na Fase 1: e-mail público na landing + página de privacidade; tratamento manual pelo operador, registrado em `kb_removals`. Formulário público só depois | Claude — conferir |
 | D13 | Dados de pessoa: na base entram nome, cargo e telefone da empresa. Endereço residencial nunca. Celular pessoal só se divulgado como contato de trabalho. Do Not Call: checagem é de quem liga, com aviso na tela antes de ligar (sem assinatura do registro federal por enquanto) | Juan |
+| D14 | Remoção/opt-out fica FORA da Fase 1 (empresa pequena, uso interno). Volta antes de vender dados para fora (com registro de data broker) | Juan |
 | D12 | `kb_jobs` guarda quem pediu (`requested_by_run`/`workspace_id` opcional). O cliente só vê os jobs que ele disparou; o resto aparece só como contagem agregada | Claude — conferir |
 
 ## 5. Abordagens consideradas
@@ -104,7 +105,7 @@ Tabelas novas **sem workspace_id** (Claude — conferir os nomes):
 - `kb_signals`: alvará/projeto (endereço, valor declarado, data, tipo de obra) ligado à empresa.
 - `kb_recipes`: receita por nicho (fontes, termos, filtros, sinal, decisor) + métrica de resultado.
 - `kb_jobs`: fila de coleta (fonte, cidade, estado, progresso, erro).
-- `kb_removals`: pedidos de remoção/opt-out, que valem para todos os clientes.
+- `kb_removals`: pedidos de remoção/opt-out, que valem para todos os clientes (adiado, D14).
 
 Acesso: cliente nunca lê a base crua. Só funções do servidor entregam e copiam para os leads do workspace, pelo caminho de import existente (`import_lead_rows`/`find_lead`, deduplicação e "Desfazer"). A RLS da base nega tudo a `authenticated` (Claude — conferir).
 
@@ -146,7 +147,7 @@ Visual: mesmo padrão de marinho, mel e hexágono do resto do app.
 - Só dados públicos. Sem login, sem criar conta, sem CAPTCHA, sem paywall, sem trocar IP para furar bloqueio.
 - LinkedIn: só sem login/cookie, perfis públicos, volume baixo, uso interno, nunca a conta do Juan. Maps: volume baixo. Nenhum dos dois é revendido.
 - A licença CSL é de pessoa e o telefone pode ser celular pessoal. Antes de ligar: lista Do Not Call. SMS frio nunca.
-- Pedido de remoção vale para a base inteira (`kb_removals`).
+- Pedido de remoção vale para a base inteira (`kb_removals`) (adiado, D14).
 - Antes de vender dados para fora: checar registro de "data broker" nos estados que exigem (?). Não vale para a Fase 1 (uso interno + clientes da Kolmeia).
 - Repo público: nenhum dado real de lead, nenhuma chave em código ou teste.
 - Backup de produção antes de cada migração.
