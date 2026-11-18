@@ -146,60 +146,93 @@ Files: `src/lib/kb/{types,fresh,load}.ts` (Plan A Task 5, all of it), `src/lib/o
 - `permit without company asks for GC`
 - `vendor portal link sets contact_path vendor_portal`
 
+- Campaign params (from P4) shape the verdict without code changes per instruction: `evaluate(input, now, params?: CampaignParams)` with `CampaignParams = { preferKinds?: BuildingKind[]; deprioritizeKinds?: BuildingKind[]; minValueUsd?: number; wantBidPath?: boolean }` and `BuildingKind = 'single_family'|'adu'|'multifamily'|'commercial'|'other'`. The rule classifies `buildingKind` (multifamily = units ≥ 3, "multi-family", "apartments", "condo", "townhouses"; commercial = commercial/COMM use) and returns it in the verdict plus `facts` (the evaluation input snapshot, JSON) so the app can re-score later without the base. Demoted items get a priority code (e.g. `below_min_value`, `kind_deprioritized`); `wantBidPath` raises `can_bid` gaps to the top of open questions and of the gap resolver order.
+- Offer metadata for proposals (used by P4): each `Offer` also exposes `meta = { audience: string /* code */, buyerCodes: string[], signalCodes: string[], sourceCodes: string[], profileFit(profile: CompanyProfileLike): { score: number; reasonCodes: string[]; assumptionCodes: string[]; missing?: string /* question code */ } }`. Ship `hvac_new_construction` fully and a `building_maintenance` stub whose `meta` is complete and whose `evaluate` returns `fit 'no'` with code `not_implemented` (proposal only; the Falmouth pilot does not run it).
+
 Commit: `feat(offers): reusable offer rule (hvac_new_construction), gap resolver, coverage`.
 
-### Task P4: Screens — call facts, coverage, agent offer
-Para o Juan: na ficha de ligação aparece a obra, a data com link da fonte, o motivo, o contato, o gancho e as perguntas; na Cobertura aparece cada cidade e fonte com o motivo do que faltou; no agente dá para escolher a oferta.
+### Task P4: Proposals, campaigns, rounds and preferences
+Para o Juan: com só "quero mais clientes", o agente lê o perfil da empresa e propõe 2-3 buscas explicadas; a busca escolhida vira uma campanha com conversa salva, rodadas com motivo de parada e feedback que vale na hora; preferência permanente só depois da sua aprovação, com desfazer.
 
-- `CallFacts.tsx` (and the lead modal's facts if they share data) shows the top open opportunity:
-  - title, date + source link, priority reasons (from codes via messages), contact path (phone / "Cadastro de fornecedor" link / bids page), `hookEn` (lang="en"), and open questions (codes via messages).
-  - Data is loaded in the existing lead-detail query path.
-- Coverage page `/leads/cobertura`: add a section "Por fonte" with one row per (town, source): date, outcome badge, entered count and reason.
-  - Read it through a new `security definer` function `kb_coverage(p_ws uuid)` (in 0041), which checks membership and returns operator rows (null workspace) plus that workspace's rows.
-  - A non-member gets a permission error.
-- Agent setup: add `offer` (select from `OFFERS`, default none) to `HunterSetup`, the wizard and the agent detail. Stored in the config. The AI run is unchanged.
-- pt/en messages in parity; Plan A Task 10 `/bot` page as specified there.
-- Tests: render/source tests in the style of existing component tests, the parity test, and `kb_coverage` membership tests.
+Files: `app/supabase/migrations/0042_hunt_campaigns.sql`, `src/lib/hunt/{proposals,interpret,rescore,rounds}.ts`, tests in `tests/db/` and `tests/unit/`.
+- Tables (workspace-scoped, RLS for members like `leads`; writes only through `security definer` functions callable by `authenticated` members with role owner/sdr, after a membership check):
+  - `hunt_campaigns(id, workspace_id, agent_id → agents on delete set null, offer text, region text, request text ≤1000, params jsonb default '{}', status text check in ('active','paused','done') default 'active', created_by, created_at, updated_at)`.
+  - `hunt_rounds(id, campaign_id cascade, n int, started_at, ended_at, stop_reason text check in ('fulfilled','limit','exhausted','waiting'), request_snapshot text, params_snapshot jsonb, summary jsonb /* {new, updated, demoted, sources:[{source,town,outcome,reason}], blockers:[code], asks:[code]} */, unique (campaign_id, n))`.
+  - `hunt_messages(id, campaign_id cascade, round_id → hunt_rounds set null, role text check in ('user','agent'), body text ≤4000, created_at)`. The conversation survives closing and reopening the app.
+  - `lead_opportunities` gets `campaign_id uuid → hunt_campaigns on delete set null` and `facts jsonb` (from P3), plus `round_seen int`, `previous_priority int`.
+  - `offer_preferences(id, workspace_id, offer text, rule jsonb /* CampaignParams subset */, status text check in ('proposed','approved','undone'), example_lead_ids uuid[], expected_effect jsonb /* {up:int, down:int} */, proposed_at, decided_by, decided_at)`. Scope = (workspace, offer). `undone` keeps the row (history).
+- Functions: `hunt_campaign_create(p_ws, p_offer, p_region, p_request, p_params) → uuid`; `hunt_message_add(p_campaign, p_role, p_body, p_round)`; `hunt_campaign_apply(p_campaign, p_params, p_message)` (merges params, starts round n+1 with stop_reason null, re-scores this campaign's open opportunities with the new params via the stored `facts` — scoring itself is done in TS and written back through `hunt_round_finish(p_round, p_scores jsonb, p_summary jsonb, p_stop_reason)` so SQL stays dumb); `offer_preference_decide(p_pref, p_decision 'approved'|'undone')`.
+- `proposals.ts`: `proposeSearches(profile, coverage, offers = OFFERS): Proposal[]` returns 2–3 items sorted by score, each `{ offer, titleCode, buyerCodes, whyFitCodes, signalCodes, sourceCodes, assumptionCodes, recommended: boolean, recommendReasonCodes }`, plus `question?: code` only when a missing profile fact would change the recommendation (e.g. no region). Deterministic, from the saved `company_profiles` row and site facts already stored; no AI. Test with an invented HVAC-installer profile: proposals include `hvac_new_construction` and `building_maintenance` with different audiences and sources; an invented bakery profile does not get either (examples are test criteria, not fixed answers).
+- `interpret.ts`: `interpretInstruction(text: string, lang: 'pt'|'en'): { params: Partial<CampaignParams>; understoodCodes: string[]; unknown: string[] }`, a deterministic phrase map (pt + en) covering at least: small/large houses, multifamily/apartments/condos, commercial, minimum value, "how to submit a bid / por onde apresentar orçamento", only recent. Unknown text → returned in `unknown` and the agent replies asking a simple question. Behind an `Interpreter` interface so an AI interpreter can replace it later (not built now: paid AI needs Juan's ok).
+  Acceptance test: `"essas casas são pequenas demais; nesta busca priorize multifamiliares e descubra por onde apresentar orçamento"` → `{ deprioritizeKinds:['single_family','adu'], preferKinds:['multifamily'], wantBidPath:true }`.
+- `rescore.ts`: re-evaluates stored `facts` with params + approved preferences of the same (workspace, offer) and returns per-opportunity `{priority, codes, movedUp|movedDown|same}`.
+- `rounds.ts`: `summarizeRound(before, after, coverage, blockers) → summary` and `stopReason({fulfilled, spentUsd, limitUsd, elapsedMs, limitMs, newEvidence}) → 'fulfilled'|'limit'|'exhausted'|'waiting'` ('waiting' = only steps that need the person or live access are left; the rest continues).
+- Preference proposals: `proposePreference(outcomes)` — when ≥3 call outcomes or explicit feedback on one campaign point the same way (e.g. ≥3 `not_interested`/`discarded` on `single_family`), propose a rule with the example lead ids and the expected effect on the current queue; never auto-apply.
+- Tests:
+  - `instruction applies to this campaign immediately`
+  - `other campaign params untouched`
+  - `preference only after approval`
+  - `undo restores previous priorities`
+  - `reopen keeps messages and rounds`
+  - `round 2 reuses round 1 opportunities (no new rows, priorities updated)`
+  - `stop reason waiting when only live steps remain`
+  - `non-member cannot read or write campaigns`
+  - `closer role cannot apply instructions` (if roles allow; else document)
 
-Commit: `feat(ui): opportunity facts on the call screen, coverage by source, agent offer`.
+Commit: `feat(hunt): search proposals, campaigns with rounds, instructions and approved preferences (0042)`.
 
-### Task P5: Pilot runner and evaluation scripts
-Para o Juan: um comando roda o piloto de Falmouth com os dados que já temos e outro compara o resultado com a lista padrão-ouro, sem a lista padrão-ouro entrar no agente.
+### Task P5: Screens — first access, campaign chat, call facts, coverage
+Para o Juan: na tela do agente, "quero mais clientes" mostra as 2-3 sugestões explicadas e um botão para aceitar; a conversa da campanha mostra cada rodada (novas, atualizadas, perderam prioridade, fontes, o que falta e por que parou); a ficha de ligação mostra obra, data com link, motivo, contato, gancho e perguntas; a Cobertura mostra cada cidade e fonte com o motivo.
+
+- Agent page: an entry box with "quero mais clientes" (pt) / "I want more customers" (en). On submit, show `proposeSearches` cards in business language (who buys, why it fits, which signal, where the agent looks, assumptions), the recommended one marked, a one-click "Começar por esta", a free-text "Ajustar" box (goes through `interpretInstruction`), and "Outra busca" for a specific request. Accepting creates a `hunt_campaigns` row (offer, region from profile or the answer to the question).
+- Campaign view (`/agentes/[id]/campanhas/[campaignId]` or a section on the agent page — pick the smallest that fits the existing layout): message thread from `hunt_messages`, one card per round with `summary` (new / updated / demoted / sources consulted with outcome / blockers and asks / stop reason in plain words), the input box for the next instruction, and the pending preference card (rule, examples, expected effect, Aprovar / Agora não, and Desfazer for approved ones).
+- `CallFacts.tsx` (and the lead modal facts if they share data) shows the top open opportunity: title, date + source link, priority reasons, contact path (phone / "Cadastro de fornecedor" link / bids page), `hookEn` (lang="en"), open questions.
+- `/leads/cobertura`: section "Por fonte" with one row per (town, source): date, outcome, entered count, reason. Read through `kb_coverage(p_ws uuid)` (security definer in 0041 or 0042; membership check; operator rows + that workspace's rows).
+- Agent setup: store `offer` and `campaign_id` in the agent config. The AI hunter run is unchanged.
+- Plan A Task 10 `/bot` page as specified there.
+- pt/en in parity, every code from P3/P4 has a message.
+- Tests: component/source tests in the existing style, the parity test, and `kb_coverage` membership.
+
+Commit: `feat(ui): first-access proposals, campaign rounds chat, opportunity call facts, coverage by source`.
+
+### Task P6: Pilot runner and evaluation scripts
+Para o Juan: um comando roda cada rodada do piloto de Falmouth com os dados que já temos e outro compara o resultado com a lista padrão-ouro, sem a lista padrão-ouro entrar no agente.
 
 - `scripts/pilot-env.ts`:
   - Guards for `PILOT_DATA_DIR`/`PILOT_OUT_DIR` outside the repo and the DB URL rule.
-  - Service key from Keychain service `kolmeia-pilot-local` (account `kolmeia-pilot`) or env `PILOT_SERVICE_KEY` for a local Supabase only.
-- `scripts/pilot-falmouth.smoke.ts`, skipped unless `PILOT_RUN=1`. Steps:
+  - Service key from env `PILOT_SERVICE_KEY` (local Supabase only) or Keychain service `kolmeia-pilot-local`, account `kolmeia-pilot`.
+- `scripts/pilot-falmouth.smoke.ts`, skipped unless `PILOT_RUN=1`. Takes `PILOT_CAMPAIGN_ID` (round runner for that campaign) and `PILOT_WORKSPACE_ID`. Steps:
   1. Load Falmouth rows from `ma_sweep/maps/raw/falmouth.csv`, Falmouth rows of `ma_sweep/projects/projects_massbuilds.csv`, and permits from `PILOT_DATA_DIR/permits_2026/falmouth.csv` if present (else coverage `skipped`, reason `no permit file`).
   2. `kb_ingest`.
   3. Read back signals and companies.
-  4. `resolveGaps` (live only with `PILOT_LIVE=1`).
-  5. `getOffer('hvac_new_construction').evaluate`.
-  6. `kb_deliver` into `PILOT_WORKSPACE_ID` as list "Piloto Falmouth · HVAC obra nova" with opportunities where `fit != 'no'`.
-  7. Write coverage `kb_jobs` rows.
-  8. Write `PILOT_OUT_DIR/pilot-run.json` (counts, coverage, per-opportunity verdicts).
+  4. `resolveGaps` (live only with `PILOT_LIVE=1`; `wantBidPath` puts bid-path steps first).
+  5. Evaluate with the campaign params and approved preferences.
+  6. `kb_deliver` into the workspace as list "Piloto Falmouth · HVAC obra nova", with opportunities (`fit != 'no'`) tagged with `campaign_id`.
+  7. Finish the round with summary and stop reason.
+  8. Write the coverage `kb_jobs` rows.
+  9. Write `PILOT_OUT_DIR/pilot-round-<n>.json`.
   It prints only counts.
 - `src/lib/evals/{gold,score}.ts` (Plan B Task 1 shapes; reuse `matchCompanies` from `baseline.ts`):
   - `scoreQueue(queue, gold)` → `{ denominators, recovered, missed, falsePositives, newNotInGold, duplicates, withProof, withContactPath }`.
-  - Company match by name_key / domain / phone.
 - `scripts/eval-falmouth.smoke.ts`, skipped unless `EVAL_RUN=1`:
-  - Reads gold Falmouth labels from a CSV export at `PILOT_DATA_DIR/gold/falmouth_gold.csv`, made by a private one-off Python export outside the repo.
-  - Reads `pilot-run.json`.
-  - Builds the **current flow** baseline locally: the same Maps + projects rows ranked by the existing `priorityOf` (`src/lib/leads/classify.ts`), no AI.
-  - Scores both and writes `PILOT_OUT_DIR/eval-falmouth.md`.
-  - Separates `newNotInGold` for manual review.
-  - Prints only counts.
+  - Reads the gold Falmouth labels from `PILOT_DATA_DIR/gold/falmouth_gold.csv` (private Python export outside the repo, made by the orchestrator).
+  - Reads the round files.
+  - Builds the **current flow** baseline on the same rows with the existing `priorityOf`, no AI.
+  - Scores both, plus round 1 vs round 2.
+  - Writes `PILOT_OUT_DIR/eval-falmouth.md` and prints counts only.
 - Tests (unit, invented data):
   - `scoreQueue` counts duplicates and recovered
-  - env guards refuse prod ref and a repo path
-  - both scripts skip without their flag
+  - env guards refuse the prod ref and a repo path
+  - scripts skip without their flag
 
-Commit: `feat(pilot): Falmouth pilot runner and gold evaluation`.
+Commit: `feat(pilot): Falmouth round runner and gold evaluation`.
 
-### Task P6: ORCHESTRATOR — local run, UI walk-through, report
+### Task P7: ORCHESTRATOR — local run, UI walk-through, report
 - Local DB per Juan's choice.
-- Run the pilot twice (second run = idempotency proof).
-- Run the eval.
-- Walk the UI: agent with the offer, `/leads/ligar`, a call facts screen, the coverage section, and a logged outcome.
-- Live permit collection (PermitEyes with the US VPN), live site reads and any AI baseline run happen only after Juan's explicit ok. Otherwise the report says exactly what was not validated.
+- First access with the Air HVAC profile and only "quero mais clientes"; accept installation.
+- Round 1, eval, then reopen the app and the campaign; give the multifamily instruction; round 2; eval again.
+- Confirm that the other campaign's params are intact, that the preference proposal is approved and then undone, and walk `/leads/ligar`, the call facts, a logged outcome and the coverage section.
+- Live permit collection (PermitEyes, US VPN), live site reads and any AI run only after Juan's explicit ok; otherwise the report states exactly what was not validated.
 - Update `/Users/juansanchees/Documents/Hvac - Project/docs/contexto-geral-2026-11-18.md` and memory.
+
+
