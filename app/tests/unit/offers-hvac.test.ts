@@ -53,6 +53,13 @@ describe("recent", () => {
     expect(ev(base({ issued_on: d })).checks.recent.state).toBe(s);
   });
   test("a no on recent makes fit no", () => expect(ev(base({ issued_on: "2024-01-01" })).fit).toBe("no"));
+  test("a date more than 7 days in the future is a typo: recency missing, no recency points; up to 7 days counts as today", () => {
+    const far = ev(base({ issued_on: "2027-11-18" }));
+    expect(far.checks.recent.state).toBe("missing");
+    expect(far.priorityCodes.filter((c) => c.startsWith("issued_"))).toEqual([]);
+    expect(far.priority).toBeLessThan(ev(base({ issued_on: "2026-11-10" })).priority);
+    expect(ev(base({ issued_on: "2026-11-24" })).priorityCodes).toContain("issued_30d");
+  });
 });
 
 describe("hvac_fit", () => {

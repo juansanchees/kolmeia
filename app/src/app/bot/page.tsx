@@ -24,7 +24,7 @@ export default async function BotPage({ searchParams }: { searchParams: Promise<
         <p className="m-0 text-base">{B.uaLabel}</p>
         <code className="break-all rounded-[10px] bg-ground px-3 py-2 font-mono text-sm">{USER_AGENT}</code>
       </section>
-      <a href={pt ? "/bot" : "/bot?lang=pt"} className="k-link text-base underline">{pt ? "English" : "Português"}</a>
+      <a href={pt ? "/bot" : "/bot?lang=pt"} className="k-link text-base underline">{B.switchLang}</a>
     </PublicShell>
   );
 }

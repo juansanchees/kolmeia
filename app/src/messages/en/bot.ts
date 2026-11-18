@@ -14,4 +14,6 @@ export const bot = {
   noLogin: "It does not log in, fill in forms or use cookies.",
   uaTitle: "Identification (User-Agent)",
   uaLabel: "The robot sends this text with every request:",
+  // the link to the other language, named in that language
+  switchLang: "Português",
 } as const satisfies Widen<typeof pt>;

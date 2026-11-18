@@ -46,9 +46,15 @@ describe.each([["pt", pt], ["en", en]] as const)("hunt messages (%s)", (_l, M) =
     for (const c of ["fulfilled", "limit", "exhausted", "waiting"]) expect(H.round.stop, c).toHaveProperty(c);
     for (const c of ["ok", "partial", "blocked", "robots", "down", "login", "empty", "skipped"]) expect(H.round.outcomes, c).toHaveProperty(c);
     for (const c of strings(src("hunt/flow.ts"), /code: "(need_\w+)"/g)) expect(H.round.blockerCodes, c).toHaveProperty(c);
-    for (const c of strings(src("hunt/flow.ts"), /code: "(run_\w+)", ask: true/g)) expect(H.round.askCodes, c).toHaveProperty(c);
+    for (const c of strings(src("hunt/flow.ts"), /code: "(\w+)", ask: true/g)) expect(H.round.askCodes, c).toHaveProperty(c);
+    // the pilot runner's codes (rounds.ts runnerBlockers): source outcomes, live off, unlinked permits
+    const rounds = src("hunt/rounds.ts");
+    const runner = [...strings(rounds, /: "(source_\w+)"/g), ...strings(rounds, /code: "(\w+)"/g)];
+    expect(runner.length).toBeGreaterThanOrEqual(6);
+    for (const c of runner) expect({ ...H.round.blockerCodes, ...H.round.askCodes }, c).toHaveProperty(c);
+    for (const c of strings(rounds, /code: "(\w+)", ask: true/g)) expect(H.round.askCodes, c).toHaveProperty(c);
     for (const c of ["single_family", "adu", "multifamily", "commercial", "other"]) expect(H.pref.kinds, c).toHaveProperty(c);
-    for (const c of ["maps_robot", "permit", "project", "crosswalk", "license_csl", "license_hic", "corp_registry", "site_robot"]) expect(H.cov.sources, c).toHaveProperty(c);
+    for (const c of ["maps_robot", "permit", "project", "crosswalk", "license_csl", "license_hic", "corp_registry", "site_robot", "permit_portal", "kb_match:permit_no", "kb_match:applicant_phone", "kb_match:name_town"]) expect(H.cov.sources, c).toHaveProperty(c);
   });
   test("an unknown code falls back to the code, never blank", () => expect(word(H.priority, "brand_new_code")).toBe("brand_new_code"));
   test("the acceptance sentence is understood in pt and the english twin in en", () => {

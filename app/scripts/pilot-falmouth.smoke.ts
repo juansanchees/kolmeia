@@ -1,4 +1,5 @@
-// Falmouth pilot round runner (LOCAL Supabase). One run = one round of one campaign. Run: npm run pilot:round
+// Falmouth pilot round runner (LOCAL Supabase). One run = one NEW round of one campaign (it opens its own: the app closes
+// every round it opens). Run: npm run pilot:round
 // Env: PILOT_RUN=1, PILOT_CAMPAIGN_ID, PILOT_SERVICE_KEY, PILOT_ANON_KEY, PILOT_OUT_DIR (needs local-seed.json from pilot:seed),
 //      optional PILOT_WORKSPACE_ID, PILOT_DATA_DIR, PILOT_LIVE=1 (real site reads through readSite; off = recorded as `live off`).
 // No paid AI: the offer rule, gap lookups and hook are deterministic. The gold list is never read here. Prints counts only.
@@ -12,7 +13,11 @@ import { falmouthPermitItems, mapsItems, massbuildsProjectItems } from "@/lib/kb
 import type { KbItem } from "@/lib/kb/types";
 import { supabaseHuntDb } from "@/lib/hunt/db";
 import { effectiveParams, rescore } from "@/lib/hunt/rescore";
-import { stopReason, summarizeRound, type Blocker } from "@/lib/hunt/rounds";
+import { openRunnerRound } from "@/lib/hunt/flow";
+import { runnerBlockers, stopReason, summarizeRound } from "@/lib/hunt/rounds";
+import { agentReply } from "@/lib/hunt/text";
+import { fill } from "@/messages/fill";
+import { pt } from "@/messages/pt";
 import { classifyBuilding } from "@/lib/offers/hvac-new-construction";
 import { getOffer, toOpportunityRow, type CampaignParams, type OfferInput, type OfferSignal } from "@/lib/offers";
 import { nameKey } from "@/lib/research/dedupe";
@@ -66,7 +71,7 @@ test.skipIf(process.env.PILOT_RUN !== "1")("pilot round", async () => {
   const camp = must(await user.from("hunt_campaigns").select("id, workspace_id, offer, params").eq("id", campaignId).single(), "campaign") as { id: string; workspace_id: string; offer: string; params: CampaignParams };
   if (camp.workspace_id !== ws) throw new Error("campaign does not belong to PILOT_WORKSPACE_ID");
   const offer = getOffer(camp.offer);
-  const round = await hunt.openRound(campaignId);
+  const round = await openRunnerRound(hunt, campaignId);
   const approved = await hunt.approvedRules(ws, camp.offer);
   const params = effectiveParams(camp.params, approved);
   const before = await hunt.campaignOpps(campaignId);
@@ -189,16 +194,12 @@ test.skipIf(process.env.PILOT_RUN !== "1")("pilot round", async () => {
   const stored = await hunt.campaignOpps(campaignId);
   const scores = rescore(stored, camp.offer, camp.params, approved, now);
   const rc = reduceCoverage(cov);
-  const blockers: Blocker[] = [
-    ...rc.filter((c) => ["blocked", "robots", "down", "login"].includes(c.outcome)).map((c) => ({ code: `${c.source}:${c.outcome}`, ask: c.outcome === "login" })),
-    ...rc.filter((c) => c.reason?.includes("live off")).map(() => ({ code: "live_off", ask: true })),
-    ...(unlinked.length ? [{ code: "unlinked_permits" }] : []),
-  ];
+  const blockers = runnerBlockers(rc, unlinked.length);
   const summary = summarizeRound(before, scores.map((s) => ({ id: s.opportunity_id, priority: s.priority })), rc, blockers);
   // a single deterministic pass is the whole round: nothing more to run, so it ends waiting (live steps skipped) or exhausted
   const stop = stopReason({ fulfilled: false, spentUsd: 0, limitUsd: 1, elapsedMs: Date.now() - t0, limitMs: 15 * 60_000, newEvidence: false, waitingSteps: rc.filter((c) => c.reason?.includes("live off")).length }) ?? "exhausted";
   must(await user.rpc("hunt_round_finish", { p_round: round.id, p_scores: scores.map((s) => ({ opportunity_id: s.opportunity_id, priority: s.priority, priority_codes: s.priority_codes, open_questions: s.open_questions })), p_summary: summary, p_stop_reason: stop }), "hunt_round_finish");
-  await hunt.rpc("hunt_message_add", { p_campaign: campaignId, p_role: "agent", p_body: `Rodada ${round.n}: ${summary.new} novas, ${summary.updated} subiram, ${summary.demoted} perderam prioridade. Parou por: ${stop}.`, p_round: round.id });
+  await hunt.rpc("hunt_message_add", { p_campaign: campaignId, p_role: "agent", p_body: agentReply(pt.hunt, { understood: [], unknown: [], summary, stop, head: fill(pt.hunt.campaign.round, { n: round.n }) }), p_round: round.id });
 
   // 8. coverage rows in kb_jobs (what kb_coverage shows on the screen)
   const fin = new Date().toISOString();

@@ -30,6 +30,21 @@ export function summarizeRound(before: { id: string; priority: number }[], after
   return s;
 }
 
+// A source that said no becomes one stable code (the coverage rows keep which source and why).
+const SOURCE_CODES: Partial<Record<CoverageRow["outcome"], string>> = { blocked: "source_blocked", robots: "source_robots", down: "source_down", login: "source_login" };
+
+/** What the pilot runner's round still lacks, as codes with words in messages (`hunt.round.blockerCodes` / `askCodes`). */
+export function runnerBlockers(coverage: CoverageRow[], unlinked: number): Blocker[] {
+  const out: Blocker[] = [];
+  for (const c of coverage) {
+    const code = SOURCE_CODES[c.outcome];
+    if (code) out.push({ code, ask: c.outcome === "login" });
+  }
+  if (coverage.some((c) => c.reason?.includes("live off"))) out.push({ code: "live_off", ask: true });
+  if (unlinked) out.push({ code: "unlinked_permits" });
+  return out;
+}
+
 /**
  * Why a round stops, or null when it should keep going (the last pass found new evidence and nothing ran out).
  * `waitingSteps` = steps left that need the person or live access; everything else keeps running without them.

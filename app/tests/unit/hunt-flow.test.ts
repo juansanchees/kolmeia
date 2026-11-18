@@ -1,5 +1,7 @@
 import { describe, expect, test } from "vitest";
-import { applyInstruction, decidePreference, refreshPreference, startCampaign, type Campaign, type HuntDb } from "@/lib/hunt/flow";
+import { applyInstruction, decidePreference, openRunnerRound, refreshPreference, startCampaign, type Campaign, type HuntDb } from "@/lib/hunt/flow";
+import { runnerBlockers } from "@/lib/hunt/rounds";
+import { agentReply } from "@/lib/hunt/text";
 import { mergeParams, type Outcome, type StoredOpp } from "@/lib/hunt/rescore";
 import { hvacNewConstruction } from "@/lib/offers/hvac-new-construction";
 import type { CampaignParams, OfferInput } from "@/lib/offers/types";
@@ -97,6 +99,17 @@ describe("applyInstruction", () => {
     expect(f.call("hunt_campaign_apply").args.p_params).toEqual({});
   });
 
+  test("nothing understood is never 'fulfilled': the round waits on a simple question", async () => {
+    const f = fake([opp("m1", facts("New 12 unit apartment building", { bids_url: "https://example.com/bids", bids_source_url: "https://example.com" }))]);
+    await applyInstruction(f.db, M, "pt", camp(), "faça um bolo");
+    const fin = f.call("hunt_round_finish").args;
+    expect(fin.p_stop_reason).toBe("waiting");
+    expect(fin.p_summary).toMatchObject({ asks: ["say_what_to_change"] });
+    const reply = String(f.calls.at(-1)!.args.p_body);
+    expect(reply).toContain(M.round.askCodes.say_what_to_change);
+    expect(reply).not.toContain(M.round.stop.fulfilled);
+  });
+
   test("english: same flow, english words", async () => {
     const f = fake(houses);
     await applyInstruction(f.db, en.hunt, "en", camp(), "these houses are too small");
@@ -124,5 +137,59 @@ describe("preferences", () => {
     const two = fake([], { outcomes: async () => outcomes(2) });
     await refreshPreference(two.db, camp());
     expect(two.names()).toEqual([]);
+  });
+});
+
+describe("pilot runner round", () => {
+  /** A fake that keeps rounds like the database: create opens round 1, finish closes it, apply closes any open one and opens the next. */
+  function stateful() {
+    const rounds: { id: string; n: number; open: boolean }[] = [];
+    const calls: Call[] = [];
+    const open = (n: number) => (rounds.forEach((r) => (r.open = false)), rounds.push({ id: `round-${n}`, n, open: true }), rounds.at(-1)!);
+    const db: HuntDb = {
+      async rpc(fn, args) {
+        calls.push({ fn, args });
+        if (fn === "hunt_campaign_create") return (open(1), "camp-1") as never;
+        if (fn === "hunt_campaign_apply") { const r = open(rounds.length + 1); return { round_id: r.id, n: r.n } as never; }
+        if (fn === "hunt_round_finish") { const r = rounds.find((x) => x.id === args.p_round)!; if (!r.open) throw new Error("round already finished"); r.open = false; }
+        return null as never;
+      },
+      async openRound() {
+        const r = rounds.filter((x) => x.open).at(-1);
+        if (!r) throw new Error("openRound: no open round");
+        return { id: r.id, n: r.n };
+      },
+      campaignOpps: async () => [],
+      approvedRules: async () => [],
+      coverage: async () => COV,
+      outcomes: async () => [],
+    };
+    return { db, calls };
+  }
+
+  test("after 'Começar por esta' closed round 1, the runner opens round 2 itself with the stored params and finishes it", async () => {
+    const f = stateful();
+    const id = await startCampaign(f.db, M, { ws: "ws-1", offer: "hvac_new_construction", region: "Exampleton, MA", request: "quero mais clientes", params: {} });
+    await expect(f.db.openRound(id)).rejects.toThrow("no open round");
+    const round = await openRunnerRound(f.db, id);
+    expect(round).toEqual({ id: "round-2", n: 2 });
+    expect(f.calls.find((c) => c.fn === "hunt_campaign_apply")!.args).toEqual({ p_campaign: "camp-1", p_params: null, p_message: null });
+    await f.db.rpc("hunt_round_finish", { p_round: round.id, p_scores: [], p_summary: {}, p_stop_reason: "waiting" });
+    expect((await openRunnerRound(f.db, id)).n).toBe(3);
+  });
+
+  test("runner blockers are stable codes with words, and the runner's reply uses them (no raw code, no raw stop reason)", () => {
+    const cov = (source: string, outcome: CoverageRow["outcome"], reason?: string): CoverageRow => ({ town: "Exampleton", source, ran_at: "2026-11-01T00:00:00Z", outcome, queried: 1, rows_in: 0, ...(reason ? { reason } : {}) });
+    const b = runnerBlockers([cov("site_robot", "blocked"), cov("kb_match:permit_no", "down"), cov("permit", "robots"), cov("x", "login"), cov("permit_portal", "skipped", "live off"), cov("maps_robot", "ok")], 2);
+    expect(b.map((x) => x.code).sort()).toEqual(["live_off", "source_blocked", "source_down", "source_login", "source_robots", "unlinked_permits"]);
+    for (const L of [pt.hunt, en.hunt]) {
+      for (const x of b) expect(x.ask ? L.round.askCodes : L.round.blockerCodes, x.code).toHaveProperty(x.code);
+      for (const c of ["site_robot", "permit_portal", "kb_match:permit_no", "kb_match:applicant_phone", "kb_match:name_town"]) expect(L.cov.sources, c).toHaveProperty(c);
+    }
+    const reply = agentReply(M, { understood: [], unknown: [], summary: { new: 1, updated: 0, demoted: 0, sources: [], blockers: b.filter((x) => !x.ask).map((x) => x.code), asks: b.filter((x) => x.ask).map((x) => x.code) }, stop: "waiting" });
+    expect(reply).toContain(M.round.stop.waiting);
+    expect(reply).toContain(M.round.askCodes.live_off);
+    expect(reply).not.toMatch(/\b(live_off|unlinked_permits|source_\w+|waiting)\b/);
+    expect(runnerBlockers([cov("maps_robot", "ok")], 0)).toEqual([]);
   });
 });

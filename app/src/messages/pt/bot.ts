@@ -11,4 +11,6 @@ export const bot = {
   noLogin: "Não faz login, não preenche formulários e não usa cookies.",
   uaTitle: "Identificação (User-Agent)",
   uaLabel: "O robô envia este texto em cada pedido:",
+  // the link to the other language, named in that language
+  switchLang: "English",
 } as const;

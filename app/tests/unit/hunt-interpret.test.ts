@@ -65,5 +65,14 @@ describe("interpretInstruction", () => {
     }
     expect(interpretInstruction("só obras novas e recentes", "pt").params).toEqual({ maxAgeDays: 90 });
   });
+  test.each([
+    ["evite casas grandes", "pt"], ["não quero casas grandes", "pt"], ["sem casas grandes", "pt"],
+    ["avoid big houses", "en"], ["no large homes", "en"], ["don't want large houses", "en"],
+  ] as const)("negated large houses lose priority: %s", (text, lang) => {
+    const r = interpretInstruction(text, lang);
+    expect(r.params).toEqual({ deprioritizeKinds: ["single_family"] });
+    expect(r.understoodCodes).toEqual(["deprioritize_large_houses"]);
+  });
+  test("large houses without a negation still move up", () => expect(interpretInstruction("priorize casas grandes", "pt").params).toEqual({ preferKinds: ["single_family"] }));
   test("Interpreter interface", () => expect(phraseInterpreter.interpret("condos", "en").params).toEqual({ preferKinds: ["multifamily"] }));
 });

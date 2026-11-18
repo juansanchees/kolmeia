@@ -86,6 +86,7 @@ export const hunt = {
   understood: {
     deprioritize_small_houses: "small houses lose priority",
     prefer_large_houses: "large houses move up",
+    deprioritize_large_houses: "large houses lose priority",
     prefer_multifamily: "multifamily moves up",
     deprioritize_multifamily: "multifamily loses priority",
     prefer_commercial: "commercial moves up",
@@ -145,9 +146,16 @@ export const hunt = {
     },
     blockerCodes: {
       need_bid_path: "Still need to find where to submit a bid (vendor registration or bids page).",
+      unlinked_permits: "Some relevant jobs have no identified builder: they stay in the report until someone finds the builder.",
+      source_blocked: "A source blocked access (see “Sources checked”); the Hunter went on with the others.",
+      source_robots: "A source forbids robots (robots.txt); the Hunter did not read it and went on with the others.",
+      source_down: "A source was down; the Hunter went on with the others.",
     },
     askCodes: {
       run_pilot: "The first search has not run yet: the operator has to run it.",
+      live_off: "Some steps need live access (websites, permit portal) and did not run: the operator has to turn live access on.",
+      source_login: "A source asks for a login: only you can sign in or send the file.",
+      say_what_to_change: "What should I change? For example: prioritize multifamily, or only recent jobs.",
     },
   },
   reply: {
@@ -232,7 +240,12 @@ export const hunt = {
       license_hic: "Licenses (home improvement)",
       corp_registry: "Company registry",
       site_robot: "Company website",
+      permit_portal: "Permit portal (live)",
+      "kb_match:permit_no": "Base: permit number",
+      "kb_match:applicant_phone": "Base: applicant phone",
+      "kb_match:name_town": "Base: name and town",
     },
+    detail: "Technical detail: {reason}",
     failed: "Could not read coverage by source.",
   },
 } as const satisfies Widen<typeof pt>;

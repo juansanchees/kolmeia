@@ -64,7 +64,8 @@ export function interpretInstruction(text: string, lang: "pt" | "en"): Interpret
     const isNeg: boolean = neg ?? lastNeg ?? false;
 
     if (SMALL_HOUSES.test(c)) { down("single_family"); down("adu"); code("deprioritize_small_houses"); hit = true; }
-    else if (LARGE_HOUSES.test(c)) { up("single_family"); code("prefer_large_houses"); hit = true; }
+    // "evite casas grandes" / "avoid big houses": a negation turns the large-house phrase into a deprioritize
+    else if (LARGE_HOUSES.test(c)) { if (isNeg) { down("single_family"); code("deprioritize_large_houses"); } else { up("single_family"); code("prefer_large_houses"); } hit = true; }
     else {
       for (const [k, re] of KINDS) {
         if (!re.test(c)) continue;

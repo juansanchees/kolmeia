@@ -38,7 +38,7 @@ async function RoundCard({ r }: { r: ThreadRound }) {
                     <span className="font-semibold">{x.town}</span>
                     <span>{word(t.hunt.cov.sources, x.source)}</span>
                     <Badge tone={OUTCOME_TONE[x.outcome] ?? "neutral"}>{word(R.outcomes, x.outcome)}</Badge>
-                    {x.reason && <span className="text-[#4a5361]">{x.reason}</span>}
+                    {x.reason && <span className="text-[#4a5361]">{fill(t.hunt.cov.detail, { reason: x.reason })}</span>}
                   </li>
                 ))}
               </ul>

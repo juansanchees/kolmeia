@@ -85,6 +85,7 @@ export const hunt = {
   understood: {
     deprioritize_small_houses: "casas pequenas perdem prioridade",
     prefer_large_houses: "casas grandes sobem",
+    deprioritize_large_houses: "casas grandes perdem prioridade",
     prefer_multifamily: "multifamiliares sobem",
     deprioritize_multifamily: "multifamiliares perdem prioridade",
     prefer_commercial: "comerciais sobem",
@@ -144,9 +145,16 @@ export const hunt = {
     },
     blockerCodes: {
       need_bid_path: "Falta descobrir por onde apresentar orçamento (cadastro de fornecedor ou página de licitações).",
+      unlinked_permits: "Há obras relevantes sem construtora identificada: ficam no relatório até alguém descobrir quem é a construtora.",
+      source_blocked: "Uma fonte bloqueou o acesso (veja “Fontes consultadas”); o Caçador seguiu pelas outras.",
+      source_robots: "Uma fonte proíbe robôs (robots.txt); o Caçador não a leu e seguiu pelas outras.",
+      source_down: "Uma fonte estava fora do ar; o Caçador seguiu pelas outras.",
     },
     askCodes: {
       run_pilot: "A primeira busca ainda não rodou: o operador precisa executá-la.",
+      live_off: "Algumas etapas precisam de acesso ao vivo (sites, portal de alvarás) e não rodaram: o operador precisa ligar o acesso ao vivo.",
+      source_login: "Uma fonte pede login: só você pode entrar ou mandar o arquivo.",
+      say_what_to_change: "O que devo mudar? Por exemplo: priorize multifamiliares, ou só obras recentes.",
     },
   },
   reply: {
@@ -231,7 +239,12 @@ export const hunt = {
       license_hic: "Licenças (reformas)",
       corp_registry: "Registro de empresas",
       site_robot: "Site da empresa",
+      permit_portal: "Portal de alvarás (ao vivo)",
+      "kb_match:permit_no": "Base: número do alvará",
+      "kb_match:applicant_phone": "Base: telefone do requerente",
+      "kb_match:name_town": "Base: nome e cidade",
     },
+    detail: "Detalhe técnico: {reason}",
     failed: "Não deu para ler a cobertura por fonte.",
   },
 } as const;

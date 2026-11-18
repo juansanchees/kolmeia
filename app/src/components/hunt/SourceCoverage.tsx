@@ -2,6 +2,7 @@ import { Badge, EmptyState, type BadgeTone } from "@/components/ui";
 import { date } from "@/components/research/format";
 import type { CoverageRow } from "@/lib/kb/coverage";
 import { word } from "@/lib/hunt/text";
+import { fill } from "@/lib/i18n";
 import { getT } from "@/lib/i18n/server";
 
 export const OUTCOME_TONE: Record<string, BadgeTone> = { ok: "ok", partial: "warn", blocked: "danger", robots: "danger", down: "danger", login: "warn", empty: "neutral", skipped: "neutral" };
@@ -21,7 +22,7 @@ export async function SourceCoverage({ rows }: { rows: CoverageRow[] }) {
           <span className="font-mono text-sm text-[#4a5361]">{date(r.ran_at, t.intl)}</span>
           <Badge tone={OUTCOME_TONE[r.outcome] ?? "neutral"}>{word(t.hunt.round.outcomes, r.outcome)}</Badge>
           <span className="font-mono text-sm">{C.columns.entered}: {r.rows_in}</span>
-          {r.reason && <span className="min-w-0 break-words text-[#4a5361]">{r.reason}</span>}
+          {r.reason && <span className="min-w-0 break-words text-[#4a5361]">{fill(C.detail, { reason: r.reason })}</span>}
         </li>
       ))}
     </ul>

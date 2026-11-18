@@ -24,7 +24,7 @@ export async function startCampaignAction(form: FormData): Promise<void> {
   const request = text(form, "request", 1000) || t.hunt.entry.placeholder;
   const offer = text(form, "offer", 60);
   if (!db) return back("/agentes/clientes", "failed", request);
-  if (!(offer in OFFERS)) return back("/agentes/clientes", "empty", request);
+  if (!Object.hasOwn(OFFERS, offer)) return back("/agentes/clientes", "empty", request);
   let region = text(form, "region", 200);
   if (!region) {
     const { data } = await db.from("company_profiles").select("service_area").eq("workspace_id", workspace.id).maybeSingle();

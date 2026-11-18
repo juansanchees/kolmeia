@@ -37,12 +37,18 @@ export async function startCampaign(db: HuntDb, M: M, i: { ws: string; offer: st
   return id;
 }
 
-async function runRound(db: HuntDb, M: M, c: Campaign, params: CampaignParams, reply: { understood: string[]; unknown: string[]; head?: string }) {
+/** The pilot runner's round. The app closes every round it opens, so the runner opens its own (stored params kept). */
+export async function openRunnerRound(db: HuntDb, campaignId: string): Promise<{ id: string; n: number }> {
+  const r = await db.rpc<{ round_id: string; n: number }>("hunt_campaign_apply", { p_campaign: campaignId, p_params: null, p_message: null });
+  return { id: r.round_id, n: r.n };
+}
+
+async function runRound(db: HuntDb, M: M, c: Campaign, params: CampaignParams, reply: { understood: string[]; unknown: string[]; head?: string }, extra: Blocker[] = []) {
   const applied = await db.rpc<{ round_id: string; n: number }>("hunt_campaign_apply", { p_campaign: c.id, p_params: params, p_message: null });
   const opps = await db.campaignOpps(c.id);
   const scores = rescore(opps, c.offer, params, await db.approvedRules(c.workspace_id, c.offer), now());
   const after = new Map(scores.map((s) => [s.opportunity_id, s.priority]));
-  const blockers: Blocker[] = [];
+  const blockers: Blocker[] = [...extra];
   if (!opps.length) blockers.push({ code: "run_pilot", ask: true });
   else if (params.wantBidPath && opps.some((o) => o.facts && !o.facts.contacts.bids_url && !o.facts.contacts.vendor_portal_url)) blockers.push({ code: "need_bid_path" });
   const summary = summarizeRound(opps.map((o) => ({ id: o.id, priority: o.priority })), opps.map((o) => ({ id: o.id, priority: after.get(o.id) ?? o.priority })), reduceCoverage(await db.coverage(c.workspace_id)), blockers);
@@ -55,7 +61,9 @@ async function runRound(db: HuntDb, M: M, c: Campaign, params: CampaignParams, r
 export async function applyInstruction(db: HuntDb, M: M, lang: "pt" | "en", c: Campaign, text: string): Promise<void> {
   const it = interpretInstruction(text, lang);
   await db.rpc("hunt_message_add", { p_campaign: c.id, p_role: "user", p_body: text, p_round: null });
-  await runRound(db, M, c, mergeParams(c.params, it.params), { understood: it.understoodCodes, unknown: it.unknown });
+  // nothing understood: never "fulfilled"; the round waits on a simple question instead
+  const ask: Blocker[] = it.understoodCodes.length ? [] : [{ code: "say_what_to_change", ask: true }];
+  await runRound(db, M, c, mergeParams(c.params, it.params), { understood: it.understoodCodes, unknown: it.unknown }, ask);
 }
 
 /** Approve a proposed rule, or undo one (proposed or approved). Either way the queue is re-scored in a new round. */

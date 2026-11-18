@@ -56,7 +56,7 @@ export function classifyBuilding(s: OfferSignal): BuildingKind {
 function daysSince(iso: string | null | undefined, now: Date): number | null {
   if (!iso) return null;
   const t = Date.parse(iso.slice(0, 10));
-  return Number.isNaN(t) ? null : Math.max(0, Math.floor((now.getTime() - t) / DAY));
+  return Number.isNaN(t) ? null : Math.floor((now.getTime() - t) / DAY);
 }
 
 /** Work phrase for the hook, picked from a whitelist (never copied free text, so no person's name can leak). */
@@ -101,8 +101,11 @@ function evaluate(input: OfferInput, now: Date, params?: CampaignParams): OfferV
     : !SMALL_SCOPE.test(t) && (WEAK_NEW_CLASS.test(s.work_class ?? "") || anyField(s, WEAK_NEW_PHRASE)) ? chk("confirmed", (s.work_class || s.description || "").slice(0, 120), url)
     : chk("missing");
 
-  const age = daysSince(s.issued_on, now);
-  const recent: Check = age == null ? chk("no", "no issue date") : age <= 180 ? chk("confirmed", `issued ${s.issued_on}`, url) : age <= 365 ? chk("missing", `issued ${s.issued_on}`, url) : chk("no", `issued ${s.issued_on}`, url);
+  const raw = daysSince(s.issued_on, now);
+  // more than a week in the future is a typo, not the newest permit: recency unknown, no recency points
+  const future = raw != null && raw < -7;
+  const age = raw == null || future ? null : Math.max(0, raw);
+  const recent: Check = future ? chk("missing", `issued ${s.issued_on} (future date)`, url) : age == null ? chk("no", "no issue date") : age <= 180 ? chk("confirmed", `issued ${s.issued_on}`, url) : age <= 365 ? chk("missing", `issued ${s.issued_on}`, url) : chk("no", `issued ${s.issued_on}`, url);
 
   const hvacFit: Check = newBuild.state === "confirmed" ? chk("confirmed", "new building", url)
     : value != null && value >= 150_000 ? chk("confirmed", `value ${value}`, url)
