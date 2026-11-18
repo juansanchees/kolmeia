@@ -1,7 +1,7 @@
 -- 0039 "Rodar agora": run_hunter_now(agent) queues a hunter run now instead of waiting for its schedule.
 --   Owner or sdr of the workspace (the closer is refused). Only a hunter that is paused or running: the clock
 --   (hunter_due_work, 0010) then picks it up on its next minute because next_run_at <= now().
---   Returns 'queued', 'already_running' (a live run of this agent, status ready/running: nothing changes) or
+--   Returns 'queued', 'already_running' (a live run of this agent, status ready/running/paused: the agent is turned on, next_run_at is not touched) or
 --   'too_many' (A7: 3 hunters already running in the workspace; the agent stays paused).
 --   guard_agent (0023) resets next_run_at on paused -> running, so the status change and the next_run_at change are
 --   two updates. A paused hunter is turned on (Ligar) by this call.
@@ -29,9 +29,6 @@ begin
   if a.archived_at is not null or a.status not in ('paused', 'running') then
     raise exception 'the agent must be paused or running' using errcode = '55000';
   end if;
-  if exists (select 1 from public.research_runs r where r.agent_id = p_agent and r.status in ('ready', 'running')) then
-    return 'already_running';
-  end if;
   if a.status = 'paused' then
     begin
       update public.agents set status = 'running' where id = p_agent;
@@ -41,6 +38,10 @@ begin
       end if;
       raise;
     end;
+  end if;
+  -- the agent is running now, so the clock moves a live run on (a 'paused' run too: a cap pause, 0010); no second run
+  if exists (select 1 from public.research_runs r where r.agent_id = p_agent and r.status in ('ready', 'running', 'paused')) then
+    return 'already_running';
   end if;
   update public.agents set next_run_at = now() where id = p_agent;
   return 'queued';

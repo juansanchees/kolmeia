@@ -33,6 +33,7 @@ describe("0039 run_hunter_now", () => {
   test("queued from paused: turns it on and due now", async () => {
     const { agent } = await seedHunter(db, { ws, ligar: false });
     await inAWeek(agent);
+    await db.admin("update public.agents set paused_reason = 'daily_cap' where id = $1", [agent]);
     expect(await ok(UUID_A, agent)).toBe("queued");
     const r = await row(agent);
     expect(r).toMatchObject({ status: "running", late: true, paused_reason: null });
@@ -47,7 +48,7 @@ describe("0039 run_hunter_now", () => {
     await db.admin("update public.agents set status = 'paused' where id = $1", [agent]);
   });
 
-  test.each(["ready", "running"])("already_running with a %s run, next_run_at unchanged", async (st) => {
+  test.each(["ready", "running", "paused"])("already_running with a %s run, next_run_at unchanged", async (st) => {
     const { agent } = await seedHunter(db, { ws });
     await inAWeek(agent);
     const before = (await row(agent)).next_run_at;
@@ -55,9 +56,27 @@ describe("0039 run_hunter_now", () => {
       "insert into public.research_runs (workspace_id, title, request_text, region_text, rigor, agent_id, status, plan) values ($1,'t','p','r','careful',$2,'ready','{\"steps\":[]}'::jsonb)",
       [ws, agent],
     );
-    if (st === "running") await db.admin("update public.research_runs set status = 'running' where agent_id = $1", [agent]);
+    if (st !== "ready") await db.admin("update public.research_runs set status = 'running' where agent_id = $1", [agent]);
+    if (st === "paused") await db.admin("update public.research_runs set status = 'paused' where agent_id = $1", [agent]);
     expect(await ok(UUID_A, agent)).toBe("already_running");
     expect((await row(agent)).next_run_at).toEqual(before);
+    await db.admin("update public.agents set status = 'paused' where id = $1", [agent]);
+  });
+
+  test.each(["running", "paused"])("paused agent with a %s run: already_running, agent turned on, next_run_at unchanged", async (st) => {
+    const { agent } = await seedHunter(db, { ws, ligar: false });
+    await inAWeek(agent);
+    const before = (await row(agent)).next_run_at;
+    await db.admin(
+      "insert into public.research_runs (workspace_id, title, request_text, region_text, rigor, agent_id, status, plan) values ($1,'t','p','r','careful',$2,'ready','{\"steps\":[]}'::jsonb)",
+      [ws, agent],
+    );
+    await db.admin("update public.research_runs set status = 'running' where agent_id = $1", [agent]);
+    if (st === "paused") await db.admin("update public.research_runs set status = 'paused' where agent_id = $1", [agent]);
+    expect(await ok(UUID_A, agent)).toBe("already_running");
+    const r = await row(agent);
+    expect(r.status).toBe("running");
+    expect(r.next_run_at).toEqual(before);
     await db.admin("update public.agents set status = 'paused' where id = $1", [agent]);
   });
 
@@ -73,7 +92,6 @@ describe("0039 run_hunter_now", () => {
     const { agent } = await seedHunter(db, { ws, ligar: false });
     expect((await call(UUID_C, agent)).error?.message).toMatch(/not allowed/);
     expect((await call(UUID_B, agent)).error?.message).toMatch(/not allowed/);
-    expect(wsB).not.toBe(ws);
   });
 
   test("draft, archived and email agent are refused", async () => {
