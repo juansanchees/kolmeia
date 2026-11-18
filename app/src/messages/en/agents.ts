@@ -15,7 +15,7 @@ export const agents = {
   restart: "Start over",
   types: { hunter: "Hunter", email: "Email", call: "Calls" },
   statuses: { draft: "draft", paused: "paused", running: "running", done: "done" },
-  metric: { draft: "Setup not finished", neverRan: "Has not run yet", pausedByYou: "Paused by you", searching: "Searching now", done: "Done" },
+  metric: { draft: "Setup not finished", neverRan: "Has not run yet", pausedByYou: "Paused by you", searching: "Searching now", done: "Done", working: "● Working now", queued: "Queued: starts within 1 minute", ranAgo: "Ran {ago}, found {n}" },
   paused: {
     daily_cap: "Paused: workspace AI cap reached",
     user_cap: "Paused: user AI cap reached",

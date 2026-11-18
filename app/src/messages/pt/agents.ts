@@ -13,7 +13,7 @@ export const agents = {
   restart: "Recomeçar",
   types: { hunter: "Caçador", email: "E-mail", call: "Ligação" },
   statuses: { draft: "rascunho", paused: "pausado", running: "rodando", done: "concluído" },
-  metric: { draft: "Falta terminar a criação", neverRan: "Ainda não rodou", pausedByYou: "Pausado por você", searching: "Buscando agora", done: "Concluído" },
+  metric: { draft: "Falta terminar a criação", neverRan: "Ainda não rodou", pausedByYou: "Pausado por você", searching: "Buscando agora", done: "Concluído", working: "● Trabalhando agora", queued: "Na fila: começa em até 1 minuto", ranAgo: "Rodou {ago}, achou {n}" },
   paused: {
     daily_cap: "Pausado: teto de IA do workspace atingido",
     user_cap: "Pausado: teto de IA do usuário atingido",

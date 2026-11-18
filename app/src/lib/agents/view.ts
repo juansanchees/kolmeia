@@ -3,16 +3,33 @@ import type { RunRow } from "@/lib/research/rows";
 import type { Messages } from "@/lib/i18n";
 import type { AgentRow } from "./types";
 
-function metricOf(a: AgentRow, now: Date, t: Messages, listSize?: number): string {
+export type LastRun = { status: string; finishedAt: string | null; found: number };
+
+/** "há 2 h" / "2 hr. ago": largest whole unit, at least one minute. */
+function ago(iso: string, now: Date, intl: string): string {
+  const mins = Math.max(1, Math.floor((now.getTime() - new Date(iso).getTime()) / 60000));
+  const rtf = new Intl.RelativeTimeFormat(intl, { numeric: "always", style: "short" });
+  if (mins < 60) return rtf.format(-mins, "minute");
+  if (mins < 1440) return rtf.format(-Math.floor(mins / 60), "hour");
+  return rtf.format(-Math.floor(mins / 1440), "day");
+}
+
+function metricOf(a: AgentRow, now: Date, t: Messages, listSize?: number, lastRun?: LastRun): string {
   // A call agent has no runs: its number is the size of today's list (when the page knows it).
   if (a.type === "call" && listSize !== undefined && a.status !== "draft") return `${listSize} ${t.callAgent.metrics.inList}`;
   switch (a.status) {
     case "draft":
       return t.agents.metric.draft;
-    case "running":
+    case "running": {
+      if (lastRun?.status === "running") return t.agents.metric.working;
+      const due = a.next_run_at !== null && new Date(a.next_run_at).getTime() <= now.getTime();
+      const live = lastRun?.status === "ready" || lastRun?.status === "paused";
+      if (a.type === "hunter" && (lastRun?.status === "ready" || (due && !live))) return t.agents.metric.queued;
+      if (lastRun?.status === "done" && lastRun.finishedAt) return t.agents.metric.ranAgo.replace("{ago}", ago(lastRun.finishedAt, now, t.intl)).replace("{n}", String(lastRun.found));
       return a.next_run_at && new Date(a.next_run_at).getTime() > now.getTime()
         ? t.agents.detail.nextRun.replace("{when}", when(a.next_run_at, t.intl))
         : t.agents.metric.searching;
+    }
     case "paused":
       return a.paused_reason ? t.agents.paused[a.paused_reason] : a.next_run_at ? t.agents.metric.pausedByYou : t.agents.metric.neverRan;
     case "done":
@@ -20,12 +37,12 @@ function metricOf(a: AgentRow, now: Date, t: Messages, listSize?: number): strin
   }
 }
 
-export function agentRowView(a: AgentRow, now: Date, t: Messages, opts: { listSize?: number } = {}): { href: string; type: string; status: string; metric: string; cta: string } {
+export function agentRowView(a: AgentRow, now: Date, t: Messages, opts: { listSize?: number; lastRun?: LastRun } = {}): { href: string; type: string; status: string; metric: string; cta: string } {
   return {
     href: `/agentes/${a.id}`,
     type: t.agents.types[a.type],
     status: t.agents.statuses[a.status],
-    metric: metricOf(a, now, t, opts.listSize),
+    metric: metricOf(a, now, t, opts.listSize, opts.lastRun),
     cta: a.status === "draft" ? t.agents.continue : t.agents.open,
   };
 }

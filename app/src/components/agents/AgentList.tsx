@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { agentRowView } from "@/lib/agents/view";
+import { agentRowView, type LastRun } from "@/lib/agents/view";
 import type { AgentRow } from "@/lib/agents/types";
 import { ArchiveButton } from "./ArchiveButton";
 import { Paged } from "@/components/Pager";
@@ -8,13 +8,13 @@ import { STATUS_TONE, TYPE_ICON } from "./type-icons";
 import { getT } from "@/lib/i18n/server";
 
 /** The agents as a grid of cards: type icon, name, what it is doing now, status badge, open + archive. */
-export async function AgentList({ agents, listSizes = {} }: { agents: AgentRow[]; listSizes?: Record<string, number> }) {
+export async function AgentList({ agents, listSizes = {}, lastRuns = {} }: { agents: AgentRow[]; listSizes?: Record<string, number>; lastRuns?: Record<string, LastRun> }) {
   const t = await getT();
   const now = new Date();
   return (
     <Paged as="ul" className="m-0 grid list-none gap-3.5 p-0 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
       {agents.map((a, n) => {
-        const v = agentRowView(a, now, t, { listSize: a.type === "call" ? (listSizes[a.id] ?? 0) : undefined });
+        const v = agentRowView(a, now, t, { listSize: a.type === "call" ? (listSizes[a.id] ?? 0) : undefined, lastRun: lastRuns[a.id] });
         return (
           <li
             key={a.id}

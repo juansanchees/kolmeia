@@ -5,6 +5,7 @@ import { hasPlaces } from "@/lib/qualifier/places-config";
 import { createClient } from "@/lib/supabase/server";
 import { SupabaseAgentStore } from "@/lib/agents/store";
 import type { AgentRow } from "@/lib/agents/types";
+import type { LastRun } from "@/lib/agents/view";
 import { listSizesToday } from "@/lib/calls/list-queries";
 import { AgentList } from "@/components/agents/AgentList";
 import { buttonClass, CountPill, EmptyState, HexPanel, Notice } from "@/components/ui";
@@ -21,6 +22,7 @@ export default async function AgentsPage() {
   const supabase = await createClient();
   let agents: AgentRow[] = [];
   let listSizes: Record<string, number> = {};
+  let lastRuns: Record<string, LastRun> = {};
   let runs: RunListItem[] = [];
   let qualifier: QualifierStatus | null = null;
   let qualifierFailed = false;
@@ -30,6 +32,7 @@ export default async function AgentsPage() {
     qualifierFailed = Boolean(qErr) || !qualifier;
     agents = await new SupabaseAgentStore(supabase).listAgents(workspace.id);
     if (agents.some((a) => a.type === "call")) listSizes = await listSizesToday(supabase);
+    lastRuns = await loadLastRuns(supabase, agents.filter((a) => a.type === "hunter").map((a) => a.id));
     const { data } = await supabase
       .from("research_runs")
       .select("id, title, status, is_partial, created_at")
@@ -61,7 +64,7 @@ export default async function AgentsPage() {
             {t.agents.emptyHint}
           </EmptyState>
         ) : (
-          <AgentList agents={agents} listSizes={listSizes} />
+          <AgentList agents={agents} listSizes={listSizes} lastRuns={lastRuns} />
         )}
       </section>
       <section aria-labelledby="one-off" className="k-in flex flex-col gap-4 [animation-delay:.12s]">
@@ -85,6 +88,24 @@ export default async function AgentsPage() {
       </section>
     </div>
   );
+}
+
+/** Latest run per hunter: two queries for all ids (runs, then their candidate rows), never one per agent. */
+async function loadLastRuns(supabase: NonNullable<Awaited<ReturnType<typeof createClient>>>, ids: string[]): Promise<Record<string, LastRun>> {
+  if (ids.length === 0) return {};
+  // shortcut: newest 200 runs overall, so a very chatty agent could hide another's latest; page by agent if lists grow
+  const { data } = await supabase.from("research_runs").select("id, agent_id, status, finished_at").in("agent_id", ids).order("created_at", { ascending: false }).limit(200);
+  const latest = new Map<string, { id: string; status: string; finished_at: string | null }>();
+  for (const r of data ?? []) if (!latest.has(r.agent_id)) latest.set(r.agent_id, r);
+  const runIds = [...latest.values()].map((r) => r.id);
+  const found = new Map<string, number>();
+  if (runIds.length) {
+    const { data: cands } = await supabase.from("research_candidates").select("run_id").in("run_id", runIds).limit(10000);
+    for (const c of cands ?? []) found.set(c.run_id, (found.get(c.run_id) ?? 0) + 1);
+  }
+  const out: Record<string, LastRun> = {};
+  for (const [agentId, r] of latest) out[agentId] = { status: r.status, finishedAt: r.finished_at, found: found.get(r.id) ?? 0 };
+  return out;
 }
 
 // a spark: "an agent does it for you"
