@@ -1,0 +1,32 @@
+// Maps an offer verdict 1:1 onto a lead_opportunities row (0041) exactly the keys kb_deliver accepts (`facts` is not one of them yet: P4 adds the column).
+import type { CampaignParams, OfferContacts, OfferInput, OfferVerdict } from "./types";
+
+export type ContactPath = "phone" | "bids" | "vendor_portal" | "none";
+
+/** Which way in: a call by default; the bid door first when the campaign wants a bid path. */
+export function contactPath(i: { companyPhone?: string; contacts: OfferContacts }, params?: CampaignParams): { path: ContactPath; value?: string } {
+  const phone = i.contacts.phone ?? i.companyPhone;
+  const opts: [ContactPath, string | undefined][] = [["phone", phone], ["bids", i.contacts.bids_url], ["vendor_portal", i.contacts.vendor_portal_url]];
+  const hit = (params?.wantBidPath ? [opts[1], opts[2], opts[0]] : opts).find(([, v]) => !!v);
+  return hit ? { path: hit[0], value: hit[1]!.slice(0, 300) } : { path: "none" };
+}
+
+export function toOpportunityRow(v: OfferVerdict, offer: string, input: OfferInput, params?: CampaignParams, kbSignalId?: string) {
+  const s = input.signal;
+  const c = contactPath({ companyPhone: input.company?.phone, contacts: input.contacts }, params);
+  return {
+    ...(kbSignalId ? { kb_signal_id: kbSignalId } : {}),
+    offer,
+    title: (s.description || s.work_class || s.address || "").slice(0, 200) || null,
+    signal_date: s.issued_on ?? null,
+    source: s.source,
+    source_url: s.source_url ?? null,
+    priority: v.priority,
+    priority_codes: v.priorityCodes,
+    hook_en: v.hookEn,
+    checks: v.checks,
+    open_questions: v.openQuestions,
+    contact_path: c.path,
+    contact_value: c.value ?? null,
+  };
+}
