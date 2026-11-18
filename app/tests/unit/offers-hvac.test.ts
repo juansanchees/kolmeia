@@ -87,6 +87,13 @@ describe("civil / marine work", () => {
     expect(v.checks.hvac_fit.state).toBe("confirmed");
     expect(v.fit).not.toBe("no");
   });
+  test("street names are not civil work", () => {
+    expect(ev(base({ work_class: "Alteration", value_usd: 200000, description: "renovation at 12 Dock Street" })).checks.hvac_fit.state).toBe("confirmed");
+    expect(ev(base({ description: "New single family at 123 Harbor Road" })).fit).not.toBe("no");
+    expect(ev(base({ work_class: "Alteration", value_usd: 200000, description: "fit-out at 5 Bridge St" })).checks.hvac_fit.state).toBe("confirmed");
+  });
+  test.each(["bridge replacement", "Bulkhead repair", "Seawall rebuild", "Septic system", "Water main extension", "Sewer main", "Site work only", "road construction"])("%s is civil", (d) =>
+    expect(ev(base({ work_class: "COMM", value_usd: 900_000, description: d })).checks.hvac_fit.state).toBe("no"));
   test("a utility room is not civil work", () => expect(ev(base({ description: "interior fit-out, utility room", work_class: "Alteration", value_usd: 200000 })).checks.hvac_fit.state).toBe("confirmed"));
 });
 

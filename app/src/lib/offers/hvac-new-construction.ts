@@ -33,7 +33,9 @@ const SMALL_SCOPE = /\b(service|water heater|electrical|panel|meter|sign|signs|w
 // Trade-only or temporary permits (Falmouth codes like ELECT., GAS, PLUMB., SHT MTL, SIGN, TENT): never a new build, whatever the description says.
 const TRADE_CLASS = /^\s*(elect\w*|gas\b|plumb\w*|sht\b|sheet\s*metal|sign\w*|tent\w*|chimney|stove|wood\s*stove|pool|solar|roof\w*|fence|deck|demo\w*)/i;
 // Civil / marine / site work is not HVAC work, whatever its value or class. Only wins when no strong new-building phrase is present.
-const CIVIL = /\b(docks?|piers?|wharf|wharves|seawall|wave\s+wall|bulkhead|revetment|jetty|jetties|sheet\s+piles?|piles?|pile\s+driving|dredg\w*|marina\s+floats?|boat\s+ramp|road(way)?|paving|bridge|culvert|retaining\s+wall|utility\s+(work|lines?|trench\w*|poles?)|water\s+main|sewer\s+main|septic|drainage|site\s+work\s+only|demolition\s+only|excavation\s+only|tower|antenna)\b/i;
+const STREET = String.raw`(?!\s+(?:st|street|rd|road|ave|avenue|ln|lane|dr|drive|way|hwy|ct|pl)\b)`;
+// Street names ("Dock Street", "Bridge St") are not civil work; road/bridge count only in work phrases.
+const CIVIL = new RegExp(String.raw`\b(?:(?:docks?|piers?|wharf|wharves|tower|antenna)${STREET}|seawall|wave\s+wall|bulkhead|revetment|jetty|jetties|sheet\s+piles?|piles?|pile\s+driving|dredg\w*|marina\s+floats?|boat\s+ramp|roadway|road\s+(?:construction|work|repair|reconstruction|resurfacing|widening)|paving|(?:new\s+)?bridge\s+(?:repair|replacement|rehab\w*|construction|work)|new\s+bridge|culvert|retaining\s+wall|utility\s+(?:work|lines?|trench\w*|poles?)|water\s+main|sewer\s+main|septic|drainage|site\s+work\s+only|demolition\s+only|excavation\s+only)\b`, "i");
 const OTHER_TRADE_HVAC = /\b(hvac|mechanical|heat pump|furnace|air handler)\b/i;
 
 const text = (s: OfferSignal) => `${s.work_class ?? ""} ${s.use ?? ""} ${s.description ?? ""}`;

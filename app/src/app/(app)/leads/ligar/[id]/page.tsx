@@ -25,7 +25,8 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
   if (!detail) notFound();
   const best = detail.candidates.find((c) => c.id === detail.lead.best_candidate_id) ?? null;
   const phone = leadPhone(best?.phone, detail.fields);
-  const [calls, opportunity, others] = await Promise.all([callsOf(supabase, id), topOpportunity(supabase, id), otherOpportunities(supabase, id)]);
+  const [calls, opportunity] = await Promise.all([callsOf(supabase, id), topOpportunity(supabase, id)]);
+  const others = await otherOpportunities(supabase, id, opportunity?.id);
   const blocked = detail.lead.do_not_call;
 
   return (
