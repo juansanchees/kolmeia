@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { interpretInstruction } from "@/lib/hunt/interpret";
-import { proposePreference, rescore, type StoredOpp } from "@/lib/hunt/rescore";
+import { mergeParams, proposePreference, rescore, type StoredOpp } from "@/lib/hunt/rescore";
 import { stopReason, summarizeRound } from "@/lib/hunt/rounds";
 import { getOffer, toOpportunityRow } from "@/lib/offers";
 import type { CampaignParams, OfferInput } from "@/lib/offers/types";
@@ -58,9 +58,10 @@ const paramsOf = (user: string, campaign: string) => db.query<{ params: Campaign
 const approvedRules = (user: string, ws: string) =>
   db.query<{ rule: CampaignParams }>(as(user), "select rule from public.offer_preferences where workspace_id = $1 and offer = $2 and status = 'approved' order by proposed_at", [ws, OFFER]).then((r) => r.map((x) => x.rule));
 
-/** The app's round: apply (new round), re-score stored facts in TS, write back. */
-async function runRound(user: string, ws: string, campaign: string, params: CampaignParams, message: string | null, stop = "exhausted") {
-  const { round_id, n } = (await db.query<{ r: { round_id: string; n: number } }>(as(user), "select public.hunt_campaign_apply($1,$2::jsonb,$3) as r", [campaign, JSON.stringify(params), message]))[0].r;
+/** The app's round: merge the instruction into the campaign's params, apply (new round), re-score stored facts in TS, write back. */
+async function runRound(user: string, ws: string, campaign: string, params: Partial<CampaignParams>, message: string | null, stop = "exhausted") {
+  const merged = mergeParams(await paramsOf(user, campaign), params);
+  const { round_id, n } = (await db.query<{ r: { round_id: string; n: number } }>(as(user), "select public.hunt_campaign_apply($1,$2::jsonb,$3) as r", [campaign, JSON.stringify(merged), message]))[0].r;
   const before = await oppsOf(user, campaign);
   const scores = rescore(before as StoredOpp[], OFFER, await paramsOf(user, campaign), await approvedRules(user, ws), NOW);
   const summary = summarizeRound(before, scores.map((s) => ({ id: s.opportunity_id, priority: s.priority })), [], []);
@@ -223,13 +224,32 @@ describe("hunt campaigns (0042)", () => {
     expect(code((await db.try(as(t.closer), "select public.hunt_campaign_create($1,'hvac_new_construction',null,'x','{}'::jsonb)", [t.ws])).error)).toBe("42501");
   });
 
-  it("params are validated; null removes a key", async () => {
+  it("two instructions accumulate; the newest wins a conflict; SQL stores what TS sends", async () => {
     const t = await seed();
-    for (const bad of [{ preferKinds: ["castle"] }, { minValueUsd: "lots" }, { evil: 1 }, { maxAgeDays: 0 }]) {
+    const c = await create(t.sdr, t.ws);
+    await deliver(t.ws, c, [facts("New single family dwelling", 400000)]);
+    await runRound(t.sdr, t.ws, c, interpretInstruction("priorize apartamentos", "pt").params, "priorize apartamentos");
+    await runRound(t.sdr, t.ws, c, interpretInstruction("e comerciais também", "pt").params, "e comerciais também");
+    expect(await paramsOf(t.sdr, c)).toEqual({ preferKinds: ["multifamily", "commercial"] });
+    await runRound(t.sdr, t.ws, c, interpretInstruction("essas casas são pequenas demais", "pt").params, null);
+    const before = (await oppsOf(t.sdr, c))[0].priority;
+    await runRound(t.sdr, t.ws, c, interpretInstruction("priorize casas unifamiliares", "pt").params, null);
+    expect(await paramsOf(t.sdr, c)).toEqual({ preferKinds: ["multifamily", "commercial", "single_family"], deprioritizeKinds: ["adu"] });
+    const house = (await oppsOf(t.sdr, c))[0];
+    expect(house.priority).toBeGreaterThan(before);
+    // null keeps the current params; a kind in both lists is refused
+    await db.query(as(t.sdr), "select public.hunt_campaign_apply($1,null,null)", [c]);
+    expect((await paramsOf(t.sdr, c)).preferKinds).toContain("single_family");
+    expect(code((await db.try(as(t.sdr), "select public.hunt_campaign_apply($1,'{\"preferKinds\":[\"adu\"],\"deprioritizeKinds\":[\"adu\"]}'::jsonb,null)", [c])).error)).toBe("22023");
+  });
+
+  it("params are validated; the full params are stored, a null drops a key", async () => {
+    const t = await seed();
+    for (const bad of [{ preferKinds: ["castle"] }, { minValueUsd: "lots" }, { evil: 1 }, { maxAgeDays: 0 }, { preferKinds: ["adu"], deprioritizeKinds: ["adu"] }]) {
       expect(code((await db.try(as(t.sdr), "select public.hunt_campaign_create($1,'hvac_new_construction',null,'x',$2::jsonb)", [t.ws, JSON.stringify(bad)])).error), JSON.stringify(bad)).toBe("22023");
     }
     const c = await create(t.sdr, t.ws, { wantBidPath: true, minValueUsd: 5 });
-    await db.query(as(t.sdr), "select public.hunt_campaign_apply($1,'{\"minValueUsd\":null,\"maxAgeDays\":90}'::jsonb,null)", [c]);
+    await db.query(as(t.sdr), "select public.hunt_campaign_apply($1,'{\"wantBidPath\":true,\"minValueUsd\":null,\"maxAgeDays\":90}'::jsonb,null)", [c]);
     expect(await paramsOf(t.sdr, c)).toEqual({ wantBidPath: true, maxAgeDays: 90 });
   });
 });

@@ -11,7 +11,8 @@
 begin;
 
 -- ---------------------------------------------------------------- helpers (NOT definer)
--- CampaignParams (src/lib/offers/types.ts): known keys only, right types, the five building kinds.
+-- CampaignParams (src/lib/offers/types.ts): known keys only, right types, the five building kinds, no kind both preferred
+-- and deprioritized (mergeParams in src/lib/hunt/rescore.ts resolves that before anything is stored).
 create or replace function public.hunt_params_ok(p jsonb)
 returns boolean
 language plpgsql
@@ -47,6 +48,10 @@ begin
       return false;
     end if;
   end loop;
+  if p ? 'preferKinds' and p ? 'deprioritizeKinds'
+     and exists (select 1 from jsonb_array_elements_text(p -> 'preferKinds') a join jsonb_array_elements_text(p -> 'deprioritizeKinds') b on a = b) then
+    return false;
+  end if;
   return true;
 end;
 $$;
@@ -256,7 +261,8 @@ begin
 end;
 $$;
 
--- An instruction: merge params (a JSON null removes a key), close the open round, start round n+1, save the message.
+-- An instruction: store the campaign's full params as sent (the app merges with mergeParams first; a JSON null drops a
+-- key; p_params null keeps the current ones), close the open round, start round n+1, save the message.
 -- The app then re-scores this campaign's opportunities from `facts` and writes them back with hunt_round_finish.
 create or replace function public.hunt_campaign_apply(p_campaign uuid, p_params jsonb, p_message text)
 returns jsonb
@@ -277,7 +283,7 @@ begin
   if p_params is not null and jsonb_typeof(p_params) <> 'object' then
     raise exception 'invalid params' using errcode = '22023';
   end if;
-  v_params := jsonb_strip_nulls(v_c.params || coalesce(p_params, '{}'::jsonb));
+  v_params := jsonb_strip_nulls(coalesce(p_params, v_c.params));
   if not public.hunt_params_ok(v_params) or char_length(v_msg) > 4000 then
     raise exception 'invalid params' using errcode = '22023';
   end if;

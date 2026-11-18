@@ -12,20 +12,25 @@ export type Move = "up" | "down" | "same";
 /** One element of hunt_round_finish's p_scores (`move` is read only by the app). */
 export type Rescored = { opportunity_id: string; priority: number; priority_codes: string[]; open_questions: string[]; move: Move };
 
-const union = <T,>(...xs: (T[] | undefined)[]) => [...new Set(xs.flatMap((x) => x ?? []))];
+const KIND_KEYS = ["preferKinds", "deprioritizeKinds"] as const;
 
-/** Approved preferences of (workspace, offer) first, then this campaign's instruction on top: on a conflict the campaign wins. */
-export function effectiveParams(campaign: CampaignParams, approved: CampaignParams[]): CampaignParams {
-  const out: CampaignParams = {};
-  const prefer = union(...approved.map((p) => p.preferKinds), campaign.preferKinds).filter((k) => !campaign.deprioritizeKinds?.includes(k));
-  const deprio = union(...approved.map((p) => p.deprioritizeKinds), campaign.deprioritizeKinds).filter((k) => !campaign.preferKinds?.includes(k));
-  if (prefer.length) out.preferKinds = prefer;
-  if (deprio.length) out.deprioritizeKinds = deprio;
-  for (const key of ["minValueUsd", "maxAgeDays", "wantBidPath"] as const) {
-    const v = campaign[key] ?? approved.map((p) => p[key]).findLast((x) => x != null);
-    if (v != null) (out as Record<string, unknown>)[key] = v;
+/**
+ * The params after a new instruction: kind lists accumulate, a kind the new instruction puts in one list leaves the other
+ * (the newest instruction wins), scalars are replaced. Every caller sends the result to hunt_campaign_apply, which stores it as is.
+ */
+export function mergeParams(current: CampaignParams, incoming: Partial<CampaignParams>): CampaignParams {
+  const out: CampaignParams = { ...current, ...incoming };
+  for (const [key, other] of [KIND_KEYS, [...KIND_KEYS].reverse()] as const) {
+    const merged = [...new Set([...(current[key] ?? []), ...(incoming[key] ?? [])])].filter((k) => !incoming[other]?.includes(k));
+    if (merged.length) out[key] = merged;
+    else delete out[key];
   }
   return out;
+}
+
+/** Approved preferences of (workspace, offer) in order, then this campaign's params on top: on a conflict the campaign wins. */
+export function effectiveParams(campaign: CampaignParams, approved: CampaignParams[]): CampaignParams {
+  return [...approved, campaign].reduce<CampaignParams>(mergeParams, {});
 }
 
 /** Opportunities without stored facts (delivered before 0042) are left out: nothing to re-score them from. */

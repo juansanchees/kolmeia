@@ -24,7 +24,12 @@ describe("interpretInstruction", () => {
     ["só obras acima de 500 mil", "pt", { minValueUsd: 500_000 }],
     ["valor mínimo de US$ 1.200.000", "pt", { minValueUsd: 1_200_000 }],
     ["only jobs over $2 million", "en", { minValueUsd: 2_000_000 }],
-    ["at least 750,000", "en", { minValueUsd: 750_000 }],
+    ["at least $750,000", "en", { minValueUsd: 750_000 }],
+    ["mais de 300 mil dólares", "pt", { minValueUsd: 300_000 }],
+    ["over 2M", "en", { minValueUsd: 2_000_000 }],
+    ["prédios com mais de 20 unidades", "pt", { preferKinds: ["multifamily"] }],
+    ["20+ units", "en", { preferKinds: ["multifamily"] }],
+    ["buildings with more than 40 units", "en", { preferKinds: ["multifamily"] }],
     ["só os recentes", "pt", { maxAgeDays: 90 }],
     ["últimos 6 meses", "pt", { maxAgeDays: 180 }],
     ["only recent ones", "en", { maxAgeDays: 90 }],
@@ -45,6 +50,20 @@ describe("interpretInstruction", () => {
     expect(r.params).toEqual({ preferKinds: ["multifamily"] });
     expect(r.unknown).toEqual(["liga só de manhã"]);
     expect(interpretInstruction("blue sky thinking", "en")).toEqual({ params: {}, understoodCodes: [], unknown: ["blue sky thinking"] });
+  });
+  test("a bare number, or a number of units/days, is not money", () => {
+    for (const t of ["mais de 20 unidades", "at least 750,000", "mais de 6 meses", "mais de 20 mil unidades", "more than 30 days"]) {
+      expect(interpretInstruction(t, "pt").params.minValueUsd, t).toBeUndefined();
+    }
+  });
+  test("new construction is the offer, not recency", () => {
+    for (const [t, lang] of [["só obras novas", "pt"], ["only new construction", "en"], ["apenas construções novas", "pt"]] as const) {
+      const r = interpretInstruction(t, lang);
+      expect(r.params, t).toEqual({});
+      expect(r.understoodCodes).toEqual(["new_construction_scope"]);
+      expect(r.unknown).toEqual([]);
+    }
+    expect(interpretInstruction("só obras novas e recentes", "pt").params).toEqual({ maxAgeDays: 90 });
   });
   test("Interpreter interface", () => expect(phraseInterpreter.interpret("condos", "en").params).toEqual({ preferKinds: ["multifamily"] }));
 });

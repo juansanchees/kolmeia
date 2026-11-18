@@ -18,14 +18,19 @@ const POS = /\b(prioriz\w*|prefir\w*|prefer\w*|foc\w*|quero|mais|busque|procure|
 const SMALL_HOUSES = /\b(casas?|casinhas?|residencias?|houses?|homes?)\b.*\b(pequen\w*|small|tiny)\b|\b(pequen\w*|small|tiny)\b.*\b(casas?|residencias?|houses?|homes?)\b|\bcasinhas?\b|\btoo small\b|\bpequen\w* demais\b/;
 const LARGE_HOUSES = /\b(casas?|residencias?|houses?|homes?)\b.*\b(grandes?|alto padrao|large|big|luxury)\b|\b(grandes?|large|big|luxury)\b.*\b(casas?|residencias?|houses?|homes?)\b|\bmansoes\b|\bmansions?\b/;
 const KINDS: [BuildingKind, RegExp][] = [
-  ["multifamily", /\b(multi-?familiar\w*|multifamily|multi-family|apartamentos?|predios?|condominios?|apartments?|condos?|condominiums?)\b/],
+  // "20 unidades" / "20+ units": a count of units means a multifamily building.
+  ["multifamily", /\b(multi-?familiar\w*|multifamily|multi-family|apartamentos?|predios?|condominios?|apartments?|condos?|condominiums?|\d+\s*\+?\s*(?:unidades|units))\b/],
   ["commercial", /\b(comercia(l|is)|lojas?|escritorios?|commercial|retail|offices?)\b/],
   ["single_family", /\b(unifamiliar\w*|casas?|residencias?|single[- ]family|houses?|homes?)\b/],
 ];
 const BID_PATH = /\b(por onde|como|onde)\b.*\b(apresentar|mandar|enviar|submeter)\b.*\b(orcamentos?|propostas?)\b|\b(portal|cadastro) de fornecedor\w*|\blicitac\w*|\bconcorrencias?\b|\b(how|where)\b.*\b(submit|send)\b.*\b(bids?|quotes?|proposals?)\b|\bbid (path|page|portal|list)\b|\bvendor (portal|registration)\b|\bbidding\b/;
-const MIN_VALUE = /\b(?:acima de|minimo(?: de)?|pelo menos|mais de|a partir de|over|above|at least|minimum(?: of)?|more than)\s*(?:us)?\$?\s*(\d[\d.,]*)\s*(mil|k|thousand|milh(?:ao|oes)|million|mi|m)?\b/;
+// Money needs a marker: $ / US$, a dollar word, or a magnitude (mil, k, milhão, million, M). "mais de 20 unidades" is not money.
+const MIN_VALUE = /\b(?:acima de|minimo(?: de)?|pelo menos|mais de|a partir de|over|above|at least|minimum(?: of)?|more than)\s*((?:us)?\$)?\s*(\d[\d.,]*)\s*(mil|k|thousand|milh(?:ao|oes)|million|mi|m)?\b\s*(dolares|dollars|usd)?/;
+const NOT_MONEY_AFTER = /^\s*(unidades?|units?|apartamentos?|apartments?|casas?|houses?|homes?|dias?|days?|semanas?|weeks?|mes(es)?|months?|anos?|years?)\b/;
 const RECENT_N = /\b(ultim[oa]s?|last|past)\s+(\d{1,3})\s*(dias?|semanas?|mes(es)?|days?|weeks?|months?)\b/;
-const RECENT = /\b(so|apenas|somente|only)\b.*\b(recentes?|novos?|recent|new)\b|\brecent only\b|\bmais recentes\b/;
+// "new" / "novas" is about the building (the offer), never about how recent the permit is.
+const RECENT = /\b(recentes?|recent)\b/;
+const NEW_BUILD = /\b(obras? novas?|novas? obras?|construc\w* novas?|new (construction|builds?|buildings?))\b/;
 const FILLER = /^(nesta busca|nessa busca|por favor|please|in this search|for this search|ok|obrigad[oa]|thanks?)$/;
 
 /** "500.000" / "500,000" / "1,5" + mil|k|milhão|million → dollars. */
@@ -70,12 +75,14 @@ export function interpretInstruction(text: string, lang: "pt" | "en"): Interpret
     if (BID_PATH.test(c)) { params.wantBidPath = true; code("want_bid_path"); hit = true; }
     const mv = MIN_VALUE.exec(c);
     if (mv) {
-      const v = money(mv[1], mv[2]);
-      if (v != null && v > 0) { params.minValueUsd = v; code("min_value"); hit = true; }
+      const v = money(mv[2], mv[3]);
+      const marked = !!(mv[1] || mv[3] || mv[4]);
+      if (marked && v != null && v > 0 && !NOT_MONEY_AFTER.test(c.slice(mv.index + mv[0].length))) { params.minValueUsd = v; code("min_value"); hit = true; }
     }
     const rn = RECENT_N.exec(c);
     if (rn) { params.maxAgeDays = days(Number(rn[2]), rn[3]); code("only_recent"); hit = true; }
     else if (RECENT.test(c)) { params.maxAgeDays = 90; code("only_recent"); hit = true; } // (?) 90 days until Juan says otherwise
+    if (NEW_BUILD.test(c)) { code("new_construction_scope"); hit = true; } // already what the offer looks for: no param
 
     if (hit) lastNeg = isNeg;
     else if (!FILLER.test(c)) unknown.push(raw.slice(0, 200));

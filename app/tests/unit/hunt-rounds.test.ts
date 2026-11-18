@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { effectiveParams, proposePreference, rescore, type StoredOpp } from "@/lib/hunt/rescore";
+import { effectiveParams, mergeParams, proposePreference, rescore, type StoredOpp } from "@/lib/hunt/rescore";
+import { interpretInstruction } from "@/lib/hunt/interpret";
 import { stopReason, summarizeRound } from "@/lib/hunt/rounds";
 import { hvacNewConstruction } from "@/lib/offers/hvac-new-construction";
 import type { OfferInput } from "@/lib/offers/types";
@@ -30,6 +31,30 @@ describe("rescore", () => {
   test("approved preferences apply; the campaign instruction wins a conflict", () => {
     expect(effectiveParams({}, [{ deprioritizeKinds: ["single_family"] }])).toEqual({ deprioritizeKinds: ["single_family"] });
     expect(effectiveParams({ preferKinds: ["single_family"], minValueUsd: 5 }, [{ deprioritizeKinds: ["single_family"], minValueUsd: 9 }])).toEqual({ preferKinds: ["single_family"], minValueUsd: 5 });
+  });
+});
+
+describe("mergeParams", () => {
+  const say = (t: string) => interpretInstruction(t, "pt").params;
+  test("lists accumulate: apartments, then commercial too", () => {
+    expect(mergeParams(mergeParams({}, say("priorize apartamentos")), say("e comerciais também"))).toEqual({ preferKinds: ["multifamily", "commercial"] });
+  });
+  test("the newest instruction wins a conflict: small houses, then prefer single family", () => {
+    const p = mergeParams(mergeParams({}, say("essas casas são pequenas demais")), say("priorize casas unifamiliares"));
+    expect(p).toEqual({ deprioritizeKinds: ["adu"], preferKinds: ["single_family"] });
+    expect(rescore([HOUSE], "hvac_new_construction", p, [], NOW)[0]).toMatchObject({ move: "up" });
+    expect(mergeParams(p, say("evite casas"))).toEqual({ deprioritizeKinds: ["adu", "single_family"] });
+  });
+  test("scalars are replaced; empty instruction keeps everything", () => {
+    expect(mergeParams({ minValueUsd: 5, wantBidPath: true }, { minValueUsd: 9 })).toEqual({ minValueUsd: 9, wantBidPath: true });
+    expect(mergeParams({ preferKinds: ["multifamily"] }, {})).toEqual({ preferKinds: ["multifamily"] });
+  });
+  test("approved preference + campaign params: preference applies, campaign overrides it, other kinds kept", () => {
+    const approved = [{ deprioritizeKinds: ["single_family" as const] }, { preferKinds: ["multifamily" as const], minValueUsd: 100 }];
+    expect(effectiveParams({}, approved)).toEqual({ deprioritizeKinds: ["single_family"], preferKinds: ["multifamily"], minValueUsd: 100 });
+    expect(effectiveParams({ preferKinds: ["single_family"], minValueUsd: 5 }, approved)).toEqual({ preferKinds: ["multifamily", "single_family"], minValueUsd: 5 });
+    expect(rescore([HOUSE], "hvac_new_construction", {}, approved, NOW)[0].move).toBe("down");
+    expect(rescore([HOUSE], "hvac_new_construction", { preferKinds: ["single_family"] }, approved, NOW)[0].move).toBe("up");
   });
 });
 
