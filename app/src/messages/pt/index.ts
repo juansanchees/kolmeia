@@ -24,8 +24,9 @@ import { emailAgent } from "./emailAgent";
 import { lists } from "./lists";
 import { tasks } from "./tasks";
 import { home } from "./home";
+import { landing } from "./landing";
 
-export const pt = { intl: "pt-BR", ...common, ...areas, leads, agents, ai, research, email, imports, sources, qualifier, spend, profile, coverage, team, handoff, calls, results, callAgent, funnel, emailAgent, lists, tasks, home } as const;
+export const pt = { intl: "pt-BR", ...common, ...areas, leads, agents, ai, research, email, imports, sources, qualifier, spend, profile, coverage, team, handoff, calls, results, callAgent, funnel, emailAgent, lists, tasks, home, landing } as const;
 
 /** The shape every language fills (string values widened). `intl` is the BCP 47 tag for dates and numbers. */
 export type Messages = Widen<typeof pt>;

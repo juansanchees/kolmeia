@@ -338,9 +338,9 @@ describe("E1 scheduler: anon key and scheduler_* functions only, no logging, no 
     expect(text.indexOf("BEARER.exec")).toBeGreaterThan(-1);
     expect(text.indexOf("BEARER.exec")).toBeLessThan(text.indexOf("createSchedulerStore("));
   });
-  test("the clock is public to the proxy (no session) and nothing else new is", () => {
+  test("the clock is public to the proxy (no session) and nothing else new is (plus /site, the landing page)", () => {
     const text = readFileSync(path.join(root, "src/lib/supabase/proxy.ts"), "utf8");
-    expect(text).toMatch(/PUBLIC_PATHS = \["\/login", "\/u", "\/api\/unsubscribe", "\/api\/scheduler", "\/api\/hunter"\]/);
+    expect(text).toMatch(/PUBLIC_PATHS = \["\/login", "\/u", "\/api\/unsubscribe", "\/api\/scheduler", "\/api\/hunter", "\/site"\]/);
   });
   test("no new environment variable: the ten known names (Fase 2 added EMAIL_VERIFIER) are the only ones named anywhere in src", () => {
     const known = new Set(["AI_GLOBAL_DAILY_CAP_USD", "AI_USER_DAILY_CAP_USD", "ANTHROPIC_API_KEY", "APP_PUBLIC_ORIGIN", "EMAIL_VERIFIER", "GOOGLE_PLACES_API_KEY", "MAILBOX_ENC_KEY", "MAILBOX_ENC_KEY_PREVIOUS", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_URL"]);

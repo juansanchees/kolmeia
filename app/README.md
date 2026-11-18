@@ -17,6 +17,10 @@ npm run check      # typecheck + lint + test + build + checagem do bundle (o mes
 O agente nasce **pausado** e ainda **não roda** (rodar sozinho = próxima fase; e-mail e ligação vêm depois). Sem chave da IA, o rascunho fica salvo e dá para **Continuar** depois. A closer vê só **Leads**; Agentes e Campanhas são do dono e do SDR.
 **Antes de publicar esta versão, aplique a migração `0008_agents.sql`** (depende de 0001 a 0004).
 
+## Página pública e lista de espera
+- `/` mostra a página de apresentação (`src/app/site`, estilos em `landing.css`, tudo sob a classe `.lp`) para quem **não** está logado; quem está logado continua no app. O `proxy` reescreve `/` para `/site` quando não há sessão; qualquer outro caminho sem sessão vai para `/login`. Texto em `src/messages/{pt,en}/landing.ts`.
+- A lista de espera grava pela função `join_waitlist` (migração `0038_waitlist.sql`, **NÃO APLICADA** em nenhum banco; a tabela `waitlist` não tem política: só o dono lê, no SQL Editor). Sem a migração, o formulário mostra "Não conseguimos salvar agora". **Aplique a `0038` antes de divulgar a página.**
+
 ## Variáveis (as únicas quatro)
 Copie `.env.example` para `.env.local` e preencha:
 

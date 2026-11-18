@@ -174,6 +174,8 @@ describe("proof that RLS is really enforced in PGlite", () => {
         "hunter_results_settle_ai_call", "hunter_propose_results_profile",
         // 0034 (RapidAPI: "Achar e-mail" asks for a site read; the queue helper has no client grant; source_month_rapidapi is NOT definer)
         "request_site_contact", "source_queue_site_contact",
+        // 0038 (public waitlist: the landing page's only write path; anon may call it, nothing may read the table)
+        "join_waitlist",
       ].sort(),
     );
     for (const r of rows) expect(r.proconfig).toContain("search_path=\"\"");

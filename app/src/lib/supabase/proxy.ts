@@ -5,9 +5,10 @@ import { env } from "@/lib/env";
 // /u and /api/unsubscribe: the public unsubscribe page and its one-click endpoint (read by e-mail recipients).
 // /api/scheduler: the clock (E1) has no session; it proves itself with a token that the database checks.
 // /api/hunter: the Caçador clock (F3b), same rule as /api/scheduler (bearer token checked by the database).
-const PUBLIC_PATHS = ["/login", "/u", "/api/unsubscribe", "/api/scheduler", "/api/hunter"];
+// /site: the public landing page. Anonymous visitors get it at "/" through a rewrite (below); signed-in people keep the app at "/".
+const PUBLIC_PATHS = ["/login", "/u", "/api/unsubscribe", "/api/scheduler", "/api/hunter", "/site"];
 
-/** Refreshes the session cookie and sends anonymous visitors to /login. No-op when the database is not configured. */
+/** Refreshes the session cookie, shows the landing to anonymous visitors at "/" and sends them to /login everywhere else. No-op when the database is not configured. */
 export async function updateSession(request: NextRequest) {
   const url = env.NEXT_PUBLIC_SUPABASE_URL;
   const key = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -33,6 +34,11 @@ export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
 
+  if (!signedIn && path === "/") {
+    const rewrite = NextResponse.rewrite(new URL("/site", request.url));
+    response.cookies.getAll().forEach((c) => rewrite.cookies.set(c));
+    return rewrite;
+  }
   if (!signedIn && !isPublic) {
     const redirect = NextResponse.redirect(new URL("/login", request.url));
     response.cookies.getAll().forEach((c) => redirect.cookies.set(c));
