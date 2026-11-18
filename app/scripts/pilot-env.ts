@@ -13,23 +13,33 @@ export const DEV_REF = "drkonindwshyyaemkcod";
 export const LOCAL_URL = "http://127.0.0.1:54321";
 type Env = Record<string, string | undefined>;
 const REPO = path.resolve(import.meta.dirname, "..", "..");
+/** This checkout and, when it is a git worktree, the main checkout too: both are the public repo. */
+export const REPO_ROOTS: string[] = [...new Set([REPO, mainCheckout(REPO)])];
+function mainCheckout(repo: string): string {
+  try {
+    return path.dirname(execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim());
+  } catch {
+    // no git: a worktree made by Claude Code lives at <main>/.claude/worktrees/<name>
+    return repo.split(`${path.sep}.claude${path.sep}worktrees${path.sep}`)[0];
+  }
+}
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1"]);
 
-export function assertOutsideRepo(dir: string, name: string, repo = REPO): string {
+export function assertOutsideRepo(dir: string, name: string, repo: string | string[] = REPO_ROOTS): string {
   const p = path.resolve(dir);
-  if (p === repo || p.startsWith(repo + path.sep)) throw new Error(`${name} must be outside kolmeia/ (public repo)`);
+  if ([repo].flat().some((r) => p === r || p.startsWith(r + path.sep))) throw new Error(`${name} must be outside kolmeia/ (public repo)`);
   return p;
 }
 
 /** PILOT_DATA_DIR: private inputs, must exist and be outside the repo. */
-export function pilotDataDir(env: Env = process.env, repo = REPO): string {
+export function pilotDataDir(env: Env = process.env, repo: string | string[] = REPO_ROOTS): string {
   const p = assertOutsideRepo(env.PILOT_DATA_DIR || path.join(os.homedir(), "Documents", "Hvac - Project", "data"), "PILOT_DATA_DIR", repo);
   if (!existsSync(p)) throw new Error("PILOT_DATA_DIR does not exist");
   return p;
 }
 
 /** PILOT_OUT_DIR: reports and the local seed file, outside the repo; created when missing. */
-export function pilotOutDir(env: Env = process.env, repo = REPO): string {
+export function pilotOutDir(env: Env = process.env, repo: string | string[] = REPO_ROOTS): string {
   const p = assertOutsideRepo(env.PILOT_OUT_DIR || path.join(os.homedir(), "kolmeia-pilot-out"), "PILOT_OUT_DIR", repo);
   mkdirSync(p, { recursive: true });
   return p;

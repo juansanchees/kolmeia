@@ -1,8 +1,9 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
-import { assertOutsideRepo, filterCsv, pilotDataDir, pilotOutDir, pilotUrl, PROD_REF, DEV_REF } from "../../scripts/pilot-env";
+import { assertOutsideRepo, filterCsv, pilotDataDir, pilotOutDir, pilotUrl, PROD_REF, DEV_REF, REPO_ROOTS } from "../../scripts/pilot-env";
 
 const root = path.resolve(import.meta.dirname, "../..");
 const repo = path.resolve(root, "..");
@@ -29,6 +30,15 @@ describe("pilot env guards", () => {
     expect(() => pilotOutDir({ PILOT_OUT_DIR: path.join(root, "out") })).toThrow(/outside kolmeia/);
     expect(() => assertOutsideRepo(repo, "X")).toThrow();
     expect(assertOutsideRepo(path.join(os.tmpdir(), "x"), "X")).toContain("x");
+  });
+  test("from a worktree, the main checkout is refused too (it is the same public repo)", () => {
+    const main = path.dirname(execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: root, encoding: "utf8" }).trim());
+    expect(REPO_ROOTS).toContain(main);
+    expect(REPO_ROOTS).toContain(repo);
+    expect(() => pilotOutDir({ PILOT_OUT_DIR: path.join(main, "out") })).toThrow(/outside kolmeia/);
+    expect(() => assertOutsideRepo(path.join(main, "data", "gold"), "X")).toThrow();
+    expect(() => assertOutsideRepo("/x/kolmeia/out", "X", ["/x/kolmeia/.claude/worktrees/w", "/x/kolmeia"])).toThrow();
+    expect(assertOutsideRepo("/x/kolmeia-out", "X", ["/x/kolmeia"])).toBe("/x/kolmeia-out");
   });
   test("filterCsv keeps the header and the accepted rows, quoting commas", () => {
     const out = filterCsv('name,city\n"Acme, Inc",Falmouth\nBay,Boston\n', (r) => r.city === "Falmouth");

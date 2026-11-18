@@ -101,3 +101,9 @@ export function dedupeCompanies(queue: QueueItem[]): QueueItem[] {
     return true;
   });
 }
+
+/** Why a current-flow company is missing from the new queue, from what the round file shows (never "the rule rejected it" without proof). */
+export function missingWhy(item: QueueItem, unlinkedRefs: ReadonlySet<string>): "no_work_signal" | "work_unlinked" | "work_not_in_queue" {
+  if (!item.signalRef) return "no_work_signal";
+  return unlinkedRefs.has(item.signalRef) ? "work_unlinked" : "work_not_in_queue";
+}

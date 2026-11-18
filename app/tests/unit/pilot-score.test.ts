@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { goldFromCsv, type GoldRow } from "@/lib/evals/gold";
-import { anonymize, compareRounds, scoreQueue, type QueueItem } from "@/lib/evals/score";
+import { anonymize, compareRounds, missingWhy, scoreQueue, type QueueItem } from "@/lib/evals/score";
 
 const g = (company: string, o: Partial<GoldRow> = {}): GoldRow => ({ company, tier: "A", temperature: "hot", city: "Townville", hasFalmouthPermit: false, ...o });
 const GOLD = [
@@ -64,5 +64,13 @@ describe("goldFromCsv", () => {
   test("reads columns by header name and drops rows without a company", () => {
     const rows = goldFromCsv("company,tier,temperature,city,phone,website,has_falmouth_permit\nAcme Builders LLC,A,hot,Townville,555-0101,,1\n,B,cold,Townville,,,0\n");
     expect(rows).toEqual([{ company: "Acme Builders LLC", tier: "A", temperature: "hot", city: "Townville", phone: "555-0101", hasFalmouthPermit: true }]);
+  });
+});
+
+describe("missingWhy", () => {
+  test("says what the round file shows: no work signal, work without a builder, or work not in the queue", () => {
+    expect(missingWhy(q("Acme Builders LLC"), new Set())).toBe("no_work_signal");
+    expect(missingWhy(q("Acme Builders LLC", { signalRef: "project:1" }), new Set(["project:1"]))).toBe("work_unlinked");
+    expect(missingWhy(q("Acme Builders LLC", { signalRef: "project:2" }), new Set(["project:1"]))).toBe("work_not_in_queue");
   });
 });

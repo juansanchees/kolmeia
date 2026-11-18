@@ -6,7 +6,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test } from "vitest";
 import { goldFromCsv } from "@/lib/evals/gold";
-import { anonymize, compareRounds, dedupeCompanies, scoreQueue, type QueueItem, type QueueScore } from "@/lib/evals/score";
+import { anonymize, compareRounds, dedupeCompanies, missingWhy, scoreQueue, type QueueItem, type QueueScore } from "@/lib/evals/score";
 import { mapsItems, massbuildsProjectItems } from "@/lib/kb/load";
 import type { KbItem } from "@/lib/kb/types";
 import { priorityOf } from "@/lib/leads/classify";
@@ -14,10 +14,16 @@ import { domainKey, nameKey, phoneKey } from "@/lib/research/dedupe";
 import { filterCsv, pilotDataDir, pilotOutDir } from "./pilot-env";
 
 const TOWN = "Falmouth";
-type RoundFile = { round: number; unlinked?: { link_status: string }[]; queue: { company: { name: string; phone?: string; website?: string }; signal: { ref: string; source_url?: string }; priority: number; codes: string[]; contact_path: string; fit: string }[] };
+type RoundFile = { round: number; unlinked?: { signal_ref: string; link_status: string }[]; queue: { company: { name: string; phone?: string; website?: string }; signal: { ref: string; source_url?: string }; priority: number; codes: string[]; contact_path: string; fit: string }[] };
 // `queue` = one item per company (the best one); `rawSize`/`duplicates` describe the queue as the flow produces it
 type Flow = { label: string; queue: QueueItem[]; score: QueueScore; rawSize: number; duplicates: QueueScore["duplicates"]; mapsOnly?: number };
 
+// what the round file can show about a current-flow company missing from the new queue
+const REJ_WHY = {
+  no_work_signal: "não há alvará nem projeto ligado a ela (só o cadastro do Maps), e o fluxo novo só entra com uma obra",
+  work_unlinked: "a obra dela ficou sem construtora confirmada (fora da fila, no arquivo da rodada)",
+  work_not_in_queue: "a obra dela não está na fila nova (não passou na regra da oferta ou não foi ligada à empresa)",
+} as const;
 const pct = (n: number, d: number) => (d ? `${Math.round((n / d) * 1000) / 10}%` : "n/a");
 const tiers = (t: Record<string, number>) => Object.entries(t).map(([k, v]) => `${k}: ${v}`).join(", ") || "-";
 
@@ -95,6 +101,8 @@ test.skipIf(process.env.EVAL_RUN !== "1")("falmouth evaluation", () => {
   const md = [
     `# Avaliação do piloto de Falmouth`,
     ``,
+    `> Atenção: a lista de referência foi montada a partir das mesmas fontes públicas de Falmouth (alvarás e varredura do Maps) que o piloto lê. Por isso a recuperação aqui pode parecer melhor do que seria numa cidade sem lista de referência: ela mede "o fluxo acha o que já tínhamos achado", não descoberta nova.`,
+    ``,
     `Mesmo recorte para os fluxos: ${TOWN}, oferta de HVAC em obra nova, mesma lista de referência. Referência lida só aqui; nunca entra na rodada.`,
     ``,
     ...flows.flatMap(section),
@@ -107,7 +115,7 @@ test.skipIf(process.env.EVAL_RUN !== "1")("falmouth evaluation", () => {
     `## Exemplos anonimizados`,
     hitIdx !== undefined ? `- Acerto: ${anonymize(nw.queue[hitIdx].company, TOWN)}, posição ${hitIdx + 1} na fila nova.` : `- Acerto: nenhum.`,
     gapG ? `- Lacuna: ${anonymize(gapG.company, TOWN)}, nível ${gapG.tier || "?"}, está na referência e não na fila nova.` : `- Lacuna: nenhuma.`,
-    rej ? `- Rejeição: ${anonymize(rej.company, TOWN)} está no fluxo atual e a regra da oferta não a colocou na fila nova.` : `- Rejeição: nenhuma.`,
+    rej ? `- Fora da fila nova: ${anonymize(rej.company, TOWN)} está no fluxo atual; ${REJ_WHY[missingWhy(rej, new Set((last.unlinked ?? []).map((u) => u.signal_ref)))]}.` : `- Fora da fila nova: nenhuma.`,
     ``,
     `## Custo`,
     `- Caminho determinístico (regra, cruzamento, gancho): US$ 0 (observado).`,
