@@ -1,4 +1,5 @@
-// Maps an offer verdict 1:1 onto a lead_opportunities row (0041) exactly the keys kb_deliver accepts (`facts` is not one of them yet: P4 adds the column).
+// Maps an offer verdict 1:1 onto a lead_opportunities row (0041 + 0042 `facts`): exactly the keys kb_deliver accepts.
+// `campaign_id` (0042) is added by the caller that runs a campaign.
 import type { CampaignParams, OfferContacts, OfferInput, OfferVerdict } from "./types";
 
 export type ContactPath = "phone" | "bids" | "vendor_portal" | "none";
@@ -25,9 +26,11 @@ export function toOpportunityRow(v: OfferVerdict, offer: string, input: OfferInp
     priority: v.priority,
     priority_codes: v.priorityCodes,
     hook_en: v.hookEn ? v.hookEn.slice(0, 300) : null,
-    checks: v.checks,
+    // The contact's own proof rides in checks (no extra column): which path and the page its value was found on.
+    checks: { ...v.checks, contact: { path: c.path, value_source_url: c.source_url ?? null } },
     open_questions: v.openQuestions,
     contact_path: c.path,
     contact_value: c.value ?? null,
+    facts: v.facts,
   };
 }

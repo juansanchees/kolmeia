@@ -20,6 +20,7 @@ import type { BuildingKind, CampaignParams, Check, CheckKey, CompanyProfileLike,
 // | campaign prefers the kind      | +15    | kind_preferred       |
 // | campaign deprioritizes the kind| -25    | kind_deprioritized   |
 // | below the campaign min value   | -25    | below_min_value      |
+// | older than the campaign wants  | -25    | older_than_wanted    |
 // Question codes: ask_gc, ask_taking_bids, ask_hvac_scope, confirm_new_build.
 
 const DAY = 86_400_000;
@@ -143,6 +144,7 @@ function evaluate(input: OfferInput, now: Date, params?: CampaignParams): OfferV
     if (params?.preferKinds?.includes(kind)) add(15, "kind_preferred");
     if (params?.deprioritizeKinds?.includes(kind)) add(-25, "kind_deprioritized");
     if (params?.minValueUsd != null && (value == null || value < params.minValueUsd)) add(-25, "below_min_value");
+    if (params?.maxAgeDays != null && (age == null || age > params.maxAgeDays)) add(-25, "older_than_wanted");
     priority = Math.max(0, Math.min(100, priority));
   }
 

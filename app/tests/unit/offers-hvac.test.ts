@@ -152,6 +152,11 @@ describe("building kind and params", () => {
     expect(v.priorityCodes).toEqual(expect.arrayContaining(["kind_deprioritized", "below_min_value"]));
     expect(v.priority).toBeLessThan(ev(base({ value_usd: 100000 })).priority);
   });
+  test("maxAgeDays demotes older permits", () => {
+    const v = ev(base({ issued_on: "2026-06-01" }), { maxAgeDays: 90 });
+    expect(v.priorityCodes).toContain("older_than_wanted");
+    expect(ev(base({ issued_on: "2026-11-01" }), { maxAgeDays: 90 }).priorityCodes).not.toContain("older_than_wanted");
+  });
   test("preferred kind promotes", () => expect(ev(base(), { preferKinds: ["single_family"] }).priorityCodes).toContain("kind_preferred"));
   test("wantBidPath puts ask_taking_bids first and bid door first in the row", () => {
     const i = base({}, { contacts: { bids_url: "https://example.com/bids" } });
@@ -172,7 +177,15 @@ describe("toOpportunityRow", () => {
   test("only keys kb_deliver accepts", () => {
     const i = base();
     const row = toOpportunityRow(ev(i), "hvac_new_construction", i, undefined, "00000000-0000-0000-0000-000000000001");
-    expect(Object.keys(row).sort()).toEqual(["checks", "contact_path", "contact_value", "hook_en", "kb_signal_id", "offer", "open_questions", "priority", "priority_codes", "signal_date", "source", "source_url", "title"]);
+    expect(Object.keys(row).sort()).toEqual(["checks", "contact_path", "contact_value", "facts", "hook_en", "kb_signal_id", "offer", "open_questions", "priority", "priority_codes", "signal_date", "source", "source_url", "title"]);
+    expect(row.facts).toEqual(i);
+  });
+  test("checks.contact carries the path and the page the contact was found on", () => {
+    const i = base({}, { company: { name: "Acme Builders LLC" }, contacts: { phone: "508-555-0101", phone_source_url: "https://example.com/contact", bids_url: "https://example.com/bids", bids_source_url: "https://example.com/work-with-us" } });
+    expect(toOpportunityRow(ev(i), "hvac_new_construction", i).checks.contact).toEqual({ path: "phone", value_source_url: "https://example.com/contact" });
+    expect(toOpportunityRow(ev(i), "hvac_new_construction", i, { wantBidPath: true }).checks.contact).toEqual({ path: "bids", value_source_url: "https://example.com/work-with-us" });
+    const none = base({}, { company: null, link_status: "none" });
+    expect(toOpportunityRow(ev(none), "hvac_new_construction", none).checks.contact).toEqual({ path: "none", value_source_url: null });
   });
 });
 

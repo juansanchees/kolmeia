@@ -6,7 +6,7 @@ export type Check = { state: CheckState; evidence?: string; source_url?: string 
 export type BuildingKind = "single_family" | "adu" | "multifamily" | "commercial" | "other";
 
 /** Campaign instructions that shape the verdict without code changes per instruction (P4 fills them). */
-export type CampaignParams = { preferKinds?: BuildingKind[]; deprioritizeKinds?: BuildingKind[]; minValueUsd?: number; wantBidPath?: boolean };
+export type CampaignParams = { preferKinds?: BuildingKind[]; deprioritizeKinds?: BuildingKind[]; minValueUsd?: number; wantBidPath?: boolean; maxAgeDays?: number };
 
 /** The signal columns the rule reads (a kb_signals row, plus `units` when a source gives it). */
 export type OfferSignal = {
