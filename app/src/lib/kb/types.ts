@@ -18,6 +18,8 @@ export type KbSignalInput = {
   source_url?: string;
   applicant_name?: string;
   permit_no?: string;
+  /** Why a confirmed link is weaker than proof (e.g. `unique_name_statewide`); written with the link, never cleared. */
+  link_note?: string;
 };
 export type KbCompanyInput = { name: string; name_key: string; website?: string; phone?: string; address?: string; city?: string; state?: string; zip?: string; company_type?: string };
 export type KbItem = {

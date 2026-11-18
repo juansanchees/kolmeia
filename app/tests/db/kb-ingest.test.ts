@@ -98,6 +98,18 @@ describe("kb_ingest", () => {
     expect(await count("kb_companies")).toBe(1);
   });
 
+  it("link_note is stored on upgrade and kept on re-ingest", async () => {
+    await ingest([{ match_only: true, signals: [permit("P-7")] }]);
+    await ingest([{ company: co("Acme Builders LLC", "acme", { city: "Exampleton" }) }]);
+    const link = { match_only: true, company: co("Acme Builders", "acme"), signals: [permit("P-7", { link_note: "unique_name_statewide" })] };
+    await ingest([link]);
+    const q = "select link_status, link_note from public.kb_signals where source_ref = 'P-7'";
+    const note = async () => (await db.admin<{ link_status: string; link_note: string | null }>(q))[0];
+    expect(await note()).toEqual({ link_status: "confirmed", link_note: "unique_name_statewide" });
+    await ingest([{ match_only: true, company: co("Acme Builders", "acme"), signals: [permit("P-7")] }]);
+    expect((await note()).link_note).toBe("unique_name_statewide");
+  });
+
   it("unique name attaches", async () => {
     await ingest([{ company: co("Acme Builders LLC", "acme", { city: "Exampleton" }) }]);
     const r = await ingest([{ match_only: true, company: co("Acme Builders", "acme"), signals: [permit("P-1")] }]);

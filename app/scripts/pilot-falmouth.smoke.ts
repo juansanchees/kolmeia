@@ -29,7 +29,7 @@ import { ingestLinks, linkItem, permitNoHits, type KbHit } from "./pilot-link";
 const TOWN = "Falmouth";
 const LIST_NAME = "Piloto Falmouth · HVAC obra nova";
 type Co = { id: string; name: string; name_key: string; domain: string | null; phone: string | null; address: string | null; city: string | null; state: string | null; zip: string | null; company_type: string | null };
-type Sig = { id: string; company_id: string | null; kind: "permit" | "project"; source: string; source_ref: string; address: string | null; town: string | null; value_usd: number | string | null; work_class: string | null; use: string | null; issued_on: string | null; description: string | null; source_url: string | null; applicant_name: string | null; permit_no: string | null; link_status: "confirmed" | "pending" | "none" };
+type Sig = { id: string; company_id: string | null; kind: "permit" | "project"; source: string; source_ref: string; address: string | null; town: string | null; value_usd: number | string | null; work_class: string | null; use: string | null; issued_on: string | null; description: string | null; source_url: string | null; applicant_name: string | null; permit_no: string | null; link_status: "confirmed" | "pending" | "none"; link_note: string | null };
 
 const must = <T>(r: { data: T; error: { message: string } | null }, what: string): NonNullable<T> => {
   if (r.error) throw new Error(`${what}: ${r.error.message}`);
@@ -118,7 +118,7 @@ test.skipIf(process.env.PILOT_RUN !== "1")("pilot round", async () => {
   }
 
   // 3. read back Falmouth signals and their companies
-  const sigs = await readAll<Sig>((a, z) => svc.from("kb_signals").select("id, company_id, kind, source, source_ref, address, town, value_usd, work_class, use, issued_on, description, source_url, applicant_name, permit_no, link_status").ilike("town", TOWN).order("id").range(a, z), "signals");
+  const sigs = await readAll<Sig>((a, z) => svc.from("kb_signals").select("id, company_id, kind, source, source_ref, address, town, value_usd, work_class, use, issued_on, description, source_url, applicant_name, permit_no, link_status, link_note").ilike("town", TOWN).order("id").range(a, z), "signals");
   const coIds = [...new Set(sigs.map((s) => s.company_id).filter((x): x is string => !!x))];
   const cos = new Map<string, Co>();
   for (const part of chunks(coIds, 200)) for (const c of must(await svc.from("kb_companies").select("id, name, name_key, domain, phone, address, city, state, zip, company_type").in("id", part), "companies") as Co[]) cos.set(c.id, c);
@@ -153,12 +153,12 @@ test.skipIf(process.env.PILOT_RUN !== "1")("pilot round", async () => {
     const g = await resolveGaps(opp, deps, params);
     cov.push(...g.coverage);
     const linked = g.link?.status === "confirmed" ? (g.company as KbHit | null) : co ? hitOf(co) : null;
-    const input: OfferInput = { signal: sig, company: g.company ? nn({ name: g.company.name, phone: g.company.phone, website: g.company.website }) as OfferInput["company"] : null, link_status: g.link?.status ?? s.link_status, contacts: g.contacts, ...(g.link?.note ? { link_note: g.link.note } : {}) };
+    const input: OfferInput = { signal: sig, company: g.company ? nn({ name: g.company.name, phone: g.company.phone, website: g.company.website }) as OfferInput["company"] : null, link_status: g.link?.status ?? s.link_status, contacts: g.contacts, ...((g.link?.note ?? s.link_note) ? { link_note: (g.link?.note ?? s.link_note)! } : {}) };
     const v = offer.evaluate(input, now, params);
     if (v.fit === "no") { noFit++; continue; }
     const linkedCo = linked ? known.get(linked.id) ?? ({ id: linked.id, name: linked.name, name_key: nameKey(linked.name), domain: null, phone: linked.phone ?? null, address: null, city: null, state: null, zip: null, company_type: null } as Co) : null;
     // a unique company found by the gap lookups is written back, so the signal is confirmed and the next round reuses it
-    if (g.link?.status === "confirmed" && linkedCo && s.link_status !== "confirmed") links.push(linkItem(s, linkedCo));
+    if (g.link?.status === "confirmed" && linkedCo && s.link_status !== "confirmed") links.push(linkItem(s, linkedCo, g.link.note));
     done.push({ sig: s, co: linkedCo, input, row: { ...toOpportunityRow(v, offer.id, input, params, s.id), campaign_id: campaignId } as never, v, pending: g.link?.status === "pending" ? (g.link.candidates?.length ?? 0) : 0 });
   }
 

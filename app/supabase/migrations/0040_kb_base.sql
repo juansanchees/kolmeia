@@ -362,14 +362,14 @@ declare
   v_cand uuid;
 begin
   if jsonb_typeof(s) <> 'object'
-     or exists (select 1 from jsonb_object_keys(s) k where k <> all (array['kind', 'source', 'source_ref', 'address', 'town', 'value_usd', 'work_class', 'use', 'issued_on', 'description', 'source_url', 'applicant_name', 'permit_no'])) then
+     or exists (select 1 from jsonb_object_keys(s) k where k <> all (array['kind', 'source', 'source_ref', 'address', 'town', 'value_usd', 'work_class', 'use', 'issued_on', 'description', 'source_url', 'applicant_name', 'permit_no', 'link_note'])) then
     raise exception 'invalid item' using errcode = '22023';
   end if;
   select id, link_status into v_old from public.kb_signals where source = s ->> 'source' and source_ref = s ->> 'source_ref';
   if v_old.id is null then
-    insert into public.kb_signals (company_id, kind, source, source_ref, address, town, value_usd, work_class, use, issued_on, description, source_url, applicant_name, permit_no, link_status)
+    insert into public.kb_signals (company_id, kind, source, source_ref, address, town, value_usd, work_class, use, issued_on, description, source_url, applicant_name, permit_no, link_status, link_note)
     values (p_company, s ->> 'kind', s ->> 'source', s ->> 'source_ref', s ->> 'address', s ->> 'town', (s ->> 'value_usd')::numeric, s ->> 'work_class', s ->> 'use',
-            (s ->> 'issued_on')::date, s ->> 'description', s ->> 'source_url', coalesce(s ->> 'applicant_name', p_applicant), s ->> 'permit_no', p_status)
+            (s ->> 'issued_on')::date, s ->> 'description', s ->> 'source_url', coalesce(s ->> 'applicant_name', p_applicant), s ->> 'permit_no', p_status, case when p_status = 'confirmed' then s ->> 'link_note' end)
     returning id into v_sid;
     if p_status = 'pending' then
       insert into public.kb_signal_candidates (signal_id, company_id, reason) select v_sid, x, p_reason from unnest(p_cands) x;
@@ -381,7 +381,7 @@ begin
   if v_old.link_status = 'confirmed' then
     return 0;
   elsif p_status = 'confirmed' then
-    update public.kb_signals set company_id = p_company, link_status = 'confirmed' where id = v_sid;
+    update public.kb_signals set company_id = p_company, link_status = 'confirmed', link_note = coalesce(s ->> 'link_note', link_note) where id = v_sid;
     delete from public.kb_signal_candidates where signal_id = v_sid;
   elsif p_status = 'pending' then
     update public.kb_signals set link_status = 'pending' where id = v_sid;

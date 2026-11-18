@@ -3,6 +3,7 @@
 // Every step that cannot run or fails leaves a coverage row and the next step still runs. Network goes only through the
 // injected readSite (robots.txt, 1 req/s, honest User-Agent live there); archived lookups are injected too.
 import { nameKey, phoneKey } from "@/lib/research/dedupe";
+import { hasCompanyToken } from "./load";
 import type { SiteRead } from "@/lib/qualifier/site/reader";
 import type { CampaignParams, OfferContacts, OfferSignal } from "@/lib/offers/types";
 import type { CoverageOutcome, CoverageRow } from "./coverage";
@@ -89,13 +90,16 @@ export async function resolveGaps(opp: GapOpp, deps: GapDeps, params?: CampaignP
   // Steps 1-3: only while the responsible company is not confirmed. One hit = linked; several = pending, never guessed.
   // The contractor, when the permit has one, is a better name than the applicant.
   const matchName = opp.applicant?.contractor || opp.applicant?.name;
+  // A person-looking name ("Pat Person") is never linked to a firm by name alone.
+  const firmName = matchName && nameKey(matchName) && hasCompanyToken(matchName) ? matchName : null;
   const steps: { source: GapLink["via"]; run: (() => Promise<CompanyHit[]>) | null }[] = [
     { source: "permit_no", run: opp.signal.permit_no && deps.byPermitNo ? () => deps.byPermitNo!(opp.signal.permit_no!, town) : null },
     { source: "applicant_phone", run: phoneKey(opp.applicant?.phone) && deps.byPhone ? () => deps.byPhone!(phoneKey(opp.applicant!.phone)!) : null },
-    { source: "name_town", run: matchName && nameKey(matchName) && deps.byNameTown ? () => deps.byNameTown!(nameKey(matchName), town) : null },
-    { source: "name_statewide", run: matchName && nameKey(matchName) && deps.byNameStatewide ? () => deps.byNameStatewide!(nameKey(matchName)) : null },
+    { source: "name_town", run: firmName && deps.byNameTown ? () => deps.byNameTown!(nameKey(firmName), town) : null },
+    { source: "name_statewide", run: firmName && deps.byNameStatewide ? () => deps.byNameStatewide!(nameKey(firmName)) : null },
   ];
   if (opp.link_status !== "confirmed") {
+    if (matchName && nameKey(matchName) && !firmName && (deps.byNameTown || deps.byNameStatewide)) row("kb_match:name_town", "skipped", 0, 0, "person_name");
     for (const st of steps) {
       if (!st.run) continue;
       const source = `kb_match:${st.source}`;

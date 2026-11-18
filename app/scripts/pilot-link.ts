@@ -20,11 +20,11 @@ export async function permitNoHits(
 const nn = <T extends object>(o: T): T => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== undefined && v !== "")) as T;
 
 /** A match_only item for the signal with the found company's key (domain / phone / name + city). Never carries an applicant name or phone (D13). */
-export function linkItem(s: LinkSig, c: LinkCo): KbItem {
+export function linkItem(s: LinkSig, c: LinkCo, note?: string): KbItem {
   return {
     match_only: true,
     company: nn({ name: c.name, name_key: c.name_key, website: c.domain ? `https://${c.domain}` : undefined, phone: c.phone ?? undefined, city: c.city ?? undefined }) as NonNullable<KbItem["company"]>,
-    signals: [nn({ kind: s.kind, source: s.source, source_ref: s.source_ref, address: s.address, town: s.town, value_usd: s.value_usd == null ? undefined : Number(s.value_usd), work_class: s.work_class, use: s.use, issued_on: s.issued_on, description: s.description, source_url: s.source_url, permit_no: s.permit_no }) as never],
+    signals: [nn({ kind: s.kind, source: s.source, source_ref: s.source_ref, address: s.address, town: s.town, value_usd: s.value_usd == null ? undefined : Number(s.value_usd), work_class: s.work_class, use: s.use, issued_on: s.issued_on, description: s.description, source_url: s.source_url, permit_no: s.permit_no, link_note: note }) as never],
   };
 }
 

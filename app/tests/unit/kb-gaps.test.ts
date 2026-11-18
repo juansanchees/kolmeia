@@ -78,7 +78,7 @@ describe("matching steps", () => {
   test("falls through: phone key, then name + town", async () => {
     const byPhone = vi.fn(async (k: string) => (k === "5085550123" ? [] : [acme]));
     const byNameTown = vi.fn(async (k: string, t: string) => (k === "pat person" && t === "Falmouth" ? [acme] : []));
-    const r = await resolveGaps(unlinked({ applicant: { name: "Pat Person", phone: "(508) 555-0123" } }), deps({ byPermitNo: async () => [], byPhone, byNameTown }));
+    const r = await resolveGaps(unlinked({ applicant: { name: "Pat Person LLC", phone: "(508) 555-0123" } }), deps({ byPermitNo: async () => [], byPhone, byNameTown }));
     expect(byPhone).toHaveBeenCalledWith("5085550123");
     expect(r.link).toMatchObject({ status: "confirmed", via: "name_town" });
     expect(r.coverage.slice(0, 3).map((c) => c.outcome)).toEqual(["empty", "empty", "ok"]);
@@ -118,6 +118,13 @@ describe("matching steps", () => {
       expect(r.link).toMatchObject({ status: "pending", via: "name_statewide", candidates: [expect.anything(), expect.anything()] });
       expect(r.link?.note).toBeUndefined();
       expect(r.company).toBeNull();
+    });
+    test("a person-looking name is never linked, even if a firm has that exact name key", async () => {
+      const byNameTown = vi.fn(async () => [acme]);
+      const r = await resolveGaps(unlinked({ applicant: { name: "Pat Person" } }), deps({ byNameTown, byNameStatewide: async () => [acme] }));
+      expect(r.link).toBeUndefined();
+      expect(byNameTown).not.toHaveBeenCalled();
+      expect(r.coverage).toEqual([expect.objectContaining({ outcome: "skipped", reason: "person_name" })]);
     });
     test("contractor name is matched before the applicant name", async () => {
       const seen: string[] = [];

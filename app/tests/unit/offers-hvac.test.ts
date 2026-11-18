@@ -229,6 +229,8 @@ describe("trade-only and temporary permits", () => {
   });
   test("unique_name_statewide link note asks the caller to confirm the job", () => {
     expect(ev(base({}, { link_note: "unique_name_statewide" })).openQuestions).toContain("confirm_job_is_theirs");
+    // a stored note on an already-confirmed signal (later round) keeps the question
+    expect(ev(base({}, { link_status: "confirmed", link_note: "unique_name_statewide" })).openQuestions).toContain("confirm_job_is_theirs");
     expect(ev(base()).openQuestions).not.toContain("confirm_job_is_theirs");
   });
 });

@@ -19,6 +19,8 @@ describe("link write-back", () => {
   const sig = { kind: "permit" as const, source: "permit" as const, source_ref: "x:B-100", town: "Falmouth", value_usd: "250000", permit_no: "B-100", applicant_name: "Pat Example", applicant_phone: "508-555-0100" };
   const co = { id: "c1", name: "Acme Builders LLC", name_key: "acme builders", domain: "acme.example", phone: "(508) 555-0101", city: "Falmouth" };
   test("re-ingests the signal as match_only with the company's keys and no applicant data", () => {
+    expect(linkItem(sig, co, "unique_name_statewide").signals?.[0].link_note).toBe("unique_name_statewide");
+    expect(linkItem(sig, co).signals?.[0]).not.toHaveProperty("link_note");
     const it = linkItem(sig, co);
     expect(it.match_only).toBe(true);
     expect(it.company).toEqual({ name: "Acme Builders LLC", name_key: "acme builders", website: "https://acme.example", phone: "(508) 555-0101", city: "Falmouth" });
