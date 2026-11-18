@@ -18,6 +18,10 @@ describe("agentLiveView", () => {
     expect(v.state).toBe("paused");
     expect(v.pausedReason).toBe("user");
   });
+  test("paused by the user (no agent reason, no run reason) -> user wording", () => {
+    expect(view(agent({ status: "paused" }), null).pausedReason).toBe("user");
+    expect(view(agent({ status: "paused" }), run({ status: "paused", progress: { pauseReason: "daily_cap" } })).pausedReason).toBe("daily_cap");
+  });
   test("run paused by cap -> reason from progress", () => {
     const v = view(agent(), run({ status: "paused", progress: { pauseReason: "daily_cap" } }));
     expect(v.state).toBe("paused");

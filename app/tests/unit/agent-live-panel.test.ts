@@ -19,6 +19,20 @@ describe("AgentLivePanel (source)", () => {
     expect(src).toContain("router.refresh()");
     expect(src).not.toMatch(/\br\.error\b|run\.error/);
   });
+  test("run button only while the agent is paused or running (never for a done agent)", () => {
+    const d = read("src/components/agents/AgentDetail.tsx");
+    expect(d).toContain('canRun={agent.status === "paused" || agent.status === "running"}');
+    expect(d).not.toMatch(/canRun\s*\/>/);
+  });
+  test("refreshes on any exit from busy, backs off on non-ok, live region is narrow", () => {
+    expect(src).toContain("!fast) router.refresh()");
+    expect(src).toContain("ctl.signal.aborted");
+    expect(src).not.toContain('<div aria-live="polite"');
+    expect(src).toContain("ring-honey");
+  });
+  test("power button shows a pause-specific pending label", () => {
+    expect(read("src/components/agents/AgentPowerButton.tsx")).toContain("t.agents.live.pausing");
+  });
   test("one stage label per engine stage", () => {
     for (const s of STAGES) expect(pt.agents.live.stages).toHaveProperty(s);
   });

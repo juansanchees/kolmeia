@@ -81,7 +81,12 @@ describe("runHunterNowAction", () => {
   });
   test("a database error is a generic error, internals not echoed", async () => {
     researchSession.mockResolvedValue(session(async () => ({ data: null, error: { message: "secret detail" } })));
-    expect(await runHunterNowAction(ID)).toEqual({ status: "error", message: pt.agents.hunter.errors.failed });
+    expect(await runHunterNowAction(ID)).toEqual({ status: "error", message: pt.agents.live.runFailed });
+  });
+  test("run-now failures use the run-now copy, not the creation copy", async () => {
+    researchSession.mockResolvedValue(session(async () => ({ data: "weird", error: null })));
+    expect(await runHunterNowAction(ID)).toEqual({ status: "error", message: pt.agents.live.runFailed });
+    expect(pt.agents.live.runFailed).not.toBe(pt.agents.hunter.errors.failed);
   });
   test("bad uuid never reaches the database", async () => {
     const rpc = vi.fn();

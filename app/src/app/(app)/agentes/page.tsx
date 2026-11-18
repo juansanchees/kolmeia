@@ -90,7 +90,7 @@ export default async function AgentsPage() {
   );
 }
 
-/** Latest run per hunter: two queries for all ids (runs, then their candidate rows), never one per agent. */
+/** Latest run per hunter: one query for all ids, never one per agent. */
 async function loadLastRuns(supabase: NonNullable<Awaited<ReturnType<typeof createClient>>>, ids: string[]): Promise<Record<string, LastRun>> {
   if (ids.length === 0) return {};
   // shortcut: newest 200 runs overall, so a very chatty agent could hide another's latest; page by agent if lists grow

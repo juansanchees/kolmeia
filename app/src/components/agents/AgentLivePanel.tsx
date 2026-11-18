@@ -42,23 +42,24 @@ export function AgentLivePanel({ agentId, initial, canRun }: { agentId: string; 
       stop();
       if (!alive || document.hidden) return;
       ctl = new AbortController();
-      let next = prev.current;
+      let fast = false;
       try {
         const res = await fetch(`/api/agents/${agentId}/live`, { cache: "no-store", signal: ctl.signal });
         if (res.ok) {
           const data = (await res.json()) as AgentLive;
-          next = data.state;
+          fast = BUSY.includes(data.state);
           if (alive) {
             setLive(data);
             setNow(Date.now());
+            if (BUSY.includes(prev.current) && !fast) router.refresh();
           }
-          if (BUSY.includes(prev.current) && data.state === "done") router.refresh();
           prev.current = data.state;
         }
       } catch {
-        if (!alive) return;
+        if (!alive || ctl.signal.aborted) return;
       }
-      if (alive) timer = setTimeout(tick, BUSY.includes(next) ? LIVE_FAST_MS : LIVE_SLOW_MS);
+      // a non-ok answer (404/401) or a network error backs off to the slow rhythm
+      if (alive) timer = setTimeout(tick, fast ? LIVE_FAST_MS : LIVE_SLOW_MS);
     };
     const onVisibility = () => (document.hidden ? stop() : void tick());
     kick.current = () => void tick();
@@ -100,9 +101,11 @@ export function AgentLivePanel({ agentId, initial, canRun }: { agentId: string; 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 id="agent-live-title" className="m-0 flex flex-wrap items-center gap-2.5 font-body text-lg font-semibold normal-case tracking-normal">
           <span>{L.title}</span>
+          <span aria-live="polite">
           <Badge tone={state === "failed" ? "danger" : state === "paused" ? "warn" : busy ? "honey" : "neutral"} dot={busy}>
             {statusLabel}
           </Badge>
+          </span>
         </h3>
         {canRun && CAN_RUN.includes(state) && (
           <HexButton type="button" tone="honey" disabled={pending} onClick={run}>
@@ -111,18 +114,18 @@ export function AgentLivePanel({ agentId, initial, canRun }: { agentId: string; 
         )}
       </div>
 
-      <div aria-live="polite" className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3">
         {(state === "running" || state === "done") && (
           <div className="flex flex-wrap items-center gap-3">
             <ol className="m-0 flex list-none items-center gap-1.5 p-0" aria-hidden>
               {STAGES.map((s, i) => (
                 <li
                   key={s}
-                  className={`${hexDot} ${i < stageIdx ? "bg-honey" : i === stageIdx ? "animate-pulse bg-honey ring-2 motion-reduce:animate-none" : "bg-[#d5dae3]"}`}
+                  className={`${hexDot} ${i < stageIdx ? "bg-honey" : i === stageIdx ? "animate-pulse bg-honey ring-2 ring-honey motion-reduce:animate-none" : "bg-[#d5dae3]"}`}
                 />
               ))}
             </ol>
-            {currentLabel && <span className="text-base font-semibold">{currentLabel}</span>}
+            <span aria-live="polite" className="text-base font-semibold empty:hidden">{currentLabel}</span>
           </div>
         )}
         {state === "queued" && <p className="m-0 text-base">{L.queuedHint}</p>}

@@ -30,7 +30,7 @@ export async function AgentDetail({ agent, setupRun, runs, now, live }: { agent:
   const aud = c.audience === "other" ? c.audienceText : c.audience ? (A.hunter.audiences as Record<string, string>)[c.audience] : undefined;
   return (
     <div className="flex min-w-0 flex-col gap-5">
-      {live && agent.status !== "draft" && <AgentLivePanel agentId={agent.id} initial={live} canRun />}
+      {live && agent.status !== "draft" && <AgentLivePanel agentId={agent.id} initial={live} canRun={agent.status === "paused" || agent.status === "running"} />}
       <HexPanel as="section" aria-labelledby="agent-title" raised wrapClassName="k-in" className="flex flex-col gap-7 py-7">
         <AgentHead id="agent-title" name={agent.name} type={agent.type} typeLabel={A.types[agent.type]} status={agent.status} statusLabel={A.statuses[agent.status]} />
 

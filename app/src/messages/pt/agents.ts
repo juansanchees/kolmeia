@@ -13,7 +13,7 @@ export const agents = {
   restart: "Recomeçar",
   types: { hunter: "Caçador", email: "E-mail", call: "Ligação" },
   statuses: { draft: "rascunho", paused: "pausado", running: "rodando", done: "concluído" },
-  metric: { draft: "Falta terminar a criação", neverRan: "Ainda não rodou", pausedByYou: "Pausado por você", searching: "Buscando agora", done: "Concluído", working: "● Trabalhando agora", queued: "Na fila: começa em até 1 minuto", ranAgo: "Rodou {ago}, achou {n}" },
+  metric: { draft: "Falta terminar a criação", neverRan: "Ainda não rodou", pausedByYou: "Pausado por você", searching: "Buscando agora", done: "Concluído", working: "● Trabalhando agora", queued: "Na fila: começa em até 1 minuto", queuedStale: "Na fila, mas ainda não começou", ranAgo: "Rodou {ago}, achou {n}" },
   paused: {
     daily_cap: "Pausado: teto de IA do workspace atingido",
     user_cap: "Pausado: teto de IA do usuário atingido",
@@ -97,7 +97,6 @@ export const agents = {
   },
   live: {
     "title": "Andamento agora",
-    "live": "Ao vivo",
     "states": {
       "idle": "Parado",
       "queued": "Na fila",
@@ -124,6 +123,8 @@ export const agents = {
     },
     "runNow": "Rodar agora",
     "starting": "Começando...",
+    "pausing": "Pausando...",
+    "runFailed": "Não deu para rodar agora. Tente de novo.",
     "found": "Empresas achadas: {n} de {max}",
     "foundNoMax": "Empresas achadas: {n}",
     "spent": "Gasto: US$ {spent} de US$ {max}",

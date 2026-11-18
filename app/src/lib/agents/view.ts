@@ -2,6 +2,7 @@ import { when } from "@/components/email/format";
 import type { RunRow } from "@/lib/research/rows";
 import type { Messages } from "@/lib/i18n";
 import type { AgentRow } from "./types";
+import { isQueueStale } from "./live";
 
 export type LastRun = { status: string; finishedAt: string | null; found: number };
 
@@ -25,7 +26,7 @@ function metricOf(a: AgentRow, now: Date, t: Messages, listSize?: number, lastRu
       if (lastRun?.status === "running") return t.agents.metric.working;
       const due = a.next_run_at !== null && new Date(a.next_run_at).getTime() <= now.getTime();
       const live = lastRun?.status === "ready" || lastRun?.status === "paused";
-      if (a.type === "hunter" && (lastRun?.status === "ready" || (due && !live))) return t.agents.metric.queued;
+      if (a.type === "hunter" && (lastRun?.status === "ready" || (due && !live))) return isQueueStale(a.next_run_at, now) ? t.agents.metric.queuedStale : t.agents.metric.queued;
       if (lastRun?.status === "done" && lastRun.finishedAt) return t.agents.metric.ranAgo.replace("{ago}", ago(lastRun.finishedAt, now, t.intl)).replace("{n}", String(lastRun.found));
       return a.next_run_at && new Date(a.next_run_at).getTime() > now.getTime()
         ? t.agents.detail.nextRun.replace("{when}", when(a.next_run_at, t.intl))

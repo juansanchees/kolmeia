@@ -94,7 +94,8 @@ describe("F2 agents", () => {
     const now = new Date("2026-11-14T12:00:00Z");
     const future = "2026-11-21T12:00:00Z";
     expect(agentRowView(row({ next_run_at: future }), now, t).metric).toBe(t.agents.detail.nextRun.replace("{when}", when(future, t.intl)));
-    expect(agentRowView(row({ next_run_at: "2026-11-14T11:00:00Z" }), now, t).metric).toBe(t.agents.metric.queued);
+    expect(agentRowView(row({ next_run_at: "2026-11-14T11:59:00Z" }), now, t).metric).toBe(t.agents.metric.queued);
+    expect(agentRowView(row({ next_run_at: "2026-11-14T11:00:00Z" }), now, t).metric).toBe(t.agents.metric.queuedStale);
     expect(agentRowView(row({ next_run_at: null }), now, t).metric).toBe(t.agents.metric.searching);
     expect(agentRowView(row({ status: "paused", paused_reason: "daily_cap" }), now, t).metric).toBe(t.agents.paused.daily_cap);
     expect(agentRowView(row({ status: "paused", paused_reason: "error" }), now, t).metric).toBe(t.agents.paused.error);
@@ -111,10 +112,11 @@ describe("F2 agents", () => {
     const now = new Date("2026-11-14T12:00:00Z");
     const m = (lastRun?: { status: string; finishedAt: string | null; found: number }, o: Partial<AgentRow> = {}) => agentRowView({ ...a, ...o }, now, t, { lastRun }).metric;
     expect(m({ status: "running", finishedAt: null, found: 3 })).toBe("● Trabalhando agora");
-    expect(m({ status: "ready", finishedAt: null, found: 0 })).toBe("Na fila: começa em até 1 minuto");
+    expect(m({ status: "ready", finishedAt: null, found: 0 }, { next_run_at: "2026-11-14T11:59:00Z" })).toBe("Na fila: começa em até 1 minuto");
+    expect(m({ status: "ready", finishedAt: null, found: 0 }, { next_run_at: "2026-11-14T11:00:00Z" })).toBe(t.agents.metric.queuedStale);
     expect(m({ status: "done", finishedAt: "2026-11-14T10:00:00Z", found: 20 })).toBe("Rodou há 2 h, achou 20");
     expect(m({ status: "paused", finishedAt: null, found: 0 })).toBe(t.agents.live.states.paused);
-    expect(m({ status: "done", finishedAt: "2026-11-14T10:00:00Z", found: 2 }, { next_run_at: "2026-11-14T11:00:00Z" })).toBe("Na fila: começa em até 1 minuto");
+    expect(m({ status: "done", finishedAt: "2026-11-14T10:00:00Z", found: 2 }, { next_run_at: "2026-11-14T11:59:00Z" })).toBe("Na fila: começa em até 1 minuto");
     expect(m(undefined)).toBe(t.agents.detail.nextRun.replace("{when}", when(a.next_run_at, t.intl)));
   });
 

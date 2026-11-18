@@ -123,13 +123,14 @@ export async function pauseHunterAction(agentId: string): Promise<FormState> {
 export async function runHunterNowAction(agentId: string): Promise<FormState> {
   const t = await getT();
   const E = t.agents.hunter.errors;
+  const failed = t.agents.live.runFailed;
   const s = await researchSession();
-  if (!s || !uuid.safeParse(agentId).success) return { status: "error", message: E.failed };
+  if (!s || !uuid.safeParse(agentId).success) return { status: "error", message: failed };
   if (!isSender(s.workspace.role)) redirect("/leads");
   const { data, error } = await s.supabase.rpc("run_hunter_now", { p_agent: agentId });
-  if (error) return { status: "error", message: E.failed };
+  if (error) return { status: "error", message: failed };
   if (data === "too_many") return { status: "error", message: t.agents.errors.tooMany };
-  if (data !== "queued" && data !== "already_running") return { status: "error", message: E.failed };
+  if (data !== "queued" && data !== "already_running") return { status: "error", message: failed };
   revalidatePath("/agentes");
   revalidatePath(`/agentes/${agentId}`);
   return { status: "success", ...(data === "already_running" ? { message: E.alreadyRunning } : {}) };

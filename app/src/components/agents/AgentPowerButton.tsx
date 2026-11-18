@@ -30,7 +30,7 @@ export function AgentPowerButton({ agentId, status }: { agentId: string; status:
           })
         }
       >
-        {pending ? t.agents.live.starting : running ? t.agents.detail.pause : t.agents.detail.turnOn}
+        {pending ? (running ? t.agents.live.pausing : t.agents.live.starting) : running ? t.agents.detail.pause : t.agents.detail.turnOn}
       </button>
       {error && (
         <span role="alert" className="text-base font-medium text-danger">

@@ -15,7 +15,7 @@ export const agents = {
   restart: "Start over",
   types: { hunter: "Hunter", email: "Email", call: "Calls" },
   statuses: { draft: "draft", paused: "paused", running: "running", done: "done" },
-  metric: { draft: "Setup not finished", neverRan: "Has not run yet", pausedByYou: "Paused by you", searching: "Searching now", done: "Done", working: "● Working now", queued: "Queued: starts within 1 minute", ranAgo: "Ran {ago}, found {n}" },
+  metric: { draft: "Setup not finished", neverRan: "Has not run yet", pausedByYou: "Paused by you", searching: "Searching now", done: "Done", working: "● Working now", queued: "Queued: starts within 1 minute", queuedStale: "Queued, but has not started yet", ranAgo: "Ran {ago}, found {n}" },
   paused: {
     daily_cap: "Paused: workspace AI cap reached",
     user_cap: "Paused: user AI cap reached",
@@ -99,7 +99,6 @@ export const agents = {
   },
   live: {
     "title": "Progress right now",
-    "live": "Live",
     "states": {
       "idle": "Stopped",
       "queued": "In line",
@@ -125,6 +124,8 @@ export const agents = {
       "finalize": "Closing the list"
     },
     "runNow": "Run now",
+    "pausing": "Pausing...",
+    "runFailed": "Couldn't run it now. Please try again.",
     "starting": "Starting...",
     "found": "Companies found: {n} of {max}",
     "foundNoMax": "Companies found: {n}",

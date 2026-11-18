@@ -21,6 +21,10 @@ export type LiveRun = Pick<
 
 const STALE_MS = 3 * 60 * 1000;
 
+/** Queued but the clock never started it: more than 3 minutes past next_run_at. */
+export const isQueueStale = (nextRunAt: string | null, now: Date) =>
+  nextRunAt !== null && now.getTime() - new Date(nextRunAt).getTime() > STALE_MS;
+
 export function agentLiveView(input: {
   agent: { status: string; next_run_at: string | null; paused_reason: string | null };
   run: LiveRun | null;
@@ -39,13 +43,12 @@ export function agentLiveView(input: {
   else if (agent.status === "running" && due && !live) state = "queued";
   else if (run?.status === "done" || run?.status === "failed") state = run.status;
 
-  const stale =
-    state === "queued" && agent.next_run_at !== null && now.getTime() - new Date(agent.next_run_at).getTime() > STALE_MS;
+  const stale = state === "queued" && isQueueStale(agent.next_run_at, now);
 
   return {
     state,
     stale,
-    pausedReason: state === "paused" ? (agent.paused_reason ?? run?.progress?.pauseReason ?? null) : null,
+    pausedReason: state === "paused" ? (agent.paused_reason ?? run?.progress?.pauseReason ?? (agent.status === "paused" ? "user" : null)) : null,
     nextRunAt: agent.next_run_at,
     run: run && {
       id: run.id,
