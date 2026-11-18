@@ -71,11 +71,10 @@ export async function resolveGaps(opp: GapOpp, deps: GapDeps, params?: CampaignP
       const o = siteOutcome(r);
       row("site_robot", o.outcome, 1, r.pages.length, o.reason);
       for (const p of r.pages) {
-        const found = (u: string) => (contacts.source_url ??= p.url, u);
-        if (!contacts.phone && p.facts.phones[0]) contacts.phone = found(p.facts.phones[0].value);
+        if (!contacts.phone && p.facts.phones[0]) { contacts.phone = p.facts.phones[0].value; contacts.phone_source_url = p.url; }
         for (const l of p.facts.links) {
-          if (!contacts.vendor_portal_url && VENDOR_RE.test(l)) contacts.vendor_portal_url = found(l);
-          else if (!contacts.bids_url && BIDS_RE.test(l)) contacts.bids_url = found(l);
+          if (!contacts.vendor_portal_url && VENDOR_RE.test(l)) { contacts.vendor_portal_url = l; contacts.vendor_portal_source_url = p.url; }
+          else if (!contacts.bids_url && BIDS_RE.test(l)) { contacts.bids_url = l; contacts.bids_source_url = p.url; }
         }
       }
     } catch (e) {

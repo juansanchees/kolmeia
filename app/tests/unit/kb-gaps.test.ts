@@ -1,10 +1,15 @@
 import { describe, expect, test, vi } from "vitest";
 import { resolveGaps, type GapDeps, type GapOpp } from "@/lib/kb/gaps";
+import { hvacNewConstruction } from "@/lib/offers/hvac-new-construction";
 import { contactPath } from "@/lib/offers/row";
 import type { SiteRead } from "@/lib/qualifier/site/reader";
 
 const facts = (phones: string[], links: string[]) => ({ name: null, phones: phones.map((value) => ({ value, url: "https://example.com", excerpt: "" })), emails: [], address: null, city: null, state: null, zip: null, links, text: "" });
 const site = (o: Partial<SiteRead> & { phones?: string[]; links?: string[] } = {}): SiteRead => ({ outcome: o.outcome ?? "ok", finalHome: "https://example.com/", pages: o.outcome && o.outcome !== "ok" ? [] : [{ url: "https://example.com/", text: "", facts: facts(o.phones ?? [], o.links ?? []) }] });
+const twoPages = (): SiteRead => ({ outcome: "ok", finalHome: "https://example.com/", pages: [
+  { url: "https://example.com/", text: "", facts: facts(["(508) 555-0111"], []) },
+  { url: "https://example.com/work", text: "", facts: facts([], ["https://example.com/bids"]) },
+] });
 const deps = (over: Partial<GapDeps> = {}): GapDeps => ({ live: true, now: () => new Date("2026-11-18T12:00:00Z"), readSite: async () => site(), ...over });
 const opp = (over: Partial<GapOpp> = {}): GapOpp => ({
   signal: { kind: "permit", source: "permit", source_ref: "t:1", town: "Falmouth", permit_no: "P-1" },
@@ -39,10 +44,17 @@ describe("site step", () => {
   test("vendor portal link sets contact_path vendor_portal; bids link and phone found", async () => {
     const r = await resolveGaps(opp(), deps({ readSite: async () => site({ links: ["https://example.com/vendor-portal", "https://example.com/about"] }) }));
     expect(r.contacts.vendor_portal_url).toBe("https://example.com/vendor-portal");
-    expect(r.contacts.source_url).toBe("https://example.com/");
+    expect(r.contacts.vendor_portal_source_url).toBe("https://example.com/");
     expect(contactPath({ contacts: r.contacts }).path).toBe("vendor_portal");
     const b = await resolveGaps(opp(), deps({ readSite: async () => site({ phones: ["(508) 555-0111"], links: ["https://example.com/subcontractors"] }) }));
     expect(b.contacts).toMatchObject({ phone: "(508) 555-0111", bids_url: "https://example.com/subcontractors" });
+  });
+  test("bids link keeps its own page as source", async () => {
+    const r = await resolveGaps(opp(), deps({ readSite: async () => twoPages() }));
+    expect(r.contacts).toMatchObject({ phone_source_url: "https://example.com/", bids_url: "https://example.com/bids", bids_source_url: "https://example.com/work" });
+    const sig = opp().signal;
+    const v = hvacNewConstruction.evaluate({ signal: { ...sig, work_class: "New", description: "new house", issued_on: "2026-11-01" }, company: acme, link_status: "confirmed", contacts: r.contacts }, new Date("2026-11-18"));
+    expect(v.checks.can_bid.source_url).toBe("https://example.com/work");
   });
   test("wantBidPath reads the site before the lookups", async () => {
     const order: string[] = [];

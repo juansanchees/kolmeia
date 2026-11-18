@@ -24,8 +24,11 @@ import type { BuildingKind, CampaignParams, Check, CheckKey, CompanyProfileLike,
 
 const DAY = 86_400_000;
 const STRONG_NEW = /\b(new\s+(construction|dwelling|house|home|building|single|two[- ]family|multi[- ]?family|residence|residential|commercial|structure)|adu|accessory dwelling|new\s+(sfd|sfh))\b/i;
-const WEAK_NEW = /^\s*new\b|\bnew construction\b/i;
+const WEAK_NEW_CLASS = /^\s*new\b/i;
+const WEAK_NEW_PHRASE = /\bnew construction\b/i;
 const NOT_NEW = /\b(repair|re-?roof\w*|roof\w*|solar|photovoltaic|pool|fence|demo(lition|lish)?|deck|siding|windows?|replacement)\b/i;
+// Small-scope work is never a new build, whatever "new" word is in front of it.
+const SMALL_SCOPE = /\b(service|water heater|electrical|panel|meter|sign|signs|window|windows|door|doors|roof|roofing|deck|fence|pool|solar|siding|generator|furnace|boiler|chimney|gutters?|plumbing)\b/i;
 const OTHER_TRADE_HVAC = /\b(hvac|mechanical|heat pump|furnace|air handler)\b/i;
 
 const text = (s: OfferSignal) => `${s.work_class ?? ""} ${s.use ?? ""} ${s.description ?? ""}`;
@@ -55,23 +58,30 @@ function daysSince(iso: string | null | undefined, now: Date): number | null {
   return Number.isNaN(t) ? null : Math.max(0, Math.floor((now.getTime() - t) / DAY));
 }
 
-/** Short work phrase for the hook: no names (cut at "for/owner/by..."), digits-heavy tokens dropped, at most 6 words. */
-function shortWork(s: OfferSignal): string {
-  for (const raw of [s.description, s.work_class]) {
-    const w = (raw ?? "").replace(/\b(for|owner|owned|applicant|c\/o|by|per|contact|client)\b.*$/i, "").replace(/[^A-Za-z0-9 \-/]/g, " ").split(/\s+/).filter((x) => x && !/\d{4,}/.test(x));
-    if (w.length) return w.slice(0, 6).join(" ").toLowerCase();
+/** Work phrase for the hook, picked from a whitelist (never copied free text, so no person's name can leak). */
+function workPhrase(s: OfferSignal, kind: BuildingKind, isNew: boolean): string {
+  if (isNew) {
+    const u = units(s);
+    if (kind === "multifamily") return u != null && u >= 3 ? `new ${u}-unit multifamily building` : "new multifamily building";
+    if (kind === "commercial") return "new commercial building";
+    if (kind === "adu") return "new ADU";
+    if (kind === "single_family") return "new single-family home";
+    return "new construction";
   }
+  const t = text(s);
+  if (/\badd(ition)?\b/i.test(t)) return "addition";
+  if (/renovat|remodel|alteration|fit-?out/i.test(t)) return "renovation";
   return "";
 }
 const street = (a: string) => a.split(",")[0].replace(/\s+(apt|unit|ste|suite|#).*$/i, "").replace(/#.*$/, "").trim();
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-function hook(s: OfferSignal): string | null {
+function hook(s: OfferSignal, kind: BuildingKind, isNew: boolean): string | null {
   const t = s.issued_on ? Date.parse(s.issued_on.slice(0, 10)) : NaN;
   const addr = s.address ? street(s.address) : "";
   if (Number.isNaN(t) || !addr) return null;
   const d = new Date(t);
-  const work = shortWork(s);
+  const work = workPhrase(s, kind, isNew);
   return `Saw the ${MON[d.getUTCMonth()]} ${d.getUTCFullYear()} permit${work ? ` for ${work}` : ""} at ${addr}${s.town ? ` in ${s.town}` : ""} — who's handling the HVAC?`.slice(0, 300);
 }
 
@@ -87,7 +97,7 @@ function evaluate(input: OfferInput, now: Date, params?: CampaignParams): OfferV
   // new_build: strong words win over a "repair/solar/..." word; a bare "New ..." work class only counts when none of those appear.
   const newBuild: Check = anyField(s, STRONG_NEW) ? chk("confirmed", (s.description || s.work_class || "").slice(0, 120), url)
     : NOT_NEW.test(t) ? chk("no", (s.description || s.work_class || "").slice(0, 120), url)
-    : anyField(s, WEAK_NEW) ? chk("confirmed", (s.work_class || s.description || "").slice(0, 120), url)
+    : !SMALL_SCOPE.test(t) && (WEAK_NEW_CLASS.test(s.work_class ?? "") || anyField(s, WEAK_NEW_PHRASE)) ? chk("confirmed", (s.work_class || s.description || "").slice(0, 120), url)
     : chk("missing");
 
   const age = daysSince(s.issued_on, now);
@@ -100,7 +110,7 @@ function evaluate(input: OfferInput, now: Date, params?: CampaignParams): OfferV
 
   const party: Check = input.link_status === "confirmed" ? chk("confirmed", input.company?.name, url) : chk("missing");
   const bidUrl = input.contacts.bids_url ?? input.contacts.vendor_portal_url;
-  const canBid: Check = bidUrl ? chk("confirmed", bidUrl, input.contacts.source_url) : chk("missing");
+  const canBid: Check = bidUrl ? chk("confirmed", bidUrl, input.contacts.bids_url ? (input.contacts.bids_source_url ?? input.contacts.source_url) : (input.contacts.vendor_portal_source_url ?? input.contacts.source_url)) : chk("missing");
 
   const checks: Record<CheckKey, Check> = { new_build: newBuild, recent, hvac_fit: hvacFit, responsible_party: party, can_bid: canBid };
   const cp = contactPath({ companyPhone: input.company?.phone, contacts: input.contacts }, params);
@@ -136,7 +146,7 @@ function evaluate(input: OfferInput, now: Date, params?: CampaignParams): OfferV
     priority = Math.max(0, Math.min(100, priority));
   }
 
-  return { fit, checks, openQuestions, priority, priorityCodes: codes, hookEn: hook(s), buildingKind: kind, facts: JSON.parse(JSON.stringify(input)) as OfferInput };
+  return { fit, checks, openQuestions, priority, priorityCodes: codes, hookEn: hook(s, kind, newBuild.state === "confirmed"), buildingKind: kind, facts: JSON.parse(JSON.stringify(input)) as OfferInput };
 }
 
 const HVAC_WORDS = /\b(hvac|heating|cooling|heat pumps?|mechanical|ar condicionado|aquecimento|climatiza\w*|bomba de calor)\b/i;

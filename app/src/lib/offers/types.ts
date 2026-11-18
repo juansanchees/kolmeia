@@ -23,7 +23,8 @@ export type OfferSignal = {
   source_url?: string | null;
   units?: number | null;
 };
-export type OfferContacts = { phone?: string; bids_url?: string; vendor_portal_url?: string; source_url?: string };
+/** `*_source_url` = the page each contact was found on; `source_url` is a fallback for older data. */
+export type OfferContacts = { phone?: string; bids_url?: string; vendor_portal_url?: string; source_url?: string; phone_source_url?: string; bids_source_url?: string; vendor_portal_source_url?: string };
 export type OfferInput = {
   signal: OfferSignal;
   company: { name: string; phone?: string; website?: string } | null;

@@ -35,6 +35,13 @@ describe("new_build", () => {
   test.each([["New dwelling", "confirmed"], ["new construction of commercial building", "confirmed"], ["ADU over garage", "confirmed"], ["Repair of roof", "no"], ["Install solar panels", "no"], ["Pool", "no"], ["Fence", "no"], ["Demolition of shed", "no"], ["Deck", "no"], ["Siding and windows", "no"], ["Interior work", "missing"]])("%s -> %s", (d, s) => {
     expect(ev(base({ description: d, work_class: "Misc", use: "" })).checks.new_build.state).toBe(s);
   });
+  test("new electrical service is not new build", () => expect(ev(base({ description: "new electrical service", work_class: "New", use: "" })).checks.new_build.state).not.toBe("confirmed"));
+  test("new water heater is not new build", () => {
+    const v = ev(base({ description: "new water heater", work_class: "Plumbing", use: "" }));
+    expect(v.checks.new_build.state).not.toBe("confirmed");
+    expect(v.fit).not.toBe("yes");
+  });
+  test("new dwelling stays confirmed", () => expect(ev(base({ description: "new dwelling", work_class: "Misc", use: "" })).checks.new_build.state).toBe("confirmed"));
   test("bare New work class counts unless a repair word appears", () => {
     expect(ev(base({ description: "", work_class: "New" })).checks.new_build.state).toBe("confirmed");
     expect(ev(base({ description: "pool", work_class: "New" })).checks.new_build.state).toBe("no");
@@ -116,17 +123,18 @@ describe("priority", () => {
 
 describe("hook", () => {
   test("gold style from evidence only", () => {
-    expect(ev(base()).hookEn).toBe("Saw the Oct 2026 permit for new single family dwelling at 12 Example Rd in Falmouth — who's handling the HVAC?");
+    expect(ev(base()).hookEn).toBe("Saw the Oct 2026 permit for new single-family home at 12 Example Rd in Falmouth — who's handling the HVAC?");
   });
   test("null without address or without date", () => {
     expect(ev(base({ address: null })).hookEn).toBeNull();
     expect(ev(base({ issued_on: null })).hookEn).toBeNull();
   });
-  test("long work text cut to 6 words; no person name after 'for'", () => {
-    const v = ev(base({ description: "New single family dwelling with attached garage and finished basement for Olive Owner" }));
-    expect(v.hookEn).toContain("for new single family dwelling with attached at");
-    expect(v.hookEn).not.toMatch(/Olive/);
+  test("hook never copies leading free text", () => {
+    const v = ev(base({ description: "Pat Person new house for Olive Owner" }));
+    expect(v.hookEn).toBe("Saw the Oct 2026 permit for new single-family home at 12 Example Rd in Falmouth — who's handling the HVAC?");
+    expect(v.hookEn).not.toMatch(/Pat|Olive/);
   });
+  test("multifamily hook carries the unit count", () => expect(ev(base({ description: "new apartments, 24 units" })).hookEn).toContain("new 24-unit multifamily building"));
   test("under 300 chars", () => expect((ev(base({ address: "1 " + "x".repeat(400) })).hookEn ?? "").length).toBeLessThanOrEqual(300));
 });
 
@@ -154,6 +162,13 @@ describe("building kind and params", () => {
 });
 
 describe("toOpportunityRow", () => {
+  test("text columns are cut to the 0041 caps", () => {
+    const i = base({ source_url: "https://example.com/" + "a".repeat(600), description: "x".repeat(400) }, { contacts: { phone: "5".repeat(400) } });
+    const row = toOpportunityRow(ev(i), "hvac_new_construction", i);
+    expect(row.source_url!.length).toBe(500);
+    expect(row.title!.length).toBe(200);
+    expect(row.contact_value!.length).toBe(300);
+  });
   test("only keys kb_deliver accepts", () => {
     const i = base();
     const row = toOpportunityRow(ev(i), "hvac_new_construction", i, undefined, "00000000-0000-0000-0000-000000000001");
