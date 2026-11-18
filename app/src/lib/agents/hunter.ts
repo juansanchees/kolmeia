@@ -16,6 +16,9 @@ export const hunterSetupSchema = z
     audience: z.enum(AUDIENCES),
     audienceText: z.string().trim().max(500),
     region: z.string().trim().min(1).max(1000),
+    // The offer and campaign (hunt_campaigns) this hunter works for; kept in the agent config, the AI run does not read them.
+    offer: z.string().regex(/^[a-z][a-z0-9_]{0,59}$/).optional(),
+    campaign_id: z.string().uuid().optional(),
   })
   .superRefine((v, ctx) => {
     if (v.profileSource === "describe" && v.companyNote.length < 1) ctx.addIssue({ code: "custom", path: ["companyNote"], message: "required" });

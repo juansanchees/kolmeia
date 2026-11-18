@@ -14,6 +14,7 @@ import type { QualifierStatus } from "@/lib/qualifier/view";
 import { NewResearchForm } from "@/components/research/NewResearchForm";
 import { RunList, type RunListItem } from "@/components/research/RunList";
 import { getT } from "@/lib/i18n/server";
+import { HuntEntry } from "@/components/hunt/HuntEntry";
 
 export default async function AgentsPage() {
   const t = await getT();
@@ -45,6 +46,7 @@ export default async function AgentsPage() {
   return (
     <div className="flex flex-col gap-8">
       {qualifierFailed && <Notice tone="warn">{t.qualifier.statusFailed}</Notice>}
+      <HuntEntry workspaceId={workspace.id} />
       {qualifier && <QualifierCard status={qualifier} placesOn={hasPlaces()} isOwner={workspace.role === "owner"} />}
       <section aria-labelledby="mine" className="k-in flex flex-col gap-3 [animation-delay:.06s]">
         <h2 id="mine" className="flex items-center gap-2.5 text-2xl">

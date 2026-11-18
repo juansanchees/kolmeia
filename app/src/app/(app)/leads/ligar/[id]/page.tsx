@@ -11,6 +11,7 @@ import { getLead } from "@/lib/leads/queries";
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/workspace";
 import { getT } from "@/lib/i18n/server";
+import { topOpportunity } from "@/lib/hunt/top-opportunity";
 
 // The call screen. Read as the user: RLS hides a lead that is not hers, so it is a 404.
 export default async function CallPage({ params }: { params: Promise<{ id: string }> }) {
@@ -24,7 +25,7 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
   if (!detail) notFound();
   const best = detail.candidates.find((c) => c.id === detail.lead.best_candidate_id) ?? null;
   const phone = leadPhone(best?.phone, detail.fields);
-  const calls = await callsOf(supabase, id);
+  const [calls, opportunity] = await Promise.all([callsOf(supabase, id), topOpportunity(supabase, id)]);
   const blocked = detail.lead.do_not_call;
 
   return (
@@ -32,7 +33,7 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
       <Link href="/leads/ligar" className="k-link inline-flex min-h-11 w-fit items-center rounded-[10px] px-1 text-base font-medium underline">
         {t.calls.back}
       </Link>
-      <CallFacts detail={detail} phone={phone} now={new Date()} blocked={blocked} />
+      <CallFacts detail={detail} phone={phone} now={new Date()} blocked={blocked} opportunity={opportunity} />
       {blocked ? <Notice tone="warn" role="alert">{t.calls.blocked}</Notice> : (
         <HexPanel as="section" aria-label={t.calls.record.title} c={20} cSm={10} className="flex flex-col gap-4 py-6" wrapClassName="k-in [animation-delay:.15s]">
           <BlockTitle hint={t.calls.recordHint}>{t.calls.record.title}</BlockTitle>

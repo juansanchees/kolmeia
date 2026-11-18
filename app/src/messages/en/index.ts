@@ -24,5 +24,7 @@ import { lists } from "./lists";
 import { tasks } from "./tasks";
 import { home } from "./home";
 import { landing } from "./landing";
+import { hunt } from "./hunt";
+import { bot } from "./bot";
 
-export const en: Messages = { intl: "en-US", ...common, ...areas, leads, agents, ai, research, email, imports, sources, qualifier, spend, profile, coverage, team, handoff, calls, results, callAgent, funnel, emailAgent, lists, tasks, home, landing };
+export const en: Messages = { intl: "en-US", ...common, ...areas, leads, agents, ai, research, email, imports, sources, qualifier, spend, profile, coverage, team, handoff, calls, results, callAgent, funnel, emailAgent, lists, tasks, home, landing, hunt, bot };

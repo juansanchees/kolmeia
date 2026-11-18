@@ -179,7 +179,7 @@ describe("proof that RLS is really enforced in PGlite", () => {
         // 0039 ("Rodar agora") and 0040 (shared base: service_role only)
         "run_hunter_now", "kb_ingest", "kb_write_signal", "kb_deliver", "kb_upsert_opportunities", "kb_deliver_finish", "kb_undo_cleanup",
         // 0042 (campaigns and preferences: owner/sdr write after a membership check; hunt_params_ok / hunt_assert_writer are NOT definer)
-        "hunt_campaign_create", "hunt_message_add", "hunt_campaign_apply", "hunt_round_finish", "offer_preference_propose", "offer_preference_decide",
+        "hunt_campaign_create", "hunt_message_add", "hunt_campaign_apply", "hunt_round_finish", "offer_preference_propose", "offer_preference_decide", "kb_coverage",
       ].sort(),
     );
     for (const r of rows) expect(r.proconfig).toContain("search_path=\"\"");

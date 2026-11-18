@@ -252,4 +252,20 @@ describe("hunt campaigns (0042)", () => {
     await db.query(as(t.sdr), "select public.hunt_campaign_apply($1,'{\"wantBidPath\":true,\"minValueUsd\":null,\"maxAgeDays\":90}'::jsonb,null)", [c]);
     expect(await paramsOf(t.sdr, c)).toEqual({ wantBidPath: true, maxAgeDays: 90 });
   });
+
+  it("kb_coverage: a member reads operator rows and own rows, a non-member gets a permission error", async () => {
+    const t = await seed();
+    const ws2 = (await db.admin<{ workspace_id: string }>("select workspace_id from public.workspace_members where user_id = $1", [t.other]))[0].workspace_id;
+    const job = (ws: string | null, city: string, source: string, outcome: string | null, rows: number, reason: string | null) =>
+      db.admin("insert into public.kb_jobs (kind, source, city, status, workspace_id, outcome, queried, rows_in, reason) values ('pilot',$1,$2,'done',$3,$4,5,$5,$6)", [source, city, ws, outcome, rows, reason]);
+    await job(null, "Exampleton", "permit", "ok", 7, null);
+    await job(t.ws, "Exampleton", "site_robot", "blocked", 0, "site blocked (403/429)");
+    await job(ws2, "Otherville", "permit", "ok", 3, null);
+    await job(null, "Exampleton", "maps_robot", null, 0, null);
+    const rows = await db.query<{ town: string; source: string; outcome: string; rows_in: number; reason: string | null }>(as(t.closer), "select * from public.kb_coverage($1)", [t.ws]);
+    expect(rows.map((r) => `${r.town}/${r.source}/${r.outcome}/${r.rows_in}`).sort()).toEqual(["Exampleton/permit/ok/7", "Exampleton/site_robot/blocked/0"]);
+    expect(rows.find((r) => r.source === "site_robot")?.reason).toBe("site blocked (403/429)");
+    expect(code((await db.try(as(t.other), "select * from public.kb_coverage($1)", [t.ws])).error)).toBe("42501");
+    expect(code((await db.try(service, "select * from public.kb_coverage($1)", [t.ws])).error)).toBe("42501");
+  });
 });

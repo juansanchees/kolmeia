@@ -10,6 +10,8 @@ import { LevelBadge } from "@/components/qualifier/LevelBadge";
 import { Pill } from "@/components/research/controls";
 import { date, host, UNKNOWN } from "@/components/research/format";
 import { getT } from "@/lib/i18n/server";
+import { OpportunityFacts } from "@/components/hunt/OpportunityFacts";
+import type { OppFacts } from "@/lib/hunt/top-opportunity";
 
 const PHONE =
   "M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z";
@@ -29,7 +31,7 @@ function proofs(candidates: LeadDetail["candidates"], checks: LeadDetail["checks
 }
 
 /** What the caller needs before dialing: the number (tel: link and plain text), who to ask for, the hook, the proof. */
-export async function CallFacts({ detail, phone, now, blocked = false }: { detail: LeadDetail; phone: string | null; now: Date; blocked?: boolean }) {
+export async function CallFacts({ detail, phone, now, blocked = false, opportunity = null }: { detail: LeadDetail; phone: string | null; now: Date; blocked?: boolean; opportunity?: OppFacts | null }) {
   const t = await getT();
   const C = t.calls;
   const LB = t.research.labels;
@@ -85,7 +87,9 @@ export async function CallFacts({ detail, phone, now, blocked = false }: { detai
         </div>
       </dl>
 
-      {best?.hook && (
+      {opportunity && <OpportunityFacts opp={opportunity} />}
+
+      {!opportunity?.hook_en && best?.hook && (
         <p className="m-0 rounded-[14px] border-2 border-honey-edge bg-honey-soft px-4 py-3 text-lg leading-normal">
           <span className="block font-mono text-[13px] uppercase tracking-wide text-[#4a5361]">{C.hook}</span>
           <q lang="en" className="[quotes:none]">{best.hook}</q>

@@ -30,7 +30,7 @@ describe("proxy: landing at / for anonymous visitors", () => {
     }
   });
   it("keeps the other public paths public", async () => {
-    for (const p of ["/login", "/u/token", "/api/unsubscribe/token", "/api/scheduler/tick", "/api/hunter/tick"]) {
+    for (const p of ["/login", "/u/token", "/api/unsubscribe/token", "/api/scheduler/tick", "/api/hunter/tick", "/bot"]) {
       expect(location(await run(p)), p).toBeNull();
     }
   });

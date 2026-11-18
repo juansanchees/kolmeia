@@ -10,6 +10,8 @@ import { requireSender } from "@/lib/workspace";
 import { fill } from "@/lib/i18n";
 import { getT } from "@/lib/i18n/server";
 import { deleteMarkAction } from "./actions";
+import { SourceCoverage } from "@/components/hunt/SourceCoverage";
+import { reduceCoverage, type CoverageRow } from "@/lib/kb/coverage";
 import { Paged } from "@/components/Pager";
 
 const LIST_MAX = 50;
@@ -23,6 +25,9 @@ export default async function CoveragePage() {
   if (!db) return <Notice tone="info">{t.ai.notConfigured}</Notice>;
   const data = await loadCoverage(db, workspace.id);
   const table = coverageTable({ searches: data.searches, leadTowns: data.leadTowns, now: new Date() });
+  // Read through kb_coverage (membership checked in the database); a failure only hides this section's rows.
+  const { data: bySource, error: bySourceError } = await db.rpc("kb_coverage", { p_ws: workspace.id });
+  const sourceRows = reduceCoverage((bySource ?? []) as CoverageRow[]);
   const recent = [...data.searches].sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, LIST_MAX);
 
   return (
@@ -32,6 +37,11 @@ export default async function CoveragePage() {
         <BlockTitle id="towns-title" hint={C.window}>{C.towns}</BlockTitle>
         <p className="m-0 rounded-[14px] bg-honey-soft px-4 py-3 text-lg font-semibold">{fill(C.summary, table.summary)}</p>
         <CoverageTable towns={table.towns} />
+      </HexPanel>
+
+      <HexPanel as="section" aria-labelledby="sources-title" c={20} cSm={10} className="flex min-w-0 flex-col gap-4 py-6" wrapClassName="k-in [animation-delay:.18s]">
+        <BlockTitle id="sources-title" hint={t.hunt.cov.hint}>{t.hunt.cov.title}</BlockTitle>
+        {bySourceError ? <Notice tone="warn">{t.hunt.cov.failed}</Notice> : <SourceCoverage rows={sourceRows} />}
       </HexPanel>
 
       <section aria-labelledby="searches-title" className="k-in rounded-2xl border border-[#e3e6ec] bg-surface p-5 shadow-[0_6px_14px_-8px_rgba(15,27,61,0.12)] flex min-w-0 flex-col gap-4 [animation-delay:.22s]">

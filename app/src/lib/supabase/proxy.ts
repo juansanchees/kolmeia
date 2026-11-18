@@ -5,8 +5,9 @@ import { env } from "@/lib/env";
 // /u and /api/unsubscribe: the public unsubscribe page and its one-click endpoint (read by e-mail recipients).
 // /api/scheduler: the clock (E1) has no session; it proves itself with a token that the database checks.
 // /api/hunter: the Caçador clock (F3b), same rule as /api/scheduler (bearer token checked by the database).
+// /bot: the public page the robot's User-Agent points to (read by site owners, logged out).
 // /site: the public landing page. Anonymous visitors get it at "/" through a rewrite (below); signed-in people keep the app at "/".
-const PUBLIC_PATHS = ["/login", "/u", "/api/unsubscribe", "/api/scheduler", "/api/hunter", "/site"];
+const PUBLIC_PATHS = ["/login", "/u", "/api/unsubscribe", "/api/scheduler", "/api/hunter", "/site", "/bot"];
 
 /** Refreshes the session cookie, shows the landing to anonymous visitors at "/" and sends them to /login everywhere else. No-op when the database is not configured. */
 export async function updateSession(request: NextRequest) {
