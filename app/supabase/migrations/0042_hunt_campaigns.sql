@@ -201,7 +201,9 @@ begin
           open_questions = excluded.open_questions, contact_path = excluded.contact_path, contact_value = excluded.contact_value,
           campaign_id = coalesce(excluded.campaign_id, public.lead_opportunities.campaign_id),
           facts = coalesce(excluded.facts, public.lead_opportunities.facts),
-          updated_at = now();
+          updated_at = now()
+      -- a row owned by a campaign is re-scored only by that campaign: another campaign of the same offer leaves it alone
+      where public.lead_opportunities.campaign_id is null or public.lead_opportunities.campaign_id = excluded.campaign_id;
   end loop;
 end;
 $$;
@@ -407,6 +409,7 @@ grant execute on function public.hunt_campaign_create(uuid, text, text, text, js
 
 -- ---------------------------------------------------------------- coverage by town and source (read-only, for the members)
 -- Operator rows (kb_jobs with no workspace) plus this workspace's own; only rows that recorded an outcome. kb_jobs stays closed.
+-- Only the latest run per (town, source): a re-run replaces the last result instead of adding to it.
 create or replace function public.kb_coverage(p_ws uuid)
 returns table (town text, source text, ran_at timestamptz, outcome text, queried int, rows_in int, reason text)
 language plpgsql
@@ -419,11 +422,15 @@ begin
     raise exception 'not a member' using errcode = '42501';
   end if;
   return query
-    select j.city, j.source, coalesce(j.finished_at, j.created_at), j.outcome, coalesce(j.queried, 0), coalesce(j.rows_in, 0), j.reason
-      from public.kb_jobs j
-     where j.outcome is not null and j.city is not null and j.source is not null
-       and (j.workspace_id is null or j.workspace_id = p_ws)
-     order by 3 desc
+    select l.city, l.source, l.ran_at, l.outcome, l.queried, l.rows_in, l.reason
+      from (select distinct on (lower(j.city), j.source)
+                   j.city, j.source, coalesce(j.finished_at, j.created_at) as ran_at, j.outcome, coalesce(j.queried, 0) as queried,
+                   coalesce(j.rows_in, 0) as rows_in, j.reason
+              from public.kb_jobs j
+             where j.outcome is not null and j.city is not null and j.source is not null
+               and (j.workspace_id is null or j.workspace_id = p_ws)
+             order by lower(j.city), j.source, coalesce(j.finished_at, j.created_at) desc, j.created_at desc, j.id) l
+     order by l.ran_at desc
      limit 2000;
 end;
 $$;

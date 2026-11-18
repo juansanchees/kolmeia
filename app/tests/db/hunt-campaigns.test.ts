@@ -269,6 +269,36 @@ describe("hunt campaigns (0042)", () => {
     expect(code((await db.try(service, "select * from public.kb_coverage($1)", [t.ws])).error)).toBe("42501");
   });
 
+  it("kb_coverage: a re-run of the same town and source replaces the last result (no summing, no stale 'partial')", async () => {
+    const t = await seed();
+    const job = (source: string, outcome: string, rows: number, at: string) =>
+      db.admin("insert into public.kb_jobs (kind, source, city, status, workspace_id, outcome, queried, rows_in, finished_at) values ('pilot',$1,'Rerunton','done',$2,$3,$4,$4,$5)", [source, t.ws, outcome, rows, at]);
+    await job("maps_robot", "ok", 40, "2026-11-01T00:00:00Z");
+    await job("maps_robot", "ok", 41, "2026-11-02T00:00:00Z");
+    await job("site_robot", "blocked", 0, "2026-11-01T00:00:00Z");
+    await job("site_robot", "ok", 3, "2026-11-02T00:00:00Z");
+    const rows = await db.query<{ town: string; source: string; outcome: string; rows_in: number }>(as(t.sdr), "select * from public.kb_coverage($1) where town = 'Rerunton'", [t.ws]);
+    expect(rows.map((r) => `${r.source}/${r.outcome}/${r.rows_in}`).sort()).toEqual(["maps_robot/ok/41", "site_robot/ok/3"]);
+  });
+
+  it("a second campaign of the same offer leaves the first one's opportunities and params alone", async () => {
+    const t = await seed();
+    const a = await create(t.sdr, t.ws, { minValueUsd: 100 });
+    const b = await create(t.sdr, t.ws, { preferKinds: ["multifamily"] });
+    const f = facts("New single family dwelling", 400000);
+    const co = (await db.admin<{ id: string }>("insert into public.kb_companies (name, name_key) values ($1,$2) returning id", [f.company!.name, `acme ${++seq}`]))[0].id;
+    const sig = (await db.admin<{ id: string }>("insert into public.kb_signals (company_id, kind, source, source_ref) values ($1,'permit','permit',$2) returning id", [co, f.signal.source_ref]))[0].id;
+    const send = (campaign: string, priority: number, title: string) =>
+      db.query(service, "select public.kb_deliver($1,null,'Base Kolmeia: teste',$2::jsonb)", [t.ws, JSON.stringify([{ row: 1, name: f.company!.name, name_key: `acme ${co}`, kb_company_id: co, opportunities: [{ kb_signal_id: sig, offer: OFFER, title, priority, campaign_id: campaign, facts: f }] }])]);
+    await send(a, 40, "A");
+    await send(b, 90, "B");
+    expect(await oppsOf(t.sdr, a)).toMatchObject([{ title: "A", priority: 40 }]);
+    expect(await oppsOf(t.sdr, b)).toEqual([]);
+    expect(await paramsOf(t.sdr, a)).toEqual({ minValueUsd: 100 });
+    await send(a, 60, "A2");
+    expect(await oppsOf(t.sdr, a)).toMatchObject([{ title: "A2", priority: 60 }]);
+  });
+
   it("declined rule is not proposed again on reload", async () => {
     const t = await seed();
     const c = await create(t.sdr, t.ws);
