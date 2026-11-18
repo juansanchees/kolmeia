@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
+import { KB_SOURCES } from "@/lib/kb/sources";
 import { companiesItems, crosswalkItems, falmouthPermitItems, licenseItems, mapsItems, massbuildsProjectItems, permitItems, projectItems } from "@/lib/kb/load";
 import { nameKey } from "@/lib/research/dedupe";
 
@@ -98,5 +100,14 @@ describe("licenseItems", () => {
   test("license without firm skipped; unknown source throws", () => {
     expect(licenseItems(`${h}\nlicense_hic,HIC,H-1,Pat Example,,Exampleton,MA,active,,,,\n`, SEEN).skipped.individual).toBe(1);
     expect(() => licenseItems(`${h}\napollo,HIC,H-1,Pat,Acme Builders LLC,,MA,active,,,,\n`, SEEN)).toThrow(/source not allowed/);
+  });
+});
+
+describe("source allowlist", () => {
+  test("every kb_* `source in (...)` check in 0040 is exactly KB_SOURCES", () => {
+    const sql = readFileSync(new URL("../../supabase/migrations/0040_kb_base.sql", import.meta.url), "utf8");
+    const lists = [...sql.matchAll(/source[^\n]*check \(source in \(([^)]*)\)\)/g)].map((m) => [...m[1].matchAll(/'(\w+)'/g)].map((x) => x[1]));
+    expect(lists.length).toBe(3);
+    for (const l of lists) expect(l).toEqual([...KB_SOURCES]);
   });
 });

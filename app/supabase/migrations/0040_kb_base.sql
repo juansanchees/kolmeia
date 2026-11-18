@@ -90,6 +90,8 @@ create table if not exists public.kb_signal_candidates (
   reason text check (char_length(reason) <= 120),
   primary key (signal_id, company_id)
 );
+-- a cascade delete from kb_companies looks rows up by company_id
+create index if not exists kb_signal_candidates_company_idx on public.kb_signal_candidates (company_id);
 
 create table if not exists public.kb_jobs (
   id uuid primary key default gen_random_uuid(),
@@ -118,6 +120,7 @@ create table if not exists public.kb_lead_links (
   created_at timestamptz not null default now(),
   primary key (workspace_id, company_id)
 );
+create index if not exists kb_lead_links_company_idx on public.kb_lead_links (company_id);
 
 create table if not exists public.kb_source_meta (
   source text primary key check (source in ('maps_robot', 'permit', 'project', 'crosswalk', 'license_csl', 'license_hic', 'corp_registry', 'site_robot')),
@@ -184,6 +187,7 @@ declare
   v_signals int := 0;
   v_unlinked int := 0;
   v_pending int := 0;
+  v_w int;
 begin
   if p_items is null or jsonb_typeof(p_items) <> 'array' then
     raise exception 'invalid item' using errcode = '22023';
@@ -216,8 +220,9 @@ begin
       -- a permit with no applicant is kept (unlinked); anything else needs a company
       if coalesce((it ->> 'match_only')::boolean, false) and jsonb_array_length(coalesce(it -> 'signals', '[]'::jsonb)) > 0 then
         for s in select * from jsonb_array_elements(it -> 'signals') loop
-          v_signals := v_signals + public.kb_write_signal(s, null, 'none', null, null, null);
-          v_unlinked := v_unlinked + 1;
+          v_w := public.kb_write_signal(s, null, 'none', null, null, null);
+          v_signals := v_signals + v_w;
+          v_unlinked := v_unlinked + v_w;
         end loop;
         continue;
       end if;
@@ -262,8 +267,10 @@ begin
     if v_id is null and coalesce((it ->> 'match_only')::boolean, false) then
       v_status := case when cardinality(v_cands) >= 1 then 'pending' else 'none' end;
       for s in select * from jsonb_array_elements(coalesce(it -> 'signals', '[]'::jsonb)) loop
-        v_signals := v_signals + public.kb_write_signal(s, null, v_status, v_cands, v_name, v_reason);
-        if v_status = 'pending' then v_pending := v_pending + 1; else v_unlinked := v_unlinked + 1; end if;
+        -- counted only when the signal row is new, so a re-run reports 0 (like every other counter)
+        v_w := public.kb_write_signal(s, null, v_status, v_cands, v_name, v_reason);
+        v_signals := v_signals + v_w;
+        if v_status = 'pending' then v_pending := v_pending + v_w; else v_unlinked := v_unlinked + v_w; end if;
       end loop;
       continue;
     end if;

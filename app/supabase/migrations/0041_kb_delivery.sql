@@ -21,7 +21,7 @@ create table if not exists public.lead_opportunities (
   workspace_id uuid not null references public.workspaces (id) on delete cascade,
   lead_id uuid not null references public.leads (id) on delete cascade,
   import_id uuid references public.lead_imports (id) on delete set null,
-  kb_signal_id uuid references public.kb_signals (id) on delete set null,
+  kb_signal_id uuid references public.kb_signals (id) on delete cascade,
   offer text not null check (char_length(offer) between 1 and 60),
   title text check (char_length(title) <= 200),
   signal_date date,
@@ -39,6 +39,12 @@ create table if not exists public.lead_opportunities (
   constraint lead_opportunities_key unique nulls not distinct (workspace_id, lead_id, offer, kb_signal_id)
 );
 create index if not exists lead_opportunities_lead_idx on public.lead_opportunities (lead_id);
+
+-- an opportunity goes with its base signal: `set null` would collide on the key when a lead has 2 signals for the same offer.
+-- Re-runnable on a table created with the old `on delete set null`.
+alter table public.lead_opportunities drop constraint if exists lead_opportunities_kb_signal_id_fkey;
+alter table public.lead_opportunities add constraint lead_opportunities_kb_signal_id_fkey
+  foreign key (kb_signal_id) references public.kb_signals (id) on delete cascade;
 
 -- re-runnable on a table created before import_id existed
 alter table public.lead_opportunities add column if not exists import_id uuid references public.lead_imports (id) on delete set null;

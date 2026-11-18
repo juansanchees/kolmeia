@@ -166,6 +166,19 @@ describe("kb_deliver as a list", () => {
     expect(code(e2.error)).toBe("22023");
   });
 
+  it("deleting a base signal or company with 2 same-offer opportunities on one lead does not abort", async () => {
+    const t = await seed();
+    const c = await company("Acme Twelve");
+    const [s1, s2, s3] = [await signal(c), await signal(c), await signal(c)];
+    await deliver(t.ws, [row(1, c, [opp(s1), opp(s2), opp(s3)])]);
+    expect(await opps(t.ws)).toHaveLength(3);
+    await db.admin("delete from public.kb_signals where id = $1", [s1]);
+    expect(await opps(t.ws)).toHaveLength(2);
+    await db.admin("delete from public.kb_companies where id = $1", [c]);
+    expect(await opps(t.ws)).toHaveLength(0);
+    expect(await cnt("select count(*) n from public.leads where workspace_id = $1", [t.ws])).toBe(1);
+  });
+
   it("undo of kb list on merged lead removes link and opportunities and allows redelivery", async () => {
     const t = await seed();
     const run = (await db.admin<{ id: string }>("insert into public.research_runs (workspace_id, title, request_text) values ($1,'t','p') returning id", [t.ws]))[0].id;

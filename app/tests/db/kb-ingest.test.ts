@@ -60,6 +60,14 @@ describe("kb_ingest", () => {
     expect(await count("kb_companies")).toBe(3);
   });
 
+  it("re-run counts no new unlinked or pending signals", async () => {
+    await twoAcmes();
+    const items = [{ match_only: true, signals: [permit("P-20")] }, { match_only: true, company: co("Acme Builders", "acme"), signals: [permit("P-21")] }, { match_only: true, company: co("Nobody Known Inc", "nobody known"), signals: [permit("P-22")] }];
+    expect(await ingest(items)).toMatchObject({ signals: 3, signals_unlinked: 2, signals_pending: 1 });
+    expect(await ingest(items)).toMatchObject({ signals: 0, signals_unlinked: 0, signals_pending: 0 });
+    expect(await count("kb_signals")).toBe(3);
+  });
+
   it("permit with blank company kept", async () => {
     const r = await ingest([
       { match_only: true, company: co("", ""), signals: [permit("P-7")] },
