@@ -12,7 +12,10 @@
     "check": "npm run typecheck && npm run lint && npm run test && npm run build && node scripts/check-client-bundle.mjs",
     "smoke": "vitest run --config scripts/vitest.smoke.config.mts smoke-ai",
     "smoke:diag": "vitest run --config scripts/vitest.smoke.config.mts smoke-diag",
-    "baseline": "vitest run --config scripts/vitest.smoke.config.mts baseline"
+    "baseline": "vitest run --config scripts/vitest.smoke.config.mts baseline",
+    "pilot:seed": "PILOT_SEED=1 vitest run --config scripts/vitest.smoke.config.mts pilot-seed-local",
+    "pilot:round": "PILOT_RUN=1 vitest run --config scripts/vitest.smoke.config.mts pilot-falmouth",
+    "pilot:eval": "EVAL_RUN=1 vitest run --config scripts/vitest.smoke.config.mts eval-falmouth"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
