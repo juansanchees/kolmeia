@@ -121,7 +121,7 @@ export function DayPlan({ input, plan: savedPlan, rule: savedRule, dateLine, cit
         {label}
       </>
     );
-    const cls = big ? "k-lift flex text-ink no-underline" : `k-btn inline-flex min-h-12 items-center gap-2 rounded-[12px] border-2 border-ink px-[18px] font-semibold no-underline ${primary ? "bg-ink text-white" : "bg-surface text-ink"}`;
+    const cls = big ? "k-lift flex text-ink no-underline" : `k-btn inline-flex min-h-12 items-center gap-2 rounded-[12px] border-2 border-ink px-[18px] font-semibold no-underline ${big ? "" : "max-sm:col-start-2 max-sm:justify-self-start"} ${primary ? "bg-ink text-white" : "bg-surface text-ink"}`;
     const name = itemWords(i, t).title;
     return i.action === "meeting" ? (
       <button type="button" onClick={() => i.leadId && setMeeting({ id: i.leadId, name: i.name, city: i.city, owner: input.rows.find((r) => r.lead.id === i.leadId)?.lead.owner_id ?? null })} aria-label={big ? undefined : `${label}: ${name}`} className={cls}>
@@ -229,7 +229,7 @@ export function DayPlan({ input, plan: savedPlan, rule: savedRule, dateLine, cit
                 {b.items.map((i) => {
                   const w = itemWords(i, t);
                   return (
-                    <li key={i.key} className="k-row flex flex-wrap items-center gap-3.5 rounded-[14px] py-3 pl-2.5 pr-3">
+                    <li key={i.key} className="k-row grid grid-cols-[44px_minmax(0,1fr)] items-start gap-x-3.5 gap-y-2 rounded-[14px] py-3 pl-2.5 pr-3 sm:flex sm:flex-wrap sm:items-center sm:gap-3.5">
                       <button
                         type="button"
                         aria-pressed={i.done}
@@ -244,7 +244,7 @@ export function DayPlan({ input, plan: savedPlan, rule: savedRule, dateLine, cit
                           </span>
                         </span>
                       </button>
-                      <div className="flex min-w-0 flex-[1_1_280px] flex-col gap-1">
+                      <div className="flex min-w-0 flex-col gap-1 sm:flex-[1_1_280px]">
                         <span className={`text-lg font-semibold ${i.done ? "text-[#4a5361] line-through decoration-honey decoration-2" : ""}`}>{w.title}</span>
                         <span className="flex flex-wrap items-center gap-2 text-[15px] text-[#4a5361]">
                           <span className={`inline-flex items-center gap-1.5 rounded-full py-[3px] pl-2 pr-2.5 font-medium text-ink ${i.hot ? "bg-honey-pill" : "bg-[#eef0f4]"}`}>

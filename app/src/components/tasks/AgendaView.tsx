@@ -132,11 +132,11 @@ export function AgendaView({ state, grid, items, people, me, leads }: { state: A
         <HexCard c={18} className="k-in min-w-0 flex-[999_1_640px] [animation-delay:.15s]" aria-label={title} innerClassName="px-5 pb-5 pt-4 md:px-[30px]">
           {state.view === "mes" && (
             <div key="mes" className="k-fade overflow-x-auto">
-              <table className="w-full min-w-[620px] table-fixed border-separate border-spacing-1.5">
+              <table className="w-full table-fixed border-separate border-spacing-0.5 sm:min-w-[620px] sm:border-spacing-1.5">
                 <thead>
                   <tr>
                     {grid[0].map((d) => (
-                      <th key={d} scope="col" className="px-2 py-1 text-left font-mono text-[13px] font-normal text-[#4a5361]">{shortWeekday(d, t)}</th>
+                      <th key={d} scope="col" className="px-0 py-1 text-center font-mono text-xs font-normal text-[#4a5361] sm:px-2 sm:text-left sm:text-[13px]">{shortWeekday(d, t)}</th>
                     ))}
                   </tr>
                 </thead>
@@ -154,18 +154,19 @@ export function AgendaView({ state, grid, items, people, me, leads }: { state: A
                               scroll={false}
                               aria-label={dayLabel(d)}
                               aria-current={d === state.today ? "date" : undefined}
-                              className={`k-btn flex min-h-[104px] flex-col gap-1 rounded-[12px] border-2 p-1.5 text-ink no-underline ${sel ? "border-ink bg-honey-soft" : inMonth ? "border-[#eef0f3] bg-surface" : "border-[#eef0f3] bg-[#f9fafb] text-[#4a5361]"}`}
+                              className={`k-btn flex min-h-[56px] flex-col gap-1 rounded-[10px] border-2 p-1 max-sm:items-center sm:min-h-[104px] sm:rounded-[12px] sm:p-1.5 text-ink no-underline ${sel ? "border-ink bg-honey-soft" : inMonth ? "border-[#eef0f3] bg-surface" : "border-[#eef0f3] bg-[#f9fafb] text-[#4a5361]"}`}
                             >
-                              <span className="flex items-center justify-between">
-                                <span className={`${hexNum(d, "h-[31px] w-7")} text-sm ${sel ? "font-bold" : "font-medium"}`}>{+d.slice(8, 10)}</span>
-                                {evs.some((x) => isLate(x, state.today)) && <span className="rounded-full bg-warn-soft px-[7px] py-px text-xs font-semibold text-warn">{A.late}</span>}
+                              <span className="flex items-center justify-between max-sm:justify-center">
+                                <span className={`${hexNum(d, "h-[27px] w-6 sm:h-[31px] sm:w-7")} text-sm ${sel ? "font-bold" : "font-medium"}`}>{+d.slice(8, 10)}</span>
+                                {evs.some((x) => isLate(x, state.today)) && <span className="max-sm:hidden rounded-full bg-warn-soft px-[7px] py-px text-xs font-semibold text-warn">{A.late}</span>}
                               </span>
+                              {evs.length > 0 && <span aria-hidden className={`min-w-[18px] rounded-full px-1 text-center text-[11px] font-semibold leading-[18px] sm:hidden ${evs.some((x) => isLate(x, state.today)) ? "bg-warn-soft text-warn" : "bg-ink text-white"}`}>{evs.length}</span>}
                               {evs.slice(0, 2).map((x) => (
-                                <span key={x.id} className={`block truncate rounded-[7px] px-[7px] py-[3px] text-[13px] leading-tight ${KIND_STYLE[kindGroup(x.kind)]} ${x.done_at ? "line-through" : ""}`}>
+                                <span key={x.id} className={`block truncate max-sm:hidden rounded-[7px] px-[7px] py-[3px] text-[13px] leading-tight ${KIND_STYLE[kindGroup(x.kind)]} ${x.done_at ? "line-through" : ""}`}>
                                   <span className="font-mono">{nyTime(x.due_at)}</span> {x.name}
                                 </span>
                               ))}
-                              {evs.length > 2 && <span className="pl-1 text-[13px] text-[#4a5361]">{fill(A.more, { n: evs.length - 2 })}</span>}
+                              {evs.length > 2 && <span className="pl-1 max-sm:hidden text-[13px] text-[#4a5361]">{fill(A.more, { n: evs.length - 2 })}</span>}
                             </Link>
                           </td>
                         );
@@ -179,10 +180,10 @@ export function AgendaView({ state, grid, items, people, me, leads }: { state: A
 
           {state.view === "semana" && (
             <div key="semana" className="k-fade overflow-x-auto">
-              <div className="grid min-w-[620px] grid-cols-7 gap-2">
+              <div className="grid grid-cols-1 gap-3 sm:min-w-[620px] sm:grid-cols-7 sm:gap-2">
                 {week.map((d) => (
                   <div key={d} className="flex min-w-0 flex-col gap-1.5">
-                    <Link href={agendaHref(d, state.view)} scroll={false} aria-label={dayLabel(d)} aria-current={d === state.today ? "date" : undefined} className={`k-btn flex flex-col items-center gap-0.5 rounded-[12px] border-2 px-1 py-2 text-ink no-underline ${d === state.day ? "border-ink bg-honey-soft" : "border-[#eef0f3] bg-surface"}`}>
+                    <Link href={agendaHref(d, state.view)} scroll={false} aria-label={dayLabel(d)} aria-current={d === state.today ? "date" : undefined} className={`k-btn flex flex-col items-center gap-0.5 rounded-[12px] border-2 px-1 py-2 text-ink no-underline max-sm:flex-row max-sm:justify-start max-sm:gap-3 max-sm:px-3 ${d === state.day ? "border-ink bg-honey-soft" : "border-[#eef0f3] bg-surface"}`}>
                       <span className="font-mono text-[13px] text-[#4a5361]">{shortWeekday(d, t)}</span>
                       <span className={`${hexNum(d, "h-[38px] w-[34px]")} text-[17px] font-bold`}>{+d.slice(8, 10)}</span>
                     </Link>
