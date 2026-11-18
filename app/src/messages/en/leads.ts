@@ -190,7 +190,7 @@ export const leads = {
     archived: "This campaign is archived.",
     notAllowed: "You do not have permission for this.",
   },
-  sources: { import: "imported", site: "website", places: "Places", ai: "AI", research: "research", apify_maps: "Google Maps", apollo: "Apollo", shovels: "Shovels (permits)", rapidapi_b2b: "RapidAPI (decision makers)", rapidapi_contact: "website (RapidAPI)", apify_contact: "website (contact)", pattern: "guess (pattern)" },
+  sources: { import: "imported", site: "website", places: "Places", ai: "AI", research: "research", apify_maps: "Google Maps", apollo: "Apollo", shovels: "Shovels (permits)", rapidapi_b2b: "RapidAPI (decision makers)", kb: "Kolmeia base", rapidapi_contact: "website (RapidAPI)", apify_contact: "website (contact)", pattern: "guess (pattern)" },
   fieldsTitle: "Where it came from",
   fieldLabels: {
     name: "Company", website: "Website", phone: "Phone", email: "Email", address: "Address", city: "City", state: "State", zip: "ZIP",

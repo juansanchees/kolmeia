@@ -59,7 +59,7 @@ export type LeadFieldRow = {
   field: LeadFieldName;
   value: string;
   /** 'pattern' = an e-mail guess from the contact's name and the site's domain (0028): never a fact, never sent unverified. */
-  source: "import" | "site" | "places" | "ai" | "research" | "apify_maps" | "apollo" | "shovels" | "rapidapi_b2b" | "apify_contact" | "rapidapi_contact" | "pattern";
+  source: "import" | "site" | "places" | "ai" | "research" | "apify_maps" | "apollo" | "shovels" | "rapidapi_b2b" | "kb" | "apify_contact" | "rapidapi_contact" | "pattern";
   source_ref: string | null;
   status: "unverified" | "confirmed" | "refuted";
   excerpt: string | null;

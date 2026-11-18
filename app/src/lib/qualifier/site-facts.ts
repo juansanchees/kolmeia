@@ -6,7 +6,7 @@ import type { FieldIn, FieldRow, LeadSnapshot } from "./types";
 // Pure: what a site read adds to a lead, and what it refutes. Only values written on the page, each with its URL and
 // excerpt; a value the lead already holds as confirmed (any source) is not added again.
 
-const IMPORT_LIKE = new Set(["import", "apify_maps", "apollo", "shovels", "rapidapi_b2b", "research"]);
+const IMPORT_LIKE = new Set(["import", "apify_maps", "apollo", "shovels", "rapidapi_b2b", "kb", "research"]);
 const MAX_ROWS = 40;
 const fold = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
 const digits = (s: string) => s.replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");

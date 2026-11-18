@@ -44,7 +44,7 @@ export type CascadeResult = {
 };
 
 /** Imported values a "no" from the decision-maker check may refute (research values follow their own proof in the database). */
-const IMPORTED = new Set(["import", "apify_maps", "apollo", "shovels", "rapidapi_b2b"]);
+const IMPORTED = new Set(["import", "apify_maps", "apollo", "shovels", "rapidapi_b2b", "kb"]);
 
 /** P5 runs for a lead the AI can still raise (level < 4) that was asked for, or contactable and matching the profile with the switch on. */
 export function deepEligible(s: LeadSnapshot, aiOn: boolean): boolean {
