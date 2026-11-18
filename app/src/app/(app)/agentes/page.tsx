@@ -94,17 +94,11 @@ export default async function AgentsPage() {
 async function loadLastRuns(supabase: NonNullable<Awaited<ReturnType<typeof createClient>>>, ids: string[]): Promise<Record<string, LastRun>> {
   if (ids.length === 0) return {};
   // shortcut: newest 200 runs overall, so a very chatty agent could hide another's latest; page by agent if lists grow
-  const { data } = await supabase.from("research_runs").select("id, agent_id, status, finished_at").in("agent_id", ids).order("created_at", { ascending: false }).limit(200);
-  const latest = new Map<string, { id: string; status: string; finished_at: string | null }>();
+  const { data } = await supabase.from("research_runs").select("id, agent_id, status, finished_at, progress").in("agent_id", ids).order("created_at", { ascending: false }).limit(200);
+  const latest = new Map<string, { status: string; finished_at: string | null; progress: { counts?: { candidates?: number } } | null }>();
   for (const r of data ?? []) if (!latest.has(r.agent_id)) latest.set(r.agent_id, r);
-  const runIds = [...latest.values()].map((r) => r.id);
-  const found = new Map<string, number>();
-  if (runIds.length) {
-    const { data: cands } = await supabase.from("research_candidates").select("run_id").in("run_id", runIds).limit(10000);
-    for (const c of cands ?? []) found.set(c.run_id, (found.get(c.run_id) ?? 0) + 1);
-  }
   const out: Record<string, LastRun> = {};
-  for (const [agentId, r] of latest) out[agentId] = { status: r.status, finishedAt: r.finished_at, found: found.get(r.id) ?? 0 };
+  for (const [agentId, r] of latest) out[agentId] = { status: r.status, finishedAt: r.finished_at, found: r.progress?.counts?.candidates ?? 0 };
   return out;
 }
 

@@ -113,6 +113,8 @@ describe("F2 agents", () => {
     expect(m({ status: "running", finishedAt: null, found: 3 })).toBe("● Trabalhando agora");
     expect(m({ status: "ready", finishedAt: null, found: 0 })).toBe("Na fila: começa em até 1 minuto");
     expect(m({ status: "done", finishedAt: "2026-11-14T10:00:00Z", found: 20 })).toBe("Rodou há 2 h, achou 20");
+    expect(m({ status: "paused", finishedAt: null, found: 0 })).toBe(t.agents.live.states.paused);
+    expect(m({ status: "done", finishedAt: "2026-11-14T10:00:00Z", found: 2 }, { next_run_at: "2026-11-14T11:00:00Z" })).toBe("Na fila: começa em até 1 minuto");
     expect(m(undefined)).toBe(t.agents.detail.nextRun.replace("{when}", when(a.next_run_at, t.intl)));
   });
 

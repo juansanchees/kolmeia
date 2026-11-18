@@ -21,6 +21,7 @@ function metricOf(a: AgentRow, now: Date, t: Messages, listSize?: number, lastRu
     case "draft":
       return t.agents.metric.draft;
     case "running": {
+      if (lastRun?.status === "paused") return t.agents.live.states.paused;
       if (lastRun?.status === "running") return t.agents.metric.working;
       const due = a.next_run_at !== null && new Date(a.next_run_at).getTime() <= now.getTime();
       const live = lastRun?.status === "ready" || lastRun?.status === "paused";
