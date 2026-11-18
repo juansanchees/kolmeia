@@ -73,6 +73,14 @@ describe("kb_ingest", () => {
     expect(await count("kb_signal_candidates")).toBe(0);
   });
 
+  it("blank-company permit after a named item has no leaked applicant", async () => {
+    await ingest([
+      { company: co("Acme Builders LLC", "acme", { city: "Exampleton" }) },
+      { match_only: true, signals: [permit("P-5")] },
+    ]);
+    expect(await db.admin("select applicant_name, link_status from public.kb_signals")).toEqual([{ applicant_name: null, link_status: "none" }]);
+  });
+
   it("same name other town goes pending with candidate", async () => {
     await ingest([{ company: co("Acme Builders LLC", "acme", { city: "Sampleville" }) }]);
     const r = await ingest([{ match_only: true, company: co("Acme Builders", "acme", { city: "Exampleton" }), signals: [permit("P-3")] }]);

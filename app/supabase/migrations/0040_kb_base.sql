@@ -199,6 +199,15 @@ begin
       raise exception 'invalid item' using errcode = '22023';
     end if;
     c := it -> 'company';
+    -- reset per item: nothing may leak from the previous one
+    v_name := nullif(btrim(c ->> 'name'), '');
+    v_nk := nullif(btrim(c ->> 'name_key'), '');
+    v_dom := public.company_domain_key(c ->> 'website');
+    v_pk := public.company_phone_key(c ->> 'phone');
+    v_city := nullif(btrim(c ->> 'city'), '');
+    v_id := null;
+    v_cands := null;
+    v_reason := 'same name_key';
     if c is not null and (jsonb_typeof(c) <> 'object'
        or exists (select 1 from jsonb_object_keys(c) k where k <> all (array['name', 'name_key', 'website', 'phone', 'address', 'city', 'state', 'zip', 'company_type']))) then
       raise exception 'invalid item' using errcode = '22023';
@@ -207,7 +216,7 @@ begin
       -- a permit with no applicant is kept (unlinked); anything else needs a company
       if coalesce((it ->> 'match_only')::boolean, false) and jsonb_array_length(coalesce(it -> 'signals', '[]'::jsonb)) > 0 then
         for s in select * from jsonb_array_elements(it -> 'signals') loop
-          v_signals := v_signals + public.kb_write_signal(s, null, 'none', null, v_name, null);
+          v_signals := v_signals + public.kb_write_signal(s, null, 'none', null, null, null);
           v_unlinked := v_unlinked + 1;
         end loop;
         continue;
@@ -215,13 +224,6 @@ begin
       raise exception 'invalid item' using errcode = '22023';
     end if;
 
-    v_name := nullif(btrim(c ->> 'name'), '');
-    v_nk := nullif(btrim(c ->> 'name_key'), '');
-    v_dom := public.company_domain_key(c ->> 'website');
-    v_pk := public.company_phone_key(c ->> 'phone');
-    v_city := nullif(btrim(c ->> 'city'), '');
-    v_id := null;
-    v_cands := null;
 
     -- ---- find the company (live only; ties -> oldest)
     if (it ->> 'company_id') is not null then
