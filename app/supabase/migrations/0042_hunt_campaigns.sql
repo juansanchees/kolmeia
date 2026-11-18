@@ -342,7 +342,7 @@ end;
 $$;
 
 -- ---------------------------------------------------------------- lasting preferences (never applied before approval)
--- The same rule already proposed or approved for (workspace, offer) returns that row instead of a duplicate.
+-- The same rule already proposed, approved or declined/undone for (workspace, offer) returns that row (a declined rule is not proposed again) instead of a duplicate.
 create or replace function public.offer_preference_propose(p_ws uuid, p_offer text, p_rule jsonb, p_example_lead_ids uuid[], p_expected_effect jsonb)
 returns uuid
 language plpgsql
@@ -365,7 +365,7 @@ begin
   end if;
   perform pg_advisory_xact_lock(hashtext('offer_pref:' || p_ws::text || ':' || p_offer));
   select p.id into v_id from public.offer_preferences p
-   where p.workspace_id = p_ws and p.offer = p_offer and p.rule = p_rule and p.status in ('proposed', 'approved')
+   where p.workspace_id = p_ws and p.offer = p_offer and p.rule = p_rule and p.status in ('proposed', 'approved', 'undone')
    order by p.proposed_at limit 1;
   if v_id is null then
     insert into public.offer_preferences (workspace_id, offer, rule, example_lead_ids, expected_effect)

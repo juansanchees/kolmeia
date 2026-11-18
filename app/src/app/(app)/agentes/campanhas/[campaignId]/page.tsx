@@ -25,8 +25,8 @@ export default async function CampaignPage({ params, searchParams }: { params: P
   const { data: c } = await db.from("hunt_campaigns").select("id, workspace_id, offer, region, params").eq("id", campaignId).maybeSingle();
   if (!c || c.workspace_id !== workspace.id) notFound();
   const campaign = { id: c.id as string, workspace_id: c.workspace_id as string, offer: c.offer as string, params: c.params as CampaignParams };
-  // Proposing is idempotent (the same rule returns the same row); a failure must not hide the conversation.
-  await refreshPreference(supabaseHuntDb(db), campaign).catch(() => undefined);
+  // Proposing is idempotent (the same rule returns the same row, declined ones too); a failure is logged and must not hide the conversation.
+  await refreshPreference(supabaseHuntDb(db), campaign).catch((e) => console.error("refreshPreference", e));
 
   const [messages, rounds, prefs, opps] = await Promise.all([
     db.from("hunt_messages").select("id, role, body, created_at").eq("campaign_id", campaignId).order("created_at"),

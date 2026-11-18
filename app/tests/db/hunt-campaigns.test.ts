@@ -268,4 +268,27 @@ describe("hunt campaigns (0042)", () => {
     expect(code((await db.try(as(t.other), "select * from public.kb_coverage($1)", [t.ws])).error)).toBe("42501");
     expect(code((await db.try(service, "select * from public.kb_coverage($1)", [t.ws])).error)).toBe("42501");
   });
+
+  it("declined rule is not proposed again on reload", async () => {
+    const t = await seed();
+    const c = await create(t.sdr, t.ws);
+    await deliver(t.ws, c, [facts("New single family dwelling", 400000)]);
+    const lead = (await db.admin<{ id: string }>("select id from public.leads where workspace_id = $1 limit 1", [t.ws]))[0].id;
+    const propose = () => db.query<{ id: string }>(as(t.sdr), "select public.offer_preference_propose($1,$2,'{\"preferKinds\":[\"multifamily\"]}'::jsonb,$3::uuid[],null) as id", [t.ws, OFFER, [lead]]).then((r) => r[0].id);
+    const id = await propose();
+    await db.query(as(t.sdr), "select public.offer_preference_decide($1,'undone')", [id]);
+    expect(await propose()).toBe(id);
+    expect(await db.admin("select id from public.offer_preferences where workspace_id = $1 and status = 'proposed'", [t.ws])).toHaveLength(0);
+    expect(await db.admin("select id from public.offer_preferences where workspace_id = $1", [t.ws])).toHaveLength(1);
+  });
+
+  it("member of another workspace cannot decide a preference", async () => {
+    const t = await seed();
+    const c = await create(t.sdr, t.ws);
+    await deliver(t.ws, c, [facts("New single family dwelling", 400000)]);
+    const lead = (await db.admin<{ id: string }>("select id from public.leads where workspace_id = $1 limit 1", [t.ws]))[0].id;
+    const id = (await db.query<{ id: string }>(as(t.sdr), "select public.offer_preference_propose($1,$2,'{\"preferKinds\":[\"multifamily\"]}'::jsonb,$3::uuid[],null) as id", [t.ws, OFFER, [lead]]))[0].id;
+    for (const d of ["approved", "undone"]) expect(code((await db.try(as(t.other), "select public.offer_preference_decide($1,$2)", [id, d])).error)).toBe("42501");
+    expect((await db.admin<{ status: string }>("select status from public.offer_preferences where id = $1", [id]))[0].status).toBe("proposed");
+  });
 });

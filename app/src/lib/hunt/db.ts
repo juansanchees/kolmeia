@@ -8,6 +8,9 @@ import type { LeadStatus } from "@/lib/leads/types";
 import type { HuntDb } from "./flow";
 import type { StoredOpp } from "./rescore";
 
+/** Ids per request for `.in()` filters (~200 uuids = ~7 KB of URL). */
+export const ID_CHUNK = 200;
+
 const must = <T>(r: { data: T; error: { message: string } | null }, what: string): T => {
   if (r.error) throw new Error(`${what}: ${r.error.message}`);
   return r.data;
@@ -38,14 +41,22 @@ export function supabaseHuntDb(db: SupabaseClient): HuntDb {
       const opps = must(await db.from("lead_opportunities").select("lead_id, facts").eq("campaign_id", campaignId), "outcomes opps") as { lead_id: string; facts: OfferInput | null }[];
       const ids = [...new Set(opps.map((o) => o.lead_id))];
       if (!ids.length) return [];
-      const [leads, calls] = await Promise.all([
-        db.from("leads").select("id, status").in("id", ids),
-        db.from("call_logs").select("lead_id, outcome, called_at").in("lead_id", ids).order("called_at", { ascending: false }),
-      ]);
-      const status = new Map((must(leads, "outcomes leads") as { id: string; status: LeadStatus }[]).map((l) => [l.id, l.status]));
-      const lastCall = new Map<string, CallOutcome>();
-      for (const c of must(calls, "outcomes calls") as { lead_id: string; outcome: CallOutcome }[]) if (!lastCall.has(c.lead_id)) lastCall.set(c.lead_id, c.outcome);
-      return opps.filter((o) => o.facts).map((o) => ({ lead_id: o.lead_id, kind: classifyBuilding(o.facts!.signal), status: status.get(o.lead_id), call: lastCall.get(o.lead_id) }));
+      const status = new Map<string, LeadStatus>();
+      const lastCall = new Map<string, { outcome: CallOutcome; at: string }>();
+      // ids go in the URL: chunk them so a big campaign does not exceed its length limit
+      for (let i = 0; i < ids.length; i += ID_CHUNK) {
+        const part = ids.slice(i, i + ID_CHUNK);
+        const [leads, calls] = await Promise.all([
+          db.from("leads").select("id, status").in("id", part),
+          db.from("call_logs").select("lead_id, outcome, called_at").in("lead_id", part),
+        ]);
+        for (const l of must(leads, "outcomes leads") as { id: string; status: LeadStatus }[]) status.set(l.id, l.status);
+        for (const c of must(calls, "outcomes calls") as { lead_id: string; outcome: CallOutcome; called_at: string }[]) {
+          const prev = lastCall.get(c.lead_id);
+          if (!prev || c.called_at > prev.at) lastCall.set(c.lead_id, { outcome: c.outcome, at: c.called_at });
+        }
+      }
+      return opps.filter((o) => o.facts).map((o) => ({ lead_id: o.lead_id, kind: classifyBuilding(o.facts!.signal), status: status.get(o.lead_id), call: lastCall.get(o.lead_id)?.outcome }));
     },
   };
 }
