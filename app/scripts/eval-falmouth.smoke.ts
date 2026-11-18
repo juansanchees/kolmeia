@@ -6,7 +6,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test } from "vitest";
 import { goldFromCsv } from "@/lib/evals/gold";
-import { anonymize, compareRounds, scoreQueue, type QueueItem, type QueueScore } from "@/lib/evals/score";
+import { anonymize, compareRounds, dedupeCompanies, scoreQueue, type QueueItem, type QueueScore } from "@/lib/evals/score";
 import { mapsItems, massbuildsProjectItems } from "@/lib/kb/load";
 import type { KbItem } from "@/lib/kb/types";
 import { priorityOf } from "@/lib/leads/classify";
@@ -14,25 +14,28 @@ import { domainKey, nameKey, phoneKey } from "@/lib/research/dedupe";
 import { filterCsv, pilotDataDir, pilotOutDir } from "./pilot-env";
 
 const TOWN = "Falmouth";
-type RoundFile = { round: number; queue: { company: { name: string; phone?: string; website?: string }; signal: { ref: string; source_url?: string }; priority: number; codes: string[]; contact_path: string; fit: string }[] };
-type Flow = { label: string; queue: QueueItem[]; score: QueueScore };
+type RoundFile = { round: number; unlinked?: { link_status: string }[]; queue: { company: { name: string; phone?: string; website?: string }; signal: { ref: string; source_url?: string }; priority: number; codes: string[]; contact_path: string; fit: string }[] };
+// `queue` = one item per company (the best one); `rawSize`/`duplicates` describe the queue as the flow produces it
+type Flow = { label: string; queue: QueueItem[]; score: QueueScore; rawSize: number; duplicates: QueueScore["duplicates"]; mapsOnly?: number };
 
 const pct = (n: number, d: number) => (d ? `${Math.round((n / d) * 1000) / 10}%` : "n/a");
 const tiers = (t: Record<string, number>) => Object.entries(t).map(([k, v]) => `${k}: ${v}`).join(", ") || "-";
 
 /** Current flow: the Maps and project rows of the town, best first by the existing priorityOf (phone, temperature, e-mail...). */
-function currentFlow(data: string): QueueItem[] {
+function currentFlow(data: string): { queue: QueueItem[]; mapsOnly: number } {
   const read = (rel: string) => (existsSync(path.join(data, rel)) ? readFileSync(path.join(data, rel), "utf8") : "");
-  const maps = mapsItems(filterCsv(read("ma_sweep/maps/universe.csv"), (r) => r.city.toLowerCase() === TOWN.toLowerCase()), new Date().toISOString());
+  const maps = mapsItems(filterCsv(read("ma_sweep/maps/universe.csv"), (r) => (r.city ?? "").toLowerCase() === TOWN.toLowerCase()), new Date().toISOString());
   const projects = massbuildsProjectItems(read("ma_sweep/projects/projects_massbuilds.csv"), TOWN);
   const rows = [...maps.items, ...projects.items].filter((it): it is KbItem & { company: NonNullable<KbItem["company"]> } => !!it.company).map((it) => ({
     company: it.company.name, phone: it.company.phone ?? null, website: it.company.website ?? null,
     signalRef: it.signals?.[0] ? `${it.signals[0].source}:${it.signals[0].source_ref}` : null,
-    sourceUrl: it.values?.find((v) => v.source_url)?.source_url ?? it.signals?.[0]?.source_url ?? null,
+    // proof = an evidence URL tied to a work signal (permit/project); a Maps place page is not proof of an opportunity
+    sourceUrl: it.signals?.[0]?.source_url ?? null,
     contactPath: it.company.phone ? "phone" : "none",
   }));
   const rank = (q: QueueItem) => priorityOf({ lead: { status: "new", level: 0, first_contacted_at: null }, best: null, display: { phone: q.phone ?? null, email: null } });
-  return rows.map((q, i) => ({ q, i })).sort((a, b) => rank(b.q) - rank(a.q) || a.i - b.i).map((x) => x.q);
+  const mapsOnly = [...maps.items].filter((it) => it.values?.some((v) => v.source_url)).length;
+  return { queue: rows.map((q, i) => ({ q, i })).sort((a, b) => rank(b.q) - rank(a.q) || a.i - b.i).map((x) => x.q), mapsOnly };
 }
 
 const roundQueue = (f: RoundFile): QueueItem[] =>
@@ -43,13 +46,13 @@ function section(f: Flow): string[] {
   const d = s.denominators;
   return [
     `### ${f.label}`,
-    `- Na fila: ${d.queue}. Referência: ${d.gold} (${tiers(d.goldByTier)}), com alvará em Falmouth: ${d.goldWithPermit}.`,
+    `- Na fila: ${f.rawSize} itens, ${d.queue} empresas únicas (as métricas abaixo contam cada empresa uma vez, pelo melhor item). Referência: ${d.gold} (${tiers(d.goldByTier)}), com alvará em Falmouth: ${d.goldWithPermit}.`,
     `- Recuperadas: ${s.recovered.count} de ${d.gold} (${pct(s.recovered.count, d.gold)}); por nível: ${tiers(s.recovered.byTier)}; com alvará: ${s.recovered.withPermit}.`,
     `- Perdidas: ${s.missed.count}; por nível: ${tiers(s.missed.byTier)}; com alvará: ${s.missed.withPermit}.`,
     `- Precisão nas 25 primeiras: ${Math.round(s.precisionAt[25] * 1000) / 10}%; nas 50 primeiras: ${Math.round(s.precisionAt[50] * 1000) / 10}%.`,
     `- Fora da referência: ${s.notInGold} (sem prova, tratados como falsos positivos: ${s.falsePositives}; com prova, para revisão manual: ${s.newNotInGold.length}).`,
-    `- Duplicatas: mesma empresa repetida ${s.duplicates.company}, mesmo alvará/projeto repetido ${s.duplicates.signal}.`,
-    `- Com prova (fonte): ${s.withProof} de ${d.queue} (${pct(s.withProof, d.queue)}). Com caminho de contato: ${s.withContactPath} (${pct(s.withContactPath, d.queue)}).`,
+    `- Duplicatas na fila bruta: mesma empresa repetida ${f.duplicates.company}, mesmo alvará/projeto repetido ${f.duplicates.signal}.`,
+    `- Com prova (URL de evidência de um alvará/projeto): ${s.withProof} de ${d.queue} (${pct(s.withProof, d.queue)})${f.mapsOnly !== undefined ? `; linhas só com link do Maps (não contam como prova): ${f.mapsOnly}` : ""}. Com caminho de contato: ${s.withContactPath} (${pct(s.withContactPath, d.queue)}).`,
     "",
   ];
 }
@@ -59,7 +62,8 @@ test.skipIf(process.env.EVAL_RUN !== "1")("falmouth evaluation", () => {
   const out = pilotOutDir();
   const goldFile = path.join(data, "gold", "falmouth_gold.csv");
   if (!existsSync(goldFile)) throw new Error("gold/falmouth_gold.csv not found in PILOT_DATA_DIR");
-  const gold = goldFromCsv(readFileSync(goldFile, "utf8")).filter((g) => !g.city || g.city.toLowerCase() === TOWN.toLowerCase());
+  // the file is already Falmouth-scoped (`city` may be the company's HQ): every row counts
+  const gold = goldFromCsv(readFileSync(goldFile, "utf8"));
   const rounds = readdirSync(out).map((f) => /^pilot-round-(\d+)\.json$/.exec(f)).filter((m): m is RegExpExecArray => !!m).map((m) => Number(m[1])).sort((a, b) => a - b);
   if (!rounds.length) throw new Error("no pilot-round-<n>.json in PILOT_OUT_DIR (run pilot:round first)");
   const file = (n: number) => JSON.parse(readFileSync(path.join(out, `pilot-round-${n}.json`), "utf8")) as RoundFile;
@@ -67,24 +71,25 @@ test.skipIf(process.env.EVAL_RUN !== "1")("falmouth evaluation", () => {
   const last = file(rounds[rounds.length - 1]);
 
   const cur = currentFlow(data);
-  const flows: Flow[] = [
-    { label: "Fluxo atual (Maps + projetos, priorityOf, sem IA)", queue: cur, score: scoreQueue(cur, gold) },
-    { label: `Fluxo novo (fila da rodada ${last.round})`, queue: roundQueue(last), score: scoreQueue(roundQueue(last), gold) },
-  ];
+  const mk = (label: string, raw: QueueItem[], mapsOnly?: number): Flow => {
+    const queue = dedupeCompanies(raw);
+    return { label, queue, score: scoreQueue(queue, gold), rawSize: raw.length, duplicates: scoreQueue(raw, gold).duplicates, mapsOnly };
+  };
+  const flows: Flow[] = [mk("Fluxo atual (Maps + projetos, priorityOf, sem IA)", cur.queue, cur.mapsOnly), mk(`Fluxo novo (fila da rodada ${last.round})`, roundQueue(last))];
   const ai = path.join(out, "ai-baseline.json");
   let aiCost: number | null = null;
   if (existsSync(ai)) {
     const j = JSON.parse(readFileSync(ai, "utf8")) as QueueItem[] | { items: QueueItem[]; cost_usd?: number };
     const items = Array.isArray(j) ? j : j.items;
     aiCost = Array.isArray(j) ? null : (j.cost_usd ?? null);
-    flows.push({ label: "Baseline com IA (arquivo ai-baseline.json)", queue: items, score: scoreQueue(items, gold) });
+    flows.push(mk("Baseline com IA (arquivo ai-baseline.json)", items));
   }
 
   const nw = flows[1];
   const hitIdx = nw.score.inGoldIdx[0];
   const gapG = gold[nw.score.missed.goldIdx[0]];
   const newKeys = new Set(nw.queue.flatMap((q) => [nameKey(q.company), domainKey(q.website), phoneKey(q.phone)]).filter(Boolean));
-  const rej = cur.find((q) => ![nameKey(q.company), domainKey(q.website), phoneKey(q.phone)].filter(Boolean).some((k) => newKeys.has(k)));
+  const rej = cur.queue.find((q) => ![nameKey(q.company), domainKey(q.website), phoneKey(q.phone)].filter(Boolean).some((k) => newKeys.has(k)));
   const delta = rounds.length > 1 ? compareRounds(first.queue.map((q) => ({ key: q.signal.ref, priority: q.priority })), last.queue.map((q) => ({ key: q.signal.ref, priority: q.priority }))) : null;
 
   const md = [
@@ -93,6 +98,9 @@ test.skipIf(process.env.EVAL_RUN !== "1")("falmouth evaluation", () => {
     `Mesmo recorte para os fluxos: ${TOWN}, oferta de HVAC em obra nova, mesma lista de referência. Referência lida só aqui; nunca entra na rodada.`,
     ``,
     ...flows.flatMap(section),
+    `## Obras sem construtora identificada`,
+    `- Obras relevantes sem construtora identificada: ${last.unlinked?.length ?? 0} (pendentes: ${(last.unlinked ?? []).filter((u) => u.link_status === "pending").length}). Pergunta da ligação: quem é o GC? Ficam fora da fila (um lead precisa de empresa) e no arquivo da rodada.`,
+    ``,
     `## Rodada ${rounds[0]} contra rodada ${rounds[rounds.length - 1]}`,
     delta ? `- Subiram: ${delta.up}. Desceram: ${delta.down}. Iguais: ${delta.same}. Novas: ${delta.new}. Saíram da fila (rebaixadas): ${delta.dropped}.` : `- Só existe uma rodada (${rounds[0]}): sem comparação ainda.`,
     ``,

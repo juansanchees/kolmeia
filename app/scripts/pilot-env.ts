@@ -13,7 +13,7 @@ export const DEV_REF = "drkonindwshyyaemkcod";
 export const LOCAL_URL = "http://127.0.0.1:54321";
 type Env = Record<string, string | undefined>;
 const REPO = path.resolve(import.meta.dirname, "..", "..");
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1"]);
 
 export function assertOutsideRepo(dir: string, name: string, repo = REPO): string {
   const p = path.resolve(dir);
@@ -35,6 +35,15 @@ export function pilotOutDir(env: Env = process.env, repo = REPO): string {
   return p;
 }
 
+export function isDevUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    return u.protocol === "https:" && u.hostname === `${DEV_REF}.supabase.co`;
+  } catch {
+    return false;
+  }
+}
+
 export function isLocalUrl(raw: string): boolean {
   try {
     return LOCAL_HOSTS.has(new URL(raw).hostname);
@@ -48,7 +57,8 @@ export function pilotUrl(env: Env = process.env): string {
   const raw = env.PILOT_SUPABASE_URL || LOCAL_URL;
   if (raw.includes(PROD_REF)) throw new Error("PILOT_SUPABASE_URL points at production: refused");
   if (isLocalUrl(raw)) return raw;
-  if (raw.includes(DEV_REF) && env.PILOT_ALLOW_DEV === "1") return raw;
+  // by parsed hostname: a dev ref in the path or query of another host never qualifies
+  if (env.PILOT_ALLOW_DEV === "1" && isDevUrl(raw)) return raw;
   throw new Error("PILOT_SUPABASE_URL must be local (or the dev project with PILOT_ALLOW_DEV=1)");
 }
 

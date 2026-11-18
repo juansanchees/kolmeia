@@ -19,6 +19,10 @@ describe("pilot env guards", () => {
     expect(pilotUrl({ PILOT_SUPABASE_URL: `https://${DEV_REF}.supabase.co`, PILOT_ALLOW_DEV: "1" })).toContain(DEV_REF);
     expect(() => pilotUrl({ PILOT_SUPABASE_URL: "https://example.com" })).toThrow();
     expect(() => pilotUrl({ PILOT_SUPABASE_URL: "http://127.0.0.1.example.com" })).toThrow();
+    // the dev ref only counts as the hostname: in a path, query, userinfo or another host it never qualifies
+    for (const u of [`https://example.com/${DEV_REF}`, `https://example.com/?r=${DEV_REF}`, `https://${DEV_REF}.supabase.co.evil.example`, `https://${DEV_REF}@evil.example`, `http://${DEV_REF}.supabase.co`])
+      expect(() => pilotUrl({ PILOT_SUPABASE_URL: u, PILOT_ALLOW_DEV: "1" }), u).toThrow();
+    expect(() => pilotUrl({ PILOT_SUPABASE_URL: "http://[::1]:54321" })).toThrow();
   });
   test("data and out dirs inside the repo are refused", () => {
     expect(() => pilotDataDir({ PILOT_DATA_DIR: path.join(repo, "data") })).toThrow(/outside kolmeia/);

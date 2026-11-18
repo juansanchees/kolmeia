@@ -90,3 +90,14 @@ export function anonymize(company: string, town: string): string {
   const ini = company.split(/[^A-Za-z]+/).filter(Boolean).slice(0, 4).map((w) => `${w[0].toUpperCase()}.`).join("");
   return `${ini || "?"} (${town.replace(/[^A-Za-z .'-]/g, "").slice(0, 40) || "?"})`;
 }
+
+/** One item per company (first = best, the queue is in call order): same name key, site domain or phone = same company. */
+export function dedupeCompanies(queue: QueueItem[]): QueueItem[] {
+  const seen = new Set<string>();
+  return queue.filter((q) => {
+    const ks = keysOf(q);
+    if (ks.some((k) => seen.has(k))) return false;
+    ks.forEach((k) => seen.add(k));
+    return true;
+  });
+}
