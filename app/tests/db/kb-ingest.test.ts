@@ -51,6 +51,37 @@ describe("kb_ingest", () => {
     expect(await count("kb_companies")).toBe(2);
   });
 
+  it("city-less item with shared name_key is idempotent", async () => {
+    await twoAcmes();
+    const item = [{ company: co("Acme Builders LLC", "acme") }];
+    await ingest(item);
+    expect(await count("kb_companies")).toBe(3);
+    await ingest(item);
+    expect(await count("kb_companies")).toBe(3);
+  });
+
+  it("permit with blank company kept", async () => {
+    const r = await ingest([
+      { match_only: true, company: co("", ""), signals: [permit("P-7")] },
+      { match_only: true, signals: [permit("P-8")] },
+      { company: co("Acme Builders LLC", "acme", { city: "Exampleton" }) },
+    ]);
+    expect(r).toMatchObject({ created: 1, signals: 2, signals_unlinked: 2 });
+    expect(await db.admin("select link_status, company_id from public.kb_signals order by source_ref")).toEqual([
+      { link_status: "none", company_id: null }, { link_status: "none", company_id: null },
+    ]);
+    expect(await count("kb_signal_candidates")).toBe(0);
+  });
+
+  it("same name other town goes pending with candidate", async () => {
+    await ingest([{ company: co("Acme Builders LLC", "acme", { city: "Sampleville" }) }]);
+    const r = await ingest([{ match_only: true, company: co("Acme Builders", "acme", { city: "Exampleton" }), signals: [permit("P-3")] }]);
+    expect(r).toMatchObject({ signals: 1, signals_pending: 1, matched: 0 });
+    expect((await db.admin("select link_status, company_id from public.kb_signals"))[0]).toEqual({ link_status: "pending", company_id: null });
+    expect(await db.admin("select reason from public.kb_signal_candidates")).toEqual([{ reason: "same name, other town" }]);
+    expect(await count("kb_companies")).toBe(1);
+  });
+
   it("unique name attaches", async () => {
     await ingest([{ company: co("Acme Builders LLC", "acme", { city: "Exampleton" }) }]);
     const r = await ingest([{ match_only: true, company: co("Acme Builders", "acme"), signals: [permit("P-1")] }]);

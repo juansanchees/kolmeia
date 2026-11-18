@@ -174,6 +174,7 @@ declare
   v_name text;
   v_nk text;
   v_status text;
+  v_reason text := 'same name_key';
   v_new boolean;
   v_pid uuid;
   v_created int := 0;
@@ -203,6 +204,14 @@ begin
       raise exception 'invalid item' using errcode = '22023';
     end if;
     if (it ->> 'company_id') is null and (c is null or nullif(btrim(c ->> 'name'), '') is null or nullif(btrim(c ->> 'name_key'), '') is null) then
+      -- a permit with no applicant is kept (unlinked); anything else needs a company
+      if coalesce((it ->> 'match_only')::boolean, false) and jsonb_array_length(coalesce(it -> 'signals', '[]'::jsonb)) > 0 then
+        for s in select * from jsonb_array_elements(it -> 'signals') loop
+          v_signals := v_signals + public.kb_write_signal(s, null, 'none', null, v_name, null);
+          v_unlinked := v_unlinked + 1;
+        end loop;
+        continue;
+      end if;
       raise exception 'invalid item' using errcode = '22023';
     end if;
 
@@ -235,15 +244,23 @@ begin
         if cardinality(v_cands) = 1 then
           v_id := v_cands[1];
           v_cands := null;
+        elsif cardinality(v_cands) >= 2 and not coalesce((it ->> 'match_only')::boolean, false) then
+          -- re-run of a city-less item: hit the city-less row created last time instead of adding another
+          select id into v_id from public.kb_companies where removed_at is null and name_key = v_nk and city is null order by created_at, id limit 1;
         end if;
+      end if;
+      if v_id is null and v_cands is null and coalesce((it ->> 'match_only')::boolean, false) then
+        -- same name only in other towns: a firm works in many towns, so keep the link pending
+        select array_agg(id order by created_at, id) into v_cands from public.kb_companies where removed_at is null and name_key = v_nk;
+        v_reason := 'same name, other town';
       end if;
     end if;
 
     -- ---- no company and match_only: signals only, never create
     if v_id is null and coalesce((it ->> 'match_only')::boolean, false) then
-      v_status := case when cardinality(v_cands) >= 2 then 'pending' else 'none' end;
+      v_status := case when cardinality(v_cands) >= 1 then 'pending' else 'none' end;
       for s in select * from jsonb_array_elements(coalesce(it -> 'signals', '[]'::jsonb)) loop
-        v_signals := v_signals + public.kb_write_signal(s, null, v_status, v_cands, v_name);
+        v_signals := v_signals + public.kb_write_signal(s, null, v_status, v_cands, v_name, v_reason);
         if v_status = 'pending' then v_pending := v_pending + 1; else v_unlinked := v_unlinked + 1; end if;
       end loop;
       continue;
@@ -313,7 +330,7 @@ begin
 
     -- ---- signals (attached to this company: confirmed)
     for s in select * from jsonb_array_elements(coalesce(it -> 'signals', '[]'::jsonb)) loop
-      v_signals := v_signals + public.kb_write_signal(s, v_id, 'confirmed', null, v_name);
+      v_signals := v_signals + public.kb_write_signal(s, v_id, 'confirmed', null, v_name, null);
     end loop;
   end loop;
 
@@ -324,7 +341,7 @@ $$;
 
 -- Writes one signal and its link state. Returns 1 when the signal row is new, else 0.
 -- Never downgrades a confirmed link; a unique match upgrades pending/none to confirmed and clears the candidates.
-create or replace function public.kb_write_signal(s jsonb, p_company uuid, p_status text, p_cands uuid[], p_applicant text)
+create or replace function public.kb_write_signal(s jsonb, p_company uuid, p_status text, p_cands uuid[], p_applicant text, p_reason text)
 returns int
 language plpgsql
 security definer
@@ -346,7 +363,7 @@ begin
             (s ->> 'issued_on')::date, s ->> 'description', s ->> 'source_url', coalesce(s ->> 'applicant_name', p_applicant), s ->> 'permit_no', p_status)
     returning id into v_sid;
     if p_status = 'pending' then
-      insert into public.kb_signal_candidates (signal_id, company_id, reason) select v_sid, x, 'same name_key' from unnest(p_cands) x;
+      insert into public.kb_signal_candidates (signal_id, company_id, reason) select v_sid, x, p_reason from unnest(p_cands) x;
     end if;
     return 1;
   end if;
@@ -360,7 +377,7 @@ begin
   elsif p_status = 'pending' then
     update public.kb_signals set link_status = 'pending' where id = v_sid;
     delete from public.kb_signal_candidates where signal_id = v_sid;
-    insert into public.kb_signal_candidates (signal_id, company_id, reason) select v_sid, x, 'same name_key' from unnest(p_cands) x;
+    insert into public.kb_signal_candidates (signal_id, company_id, reason) select v_sid, x, p_reason from unnest(p_cands) x;
   end if;
   return 0;
 end;
@@ -368,7 +385,7 @@ $$;
 
 revoke all on function public.kb_ingest(jsonb) from public, anon, authenticated;
 grant execute on function public.kb_ingest(jsonb) to service_role;
-revoke all on function public.kb_write_signal(jsonb, uuid, text, uuid[], text) from public, anon, authenticated;
-grant execute on function public.kb_write_signal(jsonb, uuid, text, uuid[], text) to service_role;
+revoke all on function public.kb_write_signal(jsonb, uuid, text, uuid[], text, text) from public, anon, authenticated;
+grant execute on function public.kb_write_signal(jsonb, uuid, text, uuid[], text, text) to service_role;
 
 commit;
