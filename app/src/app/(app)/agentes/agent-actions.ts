@@ -8,6 +8,7 @@ import { SupabaseAgentStore } from "@/lib/agents/store";
 import type { FormState } from "@/lib/form-state";
 import { researchSession } from "@/lib/research/session";
 import { getT } from "@/lib/i18n/server";
+import { isSender } from "@/lib/roles";
 
 const uuid = z.string().uuid();
 
@@ -116,4 +117,20 @@ export async function pauseHunterAction(agentId: string): Promise<FormState> {
   }
   revalidatePath("/agentes", "layout");
   return { status: "success" };
+}
+
+/** "Rodar agora": the database function queues the run (sender only, 3-Hunter cap, one live run at a time). */
+export async function runHunterNowAction(agentId: string): Promise<FormState> {
+  const t = await getT();
+  const E = t.agents.hunter.errors;
+  const s = await researchSession();
+  if (!s || !uuid.safeParse(agentId).success) return { status: "error", message: E.failed };
+  if (!isSender(s.workspace.role)) redirect("/leads");
+  const { data, error } = await s.supabase.rpc("run_hunter_now", { p_agent: agentId });
+  if (error) return { status: "error", message: E.failed };
+  if (data === "too_many") return { status: "error", message: t.agents.errors.tooMany };
+  if (data !== "queued" && data !== "already_running") return { status: "error", message: E.failed };
+  revalidatePath("/agentes");
+  revalidatePath(`/agentes/${agentId}`);
+  return { status: "success", ...(data === "already_running" ? { message: E.alreadyRunning } : {}) };
 }

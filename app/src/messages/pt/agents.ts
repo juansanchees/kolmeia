@@ -75,6 +75,7 @@ export const agents = {
       region: "Diga onde procurar.",
       failed: "Não deu para criar o agente agora. Tente de novo.",
       notReady: "O plano ainda não está pronto. Espere a IA terminar.",
+      alreadyRunning: "Já está rodando. Veja o andamento aqui.",
     },
   },
   review: {
