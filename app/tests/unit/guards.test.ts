@@ -33,9 +33,16 @@ describe("R14: no service-role key in the product", () => {
     expect(text).not.toContain("sb_secret_");
     expect(text.toUpperCase()).not.toMatch(/SECRET|SERVICE/);
   });
+  // The kb migrations (0040, 0041) grant service_role on purpose: the base is operator-only (robots and delivery), never the app.
   test("the migration grants nothing to service_role", () => {
-    const sql = readdirSync(path.join(root, "supabase/migrations")).map((f) => readFileSync(path.join(root, "supabase/migrations", f), "utf8")).join("\n");
+    const dir = path.join(root, "supabase/migrations");
+    const files = readdirSync(dir);
+    const sql = files.filter((f) => !f.includes("_kb_")).map((f) => readFileSync(path.join(dir, f), "utf8")).join("\n");
     expect(sql.toLowerCase()).not.toMatch(/service_role/);
+    for (const f of files.filter((f) => f.includes("_kb_"))) {
+      const lines = readFileSync(path.join(dir, f), "utf8").split("\n").filter((l) => /service_role/i.test(l) && !l.trim().startsWith("--"));
+      for (const l of lines) expect(l, f).toMatch(/kb_|lead_opportunities/);
+    }
   });
   test("no admin-key shapes in src (sb_secret_, env names with SECRET or SERVICE)", () => {
     for (const file of walk(path.join(root, "src"))) {

@@ -20,6 +20,7 @@ create table if not exists public.lead_opportunities (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces (id) on delete cascade,
   lead_id uuid not null references public.leads (id) on delete cascade,
+  import_id uuid references public.lead_imports (id) on delete set null,
   kb_signal_id uuid references public.kb_signals (id) on delete set null,
   offer text not null check (char_length(offer) between 1 and 60),
   title text check (char_length(title) <= 200),
@@ -38,6 +39,9 @@ create table if not exists public.lead_opportunities (
   constraint lead_opportunities_key unique nulls not distinct (workspace_id, lead_id, offer, kb_signal_id)
 );
 create index if not exists lead_opportunities_lead_idx on public.lead_opportunities (lead_id);
+
+-- re-runnable on a table created before import_id existed
+alter table public.lead_opportunities add column if not exists import_id uuid references public.lead_imports (id) on delete set null;
 
 alter table public.lead_opportunities enable row level security;
 revoke all on public.lead_opportunities from public, anon, authenticated;
@@ -329,7 +333,7 @@ begin
     if v_lead is not null then
       -- already delivered: only its opportunities are refreshed
       v_skipped := v_skipped + 1;
-      perform public.kb_upsert_opportunities(p_ws, v_lead, v_row -> 'opportunities');
+      perform public.kb_upsert_opportunities(p_ws, v_lead, v_row -> 'opportunities', v_id);
     else
       v_core := v_core || jsonb_build_array(v_row - 'kb_company_id' - 'opportunities');
       v_map := v_map || jsonb_build_array(jsonb_build_object('row', (v_row ->> 'row')::int, 'co', v_co, 'opps', coalesce(v_row -> 'opportunities', '[]'::jsonb)));
@@ -347,14 +351,15 @@ begin
     values (p_ws, r.lead_id, r.co, v_id)
     on conflict do nothing;
     -- the lead may have been linked to another company's row of this batch; the opportunities still belong to this lead
-    perform public.kb_upsert_opportunities(p_ws, r.lead_id, r.opps);
+    perform public.kb_upsert_opportunities(p_ws, r.lead_id, r.opps, v_id);
   end loop;
 
   return jsonb_build_object('import_id', v_id, 'new', v_res -> 'new', 'merged', v_res -> 'merged', 'errors', v_res -> 'errors', 'skipped_linked', v_skipped);
 end;
 $$;
 
-create or replace function public.kb_upsert_opportunities(p_ws uuid, p_lead uuid, p_opps jsonb)
+drop function if exists public.kb_upsert_opportunities(uuid, uuid, jsonb);
+create or replace function public.kb_upsert_opportunities(p_ws uuid, p_lead uuid, p_opps jsonb, p_import uuid)
 returns void
 language plpgsql
 volatile
@@ -378,9 +383,9 @@ begin
     if jsonb_typeof(o) <> 'object' or v_keys is not null or nullif(o ->> 'offer', '') is null then
       raise exception 'invalid opportunity' using errcode = '22023';
     end if;
-    insert into public.lead_opportunities (workspace_id, lead_id, kb_signal_id, offer, title, signal_date, source, source_url, priority,
+    insert into public.lead_opportunities (workspace_id, lead_id, import_id, kb_signal_id, offer, title, signal_date, source, source_url, priority,
                                            priority_codes, hook_en, checks, open_questions, contact_path, contact_value)
-    values (p_ws, p_lead, (o ->> 'kb_signal_id')::uuid, o ->> 'offer', o ->> 'title', (o ->> 'signal_date')::date, o ->> 'source',
+    values (p_ws, p_lead, p_import, (o ->> 'kb_signal_id')::uuid, o ->> 'offer', o ->> 'title', (o ->> 'signal_date')::date, o ->> 'source',
             o ->> 'source_url', coalesce((o ->> 'priority')::int, 0),
             coalesce(array(select jsonb_array_elements_text(o -> 'priority_codes')), '{}'),
             o ->> 'hook_en', coalesce(o -> 'checks', '{}'::jsonb),
@@ -409,6 +414,24 @@ begin
   end if;
 end;
 $$;
+
+-- Undo of a kb list: leads that merged into an existing lead survive undo_lead_import (0034 rule), so their link and
+-- opportunities from this import go here, which lets a later delivery start clean. Leads deleted by undo lose both by cascade.
+create or replace function public.kb_undo_cleanup()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  delete from public.lead_opportunities where import_id = new.id;
+  delete from public.kb_lead_links where import_id = new.id;
+  return new;
+end;
+$$;
+drop trigger if exists kb_undo_cleanup on public.lead_imports;
+create trigger kb_undo_cleanup after update of status on public.lead_imports
+  for each row when (new.kind = 'kb' and new.status = 'undone' and old.status is distinct from 'undone') execute function public.kb_undo_cleanup();
 
 -- ---------------------------------------------------------------- call queue (0020 + open opportunities first)
 create or replace function public.build_call_list(p_agent uuid)
@@ -495,7 +518,8 @@ revoke all on function public.undo_lead_import(uuid) from public, anon;
 grant execute on function public.undo_lead_import(uuid) to authenticated;
 revoke all on function public.build_call_list(uuid) from public, anon;
 grant execute on function public.build_call_list(uuid) to authenticated;
-revoke all on function public.kb_deliver(uuid, uuid, text, jsonb), public.kb_upsert_opportunities(uuid, uuid, jsonb), public.kb_deliver_finish(uuid) from public, anon, authenticated;
-grant execute on function public.kb_deliver(uuid, uuid, text, jsonb), public.kb_upsert_opportunities(uuid, uuid, jsonb), public.kb_deliver_finish(uuid) to service_role;
+revoke all on function public.kb_undo_cleanup() from public, anon, authenticated;
+revoke all on function public.kb_deliver(uuid, uuid, text, jsonb), public.kb_upsert_opportunities(uuid, uuid, jsonb, uuid), public.kb_deliver_finish(uuid) from public, anon, authenticated;
+grant execute on function public.kb_deliver(uuid, uuid, text, jsonb), public.kb_upsert_opportunities(uuid, uuid, jsonb, uuid), public.kb_deliver_finish(uuid) to service_role;
 
 commit;

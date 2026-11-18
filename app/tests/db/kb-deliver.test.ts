@@ -165,4 +165,19 @@ describe("kb_deliver as a list", () => {
     const e2 = await db.try(service, "select public.import_rows_core($1,'[]'::jsonb,'kb')", [fileImp]);
     expect(code(e2.error)).toBe("22023");
   });
+
+  it("undo of kb list on merged lead removes link and opportunities and allows redelivery", async () => {
+    const t = await seed();
+    const run = (await db.admin<{ id: string }>("insert into public.research_runs (workspace_id, title, request_text) values ($1,'t','p') returning id", [t.ws]))[0].id;
+    const lead = (await db.admin<{ lead_id: string }>("insert into public.research_candidates (workspace_id, run_id, name, name_key, website, user_decision, verified_at) values ($1,$2,'Acme Eleven','acme eleven','https://acme11.example.com','keep',now()) returning lead_id", [t.ws, run]))[0].lead_id;
+    const c = await company("Acme Eleven KB");
+    const merged = () => ({ ...row(1, c, [opp(null)]), name: "Acme Eleven", name_key: "acme eleven", website: "https://acme11.example.com" });
+    const r = await deliver(t.ws, [merged()]);
+    expect(r).toMatchObject({ merged: 1 });
+    await db.query(as(t.owner), "select public.undo_lead_import($1)", [r.import_id]);
+    expect(await cnt("select count(*) n from public.leads where id = $1", [lead])).toBe(1);
+    expect(await cnt("select count(*) n from public.kb_lead_links where workspace_id = $1", [t.ws])).toBe(0);
+    expect(await cnt("select count(*) n from public.lead_opportunities where workspace_id = $1", [t.ws])).toBe(0);
+    expect(await deliver(t.ws, [merged()])).toMatchObject({ merged: 1, skipped_linked: 0 });
+  });
 });
