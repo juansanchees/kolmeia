@@ -176,6 +176,8 @@ describe("proof that RLS is really enforced in PGlite", () => {
         "request_site_contact", "source_queue_site_contact",
         // 0038 (public waitlist: the landing page's only write path; anon may call it, nothing may read the table)
         "join_waitlist",
+        // 0039 ("Rodar agora") and 0040 (shared base: service_role only)
+        "run_hunter_now", "kb_ingest", "kb_write_signal",
       ].sort(),
     );
     for (const r of rows) expect(r.proconfig).toContain("search_path=\"\"");

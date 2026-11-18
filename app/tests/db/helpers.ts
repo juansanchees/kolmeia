@@ -32,8 +32,12 @@ const SUPABASE_BOOTSTRAP = `
 `;
 
 /** `headers`: what PostgREST would expose to SQL as request.headers (the scheduler token travels this way). */
-export type Actor = { role: "anon"; headers?: Record<string, string> } | { role: "authenticated"; userId: string; headers?: Record<string, string> };
+export type Actor =
+  | { role: "anon"; headers?: Record<string, string> }
+  | { role: "authenticated"; userId: string; headers?: Record<string, string> }
+  | { role: "service_role"; headers?: Record<string, string> };
 export const anon: Actor = { role: "anon" };
+export const service: Actor = { role: "service_role" };
 export const as = (userId: string): Actor => ({ role: "authenticated", userId });
 /** The public key plus the scheduler token header, as the clock's route calls the database. */
 export const anonWithToken = (token: string): Actor => ({ role: "anon", headers: { "x-scheduler-token": token } });
