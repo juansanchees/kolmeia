@@ -24,7 +24,7 @@ import { nameKey } from "@/lib/research/dedupe";
 import { nodeRawHttp } from "@/lib/qualifier/site/net";
 import { readSite } from "@/lib/qualifier/site/reader";
 import { adminClient, need, pilotDataDir, pilotOutDir, readSeed, userClient } from "./pilot-env";
-import { ingestLinks, linkItem, permitNoHits, type KbHit } from "./pilot-link";
+import { addressLookup, ingestLinks, linkItem, permitNoHits, type KbHit } from "./pilot-link";
 
 const TOWN = "Falmouth";
 const LIST_NAME = "Piloto Falmouth · HVAC obra nova";
@@ -139,6 +139,7 @@ test.skipIf(process.env.PILOT_RUN !== "1")("pilot round", async () => {
     }, no, town),
     byPhone: (k) => lookup((db) => db.from("kb_companies").select(cols).eq("phone_key", k).is("removed_at", null).limit(5) as never),
     byNameStatewide: (k) => lookup((db) => db.from("kb_companies").select(cols).eq("name_key", k).is("removed_at", null).limit(5) as never),
+    bySameAddress: addressLookup(sigs, (ids) => ids.flatMap((id) => (cos.get(id) ? [hitOf(cos.get(id)!)] : []))),
     byNameTown: (k, town) => lookup((db) => db.from("kb_companies").select(cols).eq("name_key", k).ilike("city", town).is("removed_at", null).limit(5) as never),
   };
   type Done = { sig: Sig; co: Co | null; input: OfferInput; row: ReturnType<typeof toOpportunityRow>; v: ReturnType<typeof offer.evaluate>; linkVia?: string; pending: number };

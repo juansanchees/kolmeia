@@ -14,7 +14,9 @@ export type QueueScore = {
   notInGold: number;
   falsePositives: number;
   newNotInGold: number[];
+  /** company/signal = the same signal twice (real duplicates); multiWork = companies with several different works (not duplicates). */
   duplicates: { company: number; signal: number };
+  multiWork: number;
   withProof: number;
   withContactPath: number;
   precisionAt: Record<number, number>;
@@ -43,12 +45,16 @@ export function scoreQueue(queue: QueueItem[], gold: GoldRow[], topNs: number[] 
   const seen = new Set<string>();
   const sigs = new Set<string>();
   const dup = { company: 0, signal: 0 };
+  let multiWork = 0;
   for (const q of queue) {
     const ks = keysOf(q);
-    if (ks.some((k) => seen.has(k))) dup.company++;
+    const repeated = ks.some((k) => seen.has(k));
+    const sameSignal = !!q.signalRef && sigs.has(q.signalRef);
+    // a repeated company is a duplicate only when its signal is repeated too (or has no signal to tell them apart)
+    if (repeated) { if (sameSignal || !q.signalRef) dup.company++; else multiWork++; }
     ks.forEach((k) => seen.add(k));
     if (q.signalRef) {
-      if (sigs.has(q.signalRef)) dup.signal++;
+      if (sameSignal) dup.signal++;
       sigs.add(q.signalRef);
     }
   }
@@ -63,6 +69,7 @@ export function scoreQueue(queue: QueueItem[], gold: GoldRow[], topNs: number[] 
     falsePositives: outside.filter((x) => !x.q.sourceUrl).length,
     newNotInGold: outside.filter((x) => !!x.q.sourceUrl).map((x) => x.i),
     duplicates: dup,
+    multiWork,
     withProof: queue.filter((q) => !!q.sourceUrl).length,
     withContactPath: queue.filter((q) => q.contactPath && q.contactPath !== "none").length,
     precisionAt: Object.fromEntries(topNs.map((n) => [n, queue.length ? r3(matched.slice(0, n).filter(Boolean).length / Math.min(n, queue.length)) : 0])),

@@ -20,9 +20,13 @@ describe("scoreQueue", () => {
     expect(s.missed).toMatchObject({ count: 1, goldIdx: [2] });
     expect(s.inGoldIdx).toEqual([0, 1]);
   });
-  test("duplicates: same company twice and same signal twice", () => {
+  test("duplicates: only the same signal twice; a company with several works is multiWork, not a duplicate", () => {
     const s = scoreQueue([q("Acme Builders", { signalRef: "p:1" }), q("ACME BUILDERS LLC", { signalRef: "p:2" }), q("Dune Example", { signalRef: "p:2" })], GOLD);
-    expect(s.duplicates).toEqual({ company: 1, signal: 1 });
+    expect(s.duplicates).toEqual({ company: 0, signal: 1 });
+    expect(s.multiWork).toBe(1);
+    const d = scoreQueue([q("Acme Builders", { signalRef: "p:1" }), q("Acme Builders", { signalRef: "p:1" })], GOLD);
+    expect(d.duplicates).toEqual({ company: 1, signal: 1 });
+    expect(d.multiWork).toBe(0);
   });
   test("proof, contact path and the not-in-gold split", () => {
     const s = scoreQueue([q("Acme Builders", { sourceUrl: "https://example.com/a", contactPath: "phone" }), q("New One", { sourceUrl: "https://example.com/b", contactPath: "bids" }), q("No Proof Co", { contactPath: "none" })], GOLD);

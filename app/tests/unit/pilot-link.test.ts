@@ -42,6 +42,7 @@ describe("one item per company", () => {
     const u = dedupeCompanies(raw);
     expect(u.map((x) => x.signalRef)).toEqual(["p:1", undefined]);
     expect(scoreQueue(u, gold).precisionAt[25]).toBe(0.5);
-    expect(scoreQueue(raw, gold).duplicates.company).toBe(1);
+    expect(scoreQueue(raw, gold).duplicates.company).toBe(0);
+    expect(scoreQueue(raw, gold).multiWork).toBe(1);
   });
 });

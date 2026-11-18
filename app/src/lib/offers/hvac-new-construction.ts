@@ -32,6 +32,8 @@ const NOT_NEW = /\b(repair|re-?roof\w*|roof\w*|solar|photovoltaic|pool|fence|dem
 const SMALL_SCOPE = /\b(service|water heater|electrical|panel|meter|sign|signs|window|windows|door|doors|roof|roofing|deck|fence|pool|solar|siding|generator|furnace|boiler|chimney|gutters?|plumbing)\b/i;
 // Trade-only or temporary permits (Falmouth codes like ELECT., GAS, PLUMB., SHT MTL, SIGN, TENT): never a new build, whatever the description says.
 const TRADE_CLASS = /^\s*(elect\w*|gas\b|plumb\w*|sht\b|sheet\s*metal|sign\w*|tent\w*|chimney|stove|wood\s*stove|pool|solar|roof\w*|fence|deck|demo\w*)/i;
+// Civil / marine / site work is not HVAC work, whatever its value or class. Only wins when no strong new-building phrase is present.
+const CIVIL = /\b(docks?|piers?|wharf|wharves|seawall|wave\s+wall|bulkhead|revetment|jetty|jetties|sheet\s+piles?|piles?|pile\s+driving|dredg\w*|marina\s+floats?|boat\s+ramp|road(way)?|paving|bridge|culvert|retaining\s+wall|utility\s+(work|lines?|trench\w*|poles?)|water\s+main|sewer\s+main|septic|drainage|site\s+work\s+only|demolition\s+only|excavation\s+only|tower|antenna)\b/i;
 const OTHER_TRADE_HVAC = /\b(hvac|mechanical|heat pump|furnace|air handler)\b/i;
 
 const text = (s: OfferSignal) => `${s.work_class ?? ""} ${s.use ?? ""} ${s.description ?? ""}`;
@@ -110,7 +112,10 @@ function evaluate(input: OfferInput, now: Date, params?: CampaignParams): OfferV
   const age = raw == null || future ? null : Math.max(0, raw);
   const recent: Check = future ? chk("missing", `issued ${s.issued_on} (future date)`, url) : age == null ? chk("no", "no issue date") : age <= 180 ? chk("confirmed", `issued ${s.issued_on}`, url) : age <= 365 ? chk("missing", `issued ${s.issued_on}`, url) : chk("no", `issued ${s.issued_on}`, url);
 
-  const hvacFit: Check = newBuild.state === "confirmed" ? chk("confirmed", "new building", url)
+  // The exemption looks at the description only: a work class "New Construction" says nothing about what is built.
+  const civil = !STRONG_NEW.test(s.description ?? "") && CIVIL.test(t);
+  const hvacFit: Check = civil ? chk("no", "civil_or_marine_work", url)
+    : newBuild.state === "confirmed" ? chk("confirmed", "new building", url)
     : value != null && value >= 150_000 ? chk("confirmed", `value ${value}`, url)
     : OTHER_TRADE_HVAC.test(s.description ?? "") ? chk("missing", "hvac_by_other_trade", url)
     : chk("missing");
@@ -129,7 +134,7 @@ function evaluate(input: OfferInput, now: Date, params?: CampaignParams): OfferV
   if (newBuild.state === "missing") q.push("confirm_new_build");
   if (hvacFit.state === "missing") q.push("ask_hvac_scope");
   if (party.state === "missing") q.push("ask_gc");
-  if (input.link_status === "confirmed" && input.link_note === "unique_name_statewide") q.push("confirm_job_is_theirs");
+  if (input.link_status === "confirmed" && (input.link_note === "unique_name_statewide" || input.link_note === "same_address")) q.push("confirm_job_is_theirs");
   if (canBid.state === "missing") q.push("ask_taking_bids");
   // A campaign that wants the bid door asks about it first.
   const openQuestions = params?.wantBidPath ? [...q.filter((x) => x === "ask_taking_bids"), ...q.filter((x) => x !== "ask_taking_bids")] : q;

@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
-import { resolveGaps, type GapDeps, type GapOpp } from "@/lib/kb/gaps";
+import { normalizeAddress, resolveGaps, type GapDeps, type GapOpp } from "@/lib/kb/gaps";
+import { addressLookup } from "../../scripts/pilot-link";
 import { hvacNewConstruction } from "@/lib/offers/hvac-new-construction";
 import { contactPath } from "@/lib/offers/row";
 import type { SiteRead } from "@/lib/qualifier/site/reader";
@@ -131,5 +132,40 @@ describe("matching steps", () => {
       await resolveGaps(unlinked({ applicant: { name: "Pat Person", contractor: "Zed Builders LLC" } }), deps2({}, seen));
       expect(seen).toEqual(["zed builders"]);
     });
+  });
+});
+
+describe("same address step", () => {
+  const unlinked = (address: string) => opp({ company: null, link_status: "none", signal: { kind: "permit", source: "permit", source_ref: "t:self", town: "Falmouth", address } });
+  const idx = (rows: { ref: string; address: string; town: string; co: { id: string; name: string } | null }[]) =>
+    addressLookup(rows.map((r) => ({ source_ref: r.ref, address: r.address, town: r.town, company_id: r.co?.id ?? null })), (ids) => ids.map((id) => ({ id, name: rows.find((r) => r.co?.id === id)!.co!.name })));
+  const bayco = { id: "c1", name: "Bay Example Builders LLC" };
+  const dune = { id: "c2", name: "Dune Example Homes Inc" };
+
+  test("normalizeAddress: unit, case, abbreviations", () => {
+    expect(normalizeAddress("12 Example Rd., Unit 2, Falmouth")).toBe("12 example road");
+    expect(normalizeAddress("12  EXAMPLE ROAD #4")).toBe("12 example road");
+  });
+  test("one company at the same address: confirmed with note same_address", async () => {
+    const r = await resolveGaps(unlinked("12 Example Rd, Unit 2"), deps({ bySameAddress: idx([{ ref: "t:other", address: "12 Example Road", town: "Falmouth", co: bayco }, { ref: "t:self", address: "12 Example Rd", town: "Falmouth", co: null }]) }));
+    expect(r.link).toMatchObject({ status: "confirmed", via: "same_address", note: "same_address", company: { name: bayco.name } });
+    expect(r.coverage).toContainEqual(expect.objectContaining({ source: "kb_match:same_address", outcome: "ok", queried: 1, rows_in: 1 }));
+    const v = hvacNewConstruction.evaluate({ signal: { kind: "permit", source: "permit", source_ref: "t:self", town: "Falmouth", work_class: "New Construction", issued_on: "2026-11-01" }, company: r.company, link_status: "confirmed", link_note: "same_address", contacts: {} }, new Date("2026-11-18"));
+    expect(v.openQuestions).toContain("confirm_job_is_theirs");
+  });
+  test("two companies at the same address: pending with candidates", async () => {
+    const r = await resolveGaps(unlinked("12 Example Rd"), deps({ bySameAddress: idx([{ ref: "t:a", address: "12 Example Rd", town: "Falmouth", co: bayco }, { ref: "t:b", address: "12 example road", town: "Falmouth", co: dune }]) }));
+    expect(r.link).toMatchObject({ status: "pending", via: "same_address" });
+    expect(r.link?.candidates).toHaveLength(2);
+    expect(r.company).toBeNull();
+  });
+  test("same street in another town: no link", async () => {
+    const r = await resolveGaps(unlinked("12 Example Rd"), deps({ bySameAddress: idx([{ ref: "t:a", address: "12 Example Rd", town: "Mashpee", co: bayco }]) }));
+    expect(r.link).toBeUndefined();
+    expect(r.coverage).toContainEqual(expect.objectContaining({ source: "kb_match:same_address", outcome: "empty" }));
+  });
+  test("a person is never linked", async () => {
+    const r = await resolveGaps(unlinked("12 Example Rd"), deps({ bySameAddress: async () => [{ name: "Pat Person" }] }));
+    expect(r.link).toBeUndefined();
   });
 });

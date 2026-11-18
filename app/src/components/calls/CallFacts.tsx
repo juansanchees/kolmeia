@@ -11,7 +11,8 @@ import { Pill } from "@/components/research/controls";
 import { date, host, UNKNOWN } from "@/components/research/format";
 import { getT } from "@/lib/i18n/server";
 import { OpportunityFacts } from "@/components/hunt/OpportunityFacts";
-import type { OppFacts } from "@/lib/hunt/top-opportunity";
+import type { OppFacts, OtherOpp } from "@/lib/hunt/top-opportunity";
+import { fill } from "@/lib/i18n";
 
 const PHONE =
   "M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z";
@@ -31,7 +32,7 @@ function proofs(candidates: LeadDetail["candidates"], checks: LeadDetail["checks
 }
 
 /** What the caller needs before dialing: the number (tel: link and plain text), who to ask for, the hook, the proof. */
-export async function CallFacts({ detail, phone, now, blocked = false, opportunity = null }: { detail: LeadDetail; phone: string | null; now: Date; blocked?: boolean; opportunity?: OppFacts | null }) {
+export async function CallFacts({ detail, phone, now, blocked = false, opportunity = null, others = null }: { detail: LeadDetail; phone: string | null; now: Date; blocked?: boolean; opportunity?: OppFacts | null; others?: { items: OtherOpp[]; total: number } | null }) {
   const t = await getT();
   const C = t.calls;
   const LB = t.research.labels;
@@ -88,6 +89,24 @@ export async function CallFacts({ detail, phone, now, blocked = false, opportuni
       </dl>
 
       {opportunity && <OpportunityFacts opp={opportunity} />}
+
+      {opportunity && others && others.items.length > 0 && (
+        <div className="flex flex-col gap-2 border-t border-[#e3e6ec] pt-4" data-testid="other-opportunities">
+          <span className="font-mono text-[13px] uppercase tracking-wide text-[#4a5361]">{fill(t.hunt.opp.others, { n: others.total })}</span>
+          <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-[15px]">
+            {others.items.map((o, i) => {
+              const src = sanitizeUrl(o.source_url);
+              return (
+                <li key={`${o.source_url ?? ""}${i}`}>
+                  <span className="font-semibold">{o.title ?? UNKNOWN}</span>
+                  <span className="text-[#4a5361]"> · <span className="font-mono">{date(o.signal_date, t.intl)}</span></span>
+                  {src && <> · <a href={src} target="_blank" rel="noopener noreferrer" className="k-link font-medium underline">{host(src)}</a></>}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       {!opportunity?.hook_en && best?.hook && (
         <p className="m-0 rounded-[14px] border-2 border-honey-edge bg-honey-soft px-4 py-3 text-lg leading-normal">

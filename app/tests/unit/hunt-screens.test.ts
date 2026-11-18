@@ -147,6 +147,19 @@ describe("opportunity on the call screen", () => {
     expect(without).not.toContain("opportunity-facts");
     expect(without).toContain("Old generic hook");
   });
+  it("other open jobs of the company: up to 3 with date and source link, count in the title, pt/en", async () => {
+    const detail = { lead: { id: "l1", best_candidate_id: "c1", level: 0, closer_brief: null, do_not_call: false }, agentName: null, candidates: [{ id: "c1" }], checks: [], fields: [], importNames: {}, queue: null } as unknown as LeadDetail;
+    const others = { total: 4, items: [{ title: "New duplex at 5 Example Ln", signal_date: "2026-10-01", source_url: "https://example.com/permits/2" }, { title: "Addition at 9 Example Ave", signal_date: "2026-09-01", source_url: null }] };
+    locale = "en";
+    const out = await html(CallFacts({ detail, phone: null, now: new Date(), opportunity: OPP, others }));
+    expect(out).toContain('data-testid="other-opportunities"');
+    expect(out).toContain("Other jobs of this company (4)");
+    expect(out).toContain("New duplex at 5 Example Ln");
+    expect(out).toContain('href="https://example.com/permits/2"');
+    expect(await html(CallFacts({ detail, phone: null, now: new Date(), opportunity: OPP, others: { items: [], total: 0 } }))).not.toContain("other-opportunities");
+    locale = "pt";
+    expect(await html(CallFacts({ detail, phone: null, now: new Date(), opportunity: OPP, others }))).toContain("Outras obras desta empresa (4)");
+  });
 });
 
 describe("coverage by source", () => {

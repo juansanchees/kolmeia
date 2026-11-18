@@ -196,6 +196,7 @@ export const hunt = {
     hook: "Hook (in English)",
     questions: "Ask on the call",
     source: "Source",
+    others: "Other jobs of this company ({n})",
   },
   priority: {
     issued_30d: "Permit issued within 30 days",

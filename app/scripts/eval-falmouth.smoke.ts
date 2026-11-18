@@ -16,7 +16,7 @@ import { filterCsv, pilotDataDir, pilotOutDir } from "./pilot-env";
 const TOWN = "Falmouth";
 type RoundFile = { round: number; unlinked?: { signal_ref: string; link_status: string }[]; queue: { company: { name: string; phone?: string; website?: string }; signal: { ref: string; source_url?: string }; priority: number; codes: string[]; contact_path: string; fit: string }[] };
 // `queue` = one item per company (the best one); `rawSize`/`duplicates` describe the queue as the flow produces it
-type Flow = { label: string; queue: QueueItem[]; score: QueueScore; rawSize: number; duplicates: QueueScore["duplicates"]; mapsOnly?: number };
+type Flow = { label: string; queue: QueueItem[]; score: QueueScore; rawSize: number; duplicates: QueueScore["duplicates"]; multiWork: number; mapsOnly?: number };
 
 // what the round file can show about a current-flow company missing from the new queue
 const REJ_WHY = {
@@ -58,6 +58,7 @@ function section(f: Flow): string[] {
     `- Precisão nas 25 primeiras: ${Math.round(s.precisionAt[25] * 1000) / 10}%; nas 50 primeiras: ${Math.round(s.precisionAt[50] * 1000) / 10}%.`,
     `- Fora da referência: ${s.notInGold} (sem prova, tratados como falsos positivos: ${s.falsePositives}; com prova, para revisão manual: ${s.newNotInGold.length}).`,
     `- Duplicatas na fila bruta: mesma empresa repetida ${f.duplicates.company}, mesmo alvará/projeto repetido ${f.duplicates.signal}.`,
+    `- Empresas com várias obras: ${f.multiWork} (não contam como duplicatas).`,
     `- Com prova (URL de evidência de um alvará/projeto): ${s.withProof} de ${d.queue} (${pct(s.withProof, d.queue)})${f.mapsOnly !== undefined ? `; linhas só com link do Maps (não contam como prova): ${f.mapsOnly}` : ""}. Com caminho de contato: ${s.withContactPath} (${pct(s.withContactPath, d.queue)}).`,
     "",
   ];
@@ -79,7 +80,7 @@ test.skipIf(process.env.EVAL_RUN !== "1")("falmouth evaluation", () => {
   const cur = currentFlow(data);
   const mk = (label: string, raw: QueueItem[], mapsOnly?: number): Flow => {
     const queue = dedupeCompanies(raw);
-    return { label, queue, score: scoreQueue(queue, gold), rawSize: raw.length, duplicates: scoreQueue(raw, gold).duplicates, mapsOnly };
+    return { label, queue, score: scoreQueue(queue, gold), rawSize: raw.length, duplicates: scoreQueue(raw, gold).duplicates, multiWork: scoreQueue(raw, gold).multiWork, mapsOnly };
   };
   const flows: Flow[] = [mk("Fluxo atual (Maps + projetos, priorityOf, sem IA)", cur.queue, cur.mapsOnly), mk(`Fluxo novo (fila da rodada ${last.round})`, roundQueue(last))];
   const ai = path.join(out, "ai-baseline.json");

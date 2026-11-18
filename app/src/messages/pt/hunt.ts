@@ -195,6 +195,7 @@ export const hunt = {
     hook: "Gancho (em inglês)",
     questions: "Perguntar na ligação",
     source: "Fonte",
+    others: "Outras obras desta empresa ({n})",
   },
   priority: {
     issued_30d: "Alvará de até 30 dias",

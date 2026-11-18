@@ -28,8 +28,17 @@ export type GapDeps = {
   byNameTown?: (nameKey: string, town: string) => Promise<CompanyHit[]>;
   /** Live companies in the whole base with this exact name key (statewide). */
   byNameStatewide?: (nameKey: string) => Promise<CompanyHit[]>;
+  /** Distinct companies linked to OTHER signals (permits, projects) at this normalized address in this town; `selfRef` is the signal itself. */
+  bySameAddress?: (addressKey: string, town: string, selfRef: string) => Promise<CompanyHit[]>;
 };
-export type GapLink = { status: "confirmed" | "pending"; via: "permit_no" | "applicant_phone" | "name_town" | "name_statewide"; company?: CompanyHit; candidates?: CompanyHit[]; /** `unique_name_statewide`: linked by an identical unique name only, the caller confirms. */ note?: string };
+
+const ABBR: Record<string, string> = { st: "street", rd: "road", ave: "avenue", av: "avenue", ln: "lane", dr: "drive", hwy: "highway", blvd: "boulevard", ct: "court", pl: "place", cir: "circle", pkwy: "parkway" };
+/** Street line of an address, lowercase, without unit/suite/#, common abbreviations spelled out, spaces collapsed ("" when none). */
+export function normalizeAddress(a: string | null | undefined): string {
+  const line = (a ?? "").split(",")[0].toLowerCase().replace(/\s+(apt|unit|ste|suite)\b.*$/, "").replace(/\s*#.*$/, "").replace(/[.]/g, "");
+  return line.split(/\s+/).filter(Boolean).map((w) => ABBR[w] ?? w).join(" ");
+}
+export type GapLink = { status: "confirmed" | "pending"; via: "permit_no" | "applicant_phone" | "name_town" | "name_statewide" | "same_address"; company?: CompanyHit; candidates?: CompanyHit[]; /** `unique_name_statewide` / `same_address`: linked by weak evidence only, the caller confirms. */ note?: string };
 export type GapResult = { contacts: OfferContacts; company: CompanyHit | null; link?: GapLink; coverage: CoverageRow[] };
 
 const VENDOR_RE = /(vendor|supplier|procore|buildingconnected|planhub|bidcontender)/i;
@@ -97,6 +106,12 @@ export async function resolveGaps(opp: GapOpp, deps: GapDeps, params?: CampaignP
     { source: "applicant_phone", run: phoneKey(opp.applicant?.phone) && deps.byPhone ? () => deps.byPhone!(phoneKey(opp.applicant!.phone)!) : null },
     { source: "name_town", run: firmName && deps.byNameTown ? () => deps.byNameTown!(nameKey(firmName), town) : null },
     { source: "name_statewide", run: firmName && deps.byNameStatewide ? () => deps.byNameStatewide!(nameKey(firmName)) : null },
+    // Last resort: what other signals at the same address say. Only firms, never people.
+    { source: "same_address", run: normalizeAddress(opp.signal.address) && deps.bySameAddress ? async () => {
+      const hits = await deps.bySameAddress!(normalizeAddress(opp.signal.address), town, opp.signal.source_ref);
+      const firms = hits.filter((h) => hasCompanyToken(h.name));
+      return [...new Map(firms.map((h) => [nameKey(h.name), h])).values()];
+    } : null },
   ];
   if (opp.link_status !== "confirmed") {
     if (matchName && nameKey(matchName) && !firmName && (deps.byNameTown || deps.byNameStatewide)) row("kb_match:name_town", "skipped", 0, 0, "person_name");
@@ -107,7 +122,7 @@ export async function resolveGaps(opp: GapOpp, deps: GapDeps, params?: CampaignP
         const hits = await st.run();
         if (hits.length === 1) {
           company = hits[0];
-          link = { status: "confirmed", via: st.source, company: hits[0], ...(st.source === "name_statewide" ? { note: "unique_name_statewide" } : {}) };
+          link = { status: "confirmed", via: st.source, company: hits[0], ...(st.source === "name_statewide" ? { note: "unique_name_statewide" } : st.source === "same_address" ? { note: "same_address" } : {}) };
           row(source, "ok", 1, 1);
           break;
         }

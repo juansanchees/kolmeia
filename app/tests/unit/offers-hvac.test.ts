@@ -73,6 +73,23 @@ describe("hvac_fit", () => {
   });
 });
 
+describe("civil / marine work", () => {
+  test("marine job is not HVAC work, even with a high value and class COMM", () => {
+    const v = ev(base({ work_class: "COMM", use: "Commercial", value_usd: 3_000_000, description: "Install sheet piles for wave wall, floating docks and underwater grout" }));
+    expect(v.checks.hvac_fit.state).toBe("no");
+    expect(v.fit).toBe("no");
+    expect(v.priority).toBe(0);
+  });
+  test.each(["Replace pier and boat ramp", "Roadway paving and culvert", "Retaining wall and drainage", "Dredging of channel", "Cell tower antenna install"])("%s", (d) =>
+    expect(ev(base({ work_class: "COMM", value_usd: 900_000, description: d })).fit).toBe("no"));
+  test("a real building that mentions a dock is judged by the building logic", () => {
+    const v = ev(base({ description: "New single family dwelling with dock" }));
+    expect(v.checks.hvac_fit.state).toBe("confirmed");
+    expect(v.fit).not.toBe("no");
+  });
+  test("a utility room is not civil work", () => expect(ev(base({ description: "interior fit-out, utility room", work_class: "Alteration", value_usd: 200000 })).checks.hvac_fit.state).toBe("confirmed"));
+});
+
 describe("responsible_party and can_bid", () => {
   test("link confirmed -> confirmed", () => expect(ev(base()).checks.responsible_party.state).toBe("confirmed"));
   test("pending or none -> missing with ask_gc", () => {

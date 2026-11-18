@@ -1,6 +1,6 @@
 // Small helpers of the round runner that tests can import without a database: the permit-number lookup over the
 // base, and the write-back of a gap-found company link (re-ingest of the signal through kb_ingest).
-import type { CompanyHit } from "@/lib/kb/gaps";
+import { normalizeAddress, type CompanyHit } from "@/lib/kb/gaps";
 import type { KbItem } from "@/lib/kb/types";
 
 export type KbHit = CompanyHit & { id: string };
@@ -32,4 +32,19 @@ export function linkItem(s: LinkSig, c: LinkCo, note?: string): KbItem {
 export async function ingestLinks(ingest: (items: KbItem[]) => Promise<unknown>, items: KbItem[]): Promise<number> {
   for (let i = 0; i < items.length; i += 500) await ingest(items.slice(i, i + 500));
   return items.length;
+}
+
+/** Same-address lookup over signals already read: companies linked to other signals at the same normalized address and town. */
+export function addressLookup(sigs: { source_ref: string; address?: string | null; town?: string | null; company_id: string | null }[], companies: (ids: string[]) => KbHit[]) {
+  const idx = new Map<string, { ref: string; id: string }[]>();
+  for (const s of sigs) {
+    const a = normalizeAddress(s.address);
+    if (!a || !s.company_id) continue;
+    const k = `${(s.town ?? "").toLowerCase().trim()}|${a}`;
+    idx.set(k, [...(idx.get(k) ?? []), { ref: s.source_ref, id: s.company_id }]);
+  }
+  return async (addressKey: string, town: string, selfRef: string): Promise<KbHit[]> => {
+    const ids = [...new Set((idx.get(`${town.toLowerCase().trim()}|${addressKey}`) ?? []).filter((x) => x.ref !== selfRef).map((x) => x.id))];
+    return ids.length ? companies(ids) : [];
+  };
 }
